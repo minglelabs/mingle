@@ -42,6 +42,7 @@ export const userProfileSelect = {
   isOfficial: true,
   isOperator: true,
   faceVerifiedAt: true,
+  heightCm: true,
   _count: {
     select: {
       followerRelations: {
@@ -84,6 +85,7 @@ type SelectedUserProfile = {
   isOfficial?: boolean | null;
   isOperator?: boolean | null;
   faceVerifiedAt?: Date | null;
+  heightCm?: number | null;
   _count: {
     followerRelations: number;
     followingRelations: number;
@@ -119,6 +121,8 @@ export type UserProfile = {
   isOfficial?: boolean;
   /** Passed the selfie check for the current photo; present (true) only then. */
   faceVerified?: boolean;
+  /** Height in cm, as the user typed it; present only when set. */
+  heightCm?: number;
 };
 
 export function calculateProfileAge(
@@ -178,6 +182,7 @@ export function serializeUserProfile(profile: SelectedUserProfile, now: Date = n
     isOfficial,
     isOperator,
     faceVerifiedAt,
+    heightCm,
   } = profile;
   const location = typeof locationLatitude === "number"
     && Number.isFinite(locationLatitude)
@@ -222,6 +227,7 @@ export function serializeUserProfile(profile: SelectedUserProfile, now: Date = n
     followingCount: _count.followingRelations,
     ...identityBadgeFlags({ isOfficial }),
     ...(faceVerifiedAt ? { faceVerified: true } : {}),
+    ...(typeof heightCm === "number" ? { heightCm } : {}),
   };
 }
 

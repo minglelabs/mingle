@@ -41,6 +41,8 @@ import { resolveInterestLanguageCopy } from "@/i18n/interest-language-copy";
 import LanguageLevelPicker from "@/components/language-level-picker";
 import ProfileGenderPicker from "@/components/profile-gender-picker";
 import { resolveProfileGenderCopy } from "@/i18n/profile-gender-copy";
+import { resolveProfileHeightCopy } from "@/i18n/profile-height-copy";
+import { normalizeHeightCm } from "@/lib/profile-height";
 import type { ProfileGender } from "@/lib/profile-gender";
 
 const DEFAULT_ONBOARDING_BIRTH_DATE: BirthDateParts = {
@@ -60,6 +62,8 @@ export type LanguageOnboardingConfirmPayload = {
   interestLanguage: InterestLanguage | null;
   birthDate: BirthDateParts | null;
   gender: ProfileGender | null;
+  /** Height in cm; asked of men only, null when not asked. */
+  heightCm: number | null;
   usagePurpose: UsagePurpose | null;
   /** Optional free-text reason, only for "other". */
   usagePurposeNote: string | null;
@@ -87,7 +91,7 @@ interface LanguageOnboardingModalProps {
   onConfirm: (payload: LanguageOnboardingConfirmPayload) => void | Promise<void>;
 }
 
-export type OnboardingStep = "language" | "interest-language" | "usage-purpose" | "discovery-source" | "gender" | "birth-date";
+export type OnboardingStep = "language" | "interest-language" | "usage-purpose" | "discovery-source" | "gender" | "birth-date" | "height";
 
 export const FIRST_RUN_ONBOARDING_STEPS: readonly OnboardingStep[] = ["language"];
 export const INVITE_ONBOARDING_STEPS: readonly OnboardingStep[] = ["language", "birth-date"];
@@ -107,7 +111,16 @@ export default function LanguageOnboardingModal({
   invite = false,
   onConfirm,
 }: LanguageOnboardingModalProps) {
-  const steps = invite ? INVITE_ONBOARDING_STEPS : requestedSteps;
+  const baseSteps = invite ? INVITE_ONBOARDING_STEPS : requestedSteps;
+  const [gender, setGender] = useState<ProfileGender | null>(null);
+  const [heightText, setHeightText] = useState("");
+  const heightCm = normalizeHeightCm(heightText);
+  // Height is asked of men only: when the gender is asked in this same run the
+  // step appears once "male" is picked; asked alone, the caller already knows.
+  const steps = useMemo(
+    () => baseSteps.filter((entry) => entry !== "height" || gender === "male" || !baseSteps.includes("gender")),
+    [baseSteps, gender],
+  );
   // Mounted only while onboarding is on screen: no native ad banner at any
   // step, whatever zone the screen underneath asked for.
   useNativeBannerSuppression();
@@ -123,7 +136,6 @@ export default function LanguageOnboardingModal({
   const [interestCode, setInterestCode] = useState<string | null>(null);
   const [interestLevel, setInterestLevel] = useState(1);
   const [birthDate, setBirthDate] = useState<BirthDateParts>(initialBirthDate);
-  const [gender, setGender] = useState<ProfileGender | null>(null);
   const [usagePurpose, setUsagePurpose] = useState<UsagePurpose | null>(null);
   const [usagePurposeNote, setUsagePurposeNote] = useState("");
   const [discoverySource, setDiscoverySource] = useState<DiscoverySource | null>(null);
@@ -139,6 +151,7 @@ export default function LanguageOnboardingModal({
   const usagePurposeCopy = useMemo(() => resolveUsagePurposeCopy(language), [language]);
   const interestCopy = useMemo(() => resolveInterestLanguageCopy(language), [language]);
   const genderCopy = useMemo(() => resolveProfileGenderCopy(language), [language]);
+  const heightCopy = useMemo(() => resolveProfileHeightCopy(language), [language]);
   const discoveryOptions = useMemo(() => {
     const optionsByCode = new Map(discoveryCopy.options.map((option) => [option.code, option]));
     return discoveryOptionCodes
@@ -286,6 +299,7 @@ export default function LanguageOnboardingModal({
       : target === "usage-purpose" ? Boolean(usagePurpose)
       : target === "discovery-source" ? Boolean(discoverySource)
       : target === "gender" ? Boolean(gender)
+      : target === "height" ? heightCm !== null
         : isEligibleAge
   );
 
@@ -301,6 +315,7 @@ export default function LanguageOnboardingModal({
           : null,
         birthDate: asked("birth-date") ? birthDate : null,
         gender: asked("gender") ? gender : null,
+        heightCm: asked("height") ? heightCm : null,
         usagePurpose: invite ? "social" : asked("usage-purpose") ? usagePurpose : null,
         usagePurposeNote: asked("usage-purpose") && usagePurpose === "other"
           ? normalizeUsagePurposeNote(usagePurposeNote)
@@ -567,6 +582,21 @@ export default function LanguageOnboardingModal({
                 {genderCopy.stepTitle}
               </h2>
             </div>
+          ) : step === "height" ? (
+            <div className="space-y-2 px-6 pb-4 pt-0 text-center">
+              <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
+                {heightCopy.label}
+              </p>
+              <h2
+                id={titleId}
+                className="text-[1.4rem] font-bold leading-tight tracking-[-0.02em] text-slate-950"
+              >
+                {heightCopy.stepTitle}
+              </h2>
+              <p className="text-[0.85rem] leading-relaxed text-slate-500">
+                {heightCopy.hint}
+              </p>
+            </div>
           ) : step === "birth-date" ? (
             <div className="space-y-2 px-6 pb-4 pt-0 text-center">
               <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
@@ -699,6 +729,33 @@ export default function LanguageOnboardingModal({
                 size="large"
               />
             </div>
+          </div>
+        ) : step === "height" ? (
+          <div
+            className="flex flex-1 flex-col overflow-y-auto px-6 pb-4 pt-10"
+            style={{ paddingBottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))" }}
+          >
+            <div className="mx-auto flex w-full max-w-sm items-end justify-center gap-2">
+              <input
+                data-qa="onboarding-height"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={3}
+                value={heightText}
+                onChange={(event) => setHeightText(event.target.value.replace(/\D/g, "").slice(0, 3))}
+                placeholder="175"
+                disabled={isConfirming}
+                aria-label={heightCopy.label}
+                size={3}
+                style={{ width: 150 }}
+                className="rounded-2xl border border-amber-200 bg-white px-4 py-4 text-center text-[2rem] font-bold tabular-nums text-slate-950 outline-none focus:border-amber-400"
+              />
+              <span className="pb-4 text-[1.2rem] font-semibold text-slate-500">cm</span>
+            </div>
+            {heightText.length >= 3 && heightCm === null ? (
+              <p className="mt-4 text-center text-[0.86rem] font-medium text-rose-600" role="alert">{heightCopy.invalid}</p>
+            ) : null}
           </div>
         ) : step === "birth-date" ? (
           <div

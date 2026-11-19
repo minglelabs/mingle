@@ -17,21 +17,25 @@ const TONE_CLASS: Record<ProfileGender | "unknown", string> = {
 export default function ProfileGenderAgeBadge({
   gender,
   age,
+  heightCm,
   locale,
   className = "",
 }: {
   gender?: string | null;
   age?: number | null;
+  /** Height in cm as the user typed it; shown after the age. */
+  heightCm?: number | null;
   locale: AppLocale;
   className?: string;
 }) {
   const normalizedGender = normalizeProfileGender(gender);
   const ageLabel = formatProfileAge(age, locale);
   const hasAge = ageLabel !== null && typeof age === "number";
-  if (!normalizedGender && !hasAge) return null;
+  const heightLabel = typeof heightCm === "number" && heightCm > 0 ? `${heightCm}cm` : null;
+  if (!normalizedGender && !hasAge && !heightLabel) return null;
 
   const genderLabel = normalizedGender ? profileGenderLabel(normalizedGender, locale) : null;
-  const accessibleLabel = [genderLabel, ageLabel].filter(Boolean).join(", ");
+  const accessibleLabel = [genderLabel, ageLabel, heightLabel].filter(Boolean).join(", ");
   const Icon = normalizedGender === "female" ? Venus : normalizedGender === "male" ? Mars : null;
 
   return (
@@ -46,6 +50,7 @@ export default function ProfileGenderAgeBadge({
     >
       {Icon ? <Icon size={11} strokeWidth={3} aria-hidden="true" /> : null}
       {hasAge ? <span aria-hidden="true">{age}</span> : null}
+      {heightLabel ? <span aria-hidden="true" data-qa="profile-height">{hasAge ? "· " : ""}{heightLabel}</span> : null}
     </span>
   );
 }

@@ -26,6 +26,9 @@ model User {
   /// When a selfie check on the phone (head turns + same face as the profile
   /// photo) passed: the "verified" badge. Cleared when the profile photo changes.
   faceVerifiedAt               DateTime? @map("face_verified_at")
+  /// Height in centimetres, typed by the user (never checked). Asked of men
+  /// with the profile basics; anyone may add it in profile edit.
+  heightCm                     Int?      @map("height_cm")
   latestIpAddress              String?   @map("latest_ip_address")
   latestUserAgent              String?   @map("latest_user_agent")
   language                     String?

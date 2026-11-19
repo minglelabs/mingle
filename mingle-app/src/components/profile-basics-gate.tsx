@@ -86,6 +86,7 @@ export default function ProfileBasicsGate() {
     const body: Record<string, unknown> = {};
     if (payload.gender) body.gender = payload.gender;
     if (payload.birthDate) body.birthDate = formatBirthDate(payload.birthDate);
+    if (payload.heightCm) body.heightCm = payload.heightCm;
     let saved = false;
     try {
       const response = await fetch(buildClientApiPath("/profile"), {

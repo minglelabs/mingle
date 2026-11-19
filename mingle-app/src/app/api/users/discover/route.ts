@@ -102,6 +102,9 @@ export async function GET(request: NextRequest) {
         createdAt: true,
         lastSeenAt: true,
         bio: true,
+        heightCm: true,
+        // Whether the viewer follows this person, for the Follow button on the card.
+        followerRelations: { where: { followerId: viewerId }, select: { followerId: true }, take: 1 },
       },
     })
     : [];
@@ -137,6 +140,8 @@ export async function GET(request: NextRequest) {
         interestLanguages,
         ...(badge ? { badge } : {}),
         bio: bioCardLine(bioById.get(user.id)),
+        ...(typeof user.heightCm === "number" ? { heightCm: user.heightCm } : {}),
+        isFollowing: user.followerRelations.length > 0,
         ...identityBadgeFlags(user),
       };
     });

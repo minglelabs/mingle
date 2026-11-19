@@ -123,6 +123,8 @@ import StaffAdminEntry from "@/components/staff-admin-entry";
 import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, Contact, EyeOff, Headphones, Languages, Loader2, LogOut, Menu, MessageCircle, Plus, ShieldCheck, Siren, SquarePen, Ticket, Trash2, UserRound, UserRoundX, X } from "lucide-react";
 import { resolveSelfieVerifyCopy } from "@/i18n/selfie-verify-copy";
 import { resolveProfileLockedNote } from "@/i18n/profile-locked-copy";
+import { resolveProfileHeightCopy } from "@/i18n/profile-height-copy";
+import { MAX_HEIGHT_CM, MIN_HEIGHT_CM, normalizeHeightCm } from "@/lib/profile-height";
 import dynamic from "next/dynamic";
 const SelfieVerifyScreen = dynamic(() => import("@/components/selfie-verify-screen"), { ssr: false });
 import { myPostsHref } from "@/lib/feed-routes";
@@ -155,6 +157,7 @@ type ProfileDraft = {
   primaryLanguages: SttLanguageCode[];
   birthDate: BirthDateParts | null;
   gender: ProfileGender | null;
+  heightCm: number | null;
 };
 
 const NO_INTEREST_LANGUAGES: readonly InterestLanguage[] = [];
@@ -1595,6 +1598,7 @@ function ProfileEditPanel({
   initialNationalityCountry,
   initialBirthDate,
   initialGender,
+  initialHeightCm,
   onClose,
   onSave,
   open,
@@ -1610,6 +1614,7 @@ function ProfileEditPanel({
   initialNationalityCountry: string | null;
   initialBirthDate?: BirthDateParts | null;
   initialGender?: ProfileGender | null;
+  initialHeightCm?: number | null;
   onClose: () => void;
   onSave: (draft: ProfileDraft) => Promise<ProfileSaveResult>;
   open: boolean;
@@ -1624,6 +1629,11 @@ function ProfileEditPanel({
   const [birthDate, setBirthDate] = useState<BirthDateParts>(initialBirthDate ?? DEFAULT_PROFILE_EDIT_BIRTH_DATE);
   const [hasBirthDate, setHasBirthDate] = useState(Boolean(initialBirthDate));
   const [gender, setGender] = useState<ProfileGender | null>(initialGender ?? null);
+  const [heightText, setHeightText] = useState(initialHeightCm ? String(initialHeightCm) : "");
+  const heightCopy = useMemo(() => resolveProfileHeightCopy(locale), [locale]);
+  const heightCm = normalizeHeightCm(heightText);
+  // Men must give a height; anyone else may leave it empty. A typed value must be in range.
+  const isHeightValid = heightText.trim() ? heightCm !== null : gender !== "male";
   const [nationalityCountry, setNationalityCountry] = useState<string | null>(initialNationalityCountry);
   const [imageDraft, setImageDraft] = useState<ProfileImageCropperChange>({
     file: null,
@@ -1682,13 +1692,14 @@ function ProfileEditPanel({
     setBirthDate(initialBirthDate ?? DEFAULT_PROFILE_EDIT_BIRTH_DATE);
     setHasBirthDate(Boolean(initialBirthDate));
     setGender(initialGender ?? null);
+    setHeightText(initialHeightCm ? String(initialHeightCm) : "");
     setNationalityCountry(initialNationalityCountry);
     setImageDraft({
       file: null,
       crop: normalizedInitialImageCrop,
     });
     setSaveError(null);
-  }, [initialBirthDate, initialBio, initialGender, initialHandle, initialName, initialNationalityCountry, initialPrimaryLanguages, normalizedInitialImageCrop, open]);
+  }, [initialBirthDate, initialBio, initialGender, initialHeightCm, initialHandle, initialName, initialNationalityCountry, initialPrimaryLanguages, normalizedInitialImageCrop, open]);
 
   const handleSave = useCallback(async () => {
     if (isSaving) return;
@@ -1708,6 +1719,7 @@ function ProfileEditPanel({
         primaryLanguages,
         birthDate: hasBirthDate ? birthDate : null,
         gender,
+        heightCm,
       });
       if (saved === "saved") {
         if (editOpenRef.current && epoch === saveEpoch.current) onClose();
@@ -1719,7 +1731,7 @@ function ProfileEditPanel({
     } finally {
       setIsSaving(false);
     }
-  }, [bio, birthDate, copy.handleInvalid, copy.handleTaken, copy.saveError, gender, handle, hasBirthDate, imageDraft, isSaving, name, nationalityCountry, onClose, onSave, primaryLanguages]);
+  }, [bio, birthDate, copy.handleInvalid, copy.handleTaken, copy.saveError, gender, heightCm, handle, hasBirthDate, imageDraft, isSaving, name, nationalityCountry, onClose, onSave, primaryLanguages]);
 
   return (
     <SlideSurface
@@ -1748,7 +1760,7 @@ function ProfileEditPanel({
             <button
               type="button"
               onClick={() => void handleSave()}
-              disabled={isSaving || !isEligibleAge}
+              disabled={isSaving || !isEligibleAge || !isHeightValid}
               className="min-w-[52px] text-[15px] font-semibold text-blue-600 transition active:opacity-60 disabled:opacity-50"
             >
               {isSaving ? "…" : copy.saveAction}
@@ -1823,6 +1835,32 @@ function ProfileEditPanel({
                   <ProfileGenderPicker value={gender} onChange={setGender} copy={genderCopy} disabled={isSaving} />
                 )}
               </fieldset>
+
+              <label className="block">
+                <span className="mb-2 block text-[13px] font-semibold text-gray-600">{heightCopy.label}</span>
+                <span className="flex items-center gap-2">
+                  <input
+                    data-qa="profile-edit-height"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={3}
+                    value={heightText}
+                    onChange={(event) => setHeightText(event.target.value.replace(/\D/g, "").slice(0, 3))}
+                    placeholder={`${MIN_HEIGHT_CM}–${MAX_HEIGHT_CM}`}
+                    disabled={isSaving}
+                    size={3}
+                    style={{ width: 112 }}
+                    className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[15px] tabular-nums outline-none transition focus:border-gray-400 focus:bg-white"
+                  />
+                  <span className="text-[15px] text-gray-500">cm</span>
+                </span>
+                {!isHeightValid ? (
+                  <span className="mt-2 block text-[12px] font-medium text-rose-600" role="alert">{heightCopy.invalid}</span>
+                ) : (
+                  <span className="mt-2 block text-[12px] leading-relaxed text-gray-400">{heightCopy.hint}</span>
+                )}
+              </label>
 
               <fieldset className="min-w-0 w-full max-w-full">
                 <legend className="mb-2 text-[13px] font-semibold text-gray-600">{nationalityCopy.label}</legend>
@@ -2216,6 +2254,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           birthDate: parseProfileBirthDate(data.birthDate),
           gender: normalizeProfileGender(data.gender),
           age: typeof data.age === "number" ? data.age : null,
+          heightCm: typeof data.heightCm === "number" ? data.heightCm : null,
           followersCount: typeof data.followersCount === "number" ? data.followersCount : 0,
           followingCount: typeof data.followingCount === "number" ? data.followingCount : 0,
           isOfficial: data.isOfficial === true,
@@ -2363,6 +2402,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           primaryLanguages: draft.primaryLanguages,
           birthDate: draft.birthDate ? formatBirthDate(draft.birthDate) : null,
           ...(draft.gender ? { gender: draft.gender } : {}),
+          heightCm: draft.heightCm,
           imageCropScale: draft.imageCrop.scale,
           imageCropX: draft.imageCrop.x,
           imageCropY: draft.imageCrop.y,
@@ -2392,6 +2432,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         birthDate: parseProfileBirthDate(saved.birthDate) ?? current.birthDate,
         gender: normalizeProfileGender(saved.gender) ?? current.gender,
         age: typeof saved.age === "number" ? saved.age : current.age,
+        heightCm: typeof saved.heightCm === "number" ? saved.heightCm : null,
         nationality: typeof saved.nationality === "string" ? saved.nationality : current.nationality,
         nationalityCountry: normalizeNationalityCountry(saved.nationalityCountry) ?? current.nationalityCountry,
         primaryLanguages: sanitizeSttLanguageSelection(
@@ -2521,6 +2562,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         initialNationalityCountry={nationalityCountry}
         initialBirthDate={profile.birthDate}
         initialGender={profile.gender}
+        initialHeightCm={profile.heightCm ?? null}
         onClose={() => closeMyPageSurface({ id: MY_PAGE_PROFILE_EDIT_SURFACE_ID })}
         onSave={handleSaveProfile}
         open={showProfileEdit}
@@ -2681,7 +2723,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
             <p className="flex min-w-0 items-center gap-1.5">
               <span className="truncate text-[15px] font-semibold text-slate-950">{name}</span>
               <AccountBadge kind={resolveAccountBadge(profile)} locale={locale} tone="dark" />
-              <ProfileGenderAgeBadge gender={profile.gender} age={profile.age} locale={locale} />
+              <ProfileGenderAgeBadge gender={profile.gender} age={profile.age} heightCm={profile.heightCm} locale={locale} />
               {profile.handle ? <span className="min-w-0 truncate text-[13px] text-gray-500">{formatHandle(profile.handle)}</span> : null}
             </p>
             <ProfileLanguageLevels

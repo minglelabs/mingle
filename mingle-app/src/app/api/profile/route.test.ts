@@ -176,6 +176,7 @@ describe("/api/profile route", () => {
         isOfficial: true,
         isOperator: true,
         faceVerifiedAt: true,
+        heightCm: true,
         _count: {
           select: {
             followerRelations: {
@@ -257,6 +258,7 @@ describe("/api/profile route", () => {
         isOfficial: true,
         isOperator: true,
         faceVerifiedAt: true,
+        heightCm: true,
         _count: {
           select: {
             followerRelations: {

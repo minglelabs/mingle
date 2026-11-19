@@ -2,6 +2,16 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-19 — Home cards follow and message on the spot; height on profiles, required for men
+
+- Surface: `home/home-page.tsx` (PersonCard), new `lib/use-start-direct-conversation.ts`, `api/users/discover` (`isFollowing`, `heightCm`), `LanguageOnboardingModal.tsx` (new "height" step), `lib/profile-basics.ts`, `profile-basics-gate.tsx`, `api/profile` (PATCH `heightCm`), profile edit (`my-page.tsx`), `profile-gender-age-badge.tsx`, new `i18n/profile-height-copy.ts` (15 languages), `User.heightCm`.
+- Issue: On the home tab a card only opened the profile; following or messaging took a second screen. Profiles had no height (owner decision: add it, required for men). The owner also asked whether the home tab should become one person per screen (TikTok style): kept as the 2-column grid, since many profiles have no photo yet, one-per-screen reads as a dating app, and comparing several people at once suits finding friends. No A/B test at the current number of users.
+- Resolution:
+  - Each home card has a Follow button (turns into "팔로잉", tap again to unfollow) and a round Message button under the name. Follow updates at once and is kept in the tab's session cache. Message runs the same steps as the profile's button (profile basics, first-message setup, the one-new-person-a-day limit, shown as a toast) and opens the room; a room that already exists simply opens. Your own card has no buttons.
+  - Height (cm, 120–230) is typed by the person and never checked. Men are asked for it with the profile basics (the first follow, comment, post or message): the step appears only for "male", also when the gender is picked in the same run. In profile edit anyone may fill it; a man cannot save without it. It shows after the age in the gender-age pill ("26 · 178cm") and on home cards. It is not locked.
+- Checked on the iPhone 11 Pro (local devbox, a male account with no height): the home grid with both buttons on every card; Follow on a card opened the height question, typing 178 and continuing saved it and the card turned to "팔로잉"; a second tap unfollowed; Message on the official account's card opened that room. The Galaxy was in use by another session, so Android was not checked. Unit tests cover the height range, who is asked, the copy and the wiring.
+- Dev note: the height input's width is an inline style, because in the dev server a newly used Tailwind class was sometimes not generated yet and the input fell back to its default width.
+
 ## 2026-11-19 — Gender and birth date are set once, then locked
 
 - Surface: `api/profile` (PATCH), profile edit (`my-page.tsx` ProfileEditPanel), new `i18n/profile-locked-copy.ts` (15 languages).

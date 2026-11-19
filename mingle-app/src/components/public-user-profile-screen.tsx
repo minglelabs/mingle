@@ -90,6 +90,7 @@ type PublicUserProfile = {
   bio: string | null;
   age?: number;
   gender?: string | null;
+  heightCm?: number;
   nationality: string | null;
   /** 국적 (ISO 3166-1 alpha-2). Absent from older servers. */
   nationalityCountry?: string | null;
@@ -690,7 +691,7 @@ export default function PublicUserProfileScreen({
                 <p className="flex min-w-0 items-center gap-1.5">
                   <span className="truncate text-[15px] font-semibold text-slate-950">{name}</span>
                   <AccountBadge kind={badge} locale={locale} tone="dark" />
-                  <ProfileGenderAgeBadge gender={profile.gender} age={profile.age} locale={locale} />
+                  <ProfileGenderAgeBadge gender={profile.gender} age={profile.age} heightCm={profile.heightCm} locale={locale} />
                   {profile.handle ? <span className="min-w-0 truncate text-[13px] text-gray-500">{formatHandle(profile.handle)}</span> : null}
                 </p>
                 <ProfileLanguageLevels

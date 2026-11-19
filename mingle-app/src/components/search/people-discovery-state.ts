@@ -18,6 +18,10 @@ export type DiscoveryPerson = {
   /** One line of the bio, already cut for a card; null when there is none. */
   bio: string | null;
   isOfficial?: boolean;
+  /** Whether the viewer follows this person (the Follow button on the card). */
+  isFollowing?: boolean;
+  /** Height in cm, as the person typed it. */
+  heightCm?: number;
 };
 
 export type DiscoveryPage = {
@@ -55,6 +59,8 @@ function parsePerson(value: unknown): DiscoveryPerson | null {
     ...(raw.badge === "online" || raw.badge === "new" || raw.badge === "active" ? { badge: raw.badge } : {}),
     bio: optionalString(raw.bio),
     ...(raw.isOfficial === true ? { isOfficial: true } : {}),
+    ...(raw.isFollowing === true ? { isFollowing: true } : {}),
+    ...(typeof raw.heightCm === "number" && raw.heightCm > 0 ? { heightCm: raw.heightCm } : {}),
   };
 }
 

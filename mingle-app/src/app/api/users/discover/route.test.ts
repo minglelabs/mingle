@@ -65,13 +65,13 @@ describe("/api/users/discover route", () => {
         id: "yuki", handle: "yuki", name: "Yuki", image: null, imageCropScale: null, imageCropX: null, imageCropY: null,
         isOfficial: false, isOperator: false, birthDate: null, gender: null, nationality: null, nationalityCountry: null,
         primaryLanguages: ["ja"], interestLanguages: [], interestLanguageLevels: [],
-        createdAt: new Date(now - 90 * 86_400_000), lastSeenAt: new Date(now - 72 * 3_600_000), bio: "draft only",
+        createdAt: new Date(now - 90 * 86_400_000), lastSeenAt: new Date(now - 72 * 3_600_000), bio: "draft only", heightCm: null, followerRelations: [],
       },
       {
         id: "mina", handle: "mina", name: "Mina", image: "https://cdn.example/mina.jpg", imageCropScale: 1, imageCropX: 0, imageCropY: 0,
         isOfficial: false, isOperator: false, birthDate: new Date("2000-01-01T00:00:00.000Z"), gender: "female",
         nationality: null, nationalityCountry: "KR", primaryLanguages: ["ko"], interestLanguages: ["en", "ko"], interestLanguageLevels: [3, 5],
-        createdAt: new Date(now - 2 * 86_400_000), lastSeenAt: new Date(now - 60_000), bio: "  Hello\nfrom Seoul ",
+        createdAt: new Date(now - 2 * 86_400_000), lastSeenAt: new Date(now - 60_000), bio: "  Hello\nfrom Seoul ", heightCm: 178, followerRelations: [{ followerId: "viewer" }],
       },
     ]);
 
@@ -97,6 +97,8 @@ describe("/api/users/discover route", () => {
       interestLanguages: [{ code: "en", level: 3 }],
       badge: "online",
       bio: "Hello from Seoul",
+      heightCm: 178,
+      isFollowing: true,
     });
     expect(typeof payload.users[0].age).toBe("number");
     expect(payload.users[1]).toMatchObject({ id: "yuki", nationalityCountry: "JP", primaryLanguages: ["ja"], bio: null });

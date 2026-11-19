@@ -15,6 +15,7 @@ import {
 } from "@/lib/birth-date";
 import { isDiscoverySource, type DiscoverySource } from "@/lib/discovery-source";
 import { isProfileGender, type ProfileGender } from "@/lib/profile-gender";
+import { normalizeHeightCm } from "@/lib/profile-height";
 import { defaultNationalityForLanguage, normalizeNationalityCountry } from "@/lib/nationality";
 import {
   isUsagePurpose,
@@ -270,6 +271,7 @@ export async function PATCH(request: NextRequest) {
     defaultDisplayLanguage?: string | null;
     birthDate?: Date | null;
     gender?: ProfileGender | null;
+    heightCm?: number | null;
     discoverySource?: DiscoverySource | null;
     usagePurpose?: UsagePurpose | null;
     usagePurposeNote?: string | null;
@@ -469,6 +471,19 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "gender_locked" }, { status: 409 });
     } else if (!storedGender) {
       data.gender = body.gender;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "heightCm")) {
+    // Typed by the user, in cm; null clears it. Not locked.
+    if (body.heightCm === null) {
+      data.heightCm = null;
+    } else {
+      const heightCm = normalizeHeightCm(body.heightCm);
+      if (heightCm === null) {
+        return NextResponse.json({ error: "invalid_height" }, { status: 400 });
+      }
+      data.heightCm = heightCm;
     }
   }
 

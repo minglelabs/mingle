@@ -50,6 +50,7 @@ const userProfileSelect = {
   locationCountry: true,
   locationCountryCode: true,
   faceVerifiedAt: true,
+  heightCm: true,
   _count: {
     select: {
       followerRelations: {
@@ -164,5 +165,6 @@ export async function GET(_request: NextRequest, { params }: UserProfileRoutePro
     ...identityBadgeFlags(user),
     // Passed the selfie check for the current photo.
     ...(user.faceVerifiedAt ? { faceVerified: true } : {}),
+    ...(typeof user.heightCm === "number" ? { heightCm: user.heightCm } : {}),
   });
 }

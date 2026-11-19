@@ -1,6 +1,7 @@
 "use client";
 
-import { Loader2, UserRound } from "lucide-react";
+import { Check, Loader2, MessageCircle, UserPlus, UserRound } from "lucide-react";
+import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -18,13 +19,15 @@ import {
   type DiscoveryPerson,
 } from "@/components/search/people-discovery-state";
 import type { AppDictionary, AppLocale } from "@/i18n";
-import { resolveHomeCopy, type HomeCopy } from "@/i18n/home-copy";
+import { fillHomeCount, resolveHomeCopy, type HomeCopy } from "@/i18n/home-copy";
 import { resolvePeopleDiscoveryCopy, type PeopleDiscoveryCopy } from "@/i18n/people-discovery-copy";
 import { formatProfileAge } from "@/i18n/profile-age-copy";
 import { resolveAccountBadge, withAccountBadgeLabel } from "@/lib/account-badge";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { countryFlagEmoji, getCountryDisplayName } from "@/lib/nationality";
 import { normalizeProfileImageCrop } from "@/lib/profile-image-crop";
+import { requestProfileBasics } from "@/lib/profile-basics";
+import { useStartDirectConversation } from "@/lib/use-start-direct-conversation";
 
 const InviteGate = lazy(() => import("@/components/onboarding/invite-gate"));
 const PhoneGate = lazy(() => import("@/components/onboarding/phone-gate"));
@@ -117,6 +120,49 @@ export default function HomePage({ dictionary, locale }: HomePageProps) {
     router.push(`/${locale}/users/${encodeURIComponent(userId)}`);
   }, [locale, router]);
 
+  const isKorean = locale === "ko";
+  const actionLabels = useMemo(() => ({
+    follow: dictionary.connect.followAction ?? (isKorean ? "팔로우" : "Follow"),
+    following: dictionary.connect.followingAction ?? (isKorean ? "팔로잉" : "Following"),
+    message: dictionary.profile.messageAction ?? (isKorean ? "메시지 보내기" : "Message"),
+    failed: dictionary.profile.messageError ?? (isKorean ? "잠시 후 다시 시도해 주세요." : "Please try again in a moment."),
+  }), [dictionary, isKorean]);
+
+  // Follow and Message work from the card itself, without opening the profile.
+  const followBusyRef = useRef(new Set<string>());
+  const setFollowing = useCallback((userId: string, isFollowing: boolean) => {
+    setPage((current) => {
+      if (!current) return current;
+      const next = { ...current, users: current.users.map((user) => (user.id === userId ? { ...user, isFollowing } : user)) };
+      // The session cache too, or the button reverts on coming back to the tab.
+      pageCache.set(cacheKey, next);
+      return next;
+    });
+  }, [cacheKey]);
+  const toggleFollow = useCallback(async (person: DiscoveryPerson) => {
+    const next = !person.isFollowing;
+    if (followBusyRef.current.has(person.id)) return;
+    if (next && !(await requestProfileBasics())) return;
+    followBusyRef.current.add(person.id);
+    setFollowing(person.id, next);
+    try {
+      const response = await fetch(buildClientApiPath(`/users/${encodeURIComponent(person.id)}/follow`), { method: next ? "POST" : "DELETE" });
+      if (!response.ok) throw new Error("follow_failed");
+    } catch {
+      setFollowing(person.id, !next);
+      toast(actionLabels.failed);
+    } finally {
+      followBusyRef.current.delete(person.id);
+    }
+  }, [actionLabels.failed, setFollowing]);
+
+  const { start: startDirectConversation, pendingUserId: messagePendingUserId } = useStartDirectConversation(locale);
+  const messagePerson = useCallback(async (person: DiscoveryPerson) => {
+    const result = await startDirectConversation(person.id);
+    if (result.kind === "daily_limit") toast(fillHomeCount(copy.dailyLimit, result.limit));
+    else if (result.kind === "failed") toast(actionLabels.failed);
+  }, [actionLabels.failed, copy.dailyLimit, startDirectConversation]);
+
   const heading = page?.viewerSide === "korean" ? peopleCopy.headingForKorean : peopleCopy.headingForForeigner;
   const gated = sessionStatus === "authenticated" && appAccess && !appAccess.allowed;
 
@@ -162,7 +208,19 @@ export default function HomePage({ dictionary, locale }: HomePageProps) {
             <h2 className="px-1 pb-2.5 text-[17px] font-bold text-slate-900">{heading}</h2>
             <ul className="grid grid-cols-2 gap-2.5">
               {page.users.map((person) => (
-                <PersonCard key={person.id} person={person} locale={locale} copy={copy} peopleCopy={peopleCopy} onOpen={openPerson} />
+                <PersonCard
+                  key={person.id}
+                  person={person}
+                  locale={locale}
+                  copy={copy}
+                  peopleCopy={peopleCopy}
+                  labels={actionLabels}
+                  isOwn={person.id === viewerId}
+                  messagePending={messagePendingUserId === person.id}
+                  onOpen={openPerson}
+                  onToggleFollow={toggleFollow}
+                  onMessage={messagePerson}
+                />
               ))}
             </ul>
             <div ref={sentinelRef} className="flex h-12 items-center justify-center" aria-hidden={!loadingMore}>
@@ -190,13 +248,23 @@ function PersonCard({
   locale,
   copy,
   peopleCopy,
+  labels,
+  isOwn,
+  messagePending,
   onOpen,
+  onToggleFollow,
+  onMessage,
 }: {
   person: DiscoveryPerson;
   locale: AppLocale;
   copy: HomeCopy;
   peopleCopy: PeopleDiscoveryCopy;
+  labels: { follow: string; following: string; message: string };
+  isOwn: boolean;
+  messagePending: boolean;
   onOpen: (userId: string) => void;
+  onToggleFollow: (person: DiscoveryPerson) => void;
+  onMessage: (person: DiscoveryPerson) => void;
 }) {
   const name = person.name?.trim() || person.handle?.trim() || peopleCopy.userFallback;
   // A photo that fails to load (expired URL, removed object) falls back to the silhouette.
@@ -218,13 +286,13 @@ function PersonCard({
   ].filter(Boolean).join(", ");
 
   return (
-    <li>
+    <li className="flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-[0_1px_4px_rgba(15,23,42,0.06)]">
       <button
         type="button"
         onClick={() => onOpen(person.id)}
         aria-label={label}
         data-qa="home-person-card"
-        className="block w-full overflow-hidden rounded-2xl border border-gray-100 bg-white text-left shadow-[0_1px_4px_rgba(15,23,42,0.06)] transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+        className="block w-full flex-1 text-left transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
       >
         <span className="relative block aspect-square w-full overflow-hidden bg-gray-100" aria-hidden="true">
           {person.image && !imageFailed ? (
@@ -266,6 +334,9 @@ function PersonCard({
             {typeof person.age === "number" ? (
               <span className="shrink-0 text-[14px] text-gray-500">{person.age}</span>
             ) : null}
+            {typeof person.heightCm === "number" ? (
+              <span className="shrink-0 text-[12px] tabular-nums text-gray-400">{person.heightCm}cm</span>
+            ) : null}
             <AccountBadge kind={accountBadge} locale={locale} tone="dark" />
           </span>
           {primary.length || interest.length ? (
@@ -274,6 +345,35 @@ function PersonCard({
           {person.bio ? <span className="mt-1.5 line-clamp-2 block text-[12.5px] leading-snug text-slate-600">{person.bio}</span> : null}
         </span>
       </button>
+      {isOwn ? null : (
+        // Follow and Message right on the card (no trip to the profile).
+        <div className="flex items-center gap-1.5 px-2.5 pb-2.5">
+          <button
+            type="button"
+            data-qa="home-card-follow"
+            data-following={person.isFollowing ? "true" : "false"}
+            onClick={() => onToggleFollow(person)}
+            aria-pressed={person.isFollowing === true}
+            className={`flex h-9 min-w-0 flex-1 items-center justify-center gap-1 rounded-full px-2 text-[13px] font-bold transition active:scale-[0.97] ${
+              person.isFollowing ? "bg-gray-100 text-gray-600" : "bg-slate-900 text-white"
+            }`}
+          >
+            {person.isFollowing ? <Check size={14} strokeWidth={3} aria-hidden="true" /> : <UserPlus size={14} strokeWidth={2.4} aria-hidden="true" />}
+            <span className="truncate">{person.isFollowing ? labels.following : labels.follow}</span>
+          </button>
+          <button
+            type="button"
+            data-qa="home-card-message"
+            onClick={() => onMessage(person)}
+            disabled={messagePending}
+            aria-label={labels.message}
+            title={labels.message}
+            className="flex h-9 w-11 shrink-0 items-center justify-center rounded-full bg-amber-400 text-white transition active:scale-[0.97] disabled:opacity-60"
+          >
+            {messagePending ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <MessageCircle size={17} strokeWidth={2.4} aria-hidden="true" />}
+          </button>
+        </div>
+      )}
     </li>
   );
 }
