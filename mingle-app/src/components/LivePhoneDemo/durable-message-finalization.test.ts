@@ -3,6 +3,7 @@ import type { DurableFinalization } from './durable-message-finalization'
 
 const { pendingRemoval } = vi.hoisted(() => ({ pendingRemoval: vi.fn<(identity: unknown) => unknown[]>(() => []) }))
 vi.mock('../conversation-mutation-queue', () => ({ readConversationMutationRecords: pendingRemoval }))
+vi.mock('@/lib/coin-wallet-client', () => ({ notifyCoinsExhausted: vi.fn() }))
 type Module = typeof import('./durable-message-finalization')
 const owner = 'user:one'
 const namespace = 'ios/v2.0.1'
@@ -172,6 +173,18 @@ describe('durable message finalization', () => {
     fetcher.mockImplementation(async url => String(url).endsWith('translate/finalize') ? Response.json(value) : new Response(null, { status: 204 }))
     await jobs.deliverDurableFinalization(jobs.enqueueDurableFinalization(input()))
     expect(jobs.readDurableFinalizations(owner, namespace)[0]).toMatchObject({ sourceDelivered: true, result: null, attemptCount: 1 })
+  })
+
+  it('marks a message sent with no Hash as unbilled instead of leaving it pending', async () => {
+    fetcher.mockImplementation(async url => String(url).endsWith('translate/finalize')
+      ? Response.json({ error: 'coins_insufficient', translations: {} }, { status: 402 })
+      : new Response(null, { status: 204 }))
+    const record = jobs.enqueueDurableFinalization(input('broke'))
+    await jobs.deliverDurableFinalization(record)
+    expect(fetcher.mock.calls.filter(([url]) => String(url).endsWith('translate/finalize'))).toHaveLength(1)
+    const cached = JSON.parse(localStorage.getItem(cacheKey)!).find((u: { id: string }) => u.id === 'broke')
+    expect(cached.translationStatus).toBe('unbilled')
+    expect(cached.translations).toEqual({})
   })
 
   it('accepts a detected source matching the sole target without fabricating a translation', () => {

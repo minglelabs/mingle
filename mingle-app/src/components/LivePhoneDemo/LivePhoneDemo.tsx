@@ -662,7 +662,7 @@ type LivePhoneDemoQaUtterance = {
   originalLang: string
   translations: Record<string, string>
   translationFinalized: Record<string, boolean>
-  translationStatus: 'pending' | 'retrying' | null
+  translationStatus: 'pending' | 'retrying' | 'unbilled' | null
   createdAtMs: number | null
 }
 

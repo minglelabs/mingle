@@ -2,6 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-19 — 해씨 결제 QA 수정: 소진 안내가 키보드 뒤에, 번역 안 된 메시지의 "…", 복원 피드백
+
+- Surface: `src/components/coins/coin-exhausted-sheet.tsx`, `coin-store-panel.tsx`, `src/lib/coin-wallet-client.ts`, `src/components/LivePhoneDemo/ChatBubble.tsx`, `durable-message-finalization.ts`, `src/i18n/coin-copy.ts`, `src/lib/handles.ts`.
+- Issue: The iPhone sandbox purchase QA run (scenario `hash-store-purchase`) found: when Hash ran out while typing, the "해씨를 다 썼어요" sheet opened under the keyboard, unseen, and a tap on the dimmed area closed it; the message sent with no Hash kept "…" in every language row, also after a reload and for the other members; 구매 복원 gave no feedback; the packs loaded about 2 s after the rest and pushed the price list down; the store reopened where the last visit had scrolled, hiding the balance. Separately, email sign-up with a common name failed as "이미 가입된 이메일": every default handle candidate used the last 8 characters of the address, which all @gmail.com (or @mingle.test) accounts share.
+- Resolution: The exhausted sheet and the store blur a focused text field when they open, so the keyboard goes down first. A message refused for no Hash (402) is marked `unbilled`: the bubble shows the original only, with "해씨가 없어 번역하지 않았어요" (15 languages). A stored message that still has no translation a minute after it was sent drops its empty rows instead of waiting on "…". 구매 복원 spins while the native restore runs and says "복원할 구매가 없어요" after 3 s when nothing came back. The pack list shows placeholder rows of the same size while loading, and the store opens at the top. Default handles take an 8-character hash of the whole address, then a random suffix as the last candidate.
+- Verification: iPhone 14 (iOS 26.6.2) on devbox: ran out of Hash while typing, the keyboard closed and the sheet showed; the last message showed the original with the note; the old "…" message showed the original after a relaunch; the store opened at the top with placeholder rows and no jump; restore spun, then showed the toast. Unit tests (durable finalization 402 → unbilled, handle candidates) and lint/types pass.
+
 ## 2026-11-19 — Hash Rush: pickpocketing in the app
 
 - Surface: the Hash Rush field (`src/features/hash-rush/engine`), `protocol.ts`, `client.ts`; game server hash-rush #239.

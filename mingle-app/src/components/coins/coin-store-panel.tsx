@@ -2,7 +2,7 @@
 
 import { ChevronLeft, Loader2 } from "lucide-react";
 import HashSeedIcon from "@/components/coins/hash-seed-icon";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import SlideSurface from "@/components/slide-surface";
 import type { AppLocale } from "@/i18n";
@@ -15,12 +15,16 @@ import {
   startCoinPurchase,
   useCoinStore,
 } from "@/lib/coin-purchase-client";
-import { refreshCoinWallet, useCoinWallet } from "@/lib/coin-wallet-client";
+import { dismissSoftKeyboard, refreshCoinWallet, useCoinWallet } from "@/lib/coin-wallet-client";
 import { formatCoinCount, useAnimatedCoinCount, useCoinClock } from "./coin-balance-chip";
 import CoinUsageSection from "./coin-usage-section";
 import CoinPriceListSection from "./coin-price-list-section";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+// The native restore answers only when it finds something; after this long with
+// no restored purchase, the store says there was nothing to restore.
+const RESTORE_FEEDBACK_MS = 3_000;
+const PRODUCT_PLACEHOLDER_ROWS = 5;
 
 function formatRemaining(ms: number, locale: string): string {
   const totalMinutes = Math.max(1, Math.ceil(ms / 60_000));
@@ -49,6 +53,9 @@ export default function CoinStorePanel({
   const balance = useAnimatedCoinCount(wallet?.balance ?? 0);
   const [view, setView] = useState<"store" | "usage">("store");
   const now = useCoinClock(open);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [restoring, setRestoring] = useState(false);
+  const restoreTimerRef = useRef<number | null>(null);
   // Leaving always returns to the store view, so the next open starts there.
   const close = () => {
     setView("store");
@@ -57,9 +64,29 @@ export default function CoinStorePanel({
 
   useEffect(() => {
     if (!open) return;
+    dismissSoftKeyboard();
+    // Each open starts at the balance, not where the last visit scrolled to.
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
     void refreshCoinWallet({ force: true });
     void loadCoinProducts();
   }, [open]);
+
+  // A purchase restored while the button spins already showed its own toast.
+  const restoreFoundRef = useRef(false);
+  useEffect(() => () => {
+    if (restoreTimerRef.current !== null) window.clearTimeout(restoreTimerRef.current);
+  }, []);
+  const restore = () => {
+    if (restoring) return;
+    restoreFoundRef.current = false;
+    setRestoring(true);
+    restoreCoinPurchases();
+    restoreTimerRef.current = window.setTimeout(() => {
+      restoreTimerRef.current = null;
+      setRestoring(false);
+      if (!restoreFoundRef.current) toast(copy.restoreNone);
+    }, RESTORE_FEEDBACK_MS);
+  };
 
   // The refill became due while the store is open: fetch it.
   const nextGrantAt = wallet ? Date.parse(wallet.nextDailyGrantAt) : 0;
@@ -71,6 +98,7 @@ export default function CoinStorePanel({
     const result = store.lastResult;
     if (!result) return;
     if (result.kind === "success") {
+      restoreFoundRef.current = true;
       toast.success(fillCoinCopy(copy.purchaseSuccess, { coins: formatCoinCount(result.coins, locale) }));
       if (typeof navigator !== "undefined") navigator.vibrate?.(20);
     } else {
@@ -108,7 +136,7 @@ export default function CoinStorePanel({
         <span />
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-5 pb-10 pt-5">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-5 pb-10 pt-5">
         {view === "usage" ? <CoinUsageSection locale={locale} /> : (
           <div className="space-y-5">
             <section className="text-center" aria-live="polite">
@@ -156,7 +184,18 @@ export default function CoinStorePanel({
 
             <section>
               {store.status === "loading" || store.status === "idle" ? (
-                <div className="flex justify-center py-8 text-gray-400"><Loader2 size={24} className="animate-spin" aria-hidden="true" /></div>
+                // Rows the size of the packs, so the price list below does not jump when they arrive.
+                <ul className="space-y-2.5" aria-busy="true">
+                  {Array.from({ length: store.products.length || PRODUCT_PLACEHOLDER_ROWS }, (_, index) => (
+                    <li key={index} className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3.5" aria-hidden="true">
+                      <div className="min-w-0 flex-1">
+                        <p className="flex h-[25.5px] items-center"><span className="h-4 w-20 animate-pulse rounded bg-gray-100" /></p>
+                        <p className="mt-0.5 flex h-[18px] items-center"><span className="h-3 w-24 animate-pulse rounded bg-gray-100" /></p>
+                      </div>
+                      <span className="min-h-11 min-w-[92px] shrink-0 animate-pulse rounded-full bg-gray-100" />
+                    </li>
+                  ))}
+                </ul>
               ) : store.status === "unavailable" ? (
                 <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-600">
                   {store.channel === "web" ? copy.webUnavailable : copy.updateRequired}
@@ -235,10 +274,13 @@ export default function CoinStorePanel({
               {store.status === "ready" && store.channel === "store" ? (
                 <button
                   type="button"
-                  onClick={restoreCoinPurchases}
-                  className="flex min-h-11 w-full items-center text-left text-[14px] font-semibold text-slate-800"
+                  onClick={restore}
+                  disabled={restoring}
+                  aria-busy={restoring}
+                  className="flex min-h-11 w-full items-center gap-2 text-left text-[14px] font-semibold text-slate-800 disabled:text-gray-400"
                 >
                   {copy.restore}
+                  {restoring ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : null}
                 </button>
               ) : null}
               <p className="pt-1 text-[12px] leading-relaxed text-gray-500">{copy.terms}</p>

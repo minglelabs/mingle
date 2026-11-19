@@ -4,7 +4,8 @@ import HashSeedIcon from "@/components/coins/hash-seed-icon";
 import type { AppLocale } from "@/i18n";
 import { resolveLegalDocumentLocale } from "@/i18n/config";
 import { fillCoinCopy, getCoinCopy } from "@/i18n/coin-copy";
-import { useCoinWallet } from "@/lib/coin-wallet-client";
+import { dismissSoftKeyboard, useCoinWallet } from "@/lib/coin-wallet-client";
+import { useEffect } from "react";
 import { useCoinClock } from "./coin-balance-chip";
 
 /**
@@ -25,6 +26,11 @@ export default function CoinExhaustedSheet({
   const copy = getCoinCopy(locale);
   const { wallet } = useCoinWallet();
   const now = useCoinClock(open);
+  // Hash often runs out while typing: with the composer focused, the sheet
+  // would sit under the keyboard where nobody sees it.
+  useEffect(() => {
+    if (open) dismissSoftKeyboard();
+  }, [open]);
 
   if (!open) return null;
 
