@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   settingUpsert: vi.fn(),
   userFindFirst: vi.fn(),
   postFindMany: vi.fn(),
+  commentFindMany: vi.fn(),
   messageFindMany: vi.fn(),
   messageFindFirst: vi.fn(),
   queryRaw: vi.fn(),
@@ -18,6 +19,7 @@ vi.mock('@/lib/prisma', () => ({
     adminSetting: { findUnique: mocks.settingFindUnique, upsert: mocks.settingUpsert },
     user: { findFirst: mocks.userFindFirst },
     post: { findMany: mocks.postFindMany },
+    postComment: { findMany: mocks.commentFindMany },
     appMessage: { findMany: mocks.messageFindMany, findFirst: mocks.messageFindFirst },
     $queryRaw: mocks.queryRaw,
   },
@@ -98,9 +100,10 @@ describe('auto-reply prompt', () => {
   it('gives the model the profile, the posts and the last 30 messages, oldest first', async () => {
     mocks.userFindFirst.mockResolvedValue({
       name: 'Mina', handle: 'mina', bio: 'Café e praia', birthDate: new Date('2000-01-01'), nationality: 'BR',
-      locationCity: 'Rio', locationCountry: 'Brazil', primaryLanguages: ['pt'],
+      locationCity: 'Rio', locationCountry: 'Brazil', primaryLanguages: ['pt'], createdAt: NOW,
     })
     mocks.postFindMany.mockResolvedValue([{ sourceText: 'Dia de praia!', publishedAt: NOW }, { sourceText: '  ', publishedAt: NOW }])
+    mocks.commentFindMany.mockResolvedValue([{ sourceText: 'Que lindo!', createdAt: NOW, post: { sourceText: 'Pôr do sol em Lisboa' } }])
     mocks.messageFindMany.mockResolvedValue([
       message('m3', 'user_1', '📷 Photo', 3, { image: { key: 'k' } }),
       message('m2', 'op_1', 'Oi! Tudo bem?', 2),
@@ -111,11 +114,13 @@ describe('auto-reply prompt', () => {
     expect(context).toMatchObject({
       profile: { name: 'Mina', bio: 'Café e praia', age: 26, city: 'Rio', language: 'pt' },
       posts: [{ text: 'Dia de praia!' }],
+      comments: [{ text: 'Que lindo!', onPost: 'Pôr do sol em Lisboa' }],
       counterpartName: 'João',
     })
     expect(context?.transcript.map((turn) => [turn.from, turn.text])).toEqual([
       ['them', 'Olá'], ['me', 'Oi! Tudo bem?'], ['them', '[photo]'],
     ])
+    expect(context?.voice.habits.length).toBeGreaterThan(0)
     expect(buildAutoReplyInstructions(context!)).toContain('(pt)')
   })
 
@@ -137,9 +142,10 @@ describe('auto-reply worker', () => {
     vi.clearAllMocks()
     __resetAutoReplyAttemptsForTests()
     mocks.userFindFirst.mockResolvedValue({
-      name: 'Mina', handle: 'mina', bio: null, birthDate: null, nationality: null, locationCity: null, locationCountry: null, primaryLanguages: ['pt'],
+      name: 'Mina', handle: 'mina', bio: null, birthDate: null, nationality: null, locationCity: null, locationCountry: null, primaryLanguages: ['pt'], createdAt: NOW,
     })
     mocks.postFindMany.mockResolvedValue([])
+    mocks.commentFindMany.mockResolvedValue([])
     mocks.messageFindMany.mockResolvedValue([message('msg9', 'user_1', 'Olá', 50)])
     mocks.messageFindFirst.mockResolvedValue({ id: 'msg9' })
     mocks.generateJson.mockImplementation(async (request: { validate: (value: unknown) => string }) => request.validate({ reply: 'Oi!' }))

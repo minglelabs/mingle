@@ -1,7 +1,7 @@
 import { SchemaType, type ResponseSchema } from '@google/generative-ai'
 import { getSttLanguageDisplayName } from '@/lib/stt-languages'
 import { generateJson, type GenerateJsonRequest } from '@/server/llm/generate-json'
-import { reserveLearnerPlan, reservePosterProfile, resolveReserveModel, type LearningLanguage } from '@/server/operator-post-reserve/generate'
+import { reserveLearnerPlan, reservePosterProfile, type LearningLanguage } from '@/server/operator-post-reserve/generate'
 import { hasContactDetails } from '@/server/operators/persona-rules'
 
 /**
@@ -13,11 +13,17 @@ import { hasContactDetails } from '@/server/operators/persona-rules'
  */
 export const OPERATOR_COMMENT_GENERATED_MAX_CHARS = 200
 const CALL_TIMEOUT_MS = 60_000
-/** Replies to a real person's comment: Claude Sonnet 5.5 on the Anthropic API, not the ChatGPT pool (staff decided 2026-11-19). */
-export const REAL_USER_REPLY_DEFAULT_MODEL = 'claude-sonnet-5-5'
+/** Every operator comment and reply: Claude Sonnet 5.5 on the Anthropic API, not the ChatGPT pool (staff decided 2026-11-19). */
+export const OPERATOR_COMMENT_DEFAULT_MODEL = 'claude-sonnet-5-5'
 
+/** Comments between operator accounts (OPERATOR_COMMENT_MODEL overrides). */
+export function resolveOperatorCommentModel(env: NodeJS.ProcessEnv = process.env): string {
+  return env.OPERATOR_COMMENT_MODEL?.trim() || OPERATOR_COMMENT_DEFAULT_MODEL
+}
+
+/** Replies to a real person's comment (OPERATOR_REAL_REPLY_MODEL overrides). */
 export function resolveRealUserReplyModel(env: NodeJS.ProcessEnv = process.env): string {
-  return env.OPERATOR_REAL_REPLY_MODEL?.trim() || REAL_USER_REPLY_DEFAULT_MODEL
+  return env.OPERATOR_REAL_REPLY_MODEL?.trim() || OPERATOR_COMMENT_DEFAULT_MODEL
 }
 
 export const COMMENT_KINDS: ReadonlyArray<{ key: string; weight: number; brief: string }> = [
@@ -165,7 +171,8 @@ export async function generateOperatorComment(args: {
     },
     responseSchema: RESPONSE_SCHEMA,
     validate: (value) => (value as { text?: unknown } | null)?.text,
-    ...(args.toRealUser ? { model: resolveRealUserReplyModel(), provider: 'direct' as const } : { model: resolveReserveModel() }),
+    model: args.toRealUser ? resolveRealUserReplyModel() : resolveOperatorCommentModel(),
+    provider: 'direct',
     temperature: 1,
     maxOutputTokens: 1024,
     timeoutMs: CALL_TIMEOUT_MS,

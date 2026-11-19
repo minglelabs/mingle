@@ -19,8 +19,8 @@ const IMAGE_PROMPT_MAX_CHARS = 600
 const AVOID_SAMPLE_MAX = 40
 const AVOID_SAMPLE_CHARS = 60
 const CALL_TIMEOUT_MS = 120_000
-/** Posts need a stronger writer than chat replies: the small model writes every post as the same tidy sentence. */
-export const RESERVE_DEFAULT_MODEL = 'gemini-3.8-flash'
+/** Post text: Claude Sonnet 5.5 on the Anthropic API, never the ChatGPT pool (staff decided 2026-11-19; photos stay on the pool). */
+export const RESERVE_DEFAULT_MODEL = 'claude-sonnet-5-5'
 
 export function resolveReserveModel(env: NodeJS.ProcessEnv = process.env): string {
   return env.OPERATOR_POST_RESERVE_MODEL?.trim() || RESERVE_DEFAULT_MODEL
@@ -310,6 +310,8 @@ export async function generateReservePosts(args: {
       return posts as Array<{ slot?: unknown; text?: unknown; photo?: unknown }>
     },
     model: args.model ?? resolveReserveModel(),
+    provider: 'direct',
+    effort: 'medium',
     temperature: 1,
     maxOutputTokens: 8192,
     timeoutMs: CALL_TIMEOUT_MS,
@@ -384,6 +386,8 @@ export async function rewriteReservePostText(args: {
       return posts as Array<{ slot?: unknown; text?: unknown; photo?: unknown }>
     },
     model: resolveReserveModel(),
+    provider: 'direct',
+    effort: 'medium',
     temperature: 1,
     maxOutputTokens: 2048,
     timeoutMs: CALL_TIMEOUT_MS,

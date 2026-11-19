@@ -38,7 +38,7 @@ describe('generated comments', () => {
       commenter, post: { text: '상추튀김 먹음', language: 'ko' }, existingComments: [], generate: generate as never, random: () => 0,
     })
     expect(result).toEqual({ text: '상추튀김 진짜 맛있죠', language: 'ko', kind: 'answer' })
-    expect(generate.mock.calls[0][0]).not.toHaveProperty('provider')
+    expect(generate.mock.calls[0][0]).toMatchObject({ model: 'claude-sonnet-5-5', provider: 'direct' })
   })
 
   it('answers a real person with Claude Sonnet 5.5, off the ChatGPT pool', async () => {

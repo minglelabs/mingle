@@ -1,22 +1,27 @@
 import { SchemaType, type ResponseSchema } from '@google/generative-ai'
 import { prisma } from '@/lib/prisma'
+import { zipInterestLanguages } from '@/lib/interest-languages'
 import { getSttLanguageDisplayName, sanitizeSttLanguageSelection } from '@/lib/stt-languages'
+import { reserveLearnerPlan, reservePosterProfile } from '@/server/operator-post-reserve/generate'
 import { generateJson, type GenerateJsonRequest } from '@/server/llm/generate-json'
 import { isPhotoMessageMetadata } from '@/server/operator-inbox/staff-translate'
 
 /**
  * Writes one chat reply as an operator account when staff did not answer in
- * time. The model sees exactly three things: the account's profile, the posts
- * it has published, and the last 30 messages of the room. Nothing here sends
+ * time. The model sees everything known about the account (its whole profile,
+ * the posting voice its posts are written in, its posts and its own recent
+ * comments) and the last 30 messages of the room. Nothing here sends
  * anything; `./worker.ts` decides when to call it and sends the result
  * through the same path as a staff reply.
  */
 /** Claude Sonnet 5.5 on the Anthropic API, never the ChatGPT pool (staff decided 2026-11-19). */
 export const AUTO_REPLY_DEFAULT_MODEL = 'claude-sonnet-5-5'
 export const AUTO_REPLY_TRANSCRIPT_TURNS = 30
-export const AUTO_REPLY_MAX_POSTS = 20
+export const AUTO_REPLY_MAX_POSTS = 50
+export const AUTO_REPLY_MAX_COMMENTS = 20
 export const AUTO_REPLY_MAX_REPLY_CHARS = 600
 const POST_MAX_CHARS = 500
+const COMMENT_MAX_CHARS = 200
 const MESSAGE_MAX_CHARS = 1000
 const CALL_TIMEOUT_MS = 30_000
 
@@ -36,9 +41,21 @@ export type AutoReplyContext = {
     /** The language the reply must be written in (primaryLanguages[0]). */
     language: string
     languageName: string
+    gender: string | null
+    /** ISO country of the persona (nationality shown as the flag). */
+    nationalityCountry: string | null
+    primaryLanguages: string[]
+    /** Languages the persona is learning, with the 1-5 level shown on the profile. */
+    learningLanguages: Array<{ language: string; level: number | null }>
+    usagePurpose: string | null
+    joinedAt: string
   }
+  /** How this persona types: the habits its posts are written with. */
+  voice: { type: string; length: string; habits: string[]; learner: { language: string; level: string } | null }
   /** The account's own posts, newest first. */
   posts: Array<{ publishedAt: string; text: string }>
+  /** Comments the account left on posts, newest first, with the post they answer. */
+  comments: Array<{ at: string; text: string; onPost: string }>
   counterpartName: string | null
   /** Oldest first; `me` is the operator account. */
   transcript: Array<{ from: 'me' | 'them'; at: string; text: string }>
@@ -72,15 +89,17 @@ export async function loadAutoReplyContext(args: {
   const operator = await prisma.user.findFirst({
     where: { id: args.operatorUserId, isOperator: true, isDeleted: false },
     select: {
-      name: true, handle: true, bio: true, birthDate: true, nationality: true,
-      locationCity: true, locationCountry: true, primaryLanguages: true,
+      name: true, handle: true, bio: true, birthDate: true, nationality: true, nationalityCountry: true,
+      locationCity: true, locationCountry: true, primaryLanguages: true, gender: true,
+      interestLanguages: true, interestLanguageLevels: true, usagePurpose: true, createdAt: true,
+      operatorAccount: { select: { personaGender: true, personaCountry: true } },
     },
   })
   if (!operator) return null
   const language = sanitizeSttLanguageSelection(operator.primaryLanguages)[0]
   if (!language) return null
 
-  const [posts, messages] = await Promise.all([
+  const [posts, comments, messages] = await Promise.all([
     prisma.post.findMany({
       where: {
         authorId: args.operatorUserId,
@@ -90,6 +109,12 @@ export async function loadAutoReplyContext(args: {
       orderBy: { publishedAt: 'desc' },
       take: AUTO_REPLY_MAX_POSTS,
       select: { sourceText: true, publishedAt: true },
+    }),
+    prisma.postComment.findMany({
+      where: { authorId: args.operatorUserId, OR: [{ isDeleted: null }, { isDeleted: false }], moderationHiddenAt: null },
+      orderBy: { createdAt: 'desc' },
+      take: AUTO_REPLY_MAX_COMMENTS,
+      select: { sourceText: true, createdAt: true, post: { select: { sourceText: true } } },
     }),
     prisma.appMessage.findMany({
       where: { sessionKey: args.sessionKey, OR: [{ isDeleted: false }, { isDeleted: null }] },
@@ -122,6 +147,12 @@ export async function loadAutoReplyContext(args: {
   }
   if (transcript.length === 0) return null
 
+  const gender = operator.operatorAccount?.personaGender ?? operator.gender ?? null
+  const learning = zipInterestLanguages(operator.interestLanguages, operator.interestLanguageLevels)
+    .map((item) => ({ language: item.code, level: item.level }))
+  const poster = reservePosterProfile(args.operatorUserId, gender)
+  const learner = reserveLearnerPlan(args.operatorUserId, language, learning)
+
   return {
     profile: {
       name: operator.name?.trim() || null,
@@ -133,7 +164,22 @@ export async function loadAutoReplyContext(args: {
       country: operator.locationCountry ?? null,
       language,
       languageName: getSttLanguageDisplayName(language, 'en') || language,
+      gender,
+      nationalityCountry: operator.nationalityCountry ?? operator.operatorAccount?.personaCountry ?? null,
+      primaryLanguages: sanitizeSttLanguageSelection(operator.primaryLanguages),
+      learningLanguages: learning,
+      usagePurpose: operator.usagePurpose ?? null,
+      joinedAt: operator.createdAt.toISOString(),
     },
+    voice: {
+      type: poster.type.brief,
+      length: poster.length.brief,
+      habits: poster.voice,
+      learner: learner.language !== language ? { language: learner.language, level: learner.level.brief } : null,
+    },
+    comments: comments
+      .map((comment) => ({ at: comment.createdAt.toISOString(), text: clip(comment.sourceText, COMMENT_MAX_CHARS), onPost: clip(comment.post?.sourceText, COMMENT_MAX_CHARS) }))
+      .filter((comment) => comment.text),
     posts: posts
       .map((post) => ({ publishedAt: post.publishedAt.toISOString(), text: clip(post.sourceText, POST_MAX_CHARS) }))
       .filter((post) => post.text),
@@ -146,11 +192,12 @@ export function buildAutoReplyInstructions(context: Pick<AutoReplyContext, 'prof
   const { languageName, language } = context.profile
   return [
     'You write the next chat message for one person in a one-to-one conversation on HashChat, a social app where people from different countries chat.',
-    'The input JSON has: "profile" (who you are writing as), "posts" (posts this person published, newest first), "counterpartName", and "transcript" (the conversation so far, oldest first; "me" is the person you write as, "them" is the other person).',
-    'Write ONE reply to the latest messages from "them", in the voice of the profile: consistent with its bio, age, location and the tone and topics of its posts.',
+    'The input JSON has: "profile" (everything known about who you are writing as: name, age, gender, nationality, city, languages and the ones they are learning with their level, bio, why they use the app), "voice" (how this person types: their habits and usual length, and the language they are learning), "posts" (posts this person published, newest first), "comments" (comments they left on other posts, newest first), "counterpartName", and "transcript" (the conversation so far, oldest first; "me" is the person you write as, "them" is the other person).',
+    'Write ONE reply to the latest messages from "them", in the voice of the profile: consistent with every profile fact, the typing habits in "voice", and the tone and topics of its posts and comments.',
+    'When "them" asks about this person (where they live, what they like, what they posted, what they are learning), answer from the profile, posts and comments.',
     `Write in ${languageName} (${language}), the way a native speaker texts a friend: short and casual, usually one to three sentences. Match the length and energy of the conversation. No greeting when the conversation is already under way.`,
     'Stay consistent with what "me" already said in the transcript. Do not repeat an earlier message.',
-    'Use only facts found in the profile, posts or transcript. When asked something they do not cover, answer vaguely or turn it into a question rather than inventing specifics (jobs, schools, addresses, plans).',
+    'Use only facts found in the profile, voice, posts, comments or transcript. When asked something they do not cover, answer vaguely or turn it into a question rather than inventing specifics (jobs, schools, addresses, plans).',
     'Never share or ask for contact details, other apps, links, money or payment, and never agree to meet in person or to call. Decline lightly and keep chatting here.',
     'Never claim to be a human when sincerely asked whether you are a bot or an AI; do not bring the subject up yourself.',
     'If the latest message is harassment, sexual content, or something that needs a careful human answer (self-harm, an emergency, a complaint about the app), set "reply" to an empty string.',
