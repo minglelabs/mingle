@@ -122,7 +122,7 @@ import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSession } from 'next-auth/react'
 import { EXPECTED_ACCOUNT_HEADER } from '@/lib/request-account-guard'
-import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, ChevronLeft, Share, ChevronRight, Keyboard, Instagram, PictureInPicture2, RotateCw, Headphones, ScreenShare, Volume2 } from 'lucide-react'
+import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, ChevronLeft, Share, ChevronRight, Keyboard, Users, Instagram, PictureInPicture2, RotateCw, Headphones, ScreenShare, Volume2 } from 'lucide-react'
 import ConversationParticipantsPanel from '@/components/LivePhoneDemo/conversation-participants-panel'
 import InviteFriendsScreen from '@/components/invite-friends-screen'
 import SlideSurface, { isNativeEdgeSwipeSuppressed } from '@/components/slide-surface'
@@ -2260,6 +2260,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   )
   // A 1:1 room with another account shows that person's profile above the
   // first message (once the history reaches its start).
+  // Everyone in the room, the viewer included, for the header's participants button.
+  const participantCount = (initialOtherMembers?.length ?? 0) + 1
   const directPeerMember = !isBlockedCounterpart && initialOtherMembers?.length === 1
     ? initialOtherMembers[0]
     : null
@@ -2717,6 +2719,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const bubbleDisplayModeButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuHistoryDepthRef = useRef(readInitialMenuHistoryDepth().depth)
   const menuHistoryTargetDepthRef = useRef<number | null>(null)
+  // Menu depths opened without their own history entry: the header's
+  // participants button jumps straight to depth 2, so depth 1 (the menu root)
+  // was never pushed and going back from there closes the menu.
+  const menuHistorySkippedDepthRef = useRef(0)
   const menuIosHistorySettleRef = useRef<{ depth: number, expiresAt: number } | null>(null)
   const deleteAccountCancelButtonRef = useRef<HTMLButtonElement | null>(null)
   const deleteConversationCancelButtonRef = useRef<HTMLButtonElement | null>(null)
@@ -3755,6 +3761,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setMenuScreenDirection(nextDirection)
 
     if (boundedDepth === 0) {
+      menuHistorySkippedDepthRef.current = 0
       setDeleteAccountDialogOpen(false)
       setDeleteConversationDialogOpen(false)
       setMenuScreen('root')
@@ -3790,7 +3797,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [applyMenuNavigationDepth])
 
   const requestMenuBackStep = useCallback(() => {
-    const nextDepth = Math.max(0, menuHistoryDepthRef.current - 1)
+    const steppedDepth = Math.max(0, menuHistoryDepthRef.current - 1)
+    const nextDepth = steppedDepth <= menuHistorySkippedDepthRef.current ? 0 : steppedDepth
     if (typeof window === 'undefined' || menuHistoryDepthRef.current <= 0) {
       applyMenuNavigationDepth(nextDepth)
       return
@@ -3806,7 +3814,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return
     }
     menuHistoryTargetDepthRef.current = 0
-    window.history.go(-currentDepth)
+    window.history.go(-Math.max(1, currentDepth - menuHistorySkippedDepthRef.current))
   }, [applyMenuNavigationDepth])
 
   const resetNavigationOverlays = useCallback(async () => {
@@ -4026,6 +4034,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (!menuOpen || menuScreen === 'conversation-management') return
     pushMenuHistoryEntry(2, 'conversation-management')
   }, [menuOpen, menuScreen, pushMenuHistoryEntry])
+
+  // Header shortcut (KakaoTalk-style): the participants list in one tap,
+  // without going through the menu root.
+  const handleParticipantsHeaderPress = useCallback(() => {
+    closeLanguageSelector({ syncHistory: 'replace' })
+    if (menuOpen) return
+    menuHistorySkippedDepthRef.current = 1
+    pushMenuHistoryEntry(2, 'participants')
+  }, [closeLanguageSelector, menuOpen, pushMenuHistoryEntry])
 
   const handleParticipantsMenuItemPress = useCallback(() => {
     if (!menuOpen || menuScreen === 'participants') return
@@ -9004,6 +9021,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 />
               ) : null}
             </div>
+            {headerMode === 'conversation' && conversationId && isMultiMember && showMenuButton ? (
+              <button
+                data-qa="live-demo-participants-button"
+                type="button"
+                onClick={handleParticipantsHeaderPress}
+                disabled={isAuthActionPending}
+                aria-label={participantsCopy.menuItemLabel}
+                title={participantsCopy.menuItemLabel}
+                className={`inline-flex h-9 min-w-9 items-center justify-center gap-0.5 rounded-full px-1.5 text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-950 active:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${navSurfaceClassName}`}
+              >
+                <Users size={17} strokeWidth={2} aria-hidden="true" />
+                {participantCount > 1 ? (
+                  <span className="text-[0.78rem] font-semibold tabular-nums">{participantCount}</span>
+                ) : null}
+              </button>
+            ) : null}
             {isNativeIosPipAvailable && headerMode === 'conversation' && conversationId ? (
               <button
                 data-qa="live-demo-picture-in-picture-button"
@@ -10456,6 +10489,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         onOpenProfile={onOpenProfile}
                         onBack={requestMenuBackStep}
                         conversationId={conversationId}
+                        initialOtherMembers={initialOtherMembers}
                         inviteButtonLabel={participantsCopy.inviteButtonLabel}
                         onInvite={handleInviteFromParticipantsPanel}
                       />
