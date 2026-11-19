@@ -5358,27 +5358,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ? (isNativeSttSessionOwner && (isConnecting || isReady || isActive))
     : (isConnecting || isReady || isActive)
   nativePipSttRunningRef.current = isSttSessionRunning
-  // One-time tip (per device) for the long-press "translate again", shown
-  // the first time a room shows a finished translation.
-  const retranslateTipCheckedRef = useRef(false)
-  useEffect(() => {
-    if (retranslateTipCheckedRef.current || !isVisible || !conversationId || !isStorageHydrated) return
-    const hasFinishedTranslation = utterances.some((utterance) => (
-      !utterance.recalled && !utterance.image
-      && Object.entries(utterance.translations || {}).some(([language, text]) => (
-        Boolean(text?.trim()) && utterance.translationFinalized?.[language] !== false
-      ))
-    ))
-    if (!hasFinishedTranslation) return
-    retranslateTipCheckedRef.current = true
-    try {
-      if (window.localStorage.getItem(RETRANSLATE_TIP_SHOWN_STORAGE_KEY)) return
-      window.localStorage.setItem(RETRANSLATE_TIP_SHOWN_STORAGE_KEY, String(Date.now()))
-    } catch {
-      return
-    }
-    toast.message(messageRetranslateCopy(uiLocale).tip, { duration: 6000 })
-  }, [conversationId, isStorageHydrated, isVisible, uiLocale, utterances])
   const onSttSessionRunningChangeRef = useRef(onSttSessionRunningChange)
 
   useEffect(() => {
@@ -7912,6 +7891,28 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     viewerUserId,
     declinedSessionId: declinedHashRushSessionId,
   }) ? hashRushRoomGame : null
+  // One-time tip (per device) for the long-press "translate again", shown
+  // the first time a room shows a finished translation. Held while a Hash Rush
+  // invite card is up: the toast sat over the card's buttons.
+  const retranslateTipCheckedRef = useRef(false)
+  useEffect(() => {
+    if (retranslateTipCheckedRef.current || !isVisible || !conversationId || !isStorageHydrated || hashRushInvite) return
+    const hasFinishedTranslation = utterances.some((utterance) => (
+      !utterance.recalled && !utterance.image
+      && Object.entries(utterance.translations || {}).some(([language, text]) => (
+        Boolean(text?.trim()) && utterance.translationFinalized?.[language] !== false
+      ))
+    ))
+    if (!hasFinishedTranslation) return
+    retranslateTipCheckedRef.current = true
+    try {
+      if (window.localStorage.getItem(RETRANSLATE_TIP_SHOWN_STORAGE_KEY)) return
+      window.localStorage.setItem(RETRANSLATE_TIP_SHOWN_STORAGE_KEY, String(Date.now()))
+    } catch {
+      return
+    }
+    toast.message(messageRetranslateCopy(uiLocale).tip, { duration: 6000 })
+  }, [conversationId, hashRushInvite, isStorageHydrated, isVisible, uiLocale, utterances])
   const hashRushRoom = useMemo<HashRushRoomState | null>(() => (
     hashRushRoomEnabled
       ? { liveSessionId: hashRushLiveSessionId, joined: hashRushGameActive, join: enterHashRushGame, open: hashRushGameOpen, reopen: () => setHashRushGameOpen(true), quit: () => quitHashRushGame() }
