@@ -1136,8 +1136,44 @@ describe('/api/translate/finalize route', () => {
     }
   })
 
-  it('runs the retired gemini-2.5-flash-lite request model on GPT-6 Luna without the DB preference lookup', async () => {
+  it('uses the account model over the model the app sends', async () => {
     setAuthenticatedTranslationModel('claude-haiku-5-5')
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          id: 'msg_1',
+          type: 'message',
+          role: 'assistant',
+          model: 'claude-haiku-5-5',
+          content: [{ type: 'text', text: '{"ko":"안녕하세요"}' }],
+          stop_reason: 'end_turn',
+          usage: { input_tokens: 10, output_tokens: 5 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+    process.env.OPENAI_API_KEY = 'test-openai-key'
+    process.env.ANTHROPIC_API_KEY = 'test-anthropic-key'
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: true,
+      translationModel: 'gpt-6-luna',
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.provider).toBe('claude')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('api.anthropic.com')
+  })
+
+  it('uses the model the app sends when the account has none stored', async () => {
+    setAuthenticatedTranslationModel(null)
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({
@@ -1163,9 +1199,6 @@ describe('/api/translate/finalize route', () => {
     expect(res.status).toBe(200)
     expect(json.provider).toBe('openai')
     expect(json.model).toBe('gpt-6-luna')
-    expect(mockGetServerSession).not.toHaveBeenCalled()
-    expect(mockUserFindUnique).not.toHaveBeenCalled()
-    expect(mockGenerateContent).not.toHaveBeenCalled()
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 

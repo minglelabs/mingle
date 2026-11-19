@@ -231,10 +231,11 @@ async function findUserSelectedTranslationModel(identity: SessionUserIdentity): 
   return null
 }
 
-async function resolveSelectedTranslationModel(
+/** The model stored on the requesting account, or null when there is no account or no stored model. */
+async function resolveStoredTranslationModel(
   request: NextRequest,
   sessionKeyHint?: string | null,
-): Promise<UserSelectableTranslationModel> {
+): Promise<UserSelectableTranslationModel | null> {
   const externalUserId = resolveTrackingExternalUserId(request)
   const sessionKey = resolveTrackingSessionKey(request, sessionKeyHint)
   try {
@@ -259,7 +260,7 @@ async function resolveSelectedTranslationModel(
     }
   }
 
-  return resolveDefaultSelectableTranslationModel()
+  return null
 }
 
 /** True when the text has no letter or digit in any script: only marks and spaces. */
@@ -515,9 +516,12 @@ async function runTranslateFinalize(
     isFinal,
     sourceLanguage,
   })
+  // The account's stored model wins over the one the app sends: an app keeps the model it
+  // loaded at launch, so a model changed on the server would otherwise wait for a relaunch.
   const requestedTranslationModel = normalizeSelectableTranslationModel(body.translationModel)
-  const selectedTranslationModel = requestedTranslationModel
-    ?? await resolveSelectedTranslationModel(request, sessionKeyHint)
+  const selectedTranslationModel = await resolveStoredTranslationModel(request, sessionKeyHint)
+    ?? requestedTranslationModel
+    ?? resolveDefaultSelectableTranslationModel()
   const providerResolution = resolveTranslationProviderConfig(selectedTranslationModel)
 
   if (!providerResolution.ok) {
