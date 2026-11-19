@@ -1,6 +1,7 @@
 "use client";
 
 import { requestProfileBasics } from "@/lib/profile-basics";
+import { parseFirstMessageSetupNeeds, requestFirstMessageSetup } from "@/lib/first-message-setup";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { getConversationDictionary } from "@/i18n/conversations";
 import { buildClientApiPath } from "@/lib/api-contract";
@@ -83,6 +84,19 @@ function AvatarCircle({ image, size }: { image: string | null; size: number }) {
       )}
     </div>
   );
+}
+
+/**
+ * Sends, and when the server asks for the first-message setup (someone new in
+ * the room, see @/lib/first-message-setup) shows it and sends once more.
+ * Closing the setup keeps the refusal, so the caller shows its usual error.
+ */
+async function sendPassingFirstMessageGate(send: () => Promise<Response>): Promise<Response> {
+  const response = await send();
+  if (response.status !== 403) return response;
+  const needs = parseFirstMessageSetupNeeds(response.status, await response.clone().json().catch(() => null));
+  if (!needs || !(await requestFirstMessageSetup(needs))) return response;
+  return send();
 }
 
 export default function InviteFriendsScreen({ dictionary, locale, conversationId, onRequestClose, active = true }: InviteFriendsScreenProps) {
@@ -229,7 +243,7 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
   }, []);
 
   const requestConversationStart = useCallback(async (force: boolean) => {
-    const response = await fetch(buildClientApiPath("/conversations"), {
+    const response = await sendPassingFirstMessageGate(() => fetch(buildClientApiPath("/conversations"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -237,7 +251,7 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
         inviteeUserIds: selectedUsers.map((user) => user.id),
         force,
       }),
-    });
+    }));
     if (!response.ok) throw new Error("group_conversation_create_failed");
     const data = await response.json() as { conversation?: { id?: string }; reused?: boolean };
     const conversationId = data.conversation?.id;
@@ -258,14 +272,14 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
   // creating a new one — see inviteMembersToConversationChannel.
   const requestMemberInvite = useCallback(async () => {
     if (!normalizedConversationId) throw new Error("missing_conversation_id");
-    const response = await fetch(
+    const response = await sendPassingFirstMessageGate(() => fetch(
       buildClientApiPath(`/conversations/${normalizedConversationId}/members`),
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ inviteeUserIds: selectedUsers.map((user) => user.id) }),
       },
-    );
+    ));
     if (!response.ok) throw new Error("conversation_member_invite_failed");
   }, [normalizedConversationId, selectedUsers]);
 

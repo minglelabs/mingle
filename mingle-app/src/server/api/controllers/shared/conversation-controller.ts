@@ -40,6 +40,7 @@ import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 import { mintConversationRealtimeToken, mintConversationLiveWriterToken, notifyConversationMessage } from "@/server/conversation-realtime";
 import { resolveAccountBadge } from "@/lib/account-badge";
 import { prisma } from "@/lib/prisma";
+import { readFirstMessageNeedsForInvitees } from "@/server/first-message-gate";
 
 export const runtime = "nodejs";
 
@@ -525,6 +526,16 @@ export async function postConversationMembersResponse(
     : [];
   if (inviteeUserIds.length === 0) {
     return NextResponse.json({ error: "invalid_invitees" }, { status: 400 });
+  }
+
+  // Adding someone new to a room: the same first-message gate as a 1:1 message.
+  try {
+    const needs = await readFirstMessageNeedsForInvitees(resolvedUser.userId, inviteeUserIds.map((id) => id.trim()));
+    if (needs.length > 0) {
+      return NextResponse.json({ error: "first_message_setup", needs }, { status: 403 });
+    }
+  } catch (error) {
+    console.error("[conversation/members] first_message_check_failed", error);
   }
 
   let conversation;

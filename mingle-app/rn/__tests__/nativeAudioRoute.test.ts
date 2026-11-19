@@ -114,6 +114,7 @@ describe('capabilities message (contract A.1)', () => {
       nativeTts: false,
       ttsStream: false,
       contacts: false,
+      faceCheck: false,
       earphoneMicrophoneChoice: false,
     });
     expect(buildNativeShellCapabilities({ audioRoute: false })).toEqual({
@@ -124,6 +125,7 @@ describe('capabilities message (contract A.1)', () => {
       nativeTts: false,
       ttsStream: false,
       contacts: false,
+      faceCheck: false,
       earphoneMicrophoneChoice: false,
     });
   });
@@ -137,6 +139,7 @@ describe('capabilities message (contract A.1)', () => {
       nativeTts: false,
       ttsStream: false,
       contacts: false,
+      faceCheck: false,
       earphoneMicrophoneChoice: false,
     });
   });
@@ -150,6 +153,7 @@ describe('capabilities message (contract A.1)', () => {
       nativeTts: true,
       ttsStream: false,
       contacts: false,
+      faceCheck: false,
       earphoneMicrophoneChoice: false,
     });
   });

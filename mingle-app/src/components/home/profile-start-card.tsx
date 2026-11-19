@@ -1,6 +1,7 @@
 "use client";
 
 import { Camera, Loader2, UserRound } from "lucide-react";
+import { checkPhotoForFace } from "@/lib/native-face-check";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_ACCOUNT_NAMES, needsProfileStart, resolveProfileStartCopy } from "@/i18n/profile-start-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
@@ -79,6 +80,7 @@ export default function ProfileStartCard({ locale, userId }: { locale: string; u
         form.append("imageCropScale", "1");
         form.append("imageCropX", "0");
         form.append("imageCropY", "0");
+        form.append("faceCheck", await checkPhotoForFace(file));
         const imageResponse = await fetch(buildClientApiPath("/profile/image"), {
           method: "POST",
           headers: { "x-mingle-expected-account-id": userId },

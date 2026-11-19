@@ -463,6 +463,9 @@ async function cmdStart(args) {
     'appium:wdaLaunchTimeout': 180_000,
     'appium:wdaConnectionTimeout': 180_000,
   };
+  // A second session on this Mac (its own Appium port) needs its own local
+  // WebDriverAgent port too: 8100 may already be forwarded by another session.
+  if (process.env.MINGLE_QA_WDA_PORT) capabilities['appium:wdaLocalPort'] = Number(process.env.MINGLE_QA_WDA_PORT);
   if (!simulator) {
     capabilities['appium:xcodeOrgId'] = DEFAULT_TEAM_ID;
     capabilities['appium:xcodeSigningId'] = process.env.MINGLE_UI_QA_IOS_XCODE_SIGNING_ID || 'Apple Development';
