@@ -15,7 +15,7 @@ and scores translation quality.
 | --- | --- |
 | [taste.md](taste.md) | The owner's UX rules (T1–T23), each traced to entries in [the UI/UX history](../../docs/ui-ux-codex-thread-history.md). |
 | [rubric.md](rubric.md) | Verdicts, severity anchors, the translation 1–5 scale, responsiveness thresholds. |
-| [scenarios/](scenarios) | 35 scenarios with frontmatter (`id`, `priority`, `environment`, `tags`, `taste`, `paths`, `history`). `environment` is `device` (the agent runs it end to end), `assisted` (parts need a person: speaking, AirPods) or `manual-only`. |
+| [scenarios/](scenarios) | 36 scenarios with frontmatter (`id`, `priority`, `environment`, `tags`, `taste`, `paths`, `history`). `environment` is `device` (the agent runs it end to end), `assisted` (parts need a person: speaking, AirPods) or `manual-only`. |
 | [hash-rush-web-issues-coverage.md](hash-rush-web-issues-coverage.md) | Every row of the web game's UI/UX issue list (`minglelabs/hash-rush` `docs/UIUX-ISSUES.md`) mapped to a Hash Rush scenario step, or why it does not apply in the app. |
 | [fixtures/](fixtures) | Inputs the scenarios type or send. |
 | `local/` | Gitignored: the local QA account, the device session and the Appium log. |
@@ -39,6 +39,9 @@ Scripts in `mingle-app/scripts/`:
    ```
    The phone then reaches it at `https://mingle-app-devbox-<slot>.minglelabs.app` on any network. The device profile
    uses a remote database, so the agent reads app data through the app's API.
+   Vault `secret/mingle/dev` carries the coin keys (`COIN_BILLING_ENABLED=shadow`, `IAP_ALLOW_SANDBOX=1`, store
+   keys), so the Hash store and sandbox purchases work on devbox for accounts listed in `COIN_ENFORCE_USER_IDS`
+   (see `scenarios/hash-store-purchase.md`).
 2. Connect the iPhone by USB, unlocked and trusted, with Developer Mode and Settings → Developer → Enable UI Automation on.
 3. In Claude Code: `/qa` (scenarios for the current diff), `/qa all`, `/qa P0`, or `/qa <scenario-id>`.
 4. Open the published report. Work through the manual checklist. Tell Claude where you disagree.
