@@ -89,6 +89,9 @@ export type CoinCopy = {
   restoreNone: string;
   // Under a typed message sent with no Hash: delivered, not translated.
   untranslatedNoCoins: string;
+  // "Out of Hash" sheet: invite a friend instead of paying. {coins} = reward per friend.
+  inviteForFree: string;
+  inviteForFreeNote: string;
 };
 
 const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
@@ -111,6 +114,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     gift: "선물하기", giftTitle: "{name}님에게 해씨 선물하기", giftAmountLabel: "선물할 해씨", giftAvailable: "선물 가능 {coins}", giftRule: "구매한 해씨만 선물할 수 있어요. 무료로 받은 해씨는 선물할 수 없어요.",
     giftFeeNotice: "수수료 {fee}%를 뺀 {coins}해씨가 전달돼요", giftNotEnough: "선물할 수 있는 해씨가 부족해요", giftSuccess: "{name}님에게 해씨 {coins}개를 선물했어요", giftFailed: "선물을 보내지 못했어요", sourceGiftReceived: "선물 받음", sourceGiftSent: "선물 보냄", giftRefundNotice: "선물한 해씨가 들어 있던 패키지는 환불되지 않아요.",
     restoreNone: "복원할 구매가 없어요", untranslatedNoCoins: "해씨가 없어 번역하지 않았어요",
+    inviteForFree: "친구 초대하고 무료로 받기", inviteForFreeNote: "친구 1명당 {coins}해씨 · 횟수 제한 없음",
   },
   en: {
     coin: "Hash", storeTitle: "Hash Store", balanceLabel: "Your Hash", freePaid: "Free {free} · Purchased {paid}",
@@ -131,6 +135,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     gift: "Send a gift", giftTitle: "Gift Hash to {name}", giftAmountLabel: "Hash to gift", giftAvailable: "Giftable: {coins}", giftRule: "Only Hash you purchased can be gifted. Free Hash cannot be gifted.",
     giftFeeNotice: "After a {fee}% fee, {coins} Hash will be delivered", giftNotEnough: "You don't have enough giftable Hash", giftSuccess: "You gifted {coins} Hash to {name}", giftFailed: "The gift could not be sent", sourceGiftReceived: "Gift received", sourceGiftSent: "Gift sent", giftRefundNotice: "A pack you gift Hash from can no longer be refunded.",
     restoreNone: "No purchases to restore", untranslatedNoCoins: "Not translated: out of Hash",
+    inviteForFree: "Invite friends, get Hash free", inviteForFreeNote: "{coins} Hash per friend · no limit",
   },
   ja: {
     coin: "ハッシュ", storeTitle: "ハッシュストア", balanceLabel: "保有ハッシュ", freePaid: "無料 {free} · 購入 {paid}",
@@ -151,6 +156,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     gift: "ギフトを贈る", giftTitle: "{name}さんにハッシュを贈る", giftAmountLabel: "贈るハッシュ", giftAvailable: "贈れるハッシュ {coins}", giftRule: "購入したハッシュのみ贈れます。無料でもらったハッシュは贈れません。",
     giftFeeNotice: "手数料{fee}%を差し引いた{coins}ハッシュが届きます", giftNotEnough: "贈れるハッシュが足りません", giftSuccess: "{name}さんにハッシュを{coins}個贈りました", giftFailed: "ギフトを送信できませんでした", sourceGiftReceived: "ギフト受け取り", sourceGiftSent: "ギフト送信", giftRefundNotice: "ハッシュを贈ったパックは返金できなくなります。",
     restoreNone: "復元する購入はありません", untranslatedNoCoins: "ハッシュがないため翻訳していません",
+    inviteForFree: "友だちを招待して無料でもらう", inviteForFreeNote: "友だち1人につき{coins}ハッシュ・回数制限なし",
   },
   "zh-CN": {
     coin: "哈希", storeTitle: "哈希商店", balanceLabel: "持有哈希", freePaid: "免费 {free} · 充值 {paid}",
@@ -171,6 +177,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     gift: "赠送", giftTitle: "向{name}赠送哈希", giftAmountLabel: "赠送数量", giftAvailable: "可赠送 {coins}", giftRule: "只能赠送购买的哈希，免费获得的哈希无法赠送。",
     giftFeeNotice: "扣除 {fee}% 手续费后，对方将收到 {coins} 哈希", giftNotEnough: "可赠送的哈希不足", giftSuccess: "已向{name}赠送 {coins} 哈希", giftFailed: "赠送失败", sourceGiftReceived: "收到赠送", sourceGiftSent: "已赠送", giftRefundNotice: "赠出哈希的套餐将无法退款。",
     restoreNone: "没有可恢复的购买", untranslatedNoCoins: "哈希不足，未翻译",
+    inviteForFree: "邀请好友，免费获得", inviteForFreeNote: "每邀请1位好友得{coins}哈希 · 不限次数",
   },
   "zh-TW": {
     coin: "哈希", storeTitle: "哈希商店", balanceLabel: "持有哈希", freePaid: "免費 {free} · 儲值 {paid}",
@@ -191,6 +198,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     gift: "贈送", giftTitle: "向{name}贈送哈希", giftAmountLabel: "贈送數量", giftAvailable: "可贈送 {coins}", giftRule: "只能贈送購買的哈希，免費獲得的哈希無法贈送。",
     giftFeeNotice: "扣除 {fee}% 手續費後，對方將收到 {coins} 哈希", giftNotEnough: "可贈送的哈希不足", giftSuccess: "已向{name}贈送 {coins} 哈希", giftFailed: "贈送失敗", sourceGiftReceived: "收到贈送", sourceGiftSent: "已贈送", giftRefundNotice: "贈出哈希的套餐將無法退款。",
     restoreNone: "沒有可回復的購買", untranslatedNoCoins: "哈希不足，未翻譯",
+    inviteForFree: "邀請好友，免費獲得", inviteForFreeNote: "每邀請1位好友得{coins}哈希 · 不限次數",
   },
   fr: {
     coin: "Hash", storeTitle: "Boutique Hash", balanceLabel: "Vos Hash", freePaid: "Gratuits {free} · Achetés {paid}",
@@ -211,6 +219,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     gift: "Offrir", giftTitle: "Offrir des Hash à {name}", giftAmountLabel: "Hash à offrir", giftAvailable: "Offrables : {coins}", giftRule: "Seuls les Hash achetés peuvent être offerts. Les Hash gratuits ne peuvent pas l'être.",
     giftFeeNotice: "Après {fee} % de frais, {coins} Hash seront remis", giftNotEnough: "Vous n'avez pas assez de Hash offrables", giftSuccess: "Vous avez offert {coins} Hash à {name}", giftFailed: "Le cadeau n'a pas pu être envoyé", sourceGiftReceived: "Cadeau reçu", sourceGiftSent: "Cadeau envoyé", giftRefundNotice: "Un pack dont vous offrez des Hash n’est plus remboursable.",
     restoreNone: "Aucun achat à restaurer", untranslatedNoCoins: "Non traduit : plus de Hash",
+    inviteForFree: "Invitez des amis, recevez des Hash gratuits", inviteForFreeNote: "{coins} Hash par ami · sans limite",
   },
   de: {
     coin: "Hash", storeTitle: "Hash-Shop", balanceLabel: "Deine Hash", freePaid: "Gratis {free} · Gekauft {paid}",
@@ -231,6 +240,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     gift: "Verschenken", giftTitle: "Hash an {name} verschenken", giftAmountLabel: "Hash zum Verschenken", giftAvailable: "Verschenkbar: {coins}", giftRule: "Nur gekaufte Hash können verschenkt werden. Kostenlose Hash nicht.",
     giftFeeNotice: "Nach {fee} % Gebühr kommen {coins} Hash an", giftNotEnough: "Du hast nicht genug verschenkbare Hash", giftSuccess: "Du hast {name} {coins} Hash geschenkt", giftFailed: "Das Geschenk konnte nicht gesendet werden", sourceGiftReceived: "Geschenk erhalten", sourceGiftSent: "Geschenk gesendet", giftRefundNotice: "Ein Paket, aus dem du Hash verschenkst, ist nicht mehr erstattungsfähig.",
     restoreNone: "Keine Käufe zum Wiederherstellen", untranslatedNoCoins: "Nicht übersetzt: kein Hash mehr",
+    inviteForFree: "Freunde einladen, Hash gratis bekommen", inviteForFreeNote: "{coins} Hash pro Freund · ohne Limit",
   },
   es: {
     coin: "Hash", storeTitle: "Tienda de Hash", balanceLabel: "Tus Hash", freePaid: "Gratis {free} · Comprados {paid}",
@@ -251,6 +261,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     gift: "Regalar", giftTitle: "Regalar Hash a {name}", giftAmountLabel: "Hash para regalar", giftAvailable: "Regalables: {coins}", giftRule: "Solo puedes regalar Hash comprados. Los Hash gratuitos no se pueden regalar.",
     giftFeeNotice: "Tras una comisión del {fee} %, se entregarán {coins} Hash", giftNotEnough: "No tienes suficientes Hash regalables", giftSuccess: "Regalaste {coins} Hash a {name}", giftFailed: "No se pudo enviar el regalo", sourceGiftReceived: "Regalo recibido", sourceGiftSent: "Regalo enviado", giftRefundNotice: "Un paquete del que regalas Hash ya no se puede reembolsar.",
     restoreNone: "No hay compras para restaurar", untranslatedNoCoins: "Sin traducir: no te queda Hash",
+    inviteForFree: "Invita a amigos y recibe Hash gratis", inviteForFreeNote: "{coins} Hash por amigo · sin límite",
   },
   pt: {
     coin: "Hash", storeTitle: "Loja de Hash", balanceLabel: "Seus Hash", freePaid: "Grátis {free} · Comprados {paid}",
@@ -271,6 +282,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     gift: "Presentear", giftTitle: "Presentear {name} com Hash", giftAmountLabel: "Hash para presentear", giftAvailable: "Disponível para presente: {coins}", giftRule: "Só é possível presentear Hash comprados. Hash gratuitos não podem ser presenteados.",
     giftFeeNotice: "Após a taxa de {fee}%, {coins} Hash serão entregues", giftNotEnough: "Você não tem Hash suficientes para presentear", giftSuccess: "Você presenteou {name} com {coins} Hash", giftFailed: "Não foi possível enviar o presente", sourceGiftReceived: "Presente recebido", sourceGiftSent: "Presente enviado", giftRefundNotice: "Um pacote do qual você presenteia Hash não pode mais ser reembolsado.",
     restoreNone: "Nenhuma compra para restaurar", untranslatedNoCoins: "Não traduzido: sem Hash",
+    inviteForFree: "Convide amigos e ganhe Hash grátis", inviteForFreeNote: "{coins} Hash por amigo · sem limite",
   },
   it: {
     coin: "Hash", storeTitle: "Negozio Hash", balanceLabel: "I tuoi Hash", freePaid: "Gratis {free} · Acquistati {paid}",
@@ -291,6 +303,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     gift: "Regala", giftTitle: "Regala Hash a {name}", giftAmountLabel: "Hash da regalare", giftAvailable: "Regalabili: {coins}", giftRule: "Puoi regalare solo gli Hash acquistati. Gli Hash gratuiti non si possono regalare.",
     giftFeeNotice: "Dopo una commissione del {fee}%, verranno consegnati {coins} Hash", giftNotEnough: "Non hai abbastanza Hash regalabili", giftSuccess: "Hai regalato {coins} Hash a {name}", giftFailed: "Impossibile inviare il regalo", sourceGiftReceived: "Regalo ricevuto", sourceGiftSent: "Regalo inviato", giftRefundNotice: "Un pacchetto da cui regali Hash non è più rimborsabile.",
     restoreNone: "Nessun acquisto da ripristinare", untranslatedNoCoins: "Non tradotto: Hash esauriti",
+    inviteForFree: "Invita amici e ricevi Hash gratis", inviteForFreeNote: "{coins} Hash per amico · senza limiti",
   },
   ru: {
     coin: "Хэш", storeTitle: "Магазин Хэш", balanceLabel: "Ваш Хэш", freePaid: "Бесплатно {free} · Куплено {paid}",
@@ -311,6 +324,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     gift: "Подарить", giftTitle: "Подарить Хэш: {name}", giftAmountLabel: "Сколько подарить", giftAvailable: "Доступно для подарка: {coins}", giftRule: "Дарить можно только купленный Хэш. Бесплатный Хэш подарить нельзя.",
     giftFeeNotice: "За вычетом комиссии {fee}% будет доставлено {coins} Хэш", giftNotEnough: "Недостаточно Хэша для подарка", giftSuccess: "Вы подарили {coins} Хэш: {name}", giftFailed: "Не удалось отправить подарок", sourceGiftReceived: "Получен подарок", sourceGiftSent: "Отправлен подарок", giftRefundNotice: "Пакет, из которого вы дарите Хэш, больше нельзя вернуть.",
     restoreNone: "Нет покупок для восстановления", untranslatedNoCoins: "Не переведено: закончились Хэш",
+    inviteForFree: "Пригласите друзей и получите Хэш бесплатно", inviteForFreeNote: "{coins} Хэш за друга · без ограничений",
   },
   ar: {
     coin: "هاش", storeTitle: "متجر هاش", balanceLabel: "رصيدك من هاش", freePaid: "مجاني {free} · مشترى {paid}",
@@ -331,6 +345,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     gift: "إهداء", giftTitle: "إهداء هاش إلى {name}", giftAmountLabel: "الهاش المراد إهداؤه", giftAvailable: "المتاح للإهداء: {coins}", giftRule: "يمكن إهداء الهاش الذي اشتريته فقط. لا يمكن إهداء الهاش المجاني.",
     giftFeeNotice: "بعد خصم رسوم {fee}٪ سيصل {coins} هاش", giftNotEnough: "ليس لديك هاش كافٍ للإهداء", giftSuccess: "أهديت {coins} هاش إلى {name}", giftFailed: "تعذر إرسال الهدية", sourceGiftReceived: "هدية مستلمة", sourceGiftSent: "هدية مرسلة", giftRefundNotice: "لا يمكن استرداد الحزمة التي تهدي منها الهاش.",
     restoreNone: "لا توجد مشتريات لاستعادتها", untranslatedNoCoins: "لم تتم الترجمة: نفد رصيد هاش",
+    inviteForFree: "ادعُ أصدقاءك واحصل على هاش مجانًا", inviteForFreeNote: "{coins} هاش لكل صديق · بلا حد",
   },
   hi: {
     coin: "हैश", storeTitle: "हैश स्टोर", balanceLabel: "आपके हैश", freePaid: "मुफ़्त {free} · खरीदे गए {paid}",
@@ -351,6 +366,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     gift: "उपहार दें", giftTitle: "{name} को हैश उपहार दें", giftAmountLabel: "उपहार में देने वाले हैश", giftAvailable: "उपहार योग्य: {coins}", giftRule: "केवल खरीदे गए हैश उपहार में दिए जा सकते हैं। मुफ़्त हैश उपहार में नहीं दिए जा सकते।",
     giftFeeNotice: "{fee}% शुल्क के बाद {coins} हैश पहुँचेंगे", giftNotEnough: "उपहार देने के लिए पर्याप्त हैश नहीं हैं", giftSuccess: "आपने {name} को {coins} हैश उपहार में दिए", giftFailed: "उपहार नहीं भेजा जा सका", sourceGiftReceived: "उपहार मिला", sourceGiftSent: "उपहार भेजा", giftRefundNotice: "जिस पैक से आप हैश उपहार में देते हैं, उसका रिफ़ंड नहीं हो सकता।",
     restoreNone: "बहाल करने के लिए कोई खरीद नहीं", untranslatedNoCoins: "अनुवाद नहीं हुआ: हैश खत्म हो गए",
+    inviteForFree: "दोस्तों को बुलाएँ, मुफ़्त हैश पाएँ", inviteForFreeNote: "हर दोस्त पर {coins} हैश · कोई सीमा नहीं",
   },
   th: {
     coin: "แฮช", storeTitle: "ร้านแฮช", balanceLabel: "แฮชของคุณ", freePaid: "ฟรี {free} · ซื้อ {paid}",
@@ -371,6 +387,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     gift: "ส่งของขวัญ", giftTitle: "ส่งแฮชเป็นของขวัญให้ {name}", giftAmountLabel: "จำนวนแฮชที่จะส่ง", giftAvailable: "ส่งเป็นของขวัญได้ {coins}", giftRule: "ส่งเป็นของขวัญได้เฉพาะแฮชที่ซื้อเท่านั้น แฮชที่ได้รับฟรีส่งไม่ได้",
     giftFeeNotice: "หลังหักค่าธรรมเนียม {fee}% ผู้รับจะได้ {coins} แฮช", giftNotEnough: "แฮชที่ส่งเป็นของขวัญได้มีไม่พอ", giftSuccess: "คุณส่ง {coins} แฮชให้ {name} แล้ว", giftFailed: "ส่งของขวัญไม่สำเร็จ", sourceGiftReceived: "ได้รับของขวัญ", sourceGiftSent: "ส่งของขวัญ", giftRefundNotice: "แพ็กที่คุณส่งแฮชเป็นของขวัญจะขอคืนเงินไม่ได้อีก",
     restoreNone: "ไม่มีการซื้อที่ต้องกู้คืน", untranslatedNoCoins: "ไม่ได้แปล: แฮชหมดแล้ว",
+    inviteForFree: "ชวนเพื่อน รับแฮชฟรี", inviteForFreeNote: "{coins} แฮชต่อเพื่อน 1 คน · ไม่จำกัดจำนวน",
   },
   vi: {
     coin: "Hash", storeTitle: "Cửa hàng Hash", balanceLabel: "Hash của bạn", freePaid: "Miễn phí {free} · Đã mua {paid}",
@@ -391,6 +408,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     gift: "Tặng quà", giftTitle: "Tặng Hash cho {name}", giftAmountLabel: "Số Hash muốn tặng", giftAvailable: "Có thể tặng: {coins}", giftRule: "Chỉ có thể tặng Hash đã mua. Hash miễn phí không thể tặng.",
     giftFeeNotice: "Sau khi trừ phí {fee}%, {coins} Hash sẽ được gửi đi", giftNotEnough: "Bạn không đủ Hash có thể tặng", giftSuccess: "Bạn đã tặng {coins} Hash cho {name}", giftFailed: "Không gửi được quà", sourceGiftReceived: "Nhận quà", sourceGiftSent: "Đã tặng quà", giftRefundNotice: "Gói mà bạn tặng Hash sẽ không thể hoàn tiền nữa.",
     restoreNone: "Không có giao dịch mua để khôi phục", untranslatedNoCoins: "Chưa dịch: đã hết Hash",
+    inviteForFree: "Mời bạn bè, nhận Hash miễn phí", inviteForFreeNote: "{coins} Hash cho mỗi người bạn · không giới hạn",
   },
 };
 

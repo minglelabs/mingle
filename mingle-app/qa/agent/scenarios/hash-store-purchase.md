@@ -49,6 +49,8 @@ by the agent. Run on iPhone first, then on Android (`--android`), and record bot
 - Android: the Google account on the phone is a **license tester** in Play Console (test purchases, never
   charged). Play Billing answers a sideloaded build only when its package and versionCode match a build on a Play
   track; if the store sheet says the item is unavailable, record the Android purchase steps as pending, not failed.
+- Vault `secret/mingle/dev` also sets `COIN_FREE_GRANTS_ALLOW_EMAIL=1`: in production only Apple or Google
+  accounts get the sign-up bonus, and the QA account signs up by email.
 - The QA account is new or its balance is known. Note the balance (`GET /api/coins/wallet`) at the start.
 
 ## Steps

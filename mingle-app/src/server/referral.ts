@@ -6,6 +6,7 @@ import { captureMingleEvent } from '@/lib/posthog-server'
 import { ensureMutualFollowBetween } from '@/server/follows/mutual-follow'
 import { generateReferralCode, normalizeReferralCode, type InviteSource } from '@/lib/referral-code'
 import { resolveUsagePurposeSegmentationDefaults } from '@/lib/usage-purpose'
+import { isFreeCoinGrantEligible } from '@/server/coins/free-grants'
 import { grantLot, hasLedgerEntry, withLockedWallet } from '@/server/coins/ledger'
 
 // Invites. Each user has one invite code; it is also their invite-ticket link
@@ -187,6 +188,9 @@ export async function redeemReferralCode(
   ])
   if (!user || user.isDeleted || user.isOperator || user.isOfficial) throw new ReferralError('not_allowed')
   if (!inviter || inviter.isDeleted || inviter.withdrawnAt) throw new ReferralError('not_found')
+  // The reward is free Hash for both sides: only an Apple or Google account
+  // can accept an invite, so nobody is paid for accounts they made themselves.
+  if (!(await isFreeCoinGrantEligible(userId))) throw new ReferralError('not_allowed')
   if (inviter.id === userId) throw new ReferralError('own_code')
   if (user.referredByUserId) throw new ReferralError('already_redeemed')
   // Two people accepting each other's invite would pay the pair twice.

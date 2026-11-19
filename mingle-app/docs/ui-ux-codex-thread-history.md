@@ -2,6 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-19 — 해씨: 켜고 끌 때 차감 속도 토스트, 소진 창의 친구 초대, 보이스톡 통역 잔액 0 차단
+
+- Surface: `src/lib/coin-rate-toast.ts`, `src/components/LivePhoneDemo/LivePhoneDemo.tsx`, `VoiceTalkPanel.tsx`, `src/components/coins/coin-exhausted-sheet.tsx`, `src/i18n/coin-copy.ts`, `coin-detail-copy.ts`; server `src/server/coins/free-grants.ts`, `ledger.ts`, `src/server/referral.ts`, `src/server/voice/voice-interpreter-reports.ts`, `voice-call-controller.ts`.
+- Issue: A paid switch said what it costs only once per device, and only in a voice talk; speech recognition and read-aloud never said it. With no Hash, voice talk interpretation and its read-aloud kept running (the charges were only recorded as uncollected). The "out of Hash" sheet offered only the store. Email sign-up needs no verification, so the 1,000 Hash sign-up bonus and the invite reward could be collected without limit by making accounts.
+- Resolution: Whenever a paid switch goes on or off, one short toast names it and its rate: "음성 인식 켜짐 · 1분에 약 10해씨" / "… 꺼짐 · 해씨가 더 빠지지 않아요" (speech recognition, read-aloud mode, voice talk interpretation and its read-aloud; 15 languages; only while Hash are charged). It replaces the once-per-device tip in the voice talk panel. Interpretation cannot be turned on with no Hash (the sheet opens; the server answers 402), and when the Hash run out during a call the switch goes off, the sheet opens, and the server stops saving captions for that person. The sheet has a second button, "친구 초대하고 무료로 받기 · 친구 1명당 1,000해씨 · 횟수 제한 없음", which opens the invite page. Free Hash (sign-up bonus, invite reward) is paid only to accounts signed in with Apple or Google; an email account gets its bonus the first time its wallet opens after such a sign-in is linked. `COIN_FREE_GRANTS_ALLOW_EMAIL=1` keeps email accounts eligible on devbox.
+- Verification: unit tests (rate toast text, free-grant eligibility, invite refused for an email-only account), existing voice and referral suites, i18n audit, lint and types. Not yet checked on a phone.
+
 ## 2026-11-19 — 해씨 결제 QA 수정: 소진 안내가 키보드 뒤에, 번역 안 된 메시지의 "…", 복원 피드백
 
 - Surface: `src/components/coins/coin-exhausted-sheet.tsx`, `coin-store-panel.tsx`, `src/lib/coin-wallet-client.ts`, `src/components/LivePhoneDemo/ChatBubble.tsx`, `durable-message-finalization.ts`, `src/i18n/coin-copy.ts`, `src/lib/handles.ts`.

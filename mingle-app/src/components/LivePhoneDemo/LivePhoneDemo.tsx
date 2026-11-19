@@ -112,6 +112,7 @@ import {
 } from './tts-stream-clip'
 import { TtsAgentTextScheduler } from './tts-agent-text'
 import { applyCoinBalanceFromHeaders, isCoinBillingActive, notifyCoinsExhausted, openCoinStore, useCoinWallet } from '@/lib/coin-wallet-client'
+import { showCoinRateToast } from '@/lib/coin-rate-toast'
 import { fillCoinCopy, getCoinCopy } from '@/i18n/coin-copy'
 import { formatCoinCount } from '@/components/coins/coin-balance-chip'
 import HashSeedIcon from '@/components/coins/hash-seed-icon'
@@ -2602,6 +2603,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // canceller is on only while it reads aloud without earphones; every other
   // mode, and the same mode with earphones in, keeps it off.
   const speakerModeAecEnabled = speakerModeOnSpeaker && earphoneModeGate.autoReadActive
+  // Reading translations aloud uses Hash: say so when the mode goes on or off
+  // (not when a room opens with it already on, and not inside a voice talk,
+  // whose own switches say it).
+  const coinRateReadAloudRef = useRef(earphoneModeGate.autoReadActive)
+  useEffect(() => {
+    if (coinRateReadAloudRef.current === earphoneModeGate.autoReadActive) return
+    coinRateReadAloudRef.current = earphoneModeGate.autoReadActive
+    if (!voiceTalkState.joined) showCoinRateToast('read_aloud', earphoneModeGate.autoReadActive, uiLocale)
+  }, [earphoneModeGate.autoReadActive, uiLocale, voiceTalkState.joined])
   const [earphoneModeNoticeOpen, setEarphoneModeNoticeOpen] = useState(false)
   // Warns, once per earphone-mode session, that Start is about to open the
   // system screen broadcast / sharing prompt, so it does not come as a shock.
@@ -5358,6 +5368,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ? (isNativeSttSessionOwner && (isConnecting || isReady || isActive))
     : (isConnecting || isReady || isActive)
   nativePipSttRunningRef.current = isSttSessionRunning
+  // Speech recognition uses Hash while it runs: say so when it starts and stops.
+  const coinRateSttRunningRef = useRef(isSttSessionRunning)
+  useEffect(() => {
+    if (coinRateSttRunningRef.current === isSttSessionRunning) return
+    coinRateSttRunningRef.current = isSttSessionRunning
+    showCoinRateToast('speech', isSttSessionRunning, uiLocale)
+  }, [isSttSessionRunning, uiLocale])
   const onSttSessionRunningChangeRef = useRef(onSttSessionRunningChange)
 
   useEffect(() => {
@@ -6817,13 +6834,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setVoiceTalkListenOn(on)
     setVoiceTalkListen(on)
     if (on) setVoiceTalkListenNoticeOpen(true)
-  }, [])
+    showCoinRateToast('voice_listen', on, uiLocale)
+  }, [uiLocale])
 
   const handleVoiceTalkInterpretChange = useCallback((on: boolean) => {
     voiceTalkPressedRef.current.interpretOn = { value: on, until: Date.now() + 3000 }
     setVoiceTalkInterpretOn(on)
-    if (conversationId) void setVoiceTalkInterpret(conversationId, on)
-  }, [conversationId])
+    showCoinRateToast('voice_caption', on, uiLocale)
+    if (!conversationId) return
+    void setVoiceTalkInterpret(conversationId, on).then((accepted) => {
+      if (accepted) return
+      // The server refused: no Hash. Back off, and say why.
+      voiceTalkPressedRef.current.interpretOn = { value: false, until: Date.now() + 3000 }
+      setVoiceTalkInterpretOn(false)
+      notifyCoinsExhausted({ userInitiated: true })
+    })
+  }, [conversationId, uiLocale])
 
   // The room's own speech-to-text does not run in a call: one that was on
   // stops on joining (and Start stays locked until the call ends).

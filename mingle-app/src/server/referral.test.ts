@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   messageFindUnique: vi.fn(),
   messageFindFirst: vi.fn(),
   mutualFollow: vi.fn(),
+  freeGrantEligible: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -23,6 +24,7 @@ vi.mock('@/lib/prisma', () => ({
 vi.mock('@/lib/app-conversations', () => ({ findOrCreateDirectConversation: mocks.findOrCreateDirectConversation }))
 vi.mock('@/lib/posthog-server', () => ({ captureMingleEvent: mocks.capture }))
 vi.mock('@/server/follows/mutual-follow', () => ({ ensureMutualFollowBetween: mocks.mutualFollow }))
+vi.mock('@/server/coins/free-grants', () => ({ isFreeCoinGrantEligible: mocks.freeGrantEligible }))
 vi.mock('@/server/coins/ledger', () => ({
   grantLot: mocks.grantLot,
   hasLedgerEntry: mocks.hasLedgerEntry,
@@ -65,11 +67,20 @@ beforeEach(() => {
   mocks.grantLot.mockResolvedValue({ lotId: 'lot' })
   mocks.findOrCreateDirectConversation.mockResolvedValue({ conversation: { id: 'room1' }, reused: false })
   mocks.mutualFollow.mockResolvedValue(2)
+  mocks.freeGrantEligible.mockResolvedValue(true)
   delete process.env.COIN_INVITE_JOIN_COINS
   delete process.env.COIN_INVITE_FIRST_CHAT_COINS
 })
 
 describe('redeemReferralCode', () => {
+  it('pays nobody when the invited account is not an Apple or Google account', async () => {
+    stubUsers({ id: 'me', referredByUserId: null }, { id: 'inviter', referredByUserId: null })
+    mocks.freeGrantEligible.mockResolvedValue(false)
+    await expect(redeemReferralCode('me', 'abcde')).rejects.toMatchObject({ code: 'not_allowed' })
+    expect(mocks.updateMany).not.toHaveBeenCalled()
+    expect(mocks.grantLot).not.toHaveBeenCalled()
+  })
+
   it('pays 1,000 free coins to both sides, once each', async () => {
     stubUsers({ id: 'me', referredByUserId: null }, { id: 'friend', referredByUserId: null })
     await expect(redeemReferralCode('me', ' AB3DE ', { source: 'link' })).resolves.toEqual({ rewardCoins: 1000, inviterUserId: 'friend' })
