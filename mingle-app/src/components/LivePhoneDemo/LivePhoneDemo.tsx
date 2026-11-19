@@ -113,7 +113,7 @@ import {
 import { TtsAgentTextScheduler } from './tts-agent-text'
 import { applyCoinBalanceFromHeaders, isCoinBillingActive, notifyCoinsExhausted, openCoinStore, useCoinWallet } from '@/lib/coin-wallet-client'
 import { fillCoinCopy, getCoinCopy } from '@/i18n/coin-copy'
-import CoinBalanceChip, { formatCoinCount } from '@/components/coins/coin-balance-chip'
+import { formatCoinCount } from '@/components/coins/coin-balance-chip'
 import HashSeedIcon from '@/components/coins/hash-seed-icon'
 import CoinRoomBanner from '@/components/coins/coin-room-banner'
 import { resolveLivePhoneDemoEarphoneModeCopy } from '@/i18n/live-phone-demo-earphone-mode-copy'
@@ -412,6 +412,7 @@ const KEYBOARD_CLOSE_EASE_MS = 250
 const VOLUME_THRESHOLD = 0.05
 // How long a "loaded" older-history page may go without changing the list before its loading state is released.
 const OLDER_LOAD_RELEASE_FALLBACK_MS = 1_500
+const HEADER_LANGUAGE_FLAG_LIMIT = 3
 const ACCOUNT_PREFERENCES_API_PATH = buildClientApiPath('/account/preferences')
 const FEEDBACK_API_PATH = buildClientApiPath('/feedback')
 const FEEDBACK_INSTAGRAM_CONTACT_URL = 'https://www.instagram.com/mingle.labs/'
@@ -8191,6 +8192,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       payload: state,
     })
   }, [isNativeIosPipAvailable])
+  // From the hamburger menu: close it first so the room is what goes into the PiP window.
+  const handlePipMenuItemPress = useCallback(() => {
+    requestCloseMenuPanel()
+    window.setTimeout(handleNativePipStart, 250)
+  }, [handleNativePipStart, requestCloseMenuPanel])
+  const pipMenuItem = useMemo(() => (
+    isNativeIosPipAvailable && headerMode === 'conversation' && conversationId
+      ? { label: roomManagementCopy.pictureInPictureButtonLabel, onSelect: handleNativePipStart }
+      : undefined
+  ), [conversationId, handleNativePipStart, headerMode, isNativeIosPipAvailable, roomManagementCopy.pictureInPictureButtonLabel])
 
   const syncNativePipPlaybackState = useCallback((playing: boolean, scopedConversationId?: string) => {
     if (!isNativeIosPipAvailable) return
@@ -8975,7 +8986,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             <MingleWordmark className="relative z-20" />
           )}
           <div className="relative z-20 flex items-center gap-1">
-            <CoinBalanceChip locale={coinLocale} size="compact" />
             <div className="relative mr-1.5">
               <button
                 ref={langSelectorButtonRef}
@@ -8988,15 +8998,24 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 className={LIVE_DEMO_LANGUAGE_TRIGGER_CLASSNAME}
                 style={{ backgroundColor: '#ffffff' }}
               >
-                {languageSelectorButtonLanguages.map((lang) => (
-                  <span
-                    key={lang}
-                    className="text-[1.35rem]"
-                    title={lang.toUpperCase()}
-                  >
-                    <LanguageFlag language={lang} className="text-[1.35rem] leading-none" />
-                  </span>
-                ))}
+                {/* Flags overlap (three at most, then +N) so the header keeps room for the title. */}
+                <span className="flex items-center">
+                  {languageSelectorButtonLanguages.slice(0, HEADER_LANGUAGE_FLAG_LIMIT).map((lang, index) => (
+                    <span
+                      key={lang}
+                      className={`relative text-[1.35rem] ${index > 0 ? '-ml-2' : ''}`}
+                      style={index > 0 ? { zIndex: index, filter: 'drop-shadow(-1.5px 0 0 #ffffff)' } : undefined}
+                      title={lang.toUpperCase()}
+                    >
+                      <LanguageFlag language={lang} className="text-[1.35rem] leading-none" />
+                    </span>
+                  ))}
+                  {languageSelectorButtonLanguages.length > HEADER_LANGUAGE_FLAG_LIMIT ? (
+                    <span className="ml-0.5 text-[0.72rem] font-semibold tabular-nums text-gray-500">
+                      +{languageSelectorButtonLanguages.length - HEADER_LANGUAGE_FLAG_LIMIT}
+                    </span>
+                  ) : null}
+                </span>
                 <ChevronDown
                   data-qa={LIVE_DEMO_LANGUAGE_CHEVRON_DATA_QA}
                   size={14}
@@ -9038,18 +9057,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 {participantCount > 1 ? (
                   <span className="text-[0.78rem] font-semibold tabular-nums">{participantCount}</span>
                 ) : null}
-              </button>
-            ) : null}
-            {isNativeIosPipAvailable && headerMode === 'conversation' && conversationId ? (
-              <button
-                data-qa="live-demo-picture-in-picture-button"
-                type="button"
-                onClick={handleNativePipStart}
-                aria-label={roomManagementCopy.pictureInPictureButtonLabel}
-                title={roomManagementCopy.pictureInPictureButtonLabel}
-                className={`inline-flex h-9 w-9 items-center justify-center rounded-full text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-950 active:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${navSurfaceClassName}`}
-              >
-                <PictureInPicture2 size={17} strokeWidth={2} />
               </button>
             ) : null}
             {showMenuButton ? (
@@ -9725,6 +9732,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             </span>
                           </button>
                         </div>
+
+                        {isNativeIosPipAvailable && headerMode === 'conversation' && conversationId ? (
+                          <div className="px-4 pb-4">
+                            <button
+                              type="button"
+                              data-qa="live-demo-picture-in-picture-menu-item"
+                              onClick={handlePipMenuItemPress}
+                              className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                            >
+                              <span className="min-w-0 flex-1">{roomManagementCopy.pictureInPictureButtonLabel}</span>
+                              <span className="shrink-0 text-gray-500">
+                                <PictureInPicture2 size={18} strokeWidth={2} />
+                              </span>
+                            </button>
+                          </div>
+                        ) : null}
 
                         {conversationId ? (
                           <div className="px-4 pb-4">
@@ -11278,7 +11301,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                       {conversationId && viewerUserId ? <ConversationImageComposer conversationId={conversationId} locale={uiLocale}
                         onSent={() => void refreshConversationMessages('push')} onCloseKeyboard={handleToggleComposer}
-                        onMenuOpenChange={setIsAttachmentMenuOpen} earphoneMode={earphoneModeMenuItem} voiceTalk={voiceTalkMenuItem} acceptSharedPhoto={isVisible} /> : earphoneModeMenuItem ? (
+                        onMenuOpenChange={setIsAttachmentMenuOpen} earphoneMode={earphoneModeMenuItem} voiceTalk={voiceTalkMenuItem} pip={pipMenuItem} acceptSharedPhoto={isVisible} /> : earphoneModeMenuItem ? (
                       // No sendable conversation: no photo row, but the "+" still
                       // carries the earphone-mode row and the voice-mode switch.
                       <ConversationImageComposer conversationId="" allowPhoto={false} locale={uiLocale}

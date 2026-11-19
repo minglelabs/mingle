@@ -1,7 +1,7 @@
 'use client'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type MouseEvent, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from 'react'
 import LanguageFlag from '@/components/language-flag'
-import { FlipHorizontal2, Headphones, Image as Photo, Keyboard, Loader2, Phone, Plus, RotateCcw, Volume2, X } from 'lucide-react'
+import { FlipHorizontal2, Headphones, Image as Photo, Keyboard, Loader2, Phone, PictureInPicture2, Plus, RotateCcw, Volume2, X } from 'lucide-react'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { resolveConversationImageCopy } from '@/i18n/conversation-image-copy'
 import { CONVERSATION_IMAGE_MAX_BYTES } from '@/lib/conversation-image'
@@ -62,12 +62,20 @@ export type ConversationImageComposerVoiceTalk = {
   onSelect: () => void
 }
 
-export default function ConversationImageComposer({ conversationId, locale, onSent, onCloseKeyboard, onMenuOpenChange, voiceButtonSize = 33, earphoneMode, voiceTalk, allowPhoto = true, acceptSharedPhoto = false }: {
+// Keyboard mode only: puts the room in a picture-in-picture window (iOS app).
+export type ConversationImageComposerPip = {
+  label: string
+  onSelect: () => void
+}
+
+export default function ConversationImageComposer({ conversationId, locale, onSent, onCloseKeyboard, onMenuOpenChange, voiceButtonSize = 33, earphoneMode, voiceTalk, pip, allowPhoto = true, acceptSharedPhoto = false }: {
   conversationId: string; locale: string; onSent: () => void; onCloseKeyboard?: () => void; onMenuOpenChange?: (open: boolean) => void; voiceButtonSize?: number
   // Keyboard mode only: an "earphone mode" row between the photo and voice-mode rows.
   earphoneMode?: ConversationImageComposerEarphoneMode
   // Keyboard mode only: a "voice talk" row after the earphone row.
   voiceTalk?: ConversationImageComposerVoiceTalk
+  // Keyboard mode only: a "picture in picture" row after the voice talk row.
+  pip?: ConversationImageComposerPip
   // false = no photo row (a room without a sendable conversation still gets the menu).
   allowPhoto?: boolean
   // true while this room is on screen: a photo shared to HashChat from another
@@ -539,14 +547,30 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
               </button>
             </>
           )}
-          {onCloseKeyboard && (
+          {onCloseKeyboard && pip && (
             <>
               {(allowPhoto || earphoneMode || voiceTalk) && <div className="h-px bg-gray-100" />}
               <button
                 type="button"
+                data-qa="live-demo-picture-in-picture-composer-item"
+                aria-label={pip.label}
+                onPointerDown={event => { event.preventDefault() }}
+                onClick={event => { event.preventDefault(); event.stopPropagation(); close(); pip.onSelect() }}
+                className={`flex w-full items-center justify-between px-4 py-3 text-[14px] font-medium text-slate-700 transition hover:bg-slate-50 active:bg-slate-100 ${(allowPhoto || earphoneMode || voiceTalk) ? '' : 'rounded-t-2xl'}`}
+              >
+                <span>{pip.label}</span>
+                <PictureInPicture2 className="h-4 w-4 shrink-0 text-slate-400" strokeWidth={2.15} />
+              </button>
+            </>
+          )}
+          {onCloseKeyboard && (
+            <>
+              {(allowPhoto || earphoneMode || voiceTalk || pip) && <div className="h-px bg-gray-100" />}
+              <button
+                type="button"
                 aria-label={copy.switchToVoiceMode}
                 onClick={event => { event.preventDefault(); event.stopPropagation(); close(); onCloseKeyboard() }}
-                className={`flex w-full items-center justify-between px-4 py-3 text-[14px] font-medium text-slate-700 transition hover:bg-slate-50 active:bg-slate-100 ${(allowPhoto || earphoneMode || voiceTalk) ? 'rounded-b-2xl' : 'rounded-2xl'}`}
+                className={`flex w-full items-center justify-between px-4 py-3 text-[14px] font-medium text-slate-700 transition hover:bg-slate-50 active:bg-slate-100 ${(allowPhoto || earphoneMode || voiceTalk || pip) ? 'rounded-b-2xl' : 'rounded-2xl'}`}
               >
                 <span>{copy.switchToVoiceMode}</span>
                 <Keyboard className="h-4 w-4 shrink-0 text-slate-400" />
