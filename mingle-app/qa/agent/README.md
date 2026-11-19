@@ -15,7 +15,8 @@ and scores translation quality.
 | --- | --- |
 | [taste.md](taste.md) | The owner's UX rules (T1–T23), each traced to entries in [the UI/UX history](../../docs/ui-ux-codex-thread-history.md). |
 | [rubric.md](rubric.md) | Verdicts, severity anchors, the translation 1–5 scale, responsiveness thresholds. |
-| [scenarios/](scenarios) | 27 scenarios with frontmatter (`id`, `priority`, `environment`, `tags`, `taste`, `paths`, `history`). `environment` is `device` (the agent runs it end to end), `assisted` (parts need a person: speaking, AirPods) or `manual-only`. |
+| [scenarios/](scenarios) | 35 scenarios with frontmatter (`id`, `priority`, `environment`, `tags`, `taste`, `paths`, `history`). `environment` is `device` (the agent runs it end to end), `assisted` (parts need a person: speaking, AirPods) or `manual-only`. |
+| [hash-rush-web-issues-coverage.md](hash-rush-web-issues-coverage.md) | Every row of the web game's UI/UX issue list (`minglelabs/hash-rush` `docs/UIUX-ISSUES.md`) mapped to a Hash Rush scenario step, or why it does not apply in the app. |
 | [fixtures/](fixtures) | Inputs the scenarios type or send. |
 | `local/` | Gitignored: the local QA account, the device session and the Appium log. |
 | `runs/` | Gitignored: screenshots, notes, `results.json` and `report.html` per run. |
