@@ -166,6 +166,13 @@ export function applyCoinBalanceFromHeaders(headers: Headers) {
  * after a top-up, or a session that ended before the daily refill), and the
  * sheet stayed open over a positive balance until the user closed it.
  */
+/** Blur a focused text field so the soft keyboard closes before a coin sheet covers the screen. */
+export function dismissSoftKeyboard() {
+  if (typeof document === "undefined") return;
+  const active = document.activeElement;
+  if (active instanceof HTMLElement && (active.isContentEditable || active.tagName === "INPUT" || active.tagName === "TEXTAREA")) active.blur();
+}
+
 export function notifyCoinsExhausted(options: { userInitiated?: boolean } = {}) {
   const alreadyExhausted = state.wallet?.exhausted === true;
   const shouldRaise = !alreadyExhausted || options.userInitiated === true;

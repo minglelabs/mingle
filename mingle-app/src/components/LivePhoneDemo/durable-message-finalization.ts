@@ -47,6 +47,8 @@ export type DurableFinalization = {
   nextAttemptAt: number
   attemptCount: number
   incompleteAttempts?: number
+  // The sender had no Hash (402): delivered untranslated, never retried.
+  unbilled?: boolean
 }
 type Update = { record: DurableFinalization; result: FinalizationResult | null; retrying: boolean }
 type FinalizationOwner = { consumers: number; generation: number }
@@ -158,7 +160,7 @@ function persistUtterance(record: DurableFinalization, retrying = false): void {
       ...(result.sourceDisplayText && requestText !== undefined && record.utterance.originalText === requestText
         ? { originalDisplayText: result.sourceDisplayText } : {}),
     } : {}),
-    translationStatus: result || !record.translationBody ? undefined : retrying ? 'retrying' : 'pending',
+    translationStatus: record.unbilled ? 'unbilled' : result || !record.translationBody ? undefined : retrying ? 'retrying' : 'pending',
   }
   // Both sides are canonical already; this only folds legacy generic keys.
   const next = canonicalizeUtteranceLanguages(merged, {
@@ -452,6 +454,7 @@ function deliverForRun(record: DurableFinalization, run: FinalizationRun, fetchI
           // translates it retroactively.
           if (!(error instanceof Error) || error.message !== 'translate/finalize_402' || !canSend()) throw error
           record.translationBody = null
+          record.unbilled = true
           persist(); notify(record)
           notifyCoinsExhausted()
           return
