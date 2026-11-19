@@ -9,9 +9,9 @@ import {
 } from './translation-models'
 
 describe('translation model catalog', () => {
-  it('uses GPT-6 Luna for unset accounts and for new registered accounts', () => {
-    expect(DEFAULT_SELECTABLE_TRANSLATION_MODEL).toBe('gpt-6-luna')
-    expect(NEW_REGISTERED_USER_TRANSLATION_MODEL).toBe('gpt-6-luna')
+  it('uses Claude Haiku 5.5 for unset accounts and for new registered accounts', () => {
+    expect(DEFAULT_SELECTABLE_TRANSLATION_MODEL).toBe('claude-haiku-5-5')
+    expect(NEW_REGISTERED_USER_TRANSLATION_MODEL).toBe('claude-haiku-5-5')
   })
 
   it('keeps closed-state labels compact while exposing open-menu badges as metadata', () => {
@@ -20,6 +20,10 @@ describe('translation model catalog', () => {
         value: 'gpt-6-luna',
         label: 'gpt-6-luna',
         badge: 'Best',
+      },
+      {
+        value: 'claude-haiku-5-5',
+        label: 'claude-haiku-5-5',
       },
     ])
   })
@@ -55,16 +59,11 @@ describe('translation model catalog', () => {
       infrastructureProvider: 'openai',
       runtimeModel: 'gpt-6-luna',
     })
-  })
-
-  it('runs the retired Claude Haiku on GPT-6 Luna and keeps it countable under its aliases', () => {
-    expect(normalizeSelectableTranslationModel('claude-haiku-5-5')).toBe('gpt-6-luna')
-    expect(resolveTranslationRuntimeSelection('anthropic/claude-haiku-5-5')).toMatchObject({
-      engineProvider: 'openai',
-      runtimeModel: 'gpt-6-luna',
+    expect(normalizeSelectableTranslationModel('anthropic/claude-haiku-5-5')).toBe('claude-haiku-5-5')
+    expect(resolveTranslationRuntimeSelection('claude-haiku-5-5')).toMatchObject({
+      engineProvider: 'claude',
+      infrastructureProvider: 'anthropic',
+      runtimeModel: 'claude-haiku-5-5',
     })
-    expect(normalizeRetiredTranslationModel('claude-haiku-5-5')).toBe('claude-haiku-5-5')
-    expect(normalizeRetiredTranslationModel('Anthropic/Claude-Haiku-5-5')).toBe('claude-haiku-5-5')
-    expect(normalizeRetiredTranslationModel('claude haiku 5.5')).toBe('claude-haiku-5-5')
   })
 })

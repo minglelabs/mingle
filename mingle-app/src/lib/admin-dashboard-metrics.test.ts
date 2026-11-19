@@ -505,9 +505,9 @@ describe("buildTranslationModelSeries", () => {
 
     expect(series.map((entry) => entry.label)).toEqual([
       "gpt-6-luna",
-      // Retired: their past messages keep their own series instead of folding into GPT-6 Luna.
-      "gemini-2.5-flash-lite",
       "claude-haiku-5-5",
+      // Retired: its past messages keep their own series instead of folding into GPT-6 Luna.
+      "gemini-2.5-flash-lite",
       "기타",
     ]);
   });

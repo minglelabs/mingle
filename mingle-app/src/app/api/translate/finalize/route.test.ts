@@ -1523,40 +1523,22 @@ describe('/api/translate/finalize route', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
-  it('returns 502 when GPT-6 Luna rejects the request: Claude Haiku is no longer a fallback', async () => {
+  it('falls back from GPT-6 Luna to Claude Haiku when OpenAI rejects the request', async () => {
     setAuthenticatedTranslationModel('gpt-6-luna')
     const fetchMock = vi.fn()
-      .mockResolvedValue(new Response(
+      .mockResolvedValueOnce(new Response(
         JSON.stringify({ error: { message: 'Incorrect API key provided' } }),
         { status: 401, headers: { 'Content-Type': 'application/json' } },
       ))
-
-    vi.stubGlobal('fetch', fetchMock)
-    const POST = await importRouteWithEnv()
-    process.env.OPENAI_API_KEY = 'test-openai-key'
-    process.env.ANTHROPIC_API_KEY = 'test-anthropic-key'
-
-    const res = await POST(makeJsonRequest({
-      text: 'hello',
-      sourceLanguage: 'en',
-      targetLanguages: ['ko'],
-      isFinal: true,
-    }) as never)
-
-    expect(res.status).toBe(502)
-    expect(await res.json()).toEqual({ error: 'empty_translation_response' })
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('api.openai.com')
-    expect(mockGenerateContent).not.toHaveBeenCalled()
-  })
-
-  it('runs an account that stored Claude Haiku on GPT-6 Luna', async () => {
-    setAuthenticatedTranslationModel('claude-haiku-5-5')
-    const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({
-          choices: [{ message: { content: '{"ko":"안녕하세요"}' }, finish_reason: 'stop' }],
-          usage: {},
+          id: 'msg_1',
+          type: 'message',
+          role: 'assistant',
+          model: 'claude-haiku-5-5',
+          content: [{ type: 'text', text: '{"ko":"안녕하세요"}' }],
+          stop_reason: 'end_turn',
+          usage: { input_tokens: 10, output_tokens: 5 },
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       ))
@@ -1575,10 +1557,10 @@ describe('/api/translate/finalize route', () => {
     const json = await res.json()
 
     expect(res.status).toBe(200)
-    expect(json.provider).toBe('openai')
+    expect(json.provider).toBe('claude')
     expect(json.translations).toEqual({ ko: '안녕하세요' })
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('api.openai.com')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(mockGenerateContent).not.toHaveBeenCalled()
   })
 
   it('asks GPT-6 Luna once more with a longer wait when a final request times out', async () => {

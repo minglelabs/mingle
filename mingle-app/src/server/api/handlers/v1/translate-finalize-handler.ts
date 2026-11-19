@@ -271,6 +271,7 @@ export function isPunctuationOnlyText(text: string): boolean {
 // next of these (skipping the selected one and any whose API key is missing).
 const TRANSLATION_FALLBACK_MODELS: UserSelectableTranslationModel[] = [
   'gpt-6-luna',
+  'claude-haiku-5-5',
 ]
 
 function resolveFallbackProviderConfigs(selectedModel: UserSelectableTranslationModel): TranslationProviderConfig[] {
