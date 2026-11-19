@@ -122,7 +122,7 @@ import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSession } from 'next-auth/react'
 import { EXPECTED_ACCOUNT_HEADER } from '@/lib/request-account-guard'
-import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, ChevronLeft, Share, ChevronRight, Keyboard, Users, Instagram, PictureInPicture2, RotateCw, Headphones, ScreenShare, Volume2 } from 'lucide-react'
+import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, ChevronLeft, Share, ChevronRight, Keyboard, Users, Instagram, PictureInPicture2, Phone, Image as ImageIcon, RotateCw, Headphones, ScreenShare, Volume2 } from 'lucide-react'
 import ConversationParticipantsPanel from '@/components/LivePhoneDemo/conversation-participants-panel'
 import InviteFriendsScreen from '@/components/invite-friends-screen'
 import SlideSurface, { isNativeEdgeSwipeSuppressed } from '@/components/slide-surface'
@@ -153,6 +153,8 @@ import LanguageSelector from './LanguageSelector'
 import { useLanguageSelectorNavigation } from './use-language-selector-navigation'
 import ConversationEmptyState from './ConversationEmptyState'
 import ConversationPeerProfileCard from './ConversationPeerProfileCard'
+import ChatActionPanel, { ChatActionPlusButton, resolveChatActionPanelHeightPx, type ChatActionPanelItem } from './ChatActionPanel'
+import { resolveConversationImageCopy } from '@/i18n/conversation-image-copy'
 import { shouldShowConversationEmptyState } from './conversation-empty-state.logic'
 import ChatAccountBadge from './ChatAccountBadge'
 import { labelNameWithAccountBadge, resolveRoomAccountBadge } from './chat-account-badge.logic'
@@ -326,7 +328,6 @@ import { resolveConversationExportCopy } from '@/i18n/conversation-export-copy'
 import { fetchConversationExport, shareConversationExport } from './conversation-export.client'
 import VoiceTalkPanel, {
   type VoiceTalkCaptionLine,
-  VoiceTalkButton,
   isVoiceTalkAvailable,
   joinVoiceTalk,
   resolveVoiceTalkButtonPress,
@@ -413,6 +414,7 @@ const VOLUME_THRESHOLD = 0.05
 // How long a "loaded" older-history page may go without changing the list before its loading state is released.
 const OLDER_LOAD_RELEASE_FALLBACK_MS = 1_500
 const HEADER_LANGUAGE_FLAG_LIMIT = 3
+const VOICE_MODE_PLUS_BUTTON_SIZE_PX = 36
 const ACCOUNT_PREFERENCES_API_PATH = buildClientApiPath('/account/preferences')
 const FEEDBACK_API_PATH = buildClientApiPath('/feedback')
 const FEEDBACK_INSTAGRAM_CONTACT_URL = 'https://www.instagram.com/mingle.labs/'
@@ -2476,6 +2478,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [composerHasDraft, setComposerHasDraft] = useState(false)
   const [composerTextareaHeightPx, setComposerTextareaHeightPx] = useState(COMPOSER_TEXTAREA_MIN_HEIGHT_PX)
   const [keyboardViewportInsetPx, setKeyboardViewportInsetPx] = useState(0)
+  // The keyboard's height the last time it was up: the "+" panel takes its place.
+  const [lastKeyboardHeightPx, setLastKeyboardHeightPx] = useState(0)
+  const [actionPanelOpenFor, setActionPanelOpenFor] = useState<'text' | 'voice' | null>(null)
   const [floatingToastMessage, setFloatingToastMessage] = useState('')
   const silenceSliderUpgradeToastLastShownAtRef = useRef(0)
   const floatingToastTimerRef = useRef<number | null>(null)
@@ -3165,6 +3170,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     const syncKeyboardInset = () => {
       const nextInsetPx = resolveKeyboardViewportInsetPx(viewport)
+      if (nextInsetPx > 120) setLastKeyboardHeightPx(nextInsetPx)
       setKeyboardViewportInsetPx((currentInsetPx) => resolveStableKeyboardViewportInsetPx(currentInsetPx, nextInsetPx))
     }
 
@@ -7019,7 +7025,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // the viewer can still write to.
   const hashRushQuickChatVisible = hashRushGameChatShown && Boolean(conversationId) && !isBlockedCounterpart
 
-  const handleComposerTextareaFocus = useCallback(() => setIsComposerTextareaFocused(true), [])
+  const handleComposerTextareaFocus = useCallback(() => {
+    setIsComposerTextareaFocused(true)
+    // Typing again: the keyboard takes the "+" panel's place.
+    setActionPanelOpenFor(null)
+  }, [])
   const handleComposerTextareaBlur = useCallback(() => setIsComposerTextareaFocused(false), [])
 
   useEffect(() => {
@@ -8202,6 +8212,96 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       ? { label: roomManagementCopy.pictureInPictureButtonLabel, onSelect: handleNativePipStart }
       : undefined
   ), [conversationId, handleNativePipStart, headerMode, isNativeIosPipAvailable, roomManagementCopy.pictureInPictureButtonLabel])
+
+  // The bottom bar's round "+": a KakaoTalk-style panel in the keyboard's
+  // place with photo, voice talk, PiP, earphone mode and the input-mode switch.
+  // Open for the input mode it was opened in; switching modes or the menu /
+  // game covering the bar hides it.
+  const actionPanelOpen = actionPanelOpenFor === (composerShown ? 'text' : 'voice')
+    && !menuOpen
+    && !hashRushGameChatShown
+  const setActionPanelOpen = useCallback((open: boolean) => {
+    setActionPanelOpenFor(open ? (composerShown ? 'text' : 'voice') : null)
+  }, [composerShown])
+  const photoPickerRef = useRef<(() => void) | null>(null)
+  const actionPanelHeightPx = resolveChatActionPanelHeightPx(lastKeyboardHeightPx)
+  const conversationImageCopy = useMemo(() => resolveConversationImageCopy(uiLocale), [uiLocale])
+  const handleActionPanelToggle = useCallback(() => {
+    if (actionPanelOpen) {
+      setActionPanelOpen(false)
+      if (composerShown) focusComposerTextarea()
+      return
+    }
+    if (composerShown) composerTextareaRef.current?.blur()
+    setActionPanelOpen(true)
+  }, [actionPanelOpen, composerShown, focusComposerTextarea, setActionPanelOpen])
+  const actionPanelItems = useMemo<ChatActionPanelItem[]>(() => {
+    const items: ChatActionPanelItem[] = []
+    const closeThen = (action: () => void) => () => { setActionPanelOpen(false); action() }
+    if (conversationId && viewerUserId) {
+      items.push({
+        key: 'photo',
+        label: conversationImageCopy.choose,
+        icon: <ImageIcon size={22} strokeWidth={2} />,
+        onSelect: closeThen(() => photoPickerRef.current?.()),
+      })
+    }
+    if (voiceTalkMenuItem) {
+      items.push({
+        key: 'voice-talk',
+        label: voiceTalkMenuItem.label,
+        icon: <Phone size={21} strokeWidth={2} />,
+        active: voiceTalkMenuItem.active,
+        onSelect: closeThen(voiceTalkMenuItem.onSelect),
+      })
+    }
+    if (pipMenuItem) {
+      items.push({
+        key: 'pip',
+        label: pipMenuItem.label,
+        icon: <PictureInPicture2 size={21} strokeWidth={2} />,
+        onSelect: closeThen(pipMenuItem.onSelect),
+      })
+    }
+    // Voice mode keeps the earphone / speaker button in the bar itself.
+    if (composerShown && earphoneModeMenuItem) {
+      items.push({
+        key: 'earphone-mode',
+        label: earphoneModeMenuItem.label,
+        icon: earphoneModeMenuItem.speaker ? <Volume2 size={21} strokeWidth={2} /> : <Headphones size={21} strokeWidth={2} />,
+        active: earphoneModeMenuItem.enabled,
+        disabled: earphoneModeMenuItem.disabled,
+        // Stays open: the state shows on the icon, and its notice may follow.
+        onSelect: earphoneModeMenuItem.onToggle,
+      })
+    }
+    items.push(composerShown
+      ? {
+          key: 'voice-mode',
+          label: composerCopy.switchToVoiceModeLabel,
+          icon: <Mic size={21} strokeWidth={2} />,
+          onSelect: closeThen(handleToggleComposer),
+        }
+      : {
+          key: 'keyboard-mode',
+          label: composerCopy.switchToKeyboardModeLabel,
+          icon: <Keyboard size={21} strokeWidth={2} />,
+          onSelect: closeThen(handleToggleComposer),
+        })
+    return items
+  }, [
+    composerCopy.switchToKeyboardModeLabel,
+    composerCopy.switchToVoiceModeLabel,
+    composerShown,
+    conversationId,
+    conversationImageCopy.choose,
+    earphoneModeMenuItem,
+    handleToggleComposer,
+    pipMenuItem,
+    setActionPanelOpen,
+    viewerUserId,
+    voiceTalkMenuItem,
+  ])
 
   const syncNativePipPlaybackState = useCallback((playing: boolean, scopedConversationId?: string) => {
     if (!isNativeIosPipAvailable) return
@@ -11207,58 +11307,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   className="flex items-end gap-1.5"
                 >
                   <motion.div className="flex shrink-0 items-end justify-center self-end">
-                    <button
-                      data-qa="live-demo-mic-button"
-                      onPointerDown={handleMicPointerDown}
-                      onPointerUp={handleMicPointerUp}
-                      onPointerCancel={handleMicPointerCancel}
-                      onClick={handleMicClick}
-                      // Same as voice mode: in a voice talk the call runs speech-to-text itself.
-                      disabled={(isPreparingStart && !isConnecting) || voiceTalkState.joined}
-                      className="relative flex items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
-                      style={{
-                        width: `${COMPOSER_MODE_CONTROL_SIZE_PX}px`,
-                        height: `${COMPOSER_MODE_CONTROL_SIZE_PX}px`,
-                      }}
-                    >
-                      {showRipple && (
-                        <span
-                          className="pointer-events-none absolute inset-0 rounded-full bg-red-400 transition-transform duration-150"
-                          style={{ transform: `scale(${rippleScale})`, opacity: 0.22 }}
-                        />
-                      )}
-
-                      {isReady && (
-                        <span className="pointer-events-none absolute inset-0 rounded-full bg-red-500 opacity-20 animate-ping" />
-                      )}
-
-                      <span
-                        className={`relative flex h-full w-full items-center justify-center rounded-full shadow-lg ${
-                          isLimitReached
-                            ? 'bg-gray-300'
-                            : isReady
-                              ? 'bg-red-500'
-                              : showConnectingOverlay
-                                ? 'bg-gray-300'
-                                : 'bg-gradient-to-br from-amber-400 to-orange-500'
-                        }`}
-                      >
-                        {showConnectingOverlay ? (
-                          <Loader2 size={16} className="animate-spin text-white" />
-                        ) : isReady ? (
-                          <span
-                            aria-hidden
-                            className="rounded-[3px] bg-white"
-                            style={{
-                              width: `${Math.round(COMPOSER_MODE_CONTROL_SIZE_PX * 0.28)}px`,
-                              height: `${Math.round(COMPOSER_MODE_CONTROL_SIZE_PX * 0.28)}px`,
-                            }}
-                          />
-                        ) : (
-                          <Mic size={16} className="text-white" />
-                        )}
-                      </span>
-                    </button>
+                    <ChatActionPlusButton
+                      open={actionPanelOpen}
+                      label={conversationImageCopy.attach}
+                      sizePx={COMPOSER_MODE_CONTROL_SIZE_PX}
+                      onToggle={handleActionPanelToggle}
+                    />
                   </motion.div>
 
                   <motion.form
@@ -11299,30 +11353,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         />
                       </div>
 
-                      {conversationId && viewerUserId ? <ConversationImageComposer conversationId={conversationId} locale={uiLocale}
-                        onSent={() => void refreshConversationMessages('push')} onCloseKeyboard={handleToggleComposer}
-                        onMenuOpenChange={setIsAttachmentMenuOpen} earphoneMode={earphoneModeMenuItem} voiceTalk={voiceTalkMenuItem} pip={pipMenuItem} acceptSharedPhoto={isVisible} /> : earphoneModeMenuItem ? (
-                      // No sendable conversation: no photo row, but the "+" still
-                      // carries the earphone-mode row and the voice-mode switch.
-                      <ConversationImageComposer conversationId="" allowPhoto={false} locale={uiLocale}
-                        onSent={() => void refreshConversationMessages('push')} onCloseKeyboard={handleToggleComposer}
-                        onMenuOpenChange={setIsAttachmentMenuOpen} earphoneMode={earphoneModeMenuItem} />
-                      ) : (
-                      <motion.button
-                        layoutId="live-phone-demo-keyboard-toggle"
-                        data-qa="live-demo-keyboard-close"
-                        type="button"
-                        onClick={handleToggleComposer}
-                        aria-label={composerCopy.switchToVoiceModeLabel}
-                        className="inline-flex shrink-0 items-center justify-center self-end rounded-full text-gray-500 transition-colors hover:bg-gray-50 active:scale-95"
-                        style={{
-                          width: `${COMPOSER_MODE_CONTROL_SIZE_PX}px`,
-                          height: `${COMPOSER_MODE_CONTROL_SIZE_PX}px`,
-                        }}
-                      >
-                        <Keyboard size={18} strokeWidth={2.2} />
-                      </motion.button>
-                      )}
                     </div>
 
                     <button
@@ -11373,7 +11403,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     // minmax(0, 1fr) keeps Start centered once the left cell
                     // also holds the earphone button; without it the layout
                     // stays exactly as before.
-                    gridTemplateColumns: earphoneModeGate.controlVisible ? 'minmax(0, 1fr) auto minmax(0, 1fr)' : '1fr auto 1fr',
+                    gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)',
                   }}
                 >
                   <motion.div
@@ -11381,20 +11411,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -12 }}
                     transition={{ duration: 0.09, ease: 'easeOut' }}
-                    // Mirrors the right cell (image + keyboard): same gap, no
-                    // extra inset, so both sides sit at equal distances.
-                    className="flex min-w-0 items-center gap-1 self-end justify-self-start"
+                    // Speaker / earphone mode, then this room's talk time and
+                    // message count (voice talk, photo and PiP are in the "+").
+                    className="flex min-w-0 items-center gap-1.5 self-end justify-self-start"
                   >
-                    {/* Group voice talk lives where the usage counters used to be;
-                        the counters moved into the menu's usage row. */}
-                    {headerMode === 'conversation' && conversationId && voiceTalkAvailable ? (
-                      <VoiceTalkButton
-                        uiLocale={uiLocale}
-                        active={voiceTalkState.live || voiceTalkState.joined}
-                        onPress={handleVoiceTalkPress}
-                        sizePx={VOICE_MODE_SIDE_BUTTON_SIZE_PX}
-                      />
-                    ) : null}
                     {earphoneModeGate.controlVisible && (
                       <button
                         type="button"
@@ -11433,6 +11453,28 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         )}
                       </button>
                     )}
+                    <div data-qa="live-demo-voice-usage" className="flex min-w-0 flex-col items-start justify-center leading-4">
+                      {isUsageLimited ? (
+                        <span className="flex min-w-0 max-w-full items-center gap-1.5">
+                          <span className="h-1.5 w-12 shrink-0 overflow-hidden rounded-full bg-gray-200">
+                            <span
+                              className={`block h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
+                              style={{ width: `${usagePercent}%` }}
+                            />
+                          </span>
+                          <span className={`text-[0.78rem] tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}`}>
+                            {formatLivePhoneDemoUsageDuration(remainingSec)}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="max-w-full truncate text-[0.78rem] tabular-nums text-gray-400">
+                          {formatLivePhoneDemoUsageDuration(usageSec)}
+                        </span>
+                      )}
+                      <span className="max-w-full truncate text-[0.78rem] tabular-nums text-gray-400">
+                        {storedMessageCountLabel}
+                      </span>
+                    </div>
                   </motion.div>
 
                   <motion.div className="flex self-end justify-center">
@@ -11507,28 +11549,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   </motion.div>
 
                   <div className="flex items-center gap-1 self-end justify-self-end">
-                    {conversationId && viewerUserId && <ConversationImageComposer voiceButtonSize={VOICE_MODE_SIDE_BUTTON_SIZE_PX} conversationId={conversationId} locale={uiLocale}
-                      onSent={() => void refreshConversationMessages('push')} onMenuOpenChange={setIsAttachmentMenuOpen} acceptSharedPhoto={isVisible} />}
-                    <motion.button
-                      layoutId="live-phone-demo-keyboard-toggle"
-                      data-qa="live-demo-keyboard-open"
-                      type="button"
-                      onPointerDown={(event) => event.preventDefault()}
-                      onClick={handleToggleComposer}
-                      aria-label={composerCopy.switchToKeyboardModeLabel}
-                      className="inline-flex items-center justify-center text-gray-500 transition-all duration-200 hover:text-gray-700 active:scale-95"
-                      style={{
-                        width: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
-                        height: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
-                      }}
-                    >
-                      <Keyboard size={18} strokeWidth={2.15} />
-                    </motion.button>
+                    <ChatActionPlusButton
+                      open={actionPanelOpen}
+                      label={conversationImageCopy.attach}
+                      sizePx={VOICE_MODE_PLUS_BUTTON_SIZE_PX}
+                      onToggle={handleActionPanelToggle}
+                    />
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
             )}
+            {/* Photo picking and its preview (one for both input modes); the "+" panel opens the chooser. */}
+            {conversationId && viewerUserId && !isBlockedCounterpart ? (
+              <ConversationImageComposer conversationId={conversationId} locale={uiLocale} hideTrigger photoPickerRef={photoPickerRef}
+                onSent={() => void refreshConversationMessages('push')} onMenuOpenChange={setIsAttachmentMenuOpen} acceptSharedPhoto={isVisible} />
+            ) : null}
+            {actionPanelOpen && !isBlockedCounterpart ? (
+              <ChatActionPanel items={actionPanelItems} heightPx={actionPanelHeightPx} />
+            ) : null}
           </motion.div>
           {earphoneModeNoticeOpen && (
             <MessageMediaDialog title={earphoneModeCopy.label} onClose={closeEarphoneModeNotice}>

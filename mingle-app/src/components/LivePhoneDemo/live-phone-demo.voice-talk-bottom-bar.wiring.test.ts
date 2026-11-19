@@ -14,18 +14,19 @@ function between(source: string, startMarker: string, endMarker: string): string
   return source.slice(start, end)
 }
 
-describe('voice talk button in the bottom bar', () => {
-  it('sits in the bottom-left cell instead of the usage counters', () => {
+describe('voice talk in the bottom bar', () => {
+  it('is in the "+" panel; the voice bar left cell shows talk time and message count again', () => {
     const voiceBar = between(liveDemoSource, 'key="default-bottom-bar"', 'data-qa="live-demo-mic-button"')
-    expect(voiceBar).toContain('<VoiceTalkButton')
-    expect(voiceBar).toContain("headerMode === 'conversation' && conversationId && voiceTalkAvailable")
-    expect(voiceBar).toContain('onPress={handleVoiceTalkPress}')
-    expect(voiceBar).not.toContain('storedMessageCountLabel')
-    expect(voiceBar).not.toContain('formatLivePhoneDemoUsageDuration')
+    expect(voiceBar).not.toContain('<VoiceTalkButton')
+    expect(voiceBar).toContain('data-qa="live-demo-voice-usage"')
+    expect(voiceBar).toContain('{storedMessageCountLabel}')
+    expect(voiceBar).toContain('formatLivePhoneDemoUsageDuration(usageSec)')
+    const panelItems = between(liveDemoSource, 'const actionPanelItems = useMemo', '  }, [')
+    expect(panelItems).toContain("key: 'voice-talk'")
+    expect(panelItems).toContain('onSelect: closeThen(voiceTalkMenuItem.onSelect)')
   })
 
-  it('is rendered only once, not in the header', () => {
-    expect(liveDemoSource.split('<VoiceTalkButton').length - 1).toBe(1)
+  it('is not in the header', () => {
     expect(liveDemoSource).not.toContain('VoiceTalkHeaderButton')
   })
 
@@ -62,8 +63,8 @@ describe('voice talk and STT are separate switches', () => {
 
   it('locks Start/Stop and the speaker button in a call, and runs no speech-to-text of its own there', () => {
     expect(liveDemoSource).toContain('if (voiceTalkState.joined) return\n')
-    // Both the voice-mode and the keyboard-mode mic buttons.
-    expect(liveDemoSource.split('disabled={(isPreparingStart && !isConnecting) || voiceTalkState.joined}').length - 1).toBe(2)
+    // Voice mode's Start/Stop (keyboard mode has no mic button).
+    expect(liveDemoSource.split('disabled={(isPreparingStart && !isConnecting) || voiceTalkState.joined}').length - 1).toBe(1)
     expect(liveDemoSource).toContain('disabled={voiceTalkState.joined}')
     // The speaker / earphone button looks disabled too, in voice mode and in the keyboard's + menu.
     expect(liveDemoSource).toContain('active:scale-95 disabled:pointer-events-none disabled:opacity-40 ${')
@@ -113,9 +114,9 @@ describe('starting and joining a voice talk', () => {
     expect(panelSource).toContain('if (call) setDeclinedCallId(call.id)')
   })
 
-  it('puts a voice talk row in the keyboard-mode + menu', () => {
+  it('puts voice talk in the "+" panel', () => {
     expect(composerSource).toContain('data-qa="live-demo-voice-talk-menu-item"')
-    expect(liveDemoSource).toContain('voiceTalk={voiceTalkMenuItem}')
+    expect(liveDemoSource).toContain("key: 'voice-talk'")
     expect(liveDemoSource).toContain('label: roomManagementCopy.voiceTalkMenuItemLabel')
   })
 })
