@@ -2,6 +2,7 @@ import Foundation
 import Photos
 import React
 import UIKit
+import Vision
 
 @objc(NativeQrImageModule)
 class NativeQrImageModule: NSObject {
@@ -103,6 +104,56 @@ class NativeQrImageModule: NSObject {
             return
         }
         saveData()
+    }
+
+    /// Looks for faces in a photo on the phone (Vision); the photo never leaves it.
+    /// Resolves the number of faces and the width of the largest one as a share of the photo's width.
+    @objc(detectFaces:resolver:rejecter:)
+    func detectFaces(
+        _ dataUrl: String,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        guard let encodedImage = dataUrl.range(of: "base64,")
+            .map({ String(dataUrl[$0.upperBound...]) }),
+              let imageData = Data(base64Encoded: encodedImage, options: [.ignoreUnknownCharacters]),
+              let image = UIImage(data: imageData),
+              let cgImage = image.cgImage
+        else {
+            reject("native_face_invalid_image", "Could not decode the photo.", nil)
+            return
+        }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let request = VNDetectFaceRectanglesRequest()
+            let handler = VNImageRequestHandler(
+                cgImage: cgImage,
+                orientation: Self.visionOrientation(image.imageOrientation),
+                options: [:]
+            )
+            do {
+                try handler.perform([request])
+                let faces = request.results ?? []
+                // Bounding boxes are normalized to the (oriented) photo, so width is already a share.
+                let largest = faces.map { Double($0.boundingBox.width) }.max() ?? 0
+                resolve(["faces": faces.count, "largestFaceWidth": largest])
+            } catch {
+                reject("native_face_check_failed", error.localizedDescription, error)
+            }
+        }
+    }
+
+    private static func visionOrientation(_ orientation: UIImage.Orientation) -> CGImagePropertyOrientation {
+        switch orientation {
+        case .up: return .up
+        case .down: return .down
+        case .left: return .left
+        case .right: return .right
+        case .upMirrored: return .upMirrored
+        case .downMirrored: return .downMirrored
+        case .leftMirrored: return .leftMirrored
+        case .rightMirrored: return .rightMirrored
+        @unknown default: return .up
+        }
     }
 
     private func performPhotoSave(

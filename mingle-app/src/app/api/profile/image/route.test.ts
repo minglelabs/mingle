@@ -136,6 +136,7 @@ describe("/api/profile/image route", () => {
         imageCropScale: 2,
         imageCropX: 0.25,
         imageCropY: -0.1,
+        imageFaceCheck: "unchecked",
       },
       select: { id: true },
     });

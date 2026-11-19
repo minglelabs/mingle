@@ -1,6 +1,7 @@
 "use client";
 
 import AdBannerPositionSetting from "@/components/account/ad-banner-position-setting";
+import { checkPhotoForFace } from "@/lib/native-face-check";
 import BottomTabBar, { buildNativeAwareTabPath } from "@/components/bottom-tab-bar";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import ProfileImageCropper, {
@@ -2311,6 +2312,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         imageFormData.append("imageCropScale", String(draft.imageCrop.scale));
         imageFormData.append("imageCropX", String(draft.imageCrop.x));
         imageFormData.append("imageCropY", String(draft.imageCrop.y));
+        imageFormData.append("faceCheck", await checkPhotoForFace(draft.imageFile));
 
         const imageResponse = await fetch(buildClientApiPath("/profile/image"), {
           method: "POST",

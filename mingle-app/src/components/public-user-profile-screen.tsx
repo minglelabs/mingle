@@ -1,6 +1,7 @@
 "use client";
 
 import { requestProfileBasics } from "@/lib/profile-basics";
+import { parseFirstMessageSetupNeeds, requestFirstMessageSetup } from "@/lib/first-message-setup";
 import ProfileBio from "@/components/profile-bio";
 import { sameBioLanguage } from "@/lib/profile-bio";
 import ProfileGenderAgeBadge from "@/components/profile-gender-age-badge";
@@ -430,11 +431,22 @@ export default function PublicUserProfileScreen({
 
   const requestDirectConversation = useCallback(async (force: boolean) => {
     if (!profile) throw new Error("direct_conversation_failed");
-    const response = await fetch(buildClientApiPath("/conversations/direct"), {
+    const send = () => fetch(buildClientApiPath("/conversations/direct"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ targetUserId: profile.id, locale, force }),
     });
+    let response = await send();
+    if (response.status === 403) {
+      // A first room with someone new needs a verified number and a photo with
+      // a face first (server/first-message-gate): ask for them, then send again.
+      const refused = await response.clone().json().catch(() => null);
+      const needs = parseFirstMessageSetupNeeds(response.status, refused);
+      if (needs) {
+        if (!(await requestFirstMessageSetup(needs))) throw new Error("first_message_setup");
+        response = await send();
+      }
+    }
     if (response.status === 429) {
       // The free daily number of new people is used up (server/daily-new-chat-limit).
       const limited = await response.json().catch(() => ({})) as { error?: string; limit?: number };
@@ -480,7 +492,7 @@ export default function PublicUserProfileScreen({
       }
       await openDirectConversation(conversation);
     } catch (error) {
-      if (!(error instanceof Error && error.message === "daily_new_chat_limit")) setMessageError(true);
+      if (!(error instanceof Error && (error.message === "daily_new_chat_limit" || error.message === "first_message_setup"))) setMessageError(true);
     } finally {
       setIsMessagePending(false);
     }
@@ -495,7 +507,7 @@ export default function PublicUserProfileScreen({
       await openDirectConversation(existingConversation);
       setExistingConversation(null);
     } catch (error) {
-      if (!(error instanceof Error && error.message === "daily_new_chat_limit")) setMessageError(true);
+      if (!(error instanceof Error && (error.message === "daily_new_chat_limit" || error.message === "first_message_setup"))) setMessageError(true);
     } finally {
       setIsMessagePending(false);
     }
@@ -511,7 +523,7 @@ export default function PublicUserProfileScreen({
       await openDirectConversation(conversation);
       setExistingConversation(null);
     } catch (error) {
-      if (!(error instanceof Error && error.message === "daily_new_chat_limit")) setMessageError(true);
+      if (!(error instanceof Error && (error.message === "daily_new_chat_limit" || error.message === "first_message_setup"))) setMessageError(true);
     } finally {
       setIsMessagePending(false);
     }

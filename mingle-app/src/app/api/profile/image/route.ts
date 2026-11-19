@@ -10,6 +10,7 @@ import {
   deleteProfileImage,
   putProfileImage,
 } from "@/server/profile-image-storage";
+import { parseImageFaceCheck } from "@/server/first-message-gate";
 import {
   serializeUserProfile,
   userProfileSelect,
@@ -85,6 +86,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "invalid_image_crop" }, { status: 400 });
   }
 
+  // What the phone found in this photo; anything else (a browser, an older app) is 'unchecked'.
+  const imageFaceCheck = parseImageFaceCheck(formData.get("faceCheck")) ?? "unchecked";
+
   const objectKey = `profiles/${userId}/${crypto.randomUUID()}.${extension}`;
   let imageUrl: string;
   try {
@@ -117,6 +121,7 @@ export async function POST(request: NextRequest) {
         imageCropScale,
         imageCropX,
         imageCropY,
+        imageFaceCheck,
       },
       select: userProfileSelect,
     });

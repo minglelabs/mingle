@@ -20,6 +20,9 @@ model User {
   imageCropScale               Float?    @map("image_crop_scale")
   imageCropX                   Float?    @map("image_crop_x")
   imageCropY                   Float?    @map("image_crop_y")
+  /// What the phone found in the profile photo: 'face', 'no_face', or 'unchecked'
+  /// (uploaded where no face check runs: a browser, an older app). Null: never checked.
+  imageFaceCheck               String?   @map("image_face_check")
   latestIpAddress              String?   @map("latest_ip_address")
   latestUserAgent              String?   @map("latest_user_agent")
   language                     String?

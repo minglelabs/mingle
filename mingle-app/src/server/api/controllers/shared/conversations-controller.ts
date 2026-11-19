@@ -24,6 +24,7 @@ import { isSupportedLocale } from "@/i18n/config";
 import { prisma } from "@/lib/prisma";
 import { captureMingleEvent } from "@/lib/posthog-server";
 import { checkDailyNewChatLimit } from "@/server/daily-new-chat-limit";
+import { readFirstMessageNeeds } from "@/server/first-message-gate";
 
 export const runtime = "nodejs";
 
@@ -298,7 +299,7 @@ export async function postDirectConversationResponse(request: NextRequest) {
       }
     : resolvedUser.identity;
 
-  // One new person a day (see @/server/daily-new-chat-limit). Only a first
+  // The first-message gate, then one new person a day (see @/server/daily-new-chat-limit). Only a first
   // room with someone counts: a person there is already a room with, whoever
   // opened it, is never "new". A failed check lets the room through.
   try {
@@ -307,13 +308,18 @@ export async function postDirectConversationResponse(request: NextRequest) {
       otherUserIds: [targetUserId],
     });
     if (!existingRoom) {
+      // Phone number and a photo with a face first (see @/server/first-message-gate).
+      const needs = await readFirstMessageNeeds(resolvedUser.userId);
+      if (needs.length > 0) {
+        return NextResponse.json({ error: "first_message_setup", needs }, { status: 403 });
+      }
       const dailyLimit = await checkDailyNewChatLimit(resolvedUser.userId, targetUserId);
       if (!dailyLimit.allowed) {
         return NextResponse.json({ error: "daily_new_chat_limit", limit: dailyLimit.limit }, { status: 429 });
       }
     }
   } catch (error) {
-    console.error("[conversations/direct] daily_limit_check_failed", error);
+    console.error("[conversations/direct] first_room_checks_failed", error);
   }
 
   let conversationResult;

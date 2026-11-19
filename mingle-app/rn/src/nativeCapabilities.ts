@@ -13,6 +13,9 @@
  * `contacts` is true when the shell can read the address book and open a
  * written text message (`native_contacts_request`, `native_sms_compose`);
  * absent or false means the contact-sync screen offers neither.
+ * `faceCheck` is true when the shell looks for faces in a photo on the phone
+ * (`native_face_check`, answered on `mingle:native-face-check`); absent or
+ * false means the web cannot check, and a new profile photo is 'unchecked'.
  * `earphoneMicrophoneChoice` is true when the shell records from the phone's
  * microphone while earphones are in and takes the user's pick of the earphone
  * microphone instead (`earphoneMicrophone` on `native_stt_start`,
@@ -32,6 +35,7 @@ export type NativeShellCapabilities = {
   nativeTts: boolean;
   ttsStream: boolean;
   contacts: boolean;
+  faceCheck: boolean;
   earphoneMicrophoneChoice: boolean;
   deviceId?: string;
   deviceKind?: NativeDeviceKind;
@@ -60,6 +64,7 @@ export function buildNativeShellCapabilities(options: {
   nativeTts?: boolean;
   ttsStream?: boolean;
   contacts?: boolean;
+  faceCheck?: boolean;
   earphoneMicrophoneChoice?: boolean;
   deviceId?: string | null;
   deviceKind?: string | null;
@@ -73,6 +78,7 @@ export function buildNativeShellCapabilities(options: {
     nativeTts: options.nativeTts === true,
     ttsStream: options.ttsStream === true,
     contacts: options.contacts === true,
+    faceCheck: options.faceCheck === true,
     earphoneMicrophoneChoice: options.earphoneMicrophoneChoice === true,
     ...(device ?? {}),
   };

@@ -251,6 +251,7 @@ type NativePendingProfileLink = {
 type NativeQrImageModule = {
   savePng?: (dataUrl: string, fileName: string) => Promise<unknown>;
   saveImage?: (dataUrl: string, fileName: string) => Promise<unknown>;
+  detectFaces?: (dataUrl: string) => Promise<unknown>;
 };
 type NativePushRegistrationInfo = {
   token?: unknown;
@@ -674,6 +675,9 @@ const NATIVE_QR_SAVE_EVENT = 'mingle:native-qr-save';
 const NATIVE_IMAGE_SAVE_EVENT = 'mingle:native-image-save';
 // Chat photos are at most 2048px JPEG/PNG/WebP; the data URL stays well under this.
 const NATIVE_IMAGE_SAVE_MAX_CHARS = 30_000_000;
+const NATIVE_FACE_CHECK_EVENT = 'mingle:native-face-check';
+/** The page sends a small copy (about 720 px), so a few MB of base64 is plenty. */
+const NATIVE_FACE_CHECK_MAX_CHARS = 8_000_000;
 const NATIVE_LOCATION_EVENT = 'mingle:native-location';
 const NATIVE_LOCATION_QUEUE_LIMIT = 8;
 const NATIVE_QR_SCANNER_QUEUE_LIMIT = 8;
@@ -982,6 +986,14 @@ type NativeImageSaveCommand = {
   };
 };
 
+type NativeFaceCheckCommand = {
+  type: 'native_face_check';
+  payload?: {
+    requestId?: string;
+    dataUrl?: string;
+  };
+};
+
 type NativePushRegisterCommand = {
   type: 'native_push_register';
 };
@@ -1089,6 +1101,7 @@ type WebViewCommand =
   | NativeQrScannerOpenCommand
   | NativeQrSaveCommand
   | NativeImageSaveCommand
+  | NativeFaceCheckCommand
   | NativePushRegisterCommand
   | NativeNavigationStateCommand
   | NativeHistoryDebugCommand
@@ -1290,6 +1303,9 @@ type NativeQrSaveEvent =
   | { type: 'error'; message: string };
 type NativeImageSaveEvent =
   | { type: 'ready' | 'success'; requestId: string }
+  | { type: 'error'; requestId: string; message: string };
+type NativeFaceCheckEvent =
+  | { type: 'result'; requestId: string; faces: number; largestFaceWidth: number }
   | { type: 'error'; requestId: string; message: string };
 type RecommendUpdatePrompt = {
   title: string;
@@ -3436,6 +3452,39 @@ function AppInner(): React.JSX.Element {
     }
   }, [emitImageSaveToWeb]);
 
+  const emitFaceCheckToWeb = useCallback((payload: NativeFaceCheckEvent) => {
+    if (!isPageReadyRef.current || !webViewRef.current) return;
+    const script = `window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_FACE_CHECK_EVENT)}, { detail: ${JSON.stringify(payload)} })); true;`;
+    webViewRef.current.injectJavaScript(script);
+  }, []);
+
+  // The first-message gate: looks for a face in a profile photo on the phone; the photo never leaves it.
+  const handleNativeFaceCheck = useCallback(async (payload?: NativeFaceCheckCommand['payload']) => {
+    const requestId = typeof payload?.requestId === 'string' ? payload.requestId.trim().slice(0, 64) : '';
+    const dataUrl = typeof payload?.dataUrl === 'string' ? payload.dataUrl.trim() : '';
+    if (!requestId) return;
+    const nativeImageModule = (NativeModules as { NativeQrImageModule?: NativeQrImageModule }).NativeQrImageModule;
+    if (!/^data:image\/(jpeg|png|webp);base64,/i.test(dataUrl) || dataUrl.length > NATIVE_FACE_CHECK_MAX_CHARS) {
+      emitFaceCheckToWeb({ type: 'error', requestId, message: 'native_face_invalid' });
+      return;
+    }
+    if (!nativeImageModule || typeof nativeImageModule.detectFaces !== 'function') {
+      emitFaceCheckToWeb({ type: 'error', requestId, message: 'native_face_check_unavailable' });
+      return;
+    }
+    try {
+      const raw = await nativeImageModule.detectFaces(dataUrl) as { faces?: unknown; largestFaceWidth?: unknown } | null;
+      const faces = typeof raw?.faces === 'number' && Number.isFinite(raw.faces) ? Math.max(0, Math.round(raw.faces)) : 0;
+      const largestFaceWidth = typeof raw?.largestFaceWidth === 'number' && Number.isFinite(raw.largestFaceWidth)
+        ? Math.min(1, Math.max(0, raw.largestFaceWidth))
+        : 0;
+      emitFaceCheckToWeb({ type: 'result', requestId, faces, largestFaceWidth });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      emitFaceCheckToWeb({ type: 'error', requestId, message: message || 'native_face_check_failed' });
+    }
+  }, [emitFaceCheckToWeb]);
+
   const emitPushRegistrationToWeb = useCallback((payload: NativePushRegistrationInfo) => {
     const normalizedPayload: NativePushRegistrationInfo = {
       ...payload,
@@ -4571,6 +4620,11 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (parsed.type === 'native_face_check') {
+      void handleNativeFaceCheck(parsed.payload);
+      return;
+    }
+
     if (
       parsed.type === 'native_pip_start'
       || parsed.type === 'native_pip_update'
@@ -5074,6 +5128,7 @@ function AppInner(): React.JSX.Element {
     handleNativeLocationRequest,
     handleNativeQrSave,
     handleNativeImageSave,
+    handleNativeFaceCheck,
     handleNativeStart,
     handleNativeStop,
     handleNativeStatusRequest,
@@ -5505,6 +5560,7 @@ function AppInner(): React.JSX.Element {
       nativeTts: isNativeTtsAvailable(),
       ttsStream: isNativeTtsStreamAvailable(),
       contacts: isNativeContactsAvailable(),
+      faceCheck: typeof (NativeModules as { NativeQrImageModule?: NativeQrImageModule }).NativeQrImageModule?.detectFaces === 'function',
       earphoneMicrophoneChoice: nativeEarphoneMicrophoneChoiceAvailable,
       deviceId: NATIVE_RUNTIME_CONFIG.deviceId,
       deviceKind: NATIVE_RUNTIME_CONFIG.deviceKind,
