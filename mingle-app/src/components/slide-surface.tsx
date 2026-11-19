@@ -124,6 +124,9 @@ export default function SlideSurface({
   // safety net below can tell whether framer-motion settled the gesture.
   const edgeSwipeGestureSequenceRef = useRef(0);
   const releaseSettleFrameRef = useRef<number | null>(null);
+  // Fingers still on the surface after the last touch event (a second finger
+  // lifting must not end the first finger's drag).
+  const activeTouchCountRef = useRef(0);
   const [edgeSwipeActive, setEdgeSwipeActive] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(1);
   // True once a closed surface has finished sliding out. On PC web the app is
@@ -242,14 +245,18 @@ export default function SlideSurface({
           !isMountedRef.current
           || isLeavingRef.current
           || !open
+          || activeTouchCountRef.current > 0
           || edgeSwipeGestureSequenceRef.current !== gestureSequence
         ) {
           return;
         }
+        // framer may still think the finger is down (it never saw the release);
+        // a live drag would pull the surface back to the finger's last spot.
+        dragControls.cancel();
         void motionControls.start({ x: 0, transition: SURFACE_TRANSITION });
       });
     });
-  }, [motionControls, open]);
+  }, [dragControls, motionControls, open]);
 
   const restoreEdgeSwipeTouchAction = useCallback(() => {
     const wasEdgeSwipe = edgeSwipeStartPointRef.current !== null;
@@ -324,6 +331,7 @@ export default function SlideSurface({
       onDragEnd={handleDragEnd}
       onTouchStart={(event) => {
         if (stopPropagation) event.stopPropagation();
+        activeTouchCountRef.current = event.touches.length;
         const touch = event.touches[0];
         if (touch) prepareEdgeSwipeTouchAction(event.currentTarget, touch.clientX, touch.clientY);
         onTouchStart?.(event);
@@ -334,11 +342,13 @@ export default function SlideSurface({
       }}
       onTouchEnd={(event) => {
         if (stopPropagation) event.stopPropagation();
+        activeTouchCountRef.current = event.touches?.length ?? 0;
         restoreEdgeSwipeTouchAction();
         onTouchEnd?.(event);
       }}
       onTouchCancel={(event) => {
         if (stopPropagation) event.stopPropagation();
+        activeTouchCountRef.current = event.touches?.length ?? 0;
         restoreEdgeSwipeTouchAction();
         onTouchCancel?.(event);
       }}

@@ -460,6 +460,10 @@ async function cmdStart(args) {
     'appium:wdaLaunchTimeout': 180_000,
     'appium:wdaConnectionTimeout': 180_000,
   };
+  // Another session's WebDriverAgent may already hold the default 8100 (one per phone).
+  if (process.env.MINGLE_QA_WDA_LOCAL_PORT) {
+    capabilities['appium:wdaLocalPort'] = Number(process.env.MINGLE_QA_WDA_LOCAL_PORT);
+  }
   if (!simulator) {
     capabilities['appium:xcodeOrgId'] = DEFAULT_TEAM_ID;
     capabilities['appium:xcodeSigningId'] = process.env.MINGLE_UI_QA_IOS_XCODE_SIGNING_ID || 'Apple Development';
