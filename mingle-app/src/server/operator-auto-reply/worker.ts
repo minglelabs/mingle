@@ -14,9 +14,10 @@ import { getAutoReplySettings } from './settings'
  * the room's operator account.
  *
  * - How long is long enough differs per message (`autoReplyDelayMs`): the
- *   staff-set delay is the shortest wait, a popular account (followers, rooms
- *   with real people this week) answers more slowly, and now and then a reply
- *   takes much longer, as people's do. The wait is seeded by the message id,
+ *   staff-set delay is the typical wait, a popular account (followers, rooms
+ *   with real people this week) answers more slowly, about one reply in five
+ *   comes almost at once, and now and then one takes much longer, as
+ *   people's do. The wait is seeded by the message id,
  *   so every run agrees on when a message is due.
  * - Only 1:1 rooms with an active operator account, only messages that
  *   arrived after auto-reply was turned on, and never ones older than a day.
@@ -34,6 +35,8 @@ export const AUTO_REPLY_MAX_AGE_MS = 24 * 60 * 60_000
 /** No reply waits longer than this, whatever the popularity and the draw. */
 export const AUTO_REPLY_MAX_DELAY_MS = 12 * 60 * 60_000
 const POPULARITY_WINDOW_MS = 7 * 24 * 60 * 60_000
+/** The shortest any message waits: an instant answer still looks typed. */
+export const AUTO_REPLY_MIN_WAIT_MS = 20_000
 export const AUTO_REPLY_MAX_ATTEMPTS = 3
 const MAX_TRACKED_MESSAGES = 2_000
 
@@ -59,18 +62,21 @@ export function popularityFactor(followers: number, activeRooms: number): number
 }
 
 /**
- * A long tail: half the draws stay under 1.6x, one in ten passes 5x, one in
- * thirty passes 10x (capped at 12x).
+ * One draw in five is an almost instant answer (0-0.2x). The rest have a long
+ * tail: half stay under 1.6x, one in ten passes 5x (capped at 12x).
  */
-export function slowReplyFactor(random: () => number): number {
-  return Math.min(12, (1 - random()) ** -0.7)
+export const INSTANT_REPLY_SHARE = 0.2
+export function replyDelayFactor(random: () => number): number {
+  const roll = random()
+  if (roll < INSTANT_REPLY_SHARE) return roll
+  return Math.min(12, (1 - (roll - INSTANT_REPLY_SHARE) / (1 - INSTANT_REPLY_SHARE)) ** -0.7)
 }
 
 /** How long this message waits for staff before the account answers it. */
-export function autoReplyDelayMs(candidate: Pick<AutoReplyCandidate, 'messageId' | 'followers' | 'activeRooms'>, minDelayMinutes: number): number {
+export function autoReplyDelayMs(candidate: Pick<AutoReplyCandidate, 'messageId' | 'followers' | 'activeRooms'>, delayMinutes: number): number {
   const random = seededRandom(`auto-reply-delay:${candidate.messageId}`)
-  const delay = minDelayMinutes * 60_000 * popularityFactor(candidate.followers, candidate.activeRooms) * slowReplyFactor(random)
-  return Math.min(AUTO_REPLY_MAX_DELAY_MS, Math.max(minDelayMinutes * 60_000, Math.round(delay)))
+  const delay = delayMinutes * 60_000 * popularityFactor(candidate.followers, candidate.activeRooms) * replyDelayFactor(random)
+  return Math.min(AUTO_REPLY_MAX_DELAY_MS, Math.max(AUTO_REPLY_MIN_WAIT_MS, Math.round(delay)))
 }
 
 export type AutoReplyRunSummary = {
@@ -111,14 +117,13 @@ export function autoReplyRequestId(messageId: string): string {
   return `auto-${messageId.replace(/[^A-Za-z0-9-]/g, '')}`.slice(0, 64)
 }
 
-/** Rooms waiting on staff for at least `delayMinutes` (the shortest wait), oldest message first. */
+/** Rooms waiting on staff for at least `AUTO_REPLY_MIN_WAIT_MS`, oldest message first. */
 export async function findAutoReplyCandidates(args: {
   now: Date
-  delayMinutes: number
   enabledAt: Date
   limit?: number
 }): Promise<AutoReplyCandidate[]> {
-  const cutoff = new Date(args.now.getTime() - args.delayMinutes * 60_000)
+  const cutoff = new Date(args.now.getTime() - AUTO_REPLY_MIN_WAIT_MS)
   const since = new Date(Math.max(args.enabledAt.getTime(), args.now.getTime() - AUTO_REPLY_MAX_AGE_MS))
   if (since.getTime() >= cutoff.getTime()) return []
   return prisma.$queryRaw<AutoReplyCandidate[]>(Prisma.sql`
@@ -259,7 +264,6 @@ export async function runOperatorAutoReplies(options: { now?: () => Date } = {})
   const checkedAt = now()
   const waiting = await findAutoReplyCandidates({
     now: checkedAt,
-    delayMinutes: settings.delayMinutes,
     enabledAt: new Date(settings.enabledAt),
     limit: AUTO_REPLY_SCAN_LIMIT,
   })
