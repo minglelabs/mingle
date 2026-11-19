@@ -9,6 +9,7 @@ import {
   advanceLiveness,
   initialLivenessState,
   isSameFace,
+  MIN_PHOTO_FACE_WIDTH,
   type LivenessHint,
   type LivenessState,
 } from "@/lib/selfie-liveness";
@@ -30,7 +31,9 @@ function loadHuman(): Promise<HumanInstance> {
     const human = new Human({
       modelBasePath: `${window.location.origin}${MODEL_PATH}`,
       backend: "webgl",
-      warmup: "none",
+      // The first detection compiles the GPU shaders (11 to 13 s on a Galaxy S9
+      // and an iPhone 11 Pro); warming up does it behind the "Getting ready" spinner.
+      warmup: "face",
       cacheSensitivity: 0,
       debug: false,
       face: {
@@ -53,6 +56,7 @@ function loadHuman(): Promise<HumanInstance> {
       filter: { enabled: true, flip: false },
     });
     await human.load();
+    await human.warmup();
     return human;
   }).catch((error) => {
     humanPromise = null;
@@ -74,8 +78,12 @@ function hintText(copy: SelfieVerifyCopy, hint: LivenessHint): string {
   }
 }
 
-/** The face description of the account's own profile photo, read through the server (the photo may live on another host). */
-async function profilePhotoEmbedding(human: HumanInstance): Promise<number[] | null> {
+/**
+ * The face description of the account's own profile photo, read through the
+ * server (the photo may live on another host). "small" when the face is too
+ * small to compare reliably.
+ */
+async function profilePhotoEmbedding(human: HumanInstance): Promise<number[] | "small" | null> {
   const response = await fetch(buildClientApiPath("/profile/image/face-check"), { cache: "no-store" });
   if (!response.ok) return null;
   const bitmap = await createImageBitmap(await response.blob());
@@ -87,7 +95,8 @@ async function profilePhotoEmbedding(human: HumanInstance): Promise<number[] | n
     canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     const result = await human.detect(canvas);
     const face = [...result.face].sort((a, b) => (b.boxRaw[2] ?? 0) - (a.boxRaw[2] ?? 0))[0];
-    return face?.embedding?.length ? face.embedding : null;
+    if (!face?.embedding?.length) return null;
+    return (face.boxRaw[2] ?? 0) < MIN_PHOTO_FACE_WIDTH ? "small" : face.embedding;
   } finally {
     bitmap.close();
   }
@@ -131,8 +140,13 @@ export default function SelfieVerifyScreen({
     stopCamera();
     try {
       const photo = await profilePhotoEmbedding(human);
-      if (!photo || !state.centerEmbedding) {
-        setPhase(photo ? "failed" : "need_photo");
+      if (photo === null || photo === "small") {
+        // No face in the profile photo, or too small to compare: ask for a clearer one.
+        setPhase(photo === "small" ? "mismatch" : "need_photo");
+        return;
+      }
+      if (!state.centerEmbedding) {
+        setPhase("failed");
         return;
       }
       const similarity = human.match.similarity(state.centerEmbedding, photo);

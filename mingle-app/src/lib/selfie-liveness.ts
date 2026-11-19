@@ -40,9 +40,18 @@ export const YAW_CENTER = 0.12
 export const MIN_LIVE_FACE_WIDTH = 0.22
 /**
  * Same person when the selfie and the profile photo are at least this
- * similar (Human's `match.similarity`, 0 to 1). Set from phone checks.
+ * similar (Human's `match.similarity`, 0 to 1). Measured on a Galaxy S9
+ * (2026-11-19): one photo against a mirrored, cropped, darker copy of itself
+ * scored 0.73 to 0.95; 55 pairs of different people scored 0.28 in the
+ * middle and at most 0.54, once a photo with a tiny face (0.59) was left out.
  */
-export const FACE_MATCH_THRESHOLD = 0.5
+export const FACE_MATCH_THRESHOLD = 0.55
+/**
+ * The profile photo's face must be at least this wide (share of the photo)
+ * to compare: a small, far-away face gives a loose description that can look
+ * like anyone.
+ */
+export const MIN_PHOTO_FACE_WIDTH = 0.15
 
 export function initialLivenessState(): LivenessState {
   return { step: 'center', firstSide: null, centerEmbedding: null, centerScore: 0 }

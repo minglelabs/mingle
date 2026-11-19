@@ -2,6 +2,18 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-19 — Selfie check on the phone for a "Verified" badge (free, nothing leaves the phone)
+
+- Surface: new `components/selfie-verify-screen.tsx`, `components/face-verified-badge.tsx`, `lib/selfie-liveness.ts`, `i18n/selfie-verify-copy.ts` (15 languages), `api/profile/face-verification` (+ ios/android v2.2.0), `public/models/human/` (three model pairs), My page button (`my-page.tsx`), the badge next to the name on a profile (`public-user-profile-screen.tsx`), `User.faceVerifiedAt`, app shell WebView camera grant (`rn/App.tsx`) and the iOS camera text.
+- Issue: The owner wanted a selfie video check that the profile photo is really the person, without paying for a face service.
+- Resolution: My page has "셀카 본인인증". The screen opens the front camera in the page and runs the free Human library (MIT; face detector, face mesh for head angle, face description) on the phone. The person looks straight, turns the head one way, then the other, then straight again. A held-up photo cannot turn, and two faces in the frame or a face too far away stop the steps. The straight face is then compared with the profile photo's face. They pass at a similarity of 0.55 or more, and a profile photo whose face is under 15% of its width is not compared (it asks for a clearer photo). On a pass the server sets `faceVerifiedAt`, and the profile shows a green "인증됨" badge. Only the similarity number is sent; no frame or face description leaves the phone, and nothing is stored but the time. A new profile photo clears the badge.
+- Bar measured on a Galaxy S9: one photo against a mirrored, cropped, darker copy of itself scored 0.73–0.95. 55 pairs of different people scored 0.28 in the middle and at most 0.54, once a photo with a tiny far-away face (0.59) was left out. That is why the bar is 0.55 and why the small face is not compared. A real selfie against a different photo of the same person was not measured (no such pair was available), so the bar may need lowering after real use.
+- Checked on phones (local devbox):
+  - Galaxy S9: the button, the intro, Android's camera permission prompt, the camera running at 640×640, and the "Can't see your face" step with nobody in front of it. With the warm-up the camera answers 4.1 s after Start (before the warm-up the first detection took about 11 s).
+  - iPhone 11 Pro: the face models run (WebGL), and the camera opens in the page with the Korean steps.
+  - Nobody turned their head in front of either phone, so a full pass to the badge was not checked on a phone. Unit tests cover the steps, the bar, the copy and the wiring.
+- QA tool: `MINGLE_QA_WDA_PORT` lets a second session drive an iPhone while another session's Appium holds port 8100.
+
 ## 2026-11-19 — First message to someone new: a verified number and a photo with a face first
 
 - Surface: new `components/first-message-gate.tsx` (sheet, mounted in `app/layout.tsx`), `lib/first-message-setup.ts`, `lib/native-face-check.ts`, `i18n/first-message-gate-copy.ts` (15 languages), `server/first-message-gate.ts`, `conversations-controller.ts` (direct room), `public-user-profile-screen.tsx` (Message), `api/profile/image` (+ new `face-check` route), `my-page.tsx` and `home/profile-start-card.tsx` (uploads), app shell `rn/App.tsx` (`native_face_check`, `faceCheck` capability), `NativeQrImageModule` (iOS Vision, Android ML Kit), `User.imageFaceCheck`.
