@@ -193,28 +193,29 @@ function chatHtml(lang) {
 //   booking - a booking call on speaker, the shop on the other side
 // `call`: the same room during a voice talk (the app's voice call), drawn the
 // way the voice talk build shows it (src/components/LivePhoneDemo/VoiceTalkPanel.tsx
-// on feat/voicetalk-windows-livekit-mvp): the call panel under the top bar with
+// on main since #377): the call panel under the top bar with
 // the people in the call and one open seat (the speaker's avatar ringed by the
-// soft gray ripple, each seat's language flag at its bottom left), "My voice on"
-// in red and a gray "Leave"; the room's talk under it, every line in both
+// soft gray ripple, each seat's language flag at its bottom left), and the four
+// round icon buttons of a joined call: mic on (red), interpretation on (green),
+// read-aloud on (amber), leave (gray); the room's talk under it, every line in both
 // languages; the phone button bottom left in green with its dot. The words are
 // the app's own (src/i18n/voice-talk-copy.ts there), in every language.
 const VOICE_TALK_COPY = {
-  ko: { name: '보이스톡', me: '나', empty: '빈 자리', micOn: '내 목소리 켜짐', leave: '나가기' },
-  en: { name: 'Voice talk', me: 'Me', empty: 'Open seat', micOn: 'My voice on', leave: 'Leave' },
-  ja: { name: 'ボイストーク', me: '自分', empty: '空き席', micOn: '自分の声 オン', leave: '退出' },
-  'zh-cn': { name: '语音通话', me: '我', empty: '空位', micOn: '我的声音 开', leave: '退出' },
-  'zh-tw': { name: '語音通話', me: '我', empty: '空位', micOn: '我的聲音 開', leave: '離開' },
-  fr: { name: 'Appel vocal', me: 'Moi', empty: 'Place libre', micOn: 'Ma voix activée', leave: 'Quitter' },
-  de: { name: 'Sprachanruf', me: 'Ich', empty: 'Freier Platz', micOn: 'Meine Stimme an', leave: 'Verlassen' },
-  es: { name: 'Llamada de voz', me: 'Yo', empty: 'Lugar libre', micOn: 'Mi voz activada', leave: 'Salir' },
-  pt: { name: 'Chamada de voz', me: 'Eu', empty: 'Lugar livre', micOn: 'Minha voz ligada', leave: 'Sair' },
-  it: { name: 'Chiamata vocale', me: 'Io', empty: 'Posto libero', micOn: 'La mia voce attiva', leave: 'Esci' },
-  ru: { name: 'Голосовой звонок', me: 'Я', empty: 'Свободно', micOn: 'Мой голос вкл.', leave: 'Выйти' },
-  ar: { name: 'مكالمة صوتية', me: 'أنا', empty: 'مقعد فارغ', micOn: 'صوتي مفعّل', leave: 'مغادرة' },
-  hi: { name: 'वॉइस कॉल', me: 'मैं', empty: 'खाली जगह', micOn: 'मेरी आवाज़ चालू', leave: 'छोड़ें' },
-  th: { name: 'โทรด้วยเสียง', me: 'ฉัน', empty: 'ที่ว่าง', micOn: 'เสียงของฉัน เปิด', leave: 'ออก' },
-  vi: { name: 'Gọi thoại', me: 'Tôi', empty: 'Chỗ trống', micOn: 'Giọng tôi bật', leave: 'Rời đi' },
+  ko: { name: '보이스톡', me: '나', empty: '빈 자리' },
+  en: { name: 'Voice talk', me: 'Me', empty: 'Open seat' },
+  ja: { name: 'ボイストーク', me: '自分', empty: '空き席' },
+  'zh-cn': { name: '语音通话', me: '我', empty: '空位' },
+  'zh-tw': { name: '語音通話', me: '我', empty: '空位' },
+  fr: { name: 'Appel vocal', me: 'Moi', empty: 'Place libre' },
+  de: { name: 'Sprachanruf', me: 'Ich', empty: 'Freier Platz' },
+  es: { name: 'Llamada de voz', me: 'Yo', empty: 'Lugar libre' },
+  pt: { name: 'Chamada de voz', me: 'Eu', empty: 'Lugar livre' },
+  it: { name: 'Chiamata vocale', me: 'Io', empty: 'Posto libero' },
+  ru: { name: 'Голосовой звонок', me: 'Я', empty: 'Свободно' },
+  ar: { name: 'مكالمة صوتية', me: 'أنا', empty: 'مقعد فارغ' },
+  hi: { name: 'वॉइस कॉल', me: 'मैं', empty: 'खाली जगह' },
+  th: { name: 'โทรด้วยเสียง', me: 'ฉัน', empty: 'ที่ว่าง' },
+  vi: { name: 'Gọi thoại', me: 'Tôi', empty: 'Chỗ trống' },
 };
 function voiceTalkPanel(lang, { partner, partnerName, partnerAvatar, meAvatar, speaking, group = null }) {
   const copy = VOICE_TALK_COPY[lang] || VOICE_TALK_COPY.en;
@@ -240,14 +241,17 @@ function voiceTalkPanel(lang, { partner, partnerName, partnerAvatar, meAvatar, s
     ];
   const filled = seatList.length;
   const seats = [...seatList, ...(filled < 8 ? [empty] : [])].join('');
-  const mic = '<svg viewBox="0 0 24 24" style="width:17px;height:17px"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
-  const phoneOff = '<svg viewBox="0 0 24 24" style="width:17px;height:17px"><path d="M10.7 13.3a16 16 0 0 0 3.4 2.6l1.3-1.3a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 3.1 4.2 2 2 0 0 1 5.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8.9 9.7"/><path d="M22 2 2 22"/></svg>';
+  const icon = (paths) => `<svg viewBox="0 0 24 24" class="vt-icon">${paths}</svg>`;
+  const mic = icon('<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/>');
+  const languages = icon('<path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/>');
+  const volume = icon('<path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5Z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.4 18.4a9 9 0 0 0 0-12.8"/>');
+  const phoneOff = icon('<path d="M10.7 13.3a16 16 0 0 0 3.4 2.6l1.3-1.3a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 3.1 4.2 2 2 0 0 1 5.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8.9 9.7"/><path d="M22 2 2 22"/>');
   return `
   <div class="vt-panel">
     <div class="vt-top"><span class="vt-dot"><i></i><b></b></span><span class="vt-title">${copy.name} · ${filled}/8</span>
       <svg viewBox="0 0 24 24" class="vt-chev"><path d="m18 15-6-6-6 6"/></svg></div>
     <div class="vt-grid">${seats}</div>
-    <div class="vt-buttons" dir="ltr"><span class="vt-mic">${mic}${copy.micOn}</span><span class="vt-leave">${phoneOff}${copy.leave}</span></div>
+    <div class="vt-buttons" dir="ltr"><span class="vt-btn vt-mic">${mic}</span><span class="vt-btn vt-interpret">${languages}</span><span class="vt-btn vt-listen">${volume}</span><span class="vt-btn vt-leave">${phoneOff}</span></div>
   </div>`;
 }
 const VOICE_TALK_CSS = `
@@ -275,10 +279,12 @@ const VOICE_TALK_CSS = `
   .vt-flag{position:absolute;left:-2px;bottom:-2px;min-width:18px;height:18px;padding:0 2px;border-radius:9px;background:#fff;box-shadow:0 0 0 1px #E5E7EB;
     display:flex;align-items:center;justify-content:center;font-size:11px;line-height:1}
   .vt-label{width:100%;text-align:center;font-size:11.2px;font-weight:500;color:#4B5563;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .vt-buttons{display:flex;justify-content:center;gap:16px;border-top:1px solid #F3F4F6;padding:10px 12px}
-  .vt-mic,.vt-leave{height:44px;min-width:124px;padding:0 20px;border-radius:22px;display:inline-flex;align-items:center;justify-content:center;gap:6px;
-    font-size:13.8px;font-weight:600;white-space:nowrap}
+  .vt-buttons{display:flex;justify-content:center;gap:16px;border-top:1px solid #F3F4F6;padding:12px}
+  .vt-btn{width:64px;height:48px;border-radius:24px;display:inline-flex;align-items:center;justify-content:center}
+  .vt-icon{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
   .vt-mic{background:#EF4444;color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .vt-interpret{background:#10B981;color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .vt-listen{background:#FBBF24;color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08)}
   .vt-leave{background:#F3F4F6;color:#374151}
   .vt-phone{position:relative;color:#10B981;margin-top:4px}
   .vt-phone i{position:absolute;right:-3px;top:-2px;width:7px;height:7px;border-radius:50%;background:#10B981;box-shadow:0 0 0 2px #fff}
