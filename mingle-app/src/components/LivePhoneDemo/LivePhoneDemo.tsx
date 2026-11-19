@@ -415,6 +415,7 @@ const VOLUME_THRESHOLD = 0.05
 const OLDER_LOAD_RELEASE_FALLBACK_MS = 1_500
 const HEADER_LANGUAGE_FLAG_LIMIT = 3
 const VOICE_MODE_PLUS_BUTTON_SIZE_PX = 36
+const ACTION_PANEL_KEYBOARD_RETURN_HOLD_MS = 900
 const ACCOUNT_PREFERENCES_API_PATH = buildClientApiPath('/account/preferences')
 const FEEDBACK_API_PATH = buildClientApiPath('/feedback')
 const FEEDBACK_INSTAGRAM_CONTACT_URL = 'https://www.instagram.com/mingle.labs/'
@@ -2481,6 +2482,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // The keyboard's height the last time it was up: the "+" panel takes its place.
   const [lastKeyboardHeightPx, setLastKeyboardHeightPx] = useState(0)
   const [actionPanelOpenFor, setActionPanelOpenFor] = useState<'text' | 'voice' | null>(null)
+  // Closing the "+" panel back to the keyboard: its room stays reserved until
+  // the keyboard has risen into it, so the bar does not drop and rise again.
+  const [actionPanelKeyboardReturnPending, setActionPanelKeyboardReturnPending] = useState(false)
+  const actionPanelKeyboardReturnTimerRef = useRef<number | null>(null)
+  const actionPanelOpenForRef = useRef<'text' | 'voice' | null>(null)
+  useEffect(() => {
+    actionPanelOpenForRef.current = actionPanelOpenFor
+  }, [actionPanelOpenFor])
+  const holdActionPanelRoomForKeyboard = useCallback(() => {
+    setActionPanelKeyboardReturnPending(true)
+    if (actionPanelKeyboardReturnTimerRef.current !== null) window.clearTimeout(actionPanelKeyboardReturnTimerRef.current)
+    actionPanelKeyboardReturnTimerRef.current = window.setTimeout(() => {
+      actionPanelKeyboardReturnTimerRef.current = null
+      setActionPanelKeyboardReturnPending(false)
+    }, ACTION_PANEL_KEYBOARD_RETURN_HOLD_MS)
+  }, [])
+  useEffect(() => () => {
+    if (actionPanelKeyboardReturnTimerRef.current !== null) window.clearTimeout(actionPanelKeyboardReturnTimerRef.current)
+  }, [])
   const [floatingToastMessage, setFloatingToastMessage] = useState('')
   const silenceSliderUpgradeToastLastShownAtRef = useRef(0)
   const floatingToastTimerRef = useRef<number | null>(null)
@@ -7028,8 +7048,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const handleComposerTextareaFocus = useCallback(() => {
     setIsComposerTextareaFocused(true)
     // Typing again: the keyboard takes the "+" panel's place.
+    if (actionPanelOpenForRef.current) holdActionPanelRoomForKeyboard()
     setActionPanelOpenFor(null)
-  }, [])
+  }, [holdActionPanelRoomForKeyboard])
   const handleComposerTextareaBlur = useCallback(() => setIsComposerTextareaFocused(false), [])
 
   useEffect(() => {
@@ -8228,13 +8249,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const conversationImageCopy = useMemo(() => resolveConversationImageCopy(uiLocale), [uiLocale])
   const handleActionPanelToggle = useCallback(() => {
     if (actionPanelOpen) {
+      if (composerShown) holdActionPanelRoomForKeyboard()
       setActionPanelOpen(false)
       if (composerShown) focusComposerTextarea()
       return
     }
     if (composerShown) composerTextareaRef.current?.blur()
     setActionPanelOpen(true)
-  }, [actionPanelOpen, composerShown, focusComposerTextarea, setActionPanelOpen])
+  }, [actionPanelOpen, composerShown, focusComposerTextarea, holdActionPanelRoomForKeyboard, setActionPanelOpen])
   const actionPanelItems = useMemo<ChatActionPanelItem[]>(() => {
     const items: ChatActionPanelItem[] = []
     const closeThen = (action: () => void) => () => { setActionPanelOpen(false); action() }
@@ -8685,7 +8707,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const bottomBarBottomMarginPx = composerShown
     ? COMPOSER_MODE_BOTTOM_MARGIN_PX
     : VOICE_MODE_BOTTOM_MARGIN_PX
-  const bottomBarPaddingBottom = `max(calc(env(safe-area-inset-bottom, 0px) + ${bottomBarBottomMarginPx + activeKeyboardInsetPx}px), ${bottomBarBottomMarginPx + activeKeyboardInsetPx}px)`
+  // The "+" panel and the keyboard share one room under the bar: the bar sits
+  // on whichever is taller, so it stays put while one slides out and the
+  // other comes in (the panel is the last keyboard's height).
+  const actionPanelRoomPx = actionPanelOpen || (composerShown && actionPanelKeyboardReturnPending)
+    ? actionPanelHeightPx
+    : 0
+  const bottomBarLiftPx = Math.max(activeKeyboardInsetPx, actionPanelRoomPx)
+  const bottomBarPaddingBottom = `max(calc(env(safe-area-inset-bottom, 0px) + ${bottomBarBottomMarginPx + bottomBarLiftPx}px), ${bottomBarBottomMarginPx + bottomBarLiftPx}px)`
   // iOS reports the keyboard's final height (0) as soon as it starts sliding
   // down, so the bar used to drop at once and the chat jumped to full height
   // while the keyboard was still on screen. Ease the bar down alongside the
@@ -11567,7 +11596,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 onSent={() => void refreshConversationMessages('push')} onMenuOpenChange={setIsAttachmentMenuOpen} acceptSharedPhoto={isVisible} />
             ) : null}
             {actionPanelOpen && !isBlockedCounterpart ? (
-              <ChatActionPanel items={actionPanelItems} heightPx={actionPanelHeightPx} />
+              <ChatActionPanel
+                items={actionPanelItems}
+                heightPx={actionPanelHeightPx}
+                bottomOffset={`max(calc(env(safe-area-inset-bottom, 0px) + ${bottomBarBottomMarginPx}px), ${bottomBarBottomMarginPx}px)`}
+              />
             ) : null}
           </motion.div>
           {earphoneModeNoticeOpen && (
