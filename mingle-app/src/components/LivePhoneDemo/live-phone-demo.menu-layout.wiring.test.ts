@@ -28,7 +28,7 @@ describe('room menu layout', () => {
 
   it('keeps the settings off the first screen, behind one row', () => {
     expect(firstScreen).toContain('data-qa="live-demo-menu-voice-settings"')
-    for (const moved of ['textSizeLabel', 'firstRunCopy.lengthMenuLabel', 'bubbleDisplayCopy.displayModeLabel', 'translationModelLabel', 'ttsModelLabel', 'live-demo-menu-earphone-microphone', 'handleDefaultDisplayLanguageMenuItemPress']) {
+    for (const moved of ['textSizeLabel', 'firstRunCopy.lengthMenuLabel', 'bubbleDisplayCopy.displayModeLabel', 'live-demo-menu-earphone-microphone', 'handleDefaultDisplayLanguageMenuItemPress']) {
       expect(firstScreen).not.toContain(moved)
       expect(voiceSettingsPage).toContain(moved)
     }
@@ -48,6 +48,15 @@ describe('room menu layout', () => {
     expect(myPageSource).toContain('<AdBannerPositionSetting')
     expect(settingSource).toContain('commitAccountPreferencesEdit(identity, cached.preferences, { ...cached.preferences, adBannerPosition: next }, isLegacy)')
     expect(settingSource).toContain('body: JSON.stringify({ adBannerPosition: next })')
+  })
+
+  it('offers no translation or read-aloud model, and sends none', () => {
+    expect(source).not.toContain('{translationModelLabel}')
+    expect(source).not.toContain('{ttsModelLabel}')
+    expect(source).not.toContain('handleTranslationModelSelect')
+    expect(source).not.toContain('handleTtsModelSelect')
+    expect(source).toContain('const requestTranslationModel: UserSelectableTranslationModel | undefined = undefined')
+    expect(source).toContain('const requestTtsModel: UserSelectableTtsModel | undefined = undefined')
   })
 
   it('has no sign-out or account deletion: those are on the My tab', () => {

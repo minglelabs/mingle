@@ -106,6 +106,11 @@ export function resolveTranslationRuntimeSelection(value: unknown): TranslationR
   return TRANSLATION_RUNTIME_SELECTIONS[normalized]
 }
 
+/**
+ * The translation model people are served. Nobody picks one any more
+ * (2026-11-19): the app does not send one, and a model saved on an account
+ * from before is ignored.
+ */
 export function resolveDefaultSelectableTranslationModel(): UserSelectableTranslationModel {
   return DEFAULT_SELECTABLE_TRANSLATION_MODEL
 }

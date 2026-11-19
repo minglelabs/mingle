@@ -8,7 +8,6 @@ import { COIN_INSUFFICIENT_ERROR } from '@/lib/coin-units'
 import { readMessageRecalledAtMs } from '@/lib/message-recall'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import {
-  normalizeSelectableTranslationModel,
   resolveDefaultSelectableTranslationModel,
 } from '@/lib/translation-models'
 import { normalizeChineseContent } from '@/server/chinese-script-conversion'
@@ -76,9 +75,8 @@ export async function retranslateConversationMessage(request: NextRequest, conve
     return NextResponse.json({ error: COIN_INSUFFICIENT_ERROR }, { status: 402 })
   }
 
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { translationModel: true } })
-  const modelSelection = normalizeSelectableTranslationModel(user?.translationModel)
-    ?? resolveDefaultSelectableTranslationModel()
+  // Nobody picks the model any more: the account's old pick is ignored (lib/translation-models.ts).
+  const modelSelection = resolveDefaultSelectableTranslationModel()
   const providerResolution = resolveTranslationProviderConfig(modelSelection)
   if (!providerResolution.ok) return NextResponse.json({ error: 'translation_unavailable' }, { status: 503 })
 

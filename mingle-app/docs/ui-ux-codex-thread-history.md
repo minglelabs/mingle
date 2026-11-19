@@ -2,6 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-19 — Nobody picks the translation or read-aloud model any more
+
+- Surface: `LivePhoneDemo.tsx` (Interpreting & voice settings page), `LivePhoneDemoLegacy.tsx`; `translate-finalize-handler.ts`, `message-retranslate-controller.ts`, `voice-interpreter-reports.ts`, `coins-controller.ts`; `lib/translation-models.ts`, `lib/tts-models.ts`.
+- Issue: The room settings had a translation model and a read-aloud (TTS) model picker for everyone (owner decision 2026-11-19: take them away).
+- Resolution: Both pickers are gone (also from the old v1.0.11 room screen), and the app sends no model with a translation or read-aloud request. The server no longer looks up a model saved on the account: live translation, retranslating a message, the voice talk interpreter and the read-aloud price on the coin page all use the default (translation `gpt-6-luna`, read-aloud `soniox-tts-rt-v2`). A model named in the request itself is still honoured, for tests and internal tools; no app sends one. Saved values stay in the database but are not read.
+- Checked in a phone-width browser on the local server: the Interpreting & voice settings page shows display language, text size, sentence length and bubble style only. Unit tests: 5,368.
+
 ## 2026-11-19 — Open rooms hold 200, a speaker can step off the stage, the ad banner position is on the My tab
 
 - Surface: `lib/conversation-limits.ts`, `lib/app-conversations.ts` (join and invite caps); `VoiceTalkPanel.tsx`; `components/account/ad-banner-position-setting.tsx`, `my-page.tsx`, `LivePhoneDemo.tsx` (room settings page).

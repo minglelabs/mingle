@@ -36,6 +36,7 @@ export async function handleTtsInworldV1(request: NextRequest) {
   const clientMessageId = typeof body?.clientMessageId === 'string' ? body.clientMessageId.trim().slice(0, 128) : null
   const clientContext = parseClientContext(body?.clientContext)
   // User-selected TTS model sent by the client; missing/invalid -> default (gemini-3.8-flash-lite-tts).
+  // Nobody picks the read-aloud model any more: the app sends none, so this is the served one.
   const ttsSelection = resolveTtsRuntimeSelection(body?.ttsModel)
   // Sent by clients that play audio while it is still arriving.
   const wantsStream = body?.stream === true

@@ -5,9 +5,7 @@ import {
   sanitizeNonNegativeInt,
 } from '@/lib/app-analytics'
 import { getAuthOptions } from '@/lib/auth-options'
-import { requestAllowsLegacyAnonymousUser } from '@/lib/request-user-identity'
 import { EXPECTED_ACCOUNT_HEADER, matchesExpectedAccount } from '@/lib/request-account-guard'
-import { prisma } from '@/lib/prisma'
 import { classifyChineseLanguage } from '@/lib/chinese-variant'
 import { normalizeChineseContent } from '@/server/chinese-script-conversion'
 import { synthesizeSpeech } from '@/server/api/shared/tts-provider'
@@ -82,185 +80,9 @@ type HandlerTranslateContext = TranslateContext & {
   requestMeta: TranslateRequestMeta
 }
 
-type SessionUserIdentity = {
-  id: string
-  email: string
-  externalUserId: string
-  sessionKey: string
-}
 
 // ─── Tracking helpers ────────────────────────────────────────────────────────
 
-function sanitizeTrackingValue(rawValue: string | null): string {
-  return (rawValue || '').trim().slice(0, 128)
-}
-
-function resolveTrackingSessionKey(request: NextRequest, sessionKeyHint?: string | null): string {
-  const cookieStore = (
-    typeof (request as { cookies?: { get?: (name: string) => { value?: string } | undefined } }).cookies === 'object'
-      ? (request as { cookies?: { get?: (name: string) => { value?: string } | undefined } }).cookies
-      : undefined
-  )
-
-  return sanitizeTrackingValue(
-    sessionKeyHint
-    || request.headers.get('x-mingle-session-key')
-    || cookieStore?.get?.('mingle_sid')?.value
-    || readCookieValueFromHeader(request.headers.get('cookie'), 'mingle_sid')
-    || null,
-  )
-}
-
-function readCookieValueFromHeader(cookieHeader: string | null, cookieName: string): string {
-  const rawHeader = cookieHeader || ''
-  for (const segment of rawHeader.split(';')) {
-    const trimmed = segment.trim()
-    if (!trimmed) continue
-    const separatorIndex = trimmed.indexOf('=')
-    if (separatorIndex <= 0) continue
-    const name = trimmed.slice(0, separatorIndex).trim()
-    if (name !== cookieName) continue
-    const value = trimmed.slice(separatorIndex + 1).trim()
-    try {
-      return decodeURIComponent(value)
-    } catch {
-      return value
-    }
-  }
-  return ''
-}
-
-function resolveTrackingExternalUserId(request: NextRequest): string {
-  const cookieStore = (
-    typeof (request as { cookies?: { get?: (name: string) => { value?: string } | undefined } }).cookies === 'object'
-      ? (request as { cookies?: { get?: (name: string) => { value?: string } | undefined } }).cookies
-      : undefined
-  )
-
-  return sanitizeTrackingValue(
-    request.headers.get('x-mingle-user-id')
-    || cookieStore?.get?.('mingle_uid')?.value
-    || readCookieValueFromHeader(request.headers.get('cookie'), 'mingle_uid')
-    || null,
-  )
-}
-
-// ─── Session / user identity ─────────────────────────────────────────────────
-
-function normalizeSessionUserIdentity(
-  session: { user?: { id?: unknown, email?: unknown } } | null,
-  externalUserId = '',
-  sessionKey = '',
-): SessionUserIdentity {
-  return {
-    id: typeof session?.user?.id === 'string' ? session.user.id.trim() : '',
-    email: typeof session?.user?.email === 'string' ? session.user.email.trim().toLowerCase() : '',
-    externalUserId,
-    sessionKey,
-  }
-}
-
-async function findUserIdBySessionKey(sessionKey: string): Promise<string | null> {
-  if (!sessionKey) return null
-
-  const recentEvent = await prisma.appEventLog.findFirst({
-    where: {
-      sessionKey,
-      userId: { not: null },
-    },
-    orderBy: { createdAt: 'desc' },
-    select: { userId: true },
-  })
-  if (recentEvent?.userId) return recentEvent.userId
-
-  const recentMessage = await prisma.appMessage.findFirst({
-    where: {
-      sessionKey,
-      userId: { not: null },
-    },
-    orderBy: { createdAt: 'desc' },
-    select: { userId: true },
-  })
-  return recentMessage?.userId || null
-}
-
-async function findUserSelectedTranslationModel(identity: SessionUserIdentity): Promise<UserSelectableTranslationModel | null> {
-  const select = {
-    translationModel: true,
-  } as const
-
-  if (identity.id) {
-    const record = await prisma.user.findUnique({
-      where: { id: identity.id },
-      select,
-    })
-    const normalizedModel = normalizeSelectableTranslationModel(record?.translationModel)
-    if (normalizedModel) return normalizedModel
-  }
-
-  if (identity.email) {
-    const record = await prisma.user.findUnique({
-      where: { email: identity.email },
-      select,
-    })
-    const normalizedModel = normalizeSelectableTranslationModel(record?.translationModel)
-    if (normalizedModel) return normalizedModel
-  }
-
-  if (identity.externalUserId) {
-    const record = await prisma.user.findUnique({
-      where: { externalUserId: identity.externalUserId },
-      select,
-    })
-    const normalizedModel = normalizeSelectableTranslationModel(record?.translationModel)
-    if (normalizedModel) return normalizedModel
-  }
-
-  if (identity.sessionKey) {
-    const userId = await findUserIdBySessionKey(identity.sessionKey)
-    if (userId) {
-      const record = await prisma.user.findUnique({
-        where: { id: userId },
-        select,
-      })
-      const normalizedModel = normalizeSelectableTranslationModel(record?.translationModel)
-      if (normalizedModel) return normalizedModel
-    }
-  }
-
-  return null
-}
-
-async function resolveSelectedTranslationModel(
-  request: NextRequest,
-  sessionKeyHint?: string | null,
-): Promise<UserSelectableTranslationModel> {
-  const externalUserId = resolveTrackingExternalUserId(request)
-  const sessionKey = resolveTrackingSessionKey(request, sessionKeyHint)
-  try {
-    const session = await getServerSession(getAuthOptions())
-    const sessionIdentity = normalizeSessionUserIdentity(session)
-    const hasAuthenticatedIdentity = Boolean(sessionIdentity.id || sessionIdentity.email)
-    const selectedModel = await findUserSelectedTranslationModel(hasAuthenticatedIdentity
-      ? sessionIdentity
-      : requestAllowsLegacyAnonymousUser(request)
-        ? normalizeSessionUserIdentity(null, externalUserId, sessionKey)
-        : sessionIdentity)
-    if (selectedModel) return selectedModel
-  } catch {
-    if (requestAllowsLegacyAnonymousUser(request) && (externalUserId || sessionKey)) {
-      const selectedModel = await findUserSelectedTranslationModel({
-        id: '',
-        email: '',
-        externalUserId,
-        sessionKey,
-      })
-      if (selectedModel) return selectedModel
-    }
-  }
-
-  return resolveDefaultSelectableTranslationModel()
-}
 
 // When the selected model errors or answers nothing usable, the request moves on to the
 // next of these (skipping the selected one and any whose API key is missing).
@@ -483,7 +305,7 @@ async function runTranslateFinalize(
   const targetLanguagesRaw: unknown[] = Array.isArray(body.targetLanguages) ? body.targetLanguages : []
   const ttsPayload = (typeof body.tts === 'object' && body.tts !== null) ? body.tts as Record<string, unknown> : null
   const ttsLanguage = normalizeLang(typeof ttsPayload?.language === 'string' ? ttsPayload.language : '')
-  // User-selected TTS model; missing/invalid values resolve to the default (gemini-3.8-flash-lite-tts) downstream.
+  // Nobody picks the read-aloud model any more: the app sends none (missing resolves to the served one downstream).
   const ttsModel = ttsPayload?.ttsModel
   const enableTts = ttsPayload?.enabled === true
   const isFinal = body.isFinal === true
@@ -510,9 +332,9 @@ async function runTranslateFinalize(
     isFinal,
     sourceLanguage,
   })
-  const requestedTranslationModel = normalizeSelectableTranslationModel(body.translationModel)
-  const selectedTranslationModel = requestedTranslationModel
-    ?? await resolveSelectedTranslationModel(request, sessionKeyHint)
+  // Nobody picks the model any more: the app sends none, and one saved on the
+  // account is not looked up. A model named in the request (tests, tools) still applies.
+  const selectedTranslationModel = normalizeSelectableTranslationModel(body.translationModel) ?? resolveDefaultSelectableTranslationModel()
   const providerResolution = resolveTranslationProviderConfig(selectedTranslationModel)
 
   if (!providerResolution.ok) {
