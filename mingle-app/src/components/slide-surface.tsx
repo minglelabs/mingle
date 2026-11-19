@@ -7,6 +7,7 @@ import { motion, useAnimationControls, useDragControls, type PanInfo } from "fra
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -127,6 +128,12 @@ export default function SlideSurface({
   // Fingers still on the surface after the last touch event (a second finger
   // lifting must not end the first finger's drag).
   const activeTouchCountRef = useRef(0);
+  // The live `open`: the safety net runs two frames after the release, and a
+  // tap on the back button (inside the edge zone) can close the surface by then.
+  const openRef = useRef(open);
+  useLayoutEffect(() => {
+    openRef.current = open;
+  }, [open]);
   const [edgeSwipeActive, setEdgeSwipeActive] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(1);
   // True once a closed surface has finished sliding out. On PC web the app is
@@ -244,7 +251,7 @@ export default function SlideSurface({
         if (
           !isMountedRef.current
           || isLeavingRef.current
-          || !open
+          || !openRef.current
           || activeTouchCountRef.current > 0
           || edgeSwipeGestureSequenceRef.current !== gestureSequence
         ) {
@@ -256,7 +263,7 @@ export default function SlideSurface({
         void motionControls.start({ x: 0, transition: SURFACE_TRANSITION });
       });
     });
-  }, [dragControls, motionControls, open]);
+  }, [dragControls, motionControls]);
 
   const restoreEdgeSwipeTouchAction = useCallback(() => {
     const wasEdgeSwipe = edgeSwipeStartPointRef.current !== null;

@@ -11,6 +11,11 @@ describe('SlideSurface released edge swipe', () => {
     expect(source).toContain('dragControls.cancel();')
   })
 
+  it('reads the live open state, so a surface closed by a back-button tap is not pulled back', () => {
+    expect(source).toContain('|| !openRef.current')
+    expect(source).not.toContain('|| isLeavingRef.current\n          || !open\n')
+  })
+
   it('lets handleDragEnd own the gesture it settled, so a close is not undone', () => {
     const dragEnd = source.slice(source.indexOf('const handleDragEnd'))
     expect(dragEnd.indexOf('edgeSwipeGestureSequenceRef.current += 1;'))
