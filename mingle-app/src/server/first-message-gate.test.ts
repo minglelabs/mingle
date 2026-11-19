@@ -122,6 +122,11 @@ describe('first message gate: the app side', () => {
     expect(shell).toContain('detectFaces(dataUrl)')
     expect(read('../../rn/ios/mingle/NativeQrImageModule.swift')).toContain('VNDetectFaceRectanglesRequest')
     expect(read('../../rn/ios/mingle/NativeQrImageModuleBridge.m')).toContain('RCT_EXTERN_METHOD(detectFaces:')
-    expect(read('../../rn/android/app/src/main/java/com/minglelabs/mingle/rn/NativeQrImageModule.kt')).toContain('fun detectFaces(')
+    const android = read('../../rn/android/app/src/main/java/com/minglelabs/mingle/rn/NativeQrImageModule.kt')
+    expect(android).toContain('fun detectFaces(')
+    // ML Kit: Android's old android.media.FaceDetector missed clear faces on a Galaxy S9.
+    expect(android).toContain('FaceDetection.getClient(')
+    expect(android).not.toContain('import android.media.FaceDetector')
+    expect(read('../../rn/android/app/build.gradle')).toContain('com.google.mlkit:face-detection:')
   })
 })

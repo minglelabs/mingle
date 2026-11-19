@@ -5,8 +5,6 @@ import android.content.ContentValues
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Canvas
-import android.media.FaceDetector
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
@@ -16,6 +14,9 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.WritableNativeMap
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.face.FaceDetection
+import com.google.mlkit.vision.face.FaceDetectorOptions
 
 class NativeQrImageModule(
   reactContext: ReactApplicationContext,
@@ -41,42 +42,42 @@ class NativeQrImageModule(
   }
 
   /**
-   * Looks for faces in a photo on the phone (Android's built-in face detector);
-   * the photo never leaves it. Resolves the number of faces and the width of
-   * the largest one as a share of the photo's width (about 2.5 eye distances).
+   * Looks for faces in a photo on the phone (ML Kit face detection, model
+   * bundled in the app); the photo never leaves it. Resolves the number of
+   * faces and the width of the largest one as a share of the photo's width.
+   * (Android's old android.media.FaceDetector missed clear faces, and gave
+   * different answers for the same photo.)
    */
   @ReactMethod
   fun detectFaces(dataUrl: String, promise: Promise) {
-    Thread {
-      try {
-        val bytes = Base64.decode(dataUrl.substringAfter("base64,", ""), Base64.DEFAULT)
-        val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-        if (decoded == null) {
-          promise.reject("native_face_invalid_image", "Could not decode the photo.")
-          return@Thread
-        }
-        // The detector takes an RGB_565 bitmap with an even width; a smaller copy is enough.
-        val scale = minOf(1f, FACE_CHECK_MAX_SIDE / maxOf(decoded.width, decoded.height).toFloat())
-        val width = (maxOf(2, (decoded.width * scale).toInt())) and 1.inv()
-        val height = maxOf(1, (decoded.height * scale).toInt())
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
-        Canvas(bitmap).drawBitmap(Bitmap.createScaledBitmap(decoded, width, height, true), 0f, 0f, null)
-        val found = arrayOfNulls<FaceDetector.Face>(FACE_CHECK_MAX_FACES)
-        val count = FaceDetector(width, height, FACE_CHECK_MAX_FACES).findFaces(bitmap, found)
-        var largest = 0.0
-        for (index in 0 until count) {
-          val face = found[index] ?: continue
-          if (face.confidence() < FaceDetector.Face.CONFIDENCE_THRESHOLD) continue
-          largest = maxOf(largest, face.eyesDistance() * 2.5 / width)
-        }
+    val bitmap = try {
+      val bytes = Base64.decode(dataUrl.substringAfter("base64,", ""), Base64.DEFAULT)
+      BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    } catch (error: Throwable) {
+      null
+    }
+    if (bitmap == null) {
+      promise.reject("native_face_invalid_image", "Could not decode the photo.")
+      return
+    }
+    val detector = FaceDetection.getClient(
+      FaceDetectorOptions.Builder()
+        .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
+        .setMinFaceSize(FACE_CHECK_MIN_FACE_SIZE)
+        .build(),
+    )
+    detector.process(InputImage.fromBitmap(bitmap, 0))
+      .addOnSuccessListener { faces ->
+        val largest = faces.maxOfOrNull { it.boundingBox.width().toDouble() / bitmap.width } ?: 0.0
         val result = WritableNativeMap()
-        result.putInt("faces", count)
-        result.putDouble("largestFaceWidth", minOf(1.0, largest))
+        result.putInt("faces", faces.size)
+        result.putDouble("largestFaceWidth", minOf(1.0, maxOf(0.0, largest)))
         promise.resolve(result)
-      } catch (error: Throwable) {
+      }
+      .addOnFailureListener { error ->
         promise.reject("native_face_check_failed", error.message ?: "Could not check the photo.", error)
       }
-    }.start()
+      .addOnCompleteListener { detector.close() }
   }
 
   private fun saveToGallery(dataUrl: String, fileName: String, mimeType: String, errorPrefix: String, promise: Promise) {
@@ -148,8 +149,8 @@ class NativeQrImageModule(
   }
 
   private companion object {
-    const val FACE_CHECK_MAX_SIDE = 720f
-    const val FACE_CHECK_MAX_FACES = 5
+    /** Smallest face to look for, as a share of the photo's width. */
+    const val FACE_CHECK_MIN_FACE_SIZE = 0.08f
   }
 
   private fun normalizeFileName(rawFileName: String, mimeType: String): String {

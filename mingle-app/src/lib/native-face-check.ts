@@ -1,8 +1,8 @@
 'use client'
 
 // Face check bridge to the app shell (rn/App.tsx `native_face_check`): the
-// phone looks for a face in a profile photo (iOS Vision, Android's face
-// detector). The photo never leaves the phone for this; only the answer is
+// phone looks for a face in a profile photo (iOS Vision, ML Kit on
+// Android). The photo never leaves the phone for this; only the answer is
 // sent to the server with the upload.
 
 import { NATIVE_SHELL_CAPABILITIES_STATE_KEY } from '@/lib/native-device-audio'

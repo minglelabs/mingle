@@ -10,7 +10,7 @@ import { isPhoneVerificationAvailable } from '@/server/phone-verification'
  *   found no face), or, for a photo that was never checked, a check of it
  *   ('face_check': the app checks the photo it already has on the phone).
  *
- * The face check runs on the phone (iOS Vision, Android's face detector); only
+ * The face check runs on the phone (iOS Vision, ML Kit on Android); only
  * its result is stored (`User.imageFaceCheck`). A photo uploaded where no check
  * runs (a browser, an older app) is 'unchecked' and passes, so nobody is locked
  * out by the device they use.
