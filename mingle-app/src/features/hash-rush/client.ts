@@ -127,6 +127,8 @@ export type HashRushLobbySeat = {
   fresh: boolean
   /** This seat hosts the room. */
   host: boolean
+  /** A web page (invite link): no host controls, so the room is never handed to it. */
+  web: boolean
 }
 
 /** A hosted room's lobby: who hosts, how it is set up, and what this viewer may change. */
@@ -599,6 +601,7 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
         winsText: String(t('tally', wins[index] || 0)),
         fresh: (freshUntil.get(index) ?? 0) > now,
         host: !!at?.hosted && at.hostSeat === index,
+        web: seat.web,
       }))
     const open = seats.filter((seat) => seat.kind === 'open').length
     const map = at?.map ?? 'meadow'

@@ -43,6 +43,8 @@ export type HashRushSeat = {
   team: number
   /** The mingle user in the seat (from their ticket), '' otherwise. */
   userId: string
+  /** A web page from the invite link: it cannot host (hash-rush #240). */
+  web: boolean
 }
 
 /** The race to the title: the first to `wins` wins, `lead` clear of every other side. */
@@ -366,6 +368,7 @@ export function readLobby(message: unknown): HashRushLobby | null {
       name: PEOPLE_KINDS.has(kind) ? name : localHamsterName(name),
       team: num(seat.team, -1),
       userId: typeof seat.userId === 'string' ? seat.userId : '',
+      web: seat.web === true,
     }
   })
   return {

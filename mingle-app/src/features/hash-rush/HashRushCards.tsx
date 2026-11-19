@@ -161,7 +161,7 @@ export function HashRushLobbyCard({ view, copy, art, chatBelow, onSit, onStand, 
                 {seat.me ? <i className={styles.meBadge} data-qa="hash-rush-me-badge">{view.words.me}</i> : null}
                 {seat.team >= 0 ? <i className={styles.teamDot} style={{ '--t': seat.color } as CSSProperties} /> : null}
               </span>
-              {hosting?.amHost && !seat.me && onHandHost ? (
+              {hosting?.amHost && !seat.me && !seat.web && onHandHost ? (
                 <button type="button" className={styles.handHost} onClick={() => setHandTo(seat.seat)} data-qa="hash-rush-hand-host">
                   {copy.handHost}
                 </button>
@@ -199,17 +199,6 @@ export function HashRushLobbyCard({ view, copy, art, chatBelow, onSit, onStand, 
             </>
           ) : view.open > 0 ? <li className={cx(styles.seat, styles.seatOpen)}>{copy.openSeats(view.open)}</li> : null}
         </ul>
-        {handSeat && onHandHost ? (
-          <div className={styles.confirmRow} data-qa="hash-rush-hand-host-confirm">
-            <p>{copy.handHostTo(handSeat.name)}</p>
-            <div>
-              <button type="button" className={styles.button} onClick={() => setHandTo(null)}>{copy.close}</button>
-              <button type="button" className={cx(styles.button, styles.primary)} onClick={() => { onHandHost(handSeat.seat); setHandTo(null) }}>
-                {copy.handHostConfirm}
-              </button>
-            </div>
-          </div>
-        ) : null}
 
         {teams && hosting && seated && onPickTeam ? (
           <div className={styles.setupRow} data-qa="hash-rush-pick-team">
@@ -300,6 +289,21 @@ export function HashRushLobbyCard({ view, copy, art, chatBelow, onSit, onStand, 
           </div>
         ) : null}
       </div>
+      {/* Over the card, not at the foot of the seat list: there it was below
+          the fold of a full lobby, and 방장 넘기기 looked like it did nothing. */}
+      {handSeat && onHandHost ? (
+        <div className={styles.confirmLayer} onClick={() => setHandTo(null)}>
+          <div className={styles.confirmRow} role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()} data-qa="hash-rush-hand-host-confirm">
+            <p>{copy.handHostTo(handSeat.name)}</p>
+            <div>
+              <button type="button" className={styles.button} onClick={() => setHandTo(null)}>{copy.close}</button>
+              <button type="button" className={cx(styles.button, styles.primary)} onClick={() => { onHandHost(handSeat.seat); setHandTo(null) }} data-qa="hash-rush-hand-host-yes">
+                {copy.handHostConfirm}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
