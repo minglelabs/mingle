@@ -262,11 +262,15 @@ async function resolveSelectedTranslationModel(
   return resolveDefaultSelectableTranslationModel()
 }
 
+/** True when the text has no letter or digit in any script: only marks and spaces. */
+export function isPunctuationOnlyText(text: string): boolean {
+  return Boolean(text.trim()) && !/[\p{L}\p{N}]/u.test(text)
+}
+
 // When the selected model errors or answers nothing usable, the request moves on to the
 // next of these (skipping the selected one and any whose API key is missing).
 const TRANSLATION_FALLBACK_MODELS: UserSelectableTranslationModel[] = [
   'gpt-6-luna',
-  'claude-haiku-5-5',
 ]
 
 function resolveFallbackProviderConfigs(selectedModel: UserSelectableTranslationModel): TranslationProviderConfig[] {
@@ -857,6 +861,20 @@ async function runTranslateFinalize(
       // Nothing after the fixed part: nothing to ask the model.
       return await buildResponseWithOptionalTts({ ...bubbleTailPlan.fixedTranslations }, {
         provider: 'bubble-tail',
+        infrastructureProvider: 'none',
+        model: 'none',
+      })
+    }
+
+    if (isPunctuationOnlyText(ctx.text)) {
+      // Only marks (a lone "。"): nothing to translate, and the model answers it
+      // with unparseable JSON. A bubble keeps its fixed part (an empty fill leaves
+      // it as it is); otherwise the marks stand for themselves in every language.
+      const passthrough = bubbleTailPlan
+        ? {}
+        : Object.fromEntries(targetLanguages.map((language) => [language, ctx.text.trim()]))
+      return await buildResponseWithOptionalTts(passthrough, {
+        provider: 'punctuation-only',
         infrastructureProvider: 'none',
         model: 'none',
       })

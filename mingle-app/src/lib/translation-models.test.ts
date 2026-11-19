@@ -21,10 +21,6 @@ describe('translation model catalog', () => {
         label: 'gpt-6-luna',
         badge: 'Best',
       },
-      {
-        value: 'claude-haiku-5-5',
-        label: 'claude-haiku-5-5',
-      },
     ])
   })
 
@@ -59,11 +55,16 @@ describe('translation model catalog', () => {
       infrastructureProvider: 'openai',
       runtimeModel: 'gpt-6-luna',
     })
-    expect(normalizeSelectableTranslationModel('anthropic/claude-haiku-5-5')).toBe('claude-haiku-5-5')
-    expect(resolveTranslationRuntimeSelection('claude-haiku-5-5')).toMatchObject({
-      engineProvider: 'claude',
-      infrastructureProvider: 'anthropic',
-      runtimeModel: 'claude-haiku-5-5',
+  })
+
+  it('runs the retired Claude Haiku on GPT-6 Luna and keeps it countable under its aliases', () => {
+    expect(normalizeSelectableTranslationModel('claude-haiku-5-5')).toBe('gpt-6-luna')
+    expect(resolveTranslationRuntimeSelection('anthropic/claude-haiku-5-5')).toMatchObject({
+      engineProvider: 'openai',
+      runtimeModel: 'gpt-6-luna',
     })
+    expect(normalizeRetiredTranslationModel('claude-haiku-5-5')).toBe('claude-haiku-5-5')
+    expect(normalizeRetiredTranslationModel('Anthropic/Claude-Haiku-5-5')).toBe('claude-haiku-5-5')
+    expect(normalizeRetiredTranslationModel('claude haiku 5.5')).toBe('claude-haiku-5-5')
   })
 })

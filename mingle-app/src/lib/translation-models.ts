@@ -2,22 +2,26 @@ export type TranslationEngineProvider = 'gemini' | 'openai' | 'claude'
 
 export type TranslationInfrastructureProvider = 'google' | 'openai' | 'anthropic'
 
-export type UserSelectableTranslationModel =
-  | 'gpt-6-luna'
-  | 'claude-haiku-5-5'
+export type UserSelectableTranslationModel = 'gpt-6-luna'
 
 /**
  * Models users could pick before; they are no longer offered and run on GPT-6 Luna.
  * Kept so the admin dashboard can still count the messages they translated.
  */
-export const RETIRED_TRANSLATION_MODELS = ['gemini-2.5-flash-lite'] as const
+export const RETIRED_TRANSLATION_MODELS = ['gemini-2.5-flash-lite', 'claude-haiku-5-5'] as const
 export type RetiredTranslationModel = typeof RETIRED_TRANSLATION_MODELS[number]
+
+const RETIRED_TRANSLATION_MODEL_ALIASES: Record<string, RetiredTranslationModel> = {
+  'claude haiku 5.5': 'claude-haiku-5-5',
+  'anthropic/claude-haiku-5-5': 'claude-haiku-5-5',
+}
 
 /** A recorded translation_model value that names a retired model, else null. */
 export function normalizeRetiredTranslationModel(value: unknown): RetiredTranslationModel | null {
   if (typeof value !== 'string') return null
   const normalized = value.trim().toLowerCase()
-  return RETIRED_TRANSLATION_MODELS.find((model) => model === normalized) ?? null
+  const canonical = RETIRED_TRANSLATION_MODEL_ALIASES[normalized] ?? normalized
+  return RETIRED_TRANSLATION_MODELS.find((model) => model === canonical) ?? null
 }
 
 export type TranslationModelBadge = 'Best' | 'Slow'
@@ -47,10 +51,6 @@ export const TRANSLATION_MODEL_OPTIONS: TranslationModelOption[] = [
     label: 'gpt-6-luna',
     badge: 'Best',
   },
-  {
-    value: 'claude-haiku-5-5',
-    label: 'claude-haiku-5-5',
-  },
 ]
 
 const TRANSLATION_RUNTIME_SELECTIONS: Record<UserSelectableTranslationModel, TranslationRuntimeSelection> = {
@@ -61,12 +61,6 @@ const TRANSLATION_RUNTIME_SELECTIONS: Record<UserSelectableTranslationModel, Tra
     runtimeModel: 'gpt-6-luna',
     baseUrl: 'https://api.openai.com/v1',
   },
-  'claude-haiku-5-5': {
-    value: 'claude-haiku-5-5',
-    engineProvider: 'claude',
-    infrastructureProvider: 'anthropic',
-    runtimeModel: 'claude-haiku-5-5',
-  },
 }
 
 function canonicalizeTranslationModel(rawValue: string): UserSelectableTranslationModel | null {
@@ -75,21 +69,16 @@ function canonicalizeTranslationModel(rawValue: string): UserSelectableTranslati
 
   if (
     normalized === 'gpt-6-luna'
-    // Retired option: accounts that stored it now run on GPT-6 Luna.
+    // Retired options: accounts that stored one now run on GPT-6 Luna.
     || normalized === 'gemini-2.5-flash-lite'
+    || normalized === 'claude-haiku-5-5'
+    || normalized === 'claude haiku 5.5'
+    || normalized === 'anthropic/claude-haiku-5-5'
     || normalized === 'gpt 6 luna'
     || normalized === 'models/gpt-6-luna'
     || normalized === 'openai/gpt-6-luna'
   ) {
     return 'gpt-6-luna'
-  }
-
-  if (
-    normalized === 'claude-haiku-5-5'
-    || normalized === 'claude haiku 5.5'
-    || normalized === 'anthropic/claude-haiku-5-5'
-  ) {
-    return 'claude-haiku-5-5'
   }
 
   return null

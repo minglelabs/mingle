@@ -2,6 +2,14 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-19 — Live translation runs on GPT-6 Luna only; a lone "。" no longer fails
+
+- Surface: the translation model row in settings (`lib/translation-models.ts`), `translate-finalize-handler.ts`, `translate-texts.ts`, the admin translation-model chart.
+- Issue: Production logs showed 384 failed live translations (502) in about 7 hours. 379 came from one room sending a lone "。" over and over. 5 were real sentences whose GPT-6 Luna request timed out.
+- Cause: GPT-6 Luna answered "。" with unparseable JSON, and a timed-out final request went straight to Claude Haiku. Every Haiku call failed because the Anthropic credit balance was too low.
+- Resolution: Claude Haiku is removed from the model picker and from the fallback chain; an account that stored it runs on GPT-6 Luna, and the admin chart keeps its past messages as a retired series. A final request that times out (8 s) asks GPT-6 Luna once more with a 12 s wait. Interim requests are not retried, since the final one soon replaces them. Text with no letter or digit (only marks) is answered without calling the model: the marks themselves, or a bubble's fixed part unchanged.
+- Verification: route tests for the retry (8 s then 12 s, both to OpenAI), no retry on interim, no Anthropic call after a GPT failure, a stored Haiku account running on GPT, and punctuation-only text with and without a bubble; `tsc` and the full unit suite. Not checked on a phone.
+
 ## 2026-11-19 — Invite page on My Page, and invite messages in one language the user picks
 
 - Surface: new `contacts/invite-screen.tsx` (invite page), `invite-ticket-panel.tsx` (shared with the quick sheet), `invite-message-language-picker.tsx`, `lib/invite-message-locale.ts`, `invite-ticket-copy.ts`, `contact-sync-screen.tsx`, My Page (`my-page.tsx`: profile button and menu row), profile and room link copy (`profile-share-screen.tsx`, `LivePhoneDemo.tsx`).
