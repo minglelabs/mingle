@@ -24,7 +24,7 @@ import { isSupportedLocale } from "@/i18n/config";
 import { prisma } from "@/lib/prisma";
 import { captureMingleEvent } from "@/lib/posthog-server";
 import { checkDailyNewChatLimit } from "@/server/daily-new-chat-limit";
-import { readFirstMessageNeeds } from "@/server/first-message-gate";
+import { readFirstMessageNeeds, readFirstMessageNeedsForInvitees } from "@/server/first-message-gate";
 
 export const runtime = "nodejs";
 
@@ -233,6 +233,16 @@ export async function postConversationResponse(request: NextRequest) {
       applyTrackingCookies(request, response, trackingHints);
       return response;
     }
+  }
+
+  // A group with someone new: the same first-message gate as a 1:1 message.
+  try {
+    const needs = await readFirstMessageNeedsForInvitees(resolvedUser.userId, inviteeUserIds);
+    if (needs.length > 0) {
+      return NextResponse.json({ error: "first_message_setup", needs }, { status: 403 });
+    }
+  } catch (error) {
+    console.error("[conversations] first_message_check_failed", error);
   }
 
   let conversation;

@@ -59,6 +59,24 @@ export function resolveFirstMessageNeeds(
   return needs
 }
 
+/**
+ * What the account still needs before putting these people in a room with it:
+ * nothing when it already shares a room with every one of them (they are not
+ * new), otherwise the same needs as a first message. Used by group starts and
+ * by adding people to an existing room, so neither gets around the gate.
+ */
+export async function readFirstMessageNeedsForInvitees(userId: string, inviteeUserIds: readonly string[]): Promise<FirstMessageNeed[]> {
+  if (!isFirstMessageGateOn() || inviteeUserIds.length === 0) return []
+  const known = await prisma.appConversationChannelMember.findMany({
+    where: { userId: { in: [...inviteeUserIds] }, channel: { members: { some: { userId } } } },
+    select: { userId: true },
+    distinct: ['userId'],
+  })
+  const knownIds = new Set(known.map((member) => member.userId))
+  if (inviteeUserIds.every((id) => knownIds.has(id))) return []
+  return readFirstMessageNeeds(userId)
+}
+
 export async function readFirstMessageNeeds(userId: string): Promise<FirstMessageNeed[]> {
   if (!isFirstMessageGateOn()) return []
   const user = await prisma.user.findUnique({

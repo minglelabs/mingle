@@ -15,7 +15,7 @@ const verified: FirstMessageGateUser = {
   image: 'https://images.example.com/profiles/u/1.jpg',
   imageFaceCheck: 'face',
 }
-const env = {} as NodeJS.ProcessEnv
+const env = {} as unknown as NodeJS.ProcessEnv
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
 
 describe('first message gate: what an account still needs', () => {
@@ -52,8 +52,8 @@ describe('first message gate: what an account still needs', () => {
     const bare = { ...verified, phoneE164: null, phoneVerifiedAt: null, image: null }
     expect(resolveFirstMessageNeeds({ ...bare, isOperator: true }, { env, canSendCodes: true })).toEqual([])
     expect(resolveFirstMessageNeeds({ ...bare, isOfficial: true }, { env, canSendCodes: true })).toEqual([])
-    expect(resolveFirstMessageNeeds(bare, { env: { REVIEW_ACCOUNT_EMAILS: 'a@example.com' } as NodeJS.ProcessEnv, canSendCodes: true })).toEqual([])
-    expect(resolveFirstMessageNeeds(bare, { env: { FIRST_MESSAGE_GATE: 'off' } as NodeJS.ProcessEnv, canSendCodes: true })).toEqual([])
+    expect(resolveFirstMessageNeeds(bare, { env: { REVIEW_ACCOUNT_EMAILS: 'a@example.com' } as unknown as NodeJS.ProcessEnv, canSendCodes: true })).toEqual([])
+    expect(resolveFirstMessageNeeds(bare, { env: { FIRST_MESSAGE_GATE: 'off' } as unknown as NodeJS.ProcessEnv, canSendCodes: true })).toEqual([])
     expect(isFirstMessageGateOn(env)).toBe(true)
   })
 
@@ -109,6 +109,15 @@ describe('first message gate: the app side', () => {
     const profile = read('../components/public-user-profile-screen.tsx')
     expect(profile).toContain('requestFirstMessageSetup(needs)')
     expect(profile).toContain('response = await send()')
+
+    // Groups and adding people to a room go through the same gate.
+    const group = controller.slice(controller.indexOf('export async function postConversationResponse'), controller.indexOf('export async function postDirectConversationResponse'))
+    expect(group).toContain('readFirstMessageNeedsForInvitees(resolvedUser.userId, inviteeUserIds)')
+    expect(group.indexOf('readFirstMessageNeedsForInvitees')).toBeLessThan(group.indexOf('createConversationChannelForUser('))
+    const members = read('./api/controllers/shared/conversation-controller.ts')
+    expect(members.indexOf('readFirstMessageNeedsForInvitees')).toBeLessThan(members.indexOf('await inviteMembersToConversationChannel('))
+    const picker = read('../components/invite-friends-screen.tsx')
+    expect(picker.match(/sendPassingFirstMessageGate\(\(\) => fetch\(/g)).toHaveLength(2)
 
     expect(read('../app/layout.tsx')).toContain('<FirstMessageGate />')
     expect(read('../app/api/profile/image/route.ts')).toContain('formData.get("faceCheck")')
