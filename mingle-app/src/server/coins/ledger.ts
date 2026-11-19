@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client/index'
+import { isFreeCoinGrantEligible } from './free-grants'
 import { prisma } from '@/lib/prisma'
 import { DAILY_FREE_INTERVAL_MS } from '@/lib/coin-units'
 import { resolveDailyFreeCapMicro, resolveSignupBonusMicro } from './config'
@@ -231,6 +232,10 @@ async function applyDailyFreeGrant(ctx: LockedWallet) {
 async function applySignupBonus(ctx: LockedWallet) {
   const amountMicro = resolveSignupBonusMicro()
   if (amountMicro <= 0n) return
+  // Apple or Google accounts only (free-grants.ts). An email account gets it
+  // the first time its wallet is opened after such a sign-in is linked.
+  if (!(await isFreeCoinGrantEligible(ctx.wallet.userId, ctx.tx))) return
+  if (await hasLedgerEntry(ctx, `signup:${ctx.wallet.userId}`)) return
   await grantLot(ctx, {
     source: 'signup_bonus',
     isFree: true,
@@ -290,10 +295,13 @@ async function openLockedWallet(
   }
   const loaded = walletFingerprint(ctx.wallet)
   const isNewWallet = row.dailyGrantSeq === 0 && !row.lastDailyGrantAt
+  // Never held or spent anything: an account that was not eligible for the
+  // bonus when its wallet was first opened is checked again.
+  const isUntouchedWallet = row.balanceMicro === 0n && row.lifetimeSpentMicro === 0n && row.lifetimePurchasedMicro === 0n
   await expireLots(ctx)
   if (!skipDailyGrant) {
     await applyDailyFreeGrant(ctx)
-    if (isNewWallet) await applySignupBonus(ctx)
+    if (isNewWallet || isUntouchedWallet) await applySignupBonus(ctx)
   }
   return { ctx, loaded }
 }

@@ -1,3 +1,5 @@
+import { COIN_INSUFFICIENT_ERROR } from "@/lib/coin-errors";
+import { canSpendCoins } from "@/server/coins/wallet";
 import { after, NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
@@ -225,6 +227,11 @@ export async function postVoiceCallInterpretResponse(request: NextRequest, conve
   if ("response" in member) return member.response;
   const body = await request.json().catch(() => null) as { on?: unknown } | null;
   if (typeof body?.on !== "boolean") return NextResponse.json({ error: "invalid_on" }, { status: 400 });
+  // Interpretation is paid (captions and their read-aloud): it cannot be
+  // turned on with no Hash. Turning it off is always allowed.
+  if (body.on && !(await canSpendCoins(member.userId))) {
+    return NextResponse.json({ error: COIN_INSUFFICIENT_ERROR }, { status: 402 });
+  }
   const call = await setVoiceInterpret(store, { channelId: conversationId, userId: member.userId, on: body.on });
   if (!call) return NextResponse.json({ error: "not_in_call" }, { status: 409 });
   return NextResponse.json({ callId: call.id, viewers: voiceCaptionViewers(call) });

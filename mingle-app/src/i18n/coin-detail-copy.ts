@@ -16,6 +16,10 @@ export type CoinDetailCopy = {
   /** The first time read-aloud is turned on. */
   listenTip: string;
   gotIt: string;
+  /** Toast when a paid switch goes on: "{feature} on · about {coins} Hash a minute". */
+  rateOn: string;
+  /** Toast when it goes off. */
+  rateOff: string;
 };
 
 const COPY: Record<PrimaryUiLocale, CoinDetailCopy> = {
@@ -25,6 +29,8 @@ const COPY: Record<PrimaryUiLocale, CoinDetailCopy> = {
     interpretTip: "통역을 켜면 상대가 말한 1분에 약 {coins}해씨가 들어요.",
     listenTip: "통역 듣기를 켜면 읽어 준 음성 1분에 약 {coins}해씨가 더 들어요.",
     gotIt: "알겠어요",
+    rateOn: "{feature} 켜짐 · 1분에 약 {coins}해씨",
+    rateOff: "{feature} 꺼짐 · 해씨가 더 빠지지 않아요",
   },
   en: {
     features: { voice_caption: "Voice talk captions", voice_listen: "Voice talk interpretation audio", speech: "Speech recognition", read_aloud: "Translation read aloud", typed: "Typed message translation", translation: "Translation", photo: "Photo translation" },
@@ -32,6 +38,8 @@ const COPY: Record<PrimaryUiLocale, CoinDetailCopy> = {
     interpretTip: "Interpretation uses about {coins} Hash per minute the others speak.",
     listenTip: "Hearing the interpretation adds about {coins} Hash per minute of audio.",
     gotIt: "Got it",
+    rateOn: "{feature} on · about {coins} Hash a minute",
+    rateOff: "{feature} off · no more Hash is used",
   },
   ja: {
     features: { voice_caption: "ボイストーク字幕・翻訳", voice_listen: "ボイストーク通訳音声", speech: "音声認識", read_aloud: "翻訳の読み上げ", typed: "入力メッセージの翻訳", translation: "翻訳", photo: "写真翻訳" },
@@ -39,6 +47,8 @@ const COPY: Record<PrimaryUiLocale, CoinDetailCopy> = {
     interpretTip: "通訳をオンにすると、相手が話した1分あたり約{coins}ハッシュかかります。",
     listenTip: "通訳音声をオンにすると、読み上げ1分あたり約{coins}ハッシュ追加でかかります。",
     gotIt: "OK",
+    rateOn: "{feature} オン・1分あたり約{coins}ハッシュ",
+    rateOff: "{feature} オフ・ハッシュはこれ以上減りません",
   },
   "zh-CN": {
     features: { voice_caption: "语音通话字幕·翻译", voice_listen: "语音通话口译语音", speech: "语音识别", read_aloud: "朗读翻译", typed: "输入消息翻译", translation: "翻译", photo: "图片翻译" },
@@ -46,6 +56,8 @@ const COPY: Record<PrimaryUiLocale, CoinDetailCopy> = {
     interpretTip: "开启口译后，对方每说1分钟约消耗{coins}个Hash。",
     listenTip: "开启口译语音后，每朗读1分钟约再消耗{coins}个Hash。",
     gotIt: "知道了",
+    rateOn: "{feature}已开启 · 每分钟约{coins}哈希",
+    rateOff: "{feature}已关闭 · 不再消耗哈希",
   },
   "zh-TW": {
     features: { voice_caption: "語音通話字幕·翻譯", voice_listen: "語音通話口譯語音", speech: "語音辨識", read_aloud: "朗讀翻譯", typed: "輸入訊息翻譯", translation: "翻譯", photo: "圖片翻譯" },
@@ -53,6 +65,8 @@ const COPY: Record<PrimaryUiLocale, CoinDetailCopy> = {
     interpretTip: "開啟口譯後，對方每說1分鐘約消耗{coins}個Hash。",
     listenTip: "開啟口譯語音後，每朗讀1分鐘約再消耗{coins}個Hash。",
     gotIt: "知道了",
+    rateOn: "{feature}已開啟 · 每分鐘約{coins}哈希",
+    rateOff: "{feature}已關閉 · 不再消耗哈希",
   },
   fr: {
     features: { voice_caption: "Sous-titres d'appel vocal", voice_listen: "Audio d'interprétation", speech: "Reconnaissance vocale", read_aloud: "Traduction lue à voix haute", typed: "Traduction de messages saisis", translation: "Traduction", photo: "Traduction de photo" },
@@ -60,6 +74,8 @@ const COPY: Record<PrimaryUiLocale, CoinDetailCopy> = {
     interpretTip: "L'interprétation coûte environ {coins} Hash par minute de parole des autres.",
     listenTip: "Écouter l'interprétation ajoute environ {coins} Hash par minute d'audio.",
     gotIt: "Compris",
+    rateOn: "{feature} activé · environ {coins} Hash par minute",
+    rateOff: "{feature} désactivé · plus de Hash consommé",
   },
   de: {
     features: { voice_caption: "Sprachanruf-Untertitel", voice_listen: "Dolmetsch-Audio", speech: "Spracherkennung", read_aloud: "Übersetzung vorlesen", typed: "Übersetzung getippter Nachrichten", translation: "Übersetzung", photo: "Fotoübersetzung" },
@@ -67,6 +83,8 @@ const COPY: Record<PrimaryUiLocale, CoinDetailCopy> = {
     interpretTip: "Dolmetschen kostet etwa {coins} Hash pro Minute, die andere sprechen.",
     listenTip: "Das Anhören der Verdolmetschung kostet etwa {coins} Hash mehr pro Audiominute.",
     gotIt: "Verstanden",
+    rateOn: "{feature} an · etwa {coins} Hash pro Minute",
+    rateOff: "{feature} aus · es wird kein Hash mehr verbraucht",
   },
   es: {
     features: { voice_caption: "Subtítulos de llamada de voz", voice_listen: "Audio de interpretación", speech: "Reconocimiento de voz", read_aloud: "Traducción leída en voz alta", typed: "Traducción de mensajes escritos", translation: "Traducción", photo: "Traducción de fotos" },
@@ -74,6 +92,8 @@ const COPY: Record<PrimaryUiLocale, CoinDetailCopy> = {
     interpretTip: "La interpretación cuesta unos {coins} Hash por minuto que hablan los demás.",
     listenTip: "Escuchar la interpretación suma unos {coins} Hash por minuto de audio.",
     gotIt: "Entendido",
+    rateOn: "{feature} activado · unos {coins} Hash por minuto",
+    rateOff: "{feature} desactivado · ya no se gasta Hash",
   },
   pt: {
     features: { voice_caption: "Legendas de chamada de voz", voice_listen: "Áudio de interpretação", speech: "Reconhecimento de voz", read_aloud: "Tradução lida em voz alta", typed: "Tradução de mensagens digitadas", translation: "Tradução", photo: "Tradução de foto" },
@@ -81,6 +101,8 @@ const COPY: Record<PrimaryUiLocale, CoinDetailCopy> = {
     interpretTip: "A interpretação custa cerca de {coins} Hash por minuto de fala dos outros.",
     listenTip: "Ouvir a interpretação acrescenta cerca de {coins} Hash por minuto de áudio.",
     gotIt: "Entendi",
+    rateOn: "{feature} ativado · cerca de {coins} Hash por minuto",
+    rateOff: "{feature} desativado · não gasta mais Hash",
   },
   it: {
     features: { voice_caption: "Sottotitoli chiamata vocale", voice_listen: "Audio dell'interpretazione", speech: "Riconoscimento vocale", read_aloud: "Traduzione letta ad alta voce", typed: "Traduzione dei messaggi scritti", translation: "Traduzione", photo: "Traduzione foto" },
@@ -88,6 +110,8 @@ const COPY: Record<PrimaryUiLocale, CoinDetailCopy> = {
     interpretTip: "L'interpretazione costa circa {coins} Hash per minuto di parlato degli altri.",
     listenTip: "Ascoltare l'interpretazione aggiunge circa {coins} Hash per minuto di audio.",
     gotIt: "Ho capito",
+    rateOn: "{feature} attivo · circa {coins} Hash al minuto",
+    rateOff: "{feature} disattivato · non si consumano più Hash",
   },
   ru: {
     features: { voice_caption: "Субтитры голосового звонка", voice_listen: "Озвучка перевода в звонке", speech: "Распознавание речи", read_aloud: "Озвучивание перевода", typed: "Перевод набранных сообщений", translation: "Перевод", photo: "Перевод фото" },
@@ -95,6 +119,8 @@ const COPY: Record<PrimaryUiLocale, CoinDetailCopy> = {
     interpretTip: "Перевод стоит около {coins} Hash за минуту речи собеседников.",
     listenTip: "Озвучка перевода добавляет около {coins} Hash за минуту аудио.",
     gotIt: "Понятно",
+    rateOn: "{feature}: вкл. · около {coins} Хэш в минуту",
+    rateOff: "{feature}: выкл. · Хэш больше не расходуется",
   },
   ar: {
     features: { voice_caption: "ترجمة المكالمة الصوتية", voice_listen: "صوت الترجمة الفورية", speech: "التعرف على الكلام", read_aloud: "قراءة الترجمة بصوت عالٍ", typed: "ترجمة الرسائل المكتوبة", translation: "ترجمة", photo: "ترجمة الصور" },
@@ -102,6 +128,8 @@ const COPY: Record<PrimaryUiLocale, CoinDetailCopy> = {
     interpretTip: "تكلّف الترجمة الفورية نحو {coins} Hash لكل دقيقة يتحدث فيها الآخرون.",
     listenTip: "يضيف الاستماع إلى الترجمة نحو {coins} Hash لكل دقيقة صوت.",
     gotIt: "حسنًا",
+    rateOn: "{feature}: تشغيل · نحو {coins} هاش في الدقيقة",
+    rateOff: "{feature}: إيقاف · لن يُستهلك هاش بعد الآن",
   },
   hi: {
     features: { voice_caption: "वॉइस कॉल कैप्शन", voice_listen: "वॉइस कॉल अनुवाद ऑडियो", speech: "वाक् पहचान", read_aloud: "अनुवाद पढ़कर सुनाना", typed: "टाइप किए संदेश का अनुवाद", translation: "अनुवाद", photo: "फ़ोटो अनुवाद" },
@@ -109,6 +137,8 @@ const COPY: Record<PrimaryUiLocale, CoinDetailCopy> = {
     interpretTip: "दुभाषिया दूसरों के बोलने के हर मिनट पर लगभग {coins} Hash लेता है।",
     listenTip: "अनुवाद सुनने पर ऑडियो के हर मिनट पर लगभग {coins} Hash और लगते हैं।",
     gotIt: "समझ गया",
+    rateOn: "{feature} चालू · लगभग {coins} हैश प्रति मिनट",
+    rateOff: "{feature} बंद · अब हैश खर्च नहीं होगा",
   },
   th: {
     features: { voice_caption: "คำบรรยายวอยซ์คอล", voice_listen: "เสียงล่ามวอยซ์คอล", speech: "การรู้จำเสียง", read_aloud: "อ่านคำแปลออกเสียง", typed: "แปลข้อความที่พิมพ์", translation: "การแปล", photo: "แปลรูปภาพ" },
@@ -116,6 +146,8 @@ const COPY: Record<PrimaryUiLocale, CoinDetailCopy> = {
     interpretTip: "การล่ามใช้ประมาณ {coins} Hash ต่อนาทีที่คนอื่นพูด",
     listenTip: "การฟังเสียงล่ามใช้เพิ่มประมาณ {coins} Hash ต่อนาทีของเสียง",
     gotIt: "เข้าใจแล้ว",
+    rateOn: "เปิด{feature} · ประมาณ {coins} แฮชต่อนาที",
+    rateOff: "ปิด{feature} · ไม่ใช้แฮชเพิ่มแล้ว",
   },
   vi: {
     features: { voice_caption: "Phụ đề cuộc gọi thoại", voice_listen: "Âm thanh phiên dịch", speech: "Nhận dạng giọng nói", read_aloud: "Đọc bản dịch", typed: "Dịch tin nhắn đã gõ", translation: "Dịch", photo: "Dịch ảnh" },
@@ -123,6 +155,8 @@ const COPY: Record<PrimaryUiLocale, CoinDetailCopy> = {
     interpretTip: "Phiên dịch tốn khoảng {coins} Hash cho mỗi phút người khác nói.",
     listenTip: "Nghe phiên dịch tốn thêm khoảng {coins} Hash mỗi phút âm thanh.",
     gotIt: "Đã hiểu",
+    rateOn: "Đã bật {feature} · khoảng {coins} Hash mỗi phút",
+    rateOff: "Đã tắt {feature} · không tốn thêm Hash",
   },
 };
 

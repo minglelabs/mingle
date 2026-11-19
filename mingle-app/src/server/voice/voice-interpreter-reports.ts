@@ -4,12 +4,27 @@ import { prisma } from "@/lib/prisma";
 import { buildVoiceCaptionClientMessageId, buildVoiceCaptionTag } from "@/lib/voice-caption";
 import { chargeCoinUsageSafely } from "@/server/coins/wallet";
 import { notifyConversationMessage } from "@/server/conversation-realtime";
-import { voiceCaptionPayer } from "@/server/voice/voice-calls";
+import { prismaVoiceStore } from "@/server/voice/prisma-voice-store";
+import { setVoiceInterpret, voiceCaptionPayer } from "@/server/voice/voice-calls";
 
 // Reports from the voice interpreter (mingle-voice-agent, app-report.ts). It
 // joins a voice talk while someone there has interpretation on, writes down
 // each speaker from the call audio, and tells the app about each line and
 // each translation it read aloud.
+
+/**
+ * Out of Hash in the middle of a call: this person's interpretation goes off
+ * on the server, so no more captions are saved for them and nobody is charged
+ * in their place. Their phone turns the call's switch off when it next reads
+ * the wallet. Never throws: billing must not break a caption.
+ */
+async function stopInterpretationForExhaustedUser(channelId: string, userId: string): Promise<void> {
+  try {
+    await setVoiceInterpret(prismaVoiceStore, { channelId, userId, on: false });
+  } catch (error) {
+    console.warn("[voice] interpret_off_on_exhausted_failed", error instanceof Error ? error.message : String(error));
+  }
+}
 
 /** The shared secret: VOICE_INTERNAL_SECRET, else the realtime secret both already have in one container. */
 export function readVoiceInternalSecret(env: NodeJS.ProcessEnv = process.env): string {
@@ -160,7 +175,7 @@ export async function recordVoiceCaption(report: VoiceCaptionReport): Promise<"s
   // rooms reload and get what each viewer may read.
   await notifyConversationMessage(sessionKey, [], undefined, { timeoutMs: 3000 });
   if (report.durationMs > 0) {
-    await chargeCoinUsageSafely({
+    const charge = await chargeCoinUsageSafely({
       userId: payer,
       kind: "stt",
       units: { second: report.durationMs / 1000 },
@@ -169,6 +184,7 @@ export async function recordVoiceCaption(report: VoiceCaptionReport): Promise<"s
       messageId: message.id,
       sessionKey,
     });
+    if (charge?.balanceExhausted) await stopInterpretationForExhaustedUser(call.channelId, payer);
   }
   return "saved";
 }
@@ -247,7 +263,7 @@ export async function recordVoicePlayback(report: VoicePlaybackReport): Promise<
   let charged = 0;
   for (const listener of report.listeners) {
     if (!inCall.has(listener)) continue;
-    await chargeCoinUsageSafely({
+    const charge = await chargeCoinUsageSafely({
       userId: listener,
       kind: "tts",
       units: { second: report.audioMs / 1000 },
@@ -255,6 +271,7 @@ export async function recordVoicePlayback(report: VoicePlaybackReport): Promise<
       conversationId: call.channelId,
       sessionKey: call.channel.sessionKey,
     });
+    if (charge?.balanceExhausted) await stopInterpretationForExhaustedUser(call.channelId, listener);
     charged++;
   }
   return charged;
