@@ -91,3 +91,30 @@ describe('speakTrialNeedsSessionCheck', () => {
     expect(speakTrialNeedsSessionCheck({ speakTrialDone: false, hasSignedInBefore: true })).toBe(false)
   })
 })
+
+describe('going Home after the first sign-in', () => {
+  function memoryStorage() {
+    const map = new Map<string, string>()
+    return {
+      getItem: (key: string) => map.get(key) ?? null,
+      setItem: (key: string, value: string) => void map.set(key, value),
+      removeItem: (key: string) => void map.delete(key),
+    }
+  }
+
+  it('moves a first-run device that signed out on the sign-in screen within ten minutes, until Home clears the mark', async () => {
+    const { SIGNED_OUT_HERE_TTL_MS, clearSignedOutHere, markSignedOutHere, shouldGoHomeAfterSignIn } = await import('./first-run')
+    const storage = memoryStorage()
+    expect(shouldGoHomeAfterSignIn(1_000, storage)).toBe(false)
+    markSignedOutHere(1_000, storage)
+    // Not a first-run device (an existing user signing in again): stays on Chats.
+    expect(shouldGoHomeAfterSignIn(2_000, storage)).toBe(false)
+    markFirstSpeakPending(storage)
+    expect(shouldGoHomeAfterSignIn(2_000, storage)).toBe(true)
+    // Still true after a reload brings the page back to Chats.
+    expect(shouldGoHomeAfterSignIn(3_000, storage)).toBe(true)
+    expect(shouldGoHomeAfterSignIn(1_000 + SIGNED_OUT_HERE_TTL_MS + 1, storage)).toBe(false)
+    clearSignedOutHere(storage)
+    expect(shouldGoHomeAfterSignIn(3_000, storage)).toBe(false)
+  })
+})

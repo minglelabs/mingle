@@ -30,7 +30,7 @@ import { normalizeProfileImageCrop } from "@/lib/profile-image-crop";
 import { requestProfileBasics } from "@/lib/profile-basics";
 import { useStartDirectConversation } from "@/lib/use-start-direct-conversation";
 import { resolveFirstRunCopy } from "@/i18n/first-run-copy";
-import { isFirstSpeakPending } from "@/lib/first-run";
+import { clearSignedOutHere, isFirstSpeakPending } from "@/lib/first-run";
 import { conversationsHref } from "@/lib/posting-feed-guard";
 import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
 import { BOTTOM_TAB_BAR_HEIGHT_PX } from "@/components/bottom-tab-bar";
@@ -176,14 +176,16 @@ export default function HomePage({ dictionary, locale }: HomePageProps) {
   const firstRunCopy = useMemo(() => resolveFirstRunCopy(locale), [locale]);
   const [firstSpeakPending, setFirstSpeakPending] = useState(false);
   useEffect(() => {
+    // Home is on screen: the "go Home after sign-in" move is finished.
+    clearSignedOutHere();
     const timer = window.setTimeout(() => setFirstSpeakPending(isFirstSpeakPending()), 0);
     return () => window.clearTimeout(timer);
   }, []);
   const showFirstSpeakCard = firstSpeakPending && sessionStatus === "authenticated" && !gated;
   const handleFirstSpeak = useCallback(() => {
-    const params = new URLSearchParams(window.location.search);
-    params.set("firstSpeak", "1");
-    router.push(buildNativeAwareTabPath(conversationsHref(locale), params, { skipConversationRestore: true, tabRoot: true }));
+    // buildNativeAwareTabPath keeps only the app shell's own params, so `firstSpeak` is added after it.
+    const path = buildNativeAwareTabPath(conversationsHref(locale), new URLSearchParams(window.location.search), { skipConversationRestore: true, tabRoot: true });
+    router.push(`${path}${path.includes("?") ? "&" : "?"}firstSpeak=1`);
   }, [locale, router]);
 
   return (

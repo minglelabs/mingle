@@ -100,3 +100,40 @@ export function shouldOpenConversationsInsteadOfFeed(input: {
 export function speakTrialNeedsSessionCheck(input: { speakTrialDone: boolean; hasSignedInBefore: boolean }): boolean {
   return !input.speakTrialDone && !input.hasSignedInBefore
 }
+
+/**
+ * A new account goes to the Home tab right after it signs in on the sign-in
+ * screen (which lives on the Chats tab). Signing in can reload the page, or
+ * bring it back to Chats after the first move, so "signed out on this screen
+ * a moment ago" is a timestamp in localStorage that stays until Home is
+ * actually on screen (Home clears it), or for ten minutes at most.
+ */
+export const LS_KEY_SIGNED_OUT_HERE_AT = 'mingle.firstRun.signedOutHereAt'
+export const SIGNED_OUT_HERE_TTL_MS = 10 * 60 * 1000
+
+export function markSignedOutHere(now: number = Date.now(), storage: FirstRunStorage | null = resolveBrowserStorage()): void {
+  try {
+    storage?.setItem(LS_KEY_SIGNED_OUT_HERE_AT, String(now))
+  } catch {
+    // Without the mark the account just stays on the Chats tab.
+  }
+}
+
+export function clearSignedOutHere(storage: FirstRunStorage | null = resolveBrowserStorage()): void {
+  try {
+    storage?.removeItem(LS_KEY_SIGNED_OUT_HERE_AT)
+  } catch {
+    // Nothing to clear.
+  }
+}
+
+/** Signed in just now, on a device still in its first run: show Home (people) first. */
+export function shouldGoHomeAfterSignIn(now: number = Date.now(), storage: FirstRunStorage | null = resolveBrowserStorage()): boolean {
+  try {
+    const signedOutAt = Number(storage?.getItem(LS_KEY_SIGNED_OUT_HERE_AT))
+    if (!Number.isFinite(signedOutAt) || signedOutAt <= 0 || now - signedOutAt > SIGNED_OUT_HERE_TTL_MS) return false
+    return isFirstSpeakPending(storage)
+  } catch {
+    return false
+  }
+}

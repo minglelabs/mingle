@@ -88,6 +88,8 @@ import {
   completeFirstSpeak,
   isDiscoveryPromptDue,
   isFirstSpeakPending,
+  markSignedOutHere,
+  shouldGoHomeAfterSignIn,
   markFirstSpeakPending,
 } from "@/lib/first-run";
 import { resolveFirstRunCopy } from "@/i18n/first-run-copy";
@@ -5646,15 +5648,16 @@ export default function ConversationList({
   // A new account that just signed in here goes to the Home tab: the app is
   // for meeting people, so they are the first thing it shows. The "say
   // something" card is on Home as well and comes back here with `firstSpeak=1`.
-  const signedOutHereRef = useRef(false);
+  // The mark is cleared by Home once it is on screen (see shouldGoHomeAfterSignIn):
+  // signing in can reload this page or bring it back here after the first move.
   useEffect(() => {
     if (sessionStatus === "unauthenticated") {
-      signedOutHereRef.current = true;
+      markSignedOutHere();
       return;
     }
-    if (sessionStatus !== "authenticated" || !signedOutHereRef.current) return;
-    signedOutHereRef.current = false;
-    if (!isFirstSpeakPending() || activeConversation !== null) return;
+    if (sessionStatus !== "authenticated") return;
+    // The speak-trial room can still be closing right after sign-in: wait for the list.
+    if (activeConversation !== null || !shouldGoHomeAfterSignIn()) return;
     const params = new URLSearchParams(window.location.search);
     if (params.has("firstSpeak")) return;
     captureMingleClientEvent("mingle_first_run_step", { step: "home_after_sign_in" });

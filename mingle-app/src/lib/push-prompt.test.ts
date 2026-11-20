@@ -63,6 +63,9 @@ describe('notification prompt timing', () => {
     expect(list).toContain('if (params.get("firstSpeak") !== "1") return;')
     const home = read('../components/home/home-page.tsx')
     expect(home).toContain('data-qa="home-first-speak-card"')
-    expect(home).toContain('params.set("firstSpeak", "1");')
+    expect(home).toContain('firstSpeak=1`);')
+    // Signing in can reload the page or bring it back to Chats: the move holds until Home is on screen.
+    expect(list).toContain('if (activeConversation !== null || !shouldGoHomeAfterSignIn()) return;')
+    expect(home).toContain('clearSignedOutHere();')
   })
 })
