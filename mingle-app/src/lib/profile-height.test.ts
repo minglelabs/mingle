@@ -41,6 +41,16 @@ describe('profile height', () => {
     expect(read('../components/profile-gender-age-badge.tsx')).toContain('data-qa="profile-height"')
   })
 
+  it('is picked on a wheel that starts at 177 cm, never typed on a keyboard', () => {
+    const modal = read('../components/LivePhoneDemo/LanguageOnboardingModal.tsx')
+    expect(modal).toContain('useState<number>(DEFAULT_HEIGHT_CM)')
+    expect(modal).toContain('<ProfileHeightWheel value={heightCm} onChange={setHeightCm} />')
+    expect(modal).not.toContain('inputMode="numeric"')
+    const edit = read('../components/my-page.tsx')
+    expect(edit).toContain('optional={gender !== "male"}')
+    expect(edit).not.toContain('setHeightText')
+  })
+
   it('home cards follow and message without opening the profile', () => {
     const home = read('../components/home/home-page.tsx')
     expect(home).toContain('data-qa="home-card-follow"')

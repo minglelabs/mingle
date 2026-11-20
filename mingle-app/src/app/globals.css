@@ -306,3 +306,12 @@ html[data-hash-rush-open="true"] [data-sonner-toaster] {
     opacity: 0.45;
   }
 }
+
+/* Full-screen sheets and dialogs that hold a text field end above the
+   on-screen keyboard (iOS does not resize the page for it), so their bottom
+   button stays visible while typing. `--keyboard-inset` comes from
+   components/keyboard-inset-var.tsx. Outside any layer so it wins over
+   Tailwind's inset-0. */
+.keyboard-safe {
+  bottom: var(--keyboard-inset, 0px) !important;
+}

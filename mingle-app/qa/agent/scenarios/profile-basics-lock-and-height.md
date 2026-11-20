@@ -28,9 +28,9 @@ history:
 ## Steps
 
 1. Signed in as M, trigger the profile basics (first follow from Home or a profile). Screenshot the height step.
-2. Type `119` and screenshot; then type a height such as `182` and continue.
+2. Scroll the wheel to another height such as `182` and continue.
 3. Open My page → profile edit. Screenshot the gender, birth date and height fields.
-4. Clear the height and try to save. Screenshot. Put the height back and save.
+4. Scroll the height wheel and save. Screenshot the pill on My page.
 5. Through `eval` `fetch`, PATCH `/api/profile` with a different gender, then a different birth date. Record the
    status codes.
 6. Open M's profile from another account. Screenshot the gender-age pill.
@@ -38,13 +38,13 @@ history:
 
 ## Oracle (pass when)
 
-- Step 1: the height step says the number shows on the profile, has a number keypad and `cm`, and Continue stays
-  off until a number is typed (T16, T22).
-- Step 2: `119` (or anything outside 120-230) is not accepted; `182` is saved (`GET /api/profile` `heightCm: 182`)
-  and the follow goes through after the question closes (T5).
+- Step 1: the height step is a scroll wheel in cm (120-230) that starts at 177, with no keyboard, and Continue is
+  on at once (T16, T21, T22).
+- Step 2: the picked height is saved (`GET /api/profile` `heightCm: 182`) and the follow goes through after the
+  question closes (T5).
 - Step 3: the set gender and birth date show as plain text with the note that they cannot be changed; no picker,
-  no date field (T19). The height field shows 182 and can be edited.
-- Step 4: a man cannot save without a height; the message is in the app language (T17).
+  no date field (T19). The height wheel shows 182. A man's wheel has no "—" (no height) row; anyone else's does.
+- Step 4: the new height is saved and shows in the pill.
 - Step 5: `409 gender_locked` and `409 birth_date_locked`; the profile still shows the old values.
 - Step 6: the pill reads age and height, e.g. `26 · 182cm`, and nothing shifts while it loads (T13).
 - Step 7: a woman is never asked for a height.

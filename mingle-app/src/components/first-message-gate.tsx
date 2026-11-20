@@ -163,7 +163,7 @@ export default function FirstMessageGate() {
       role="dialog"
       aria-modal="true"
       aria-label={copy.title}
-      className="fixed inset-0 z-[230] flex items-end justify-center bg-black/45"
+      className="keyboard-safe fixed inset-0 z-[230] flex items-end justify-center bg-black/45"
       onClick={(event) => {
         if (event.target === event.currentTarget) finish(false);
       }}

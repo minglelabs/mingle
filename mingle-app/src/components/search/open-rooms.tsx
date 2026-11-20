@@ -317,7 +317,7 @@ function OpenRoomRow({ room, copy, busy, onEnter }: { room: OpenRoomCard; copy: 
 // Both dialogs sit in the upper part of the screen so the keyboard does not cover them.
 function Dialog({ label, onClose, children, qa }: { label: string; onClose: () => void; children: React.ReactNode; qa: string }) {
   return (
-    <div className="fixed inset-0 z-[150] flex items-start justify-center px-6" style={{ paddingTop: "calc(env(safe-area-inset-top, 44px) + 72px)" }} role="dialog" aria-modal="true" aria-label={label} data-qa={qa}>
+    <div className="keyboard-safe fixed inset-0 z-[150] flex items-start justify-center px-6" style={{ paddingTop: "calc(env(safe-area-inset-top, 44px) + 72px)" }} role="dialog" aria-modal="true" aria-label={label} data-qa={qa}>
       <button type="button" className="absolute inset-0 bg-black/45" aria-label={label} tabIndex={-1} onClick={onClose} />
       <div className="relative w-full max-w-[340px] rounded-2xl bg-white p-5 shadow-xl">{children}</div>
     </div>

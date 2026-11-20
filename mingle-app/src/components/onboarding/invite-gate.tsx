@@ -100,7 +100,7 @@ export default function InviteGate({ locale, onAccess }: { locale: string; onAcc
       role="dialog"
       aria-modal="true"
       aria-label={copy.title}
-      className="absolute inset-0 z-[210] flex flex-col overflow-y-auto bg-gradient-to-b from-[#FBBC32] to-[#F97316] px-6"
+      className="keyboard-safe absolute inset-0 z-[210] flex flex-col overflow-y-auto bg-gradient-to-b from-[#FBBC32] to-[#F97316] px-6"
       style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 72px)", paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }}
     >
       <div className="flex flex-1 flex-col items-center text-center">

@@ -2,6 +2,15 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-20 — Bottom buttons stay above the keyboard; height is a wheel that starts at 177 cm
+
+- Surface: new `components/keyboard-inset-var.tsx` (mounted in `app/layout.tsx`), `.keyboard-safe` in `app/globals.css`, the full-screen sheets and dialogs that hold a text field (onboarding questions, language pickers, profile edit and My page dialogs, follow list, invites, contact sync, report, coin gift, open-room dialog, invite code gate, first-message setup, chat search), new `components/profile-height-wheel.tsx`, `WheelColumn` exported from `signup-birth-date-picker.tsx`, `LanguageOnboardingModal.tsx` (height step), profile edit (`my-page.tsx`), `lib/profile-height.ts` (`DEFAULT_HEIGHT_CM`), `i18n/profile-height-copy.ts`.
+- Issue: QA on an iPhone 14 (2026-11-20): on the height question the keyboard covered Continue, so the person had to close the keyboard first. The iOS WebView does not resize the page for the keyboard (Android's adjustResize does), so every sheet whose button sits at the bottom had the same problem. The owner: a call-to-action must be tappable without closing the keyboard, on every screen, and height should be a wheel like the birth date, starting at about 177 cm.
+- Resolution:
+  - The app publishes the keyboard's height as `--keyboard-inset` on `<html>` (from `visualViewport`; 0 on Android and when no keyboard is up). Sheets and dialogs with a text field carry `keyboard-safe`, which ends them at the top of the keyboard, so their bottom button rides above it. Screens that already move their own composer (the room, comments, post compose, phone verification) keep their own handling.
+  - Height is picked on a scroll wheel (120–230 cm), no keyboard. The question starts at 177. In profile edit men get the same wheel (177 when no height is set yet); anyone else gets a "—" row on top for no height.
+- Checked on the iPhone 14 (local devbox): the height question showed the wheel at 177; scrolling to 180 and Continue saved 180 and the follow went through; profile edit showed the wheel at 180 and the pill read "26 · 180cm". A sheet with a field at the top and a button at the bottom kept the button just above the keyboard once the field was focused (`--keyboard-inset` 342 px); the report sheet's buttons stayed above the keyboard too. Android was not rechecked (its inset is 0, layout unchanged).
+
 ## 2026-11-19 — Home cards follow and message on the spot; height on profiles, required for men
 
 - Surface: `home/home-page.tsx` (PersonCard), new `lib/use-start-direct-conversation.ts`, `api/users/discover` (`isFollowing`, `heightCm`), `LanguageOnboardingModal.tsx` (new "height" step), `lib/profile-basics.ts`, `profile-basics-gate.tsx`, `api/profile` (PATCH `heightCm`), profile edit (`my-page.tsx`), `profile-gender-age-badge.tsx`, new `i18n/profile-height-copy.ts` (15 languages), `User.heightCm`.

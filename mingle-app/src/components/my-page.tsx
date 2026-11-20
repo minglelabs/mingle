@@ -124,7 +124,8 @@ import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, Contact, Ey
 import { resolveSelfieVerifyCopy } from "@/i18n/selfie-verify-copy";
 import { resolveProfileLockedNote } from "@/i18n/profile-locked-copy";
 import { resolveProfileHeightCopy } from "@/i18n/profile-height-copy";
-import { MAX_HEIGHT_CM, MIN_HEIGHT_CM, normalizeHeightCm } from "@/lib/profile-height";
+import { DEFAULT_HEIGHT_CM, normalizeHeightCm } from "@/lib/profile-height";
+import ProfileHeightWheel, { NO_HEIGHT } from "@/components/profile-height-wheel";
 import dynamic from "next/dynamic";
 const SelfieVerifyScreen = dynamic(() => import("@/components/selfie-verify-screen"), { ssr: false });
 import { myPostsHref } from "@/lib/feed-routes";
@@ -911,7 +912,7 @@ function ProfileSettingsPanel({
       open={open}
       onClose={onClose}
       ariaLabel={copy.title}
-      className="fixed inset-0 z-[90] flex min-h-0 w-full flex-col bg-white text-slate-950"
+      className="keyboard-safe fixed inset-0 z-[90] flex min-h-0 w-full flex-col bg-white text-slate-950"
       style={{ touchAction: "pan-y" }}
     >
           <header
@@ -1145,7 +1146,7 @@ function ProfileSettingsPanel({
             </button>
             {isSignInMethodsOpen ? <SignInMethodsSheet locale={locale} onClose={() => setIsSignInMethodsOpen(false)} /> : null}
             {isSignOutConfirmOpen ? (
-              <div className="fixed inset-0 z-[150] flex items-center justify-center px-8" role="alertdialog" aria-modal="true" aria-label={resolveSignInMethodsCopy(locale).signOutConfirm} data-qa="sign-out-confirm">
+              <div className="keyboard-safe fixed inset-0 z-[150] flex items-center justify-center px-8" role="alertdialog" aria-modal="true" aria-label={resolveSignInMethodsCopy(locale).signOutConfirm} data-qa="sign-out-confirm">
                 <button type="button" className="absolute inset-0 bg-black/45" aria-label={resolveSignInMethodsCopy(locale).close} onClick={() => setIsSignOutConfirmOpen(false)} />
                 <div className="relative w-full max-w-[320px] rounded-2xl bg-white p-5 text-center shadow-xl">
                   <p className="text-[15px] font-semibold text-slate-900">{resolveSignInMethodsCopy(locale).signOutConfirm}</p>
@@ -1191,7 +1192,7 @@ function ProfileSettingsPanel({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.16, ease: "easeOut" }}
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-5"
+          className="keyboard-safe fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-5"
           onClick={() => setIsAccountActionModalOpen(false)}
         >
           <motion.div
@@ -1239,7 +1240,7 @@ function ProfileSettingsPanel({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.16, ease: "easeOut" }}
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-5"
+          className="keyboard-safe fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-5"
           onClick={() => {
             if (isWithdrawing) return;
             setIsWithdrawConfirmModalOpen(false);
@@ -1293,7 +1294,7 @@ function ProfileSettingsPanel({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.16, ease: "easeOut" }}
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-5"
+          className="keyboard-safe fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-5"
           onClick={() => {
             if (isDeactivating) return;
             setIsDeactivateModalOpen(false);
@@ -1346,7 +1347,7 @@ function ProfileSettingsPanel({
         onClose={closeManagementPage}
         ariaLabel={managementPageTitle}
         nativeBackPriority={30}
-        className="fixed inset-0 z-[100] flex min-h-0 w-full flex-col bg-white text-slate-950"
+        className="keyboard-safe fixed inset-0 z-[100] flex min-h-0 w-full flex-col bg-white text-slate-950"
         style={{ touchAction: "pan-y" }}
       >
           <header
@@ -1629,11 +1630,11 @@ function ProfileEditPanel({
   const [birthDate, setBirthDate] = useState<BirthDateParts>(initialBirthDate ?? DEFAULT_PROFILE_EDIT_BIRTH_DATE);
   const [hasBirthDate, setHasBirthDate] = useState(Boolean(initialBirthDate));
   const [gender, setGender] = useState<ProfileGender | null>(initialGender ?? null);
-  const [heightText, setHeightText] = useState(initialHeightCm ? String(initialHeightCm) : "");
+  const [heightValue, setHeightValue] = useState<number>(normalizeHeightCm(initialHeightCm) ?? NO_HEIGHT);
   const heightCopy = useMemo(() => resolveProfileHeightCopy(locale), [locale]);
-  const heightCm = normalizeHeightCm(heightText);
-  // Men must give a height; anyone else may leave it empty. A typed value must be in range.
-  const isHeightValid = heightText.trim() ? heightCm !== null : gender !== "male";
+  // Men always have one on the wheel (it starts at the default); anyone else may pick "—" (none).
+  const heightCm = gender === "male" ? normalizeHeightCm(heightValue) ?? DEFAULT_HEIGHT_CM : normalizeHeightCm(heightValue);
+  const isHeightValid = gender !== "male" || heightCm !== null;
   const [nationalityCountry, setNationalityCountry] = useState<string | null>(initialNationalityCountry);
   const [imageDraft, setImageDraft] = useState<ProfileImageCropperChange>({
     file: null,
@@ -1692,7 +1693,7 @@ function ProfileEditPanel({
     setBirthDate(initialBirthDate ?? DEFAULT_PROFILE_EDIT_BIRTH_DATE);
     setHasBirthDate(Boolean(initialBirthDate));
     setGender(initialGender ?? null);
-    setHeightText(initialHeightCm ? String(initialHeightCm) : "");
+    setHeightValue(normalizeHeightCm(initialHeightCm) ?? NO_HEIGHT);
     setNationalityCountry(initialNationalityCountry);
     setImageDraft({
       file: null,
@@ -1738,7 +1739,7 @@ function ProfileEditPanel({
       open={open}
       onClose={onClose}
       ariaLabel={copy.title}
-      className="fixed inset-0 z-[90] flex min-h-0 w-full flex-col bg-white text-slate-950"
+      className="keyboard-safe fixed inset-0 z-[90] flex min-h-0 w-full flex-col bg-white text-slate-950"
       style={{ touchAction: "pan-y" }}
     >
           <header
@@ -1836,31 +1837,16 @@ function ProfileEditPanel({
                 )}
               </fieldset>
 
-              <label className="block">
+              <div className="block" data-qa="profile-edit-height">
                 <span className="mb-2 block text-[13px] font-semibold text-gray-600">{heightCopy.label}</span>
-                <span className="flex items-center gap-2">
-                  <input
-                    data-qa="profile-edit-height"
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={3}
-                    value={heightText}
-                    onChange={(event) => setHeightText(event.target.value.replace(/\D/g, "").slice(0, 3))}
-                    placeholder={`${MIN_HEIGHT_CM}–${MAX_HEIGHT_CM}`}
-                    disabled={isSaving}
-                    size={3}
-                    style={{ width: 112 }}
-                    className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[15px] tabular-nums outline-none transition focus:border-gray-400 focus:bg-white"
-                  />
-                  <span className="text-[15px] text-gray-500">cm</span>
-                </span>
-                {!isHeightValid ? (
-                  <span className="mt-2 block text-[12px] font-medium text-rose-600" role="alert">{heightCopy.invalid}</span>
-                ) : (
-                  <span className="mt-2 block text-[12px] leading-relaxed text-gray-400">{heightCopy.hint}</span>
-                )}
-              </label>
+                {/* A wheel like the birth date: no keyboard to cover Save. Men must give a height; others may pick "—". */}
+                <ProfileHeightWheel
+                  value={gender === "male" && heightValue === NO_HEIGHT ? DEFAULT_HEIGHT_CM : heightValue}
+                  onChange={setHeightValue}
+                  optional={gender !== "male"}
+                />
+                <span className="mt-2 block text-[12px] leading-relaxed text-gray-400">{heightCopy.hint}</span>
+              </div>
 
               <fieldset className="min-w-0 w-full max-w-full">
                 <legend className="mb-2 text-[13px] font-semibold text-gray-600">{nationalityCopy.label}</legend>

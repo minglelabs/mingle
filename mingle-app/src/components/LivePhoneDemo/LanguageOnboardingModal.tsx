@@ -42,7 +42,8 @@ import LanguageLevelPicker from "@/components/language-level-picker";
 import ProfileGenderPicker from "@/components/profile-gender-picker";
 import { resolveProfileGenderCopy } from "@/i18n/profile-gender-copy";
 import { resolveProfileHeightCopy } from "@/i18n/profile-height-copy";
-import { normalizeHeightCm } from "@/lib/profile-height";
+import { DEFAULT_HEIGHT_CM } from "@/lib/profile-height";
+import ProfileHeightWheel from "@/components/profile-height-wheel";
 import type { ProfileGender } from "@/lib/profile-gender";
 
 const DEFAULT_ONBOARDING_BIRTH_DATE: BirthDateParts = {
@@ -113,8 +114,8 @@ export default function LanguageOnboardingModal({
 }: LanguageOnboardingModalProps) {
   const baseSteps = invite ? INVITE_ONBOARDING_STEPS : requestedSteps;
   const [gender, setGender] = useState<ProfileGender | null>(null);
-  const [heightText, setHeightText] = useState("");
-  const heightCm = normalizeHeightCm(heightText);
+  // A wheel like the birth date, starting at a typical height (no keyboard).
+  const [heightCm, setHeightCm] = useState<number>(DEFAULT_HEIGHT_CM);
   // Height is asked of men only: when the gender is asked in this same run the
   // step appears once "male" is picked; asked alone, the caller already knows.
   const steps = useMemo(
@@ -299,7 +300,7 @@ export default function LanguageOnboardingModal({
       : target === "usage-purpose" ? Boolean(usagePurpose)
       : target === "discovery-source" ? Boolean(discoverySource)
       : target === "gender" ? Boolean(gender)
-      : target === "height" ? heightCm !== null
+      : target === "height" ? heightCm > 0
         : isEligibleAge
   );
 
@@ -447,7 +448,7 @@ export default function LanguageOnboardingModal({
 
   const overlay = (
     <div
-      className="fixed inset-0 bg-[rgba(248,245,239,0.94)] backdrop-blur-sm"
+      className="keyboard-safe fixed inset-0 bg-[rgba(248,245,239,0.94)] backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
@@ -732,30 +733,12 @@ export default function LanguageOnboardingModal({
           </div>
         ) : step === "height" ? (
           <div
-            className="flex flex-1 flex-col overflow-y-auto px-6 pb-4 pt-10"
+            className="flex flex-1 flex-col justify-center overflow-y-auto px-6 py-4"
             style={{ paddingBottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))" }}
           >
-            <div className="mx-auto flex w-full max-w-sm items-end justify-center gap-2">
-              <input
-                data-qa="onboarding-height"
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={3}
-                value={heightText}
-                onChange={(event) => setHeightText(event.target.value.replace(/\D/g, "").slice(0, 3))}
-                placeholder="175"
-                disabled={isConfirming}
-                aria-label={heightCopy.label}
-                size={3}
-                style={{ width: 150 }}
-                className="rounded-2xl border border-amber-200 bg-white px-4 py-4 text-center text-[2rem] font-bold tabular-nums text-slate-950 outline-none focus:border-amber-400"
-              />
-              <span className="pb-4 text-[1.2rem] font-semibold text-slate-500">cm</span>
+            <div data-qa="onboarding-height">
+              <ProfileHeightWheel value={heightCm} onChange={setHeightCm} />
             </div>
-            {heightText.length >= 3 && heightCm === null ? (
-              <p className="mt-4 text-center text-[0.86rem] font-medium text-rose-600" role="alert">{heightCopy.invalid}</p>
-            ) : null}
           </div>
         ) : step === "birth-date" ? (
           <div

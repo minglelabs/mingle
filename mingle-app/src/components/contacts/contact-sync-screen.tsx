@@ -268,7 +268,7 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
       ariaLabel={copy.title}
       zIndex={130}
       nativeBackPriority={130}
-      className="fixed inset-0 z-[130] flex min-h-0 w-full flex-col bg-white text-slate-950"
+      className="keyboard-safe fixed inset-0 z-[130] flex min-h-0 w-full flex-col bg-white text-slate-950"
       style={{ touchAction: "pan-y" }}
     >
       <header

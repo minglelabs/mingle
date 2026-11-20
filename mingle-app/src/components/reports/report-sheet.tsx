@@ -96,7 +96,7 @@ export default function ReportSheet({ open, target, locale, onClose }: ReportShe
 
   return (
     <div
-      className="fixed inset-0 z-[130] flex items-end justify-center bg-black/40"
+      className="keyboard-safe fixed inset-0 z-[130] flex items-end justify-center bg-black/40"
       onClick={onClose}
     >
       <section

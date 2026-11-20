@@ -20,7 +20,8 @@ type SignupBirthDatePickerProps = {
   dayLabel: string;
 };
 
-function WheelColumn({
+/** One scroll wheel column (snap to a value); also used for the height picker. */
+export function WheelColumn({
   values,
   selectedValue,
   label,

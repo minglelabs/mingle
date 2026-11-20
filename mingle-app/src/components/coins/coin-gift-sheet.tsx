@@ -93,7 +93,7 @@ function CoinGiftSheetBody({ onClose, recipientId, recipientName, locale }: Coin
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[130] flex items-end bg-black/40"
+      className="keyboard-safe fixed inset-0 z-[130] flex items-end bg-black/40"
       role="dialog"
       aria-modal="true"
       aria-label={fillCoinCopy(copy.giftTitle, { name: recipientName })}

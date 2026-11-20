@@ -1,6 +1,8 @@
 /** Height on a profile, in whole centimetres. Typed by the user; nothing checks it. */
 export const MIN_HEIGHT_CM = 120
 export const MAX_HEIGHT_CM = 230
+/** Where the height wheel starts when no height is set yet. */
+export const DEFAULT_HEIGHT_CM = 177
 
 export function normalizeHeightCm(value: unknown): number | null {
   const number = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : Number.NaN

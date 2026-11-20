@@ -826,7 +826,7 @@ export default function PublicUserProfileScreen({
       </div>
 
       {reportOpen ? (
-        <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/35" onClick={() => setReportOpen(false)}>
+        <div className="keyboard-safe fixed inset-0 z-[120] flex items-end justify-center bg-black/35" onClick={() => setReportOpen(false)}>
           <section
             className="w-full rounded-t-[24px] bg-white px-5 pb-[max(env(safe-area-inset-bottom),20px)] pt-5 shadow-2xl"
             role="dialog"

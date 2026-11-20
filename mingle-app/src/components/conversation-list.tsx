@@ -1783,7 +1783,7 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
       ariaLabel={copy.searchButtonLabel}
       nativeBackPriority={20}
       transitionMode={transitionMode}
-      className="absolute inset-0 z-40 flex h-full min-h-0 w-full flex-col overflow-hidden bg-white"
+      className="keyboard-safe absolute inset-0 z-40 flex h-full min-h-0 w-full flex-col overflow-hidden bg-white"
       style={{ touchAction: "pan-y" }}
       stopPropagation
     >

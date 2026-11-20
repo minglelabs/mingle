@@ -180,9 +180,12 @@ playback controls that do nothing.
 
 ### T21. Primary actions are big and in thumb reach
 Creating a conversation is a full-width bottom action. Full-screen viewers close with a swipe, not only a small
-top-corner X.
+top-corner X. While the keyboard is up, a sheet's bottom button (Continue, Save, Send) stays visible and tappable
+above it: the person never has to close the keyboard first. Numbers with a small range (height, birth date) are
+picked on a wheel, not typed.
 - 2026-08-14 - Restore the bottom new-conversation action
 - 2026-09-26 — Swipe-down-to-dismiss for the full-screen photo viewer
+- 2026-11-20 — Bottom buttons stay above the keyboard; height is a wheel that starts at 177 cm
 
 ## Trust
 

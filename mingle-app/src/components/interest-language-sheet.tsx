@@ -112,7 +112,7 @@ export default function InterestLanguageSheet({
   };
 
   const overlay = (
-    <div className="fixed inset-0 bg-[rgba(248,245,239,0.94)] backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby={titleId} style={{ zIndex: 250 }}>
+    <div className="keyboard-safe fixed inset-0 bg-[rgba(248,245,239,0.94)] backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby={titleId} style={{ zIndex: 250 }}>
       <div className="mx-auto flex h-full w-full max-w-[540px] flex-col bg-[#fcfbf8] text-slate-950 shadow-[0_32px_80px_rgba(15,23,42,0.16)]">
         <header className="shrink-0 border-b border-gray-100 bg-[#fcfbf8]">
           <div aria-hidden="true" style={{ height: "env(safe-area-inset-top, 0px)" }} />

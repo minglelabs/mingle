@@ -679,7 +679,7 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
   }
 
   return (
-    <div className="fixed inset-0 z-[100] overflow-hidden bg-white">
+    <div className="keyboard-safe fixed inset-0 z-[100] overflow-hidden bg-white">
       <motion.main
         initial={{ x: "100%" }}
         animate={motionControls}
