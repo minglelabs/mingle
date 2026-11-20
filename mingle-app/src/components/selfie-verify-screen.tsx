@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronsLeft, ChevronsRight, Loader2, ShieldCheck, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Loader2, ShieldCheck, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resolveSelfieVerifyCopy, type SelfieVerifyCopy } from "@/i18n/selfie-verify-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
@@ -27,6 +27,8 @@ type Phase = "intro" | "loading" | "camera" | "comparing" | "passed" | "mismatch
 /** Free face models (Human, MIT), served from this site; nothing is fetched from elsewhere. */
 const MODEL_PATH = "/models/human/";
 const FRAME_INTERVAL_MS = 120;
+/** Screens where the circle shows the live camera instead of an empty grey disc. */
+const LIVE_PREVIEW_PHASES: readonly string[] = ["intro", "mismatch", "failed", "need_photo"];
 const LIVENESS_TIMEOUT_MS = 45_000;
 
 let humanPromise: Promise<HumanInstance> | null = null;
@@ -84,11 +86,14 @@ function hintText(copy: SelfieVerifyCopy, hint: LivenessHint): string {
 }
 
 /**
- * The face description of the account's own profile photo, read through the
- * server (the photo may live on another host). "small" when the face is too
- * small to compare reliably.
+ * The face descriptions of the account's own profile photo, as saved and
+ * mirrored, read through the server (the photo may live on another host).
+ * Front-camera selfies are often saved mirrored (iPhone does by default) while
+ * the live camera frames are not, and a face description is not the same for
+ * a mirrored face, so both are compared. "small" when the face is too small
+ * to compare reliably.
  */
-async function profilePhotoEmbedding(human: HumanInstance): Promise<number[] | "small" | null> {
+async function profilePhotoEmbeddings(human: HumanInstance): Promise<number[][] | "small" | null> {
   const response = await fetch(buildClientApiPath("/profile/image/face-check"), { cache: "no-store" });
   if (!response.ok) return null;
   const bitmap = await createImageBitmap(await response.blob());
@@ -97,11 +102,23 @@ async function profilePhotoEmbedding(human: HumanInstance): Promise<number[] | "
     const scale = Math.min(1, 720 / Math.max(bitmap.width, bitmap.height));
     canvas.width = Math.round(bitmap.width * scale);
     canvas.height = Math.round(bitmap.height * scale);
-    canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    const result = await human.detect(canvas);
-    const face = [...result.face].sort((a, b) => (b.boxRaw[2] ?? 0) - (a.boxRaw[2] ?? 0))[0];
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+    const largestFace = async () => {
+      const result = await human.detect(canvas);
+      return [...result.face].sort((a, b) => (b.boxRaw[2] ?? 0) - (a.boxRaw[2] ?? 0))[0];
+    };
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const face = await largestFace();
     if (!face?.embedding?.length) return null;
-    return (face.boxRaw[2] ?? 0) < MIN_PHOTO_FACE_WIDTH ? "small" : face.embedding;
+    if ((face.boxRaw[2] ?? 0) < MIN_PHOTO_FACE_WIDTH) return "small";
+    const embeddings = [face.embedding];
+    context.setTransform(-1, 0, 0, 1, canvas.width, 0);
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    const mirrored = await largestFace();
+    if (mirrored?.embedding?.length) embeddings.push(mirrored.embedding);
+    return embeddings;
   } finally {
     bitmap.close();
   }
@@ -142,29 +159,75 @@ export default function SelfieVerifyScreen({
   const runRef = useRef(0);
   useNativeBannerSuppression(true);
 
+  /** The camera is live on the intro too, so the person sees themself before tapping Start. */
+  const [previewing, setPreviewing] = useState(false);
+
   const stopCamera = useCallback(() => {
     runRef.current += 1;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    setPreviewing(false);
   }, []);
 
   useEffect(() => stopCamera, [stopCamera]);
 
+  /** Opens the front camera (once) and shows it in the circle. Null when it is refused or missing. */
+  const openingRef = useRef<Promise<MediaStream | null> | null>(null);
+  const openCamera = useCallback((): Promise<MediaStream | null> => {
+    if (streamRef.current) return Promise.resolve(streamRef.current);
+    openingRef.current ??= openCameraOnce().finally(() => {
+      openingRef.current = null;
+    });
+    return openingRef.current;
+
+    async function openCameraOnce(): Promise<MediaStream | null> {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) return null;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 640 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      const video = videoRef.current;
+      if (video) {
+        video.srcObject = stream;
+        await video.play().catch(() => undefined);
+      }
+      setPreviewing(true);
+      return stream;
+    } catch {
+      return null;
+    }
+    }
+  }, []);
+
+  // On the intro: open the camera and load the face models right away, so Start
+  // begins the head turns without the "Getting ready" wait.
+  useEffect(() => {
+    if (!LIVE_PREVIEW_PHASES.includes(phase)) return;
+    void openCamera();
+    if (phase !== "need_photo") void loadHuman().catch(() => undefined);
+  }, [openCamera, phase]);
+
   const finishWith = useCallback(async (human: HumanInstance, state: LivenessState) => {
     setPhase("comparing");
-    stopCamera();
+    // Stop the detection loop; the camera stays on behind the result, for a retry.
+    runRef.current += 1;
     try {
-      const photo = await profilePhotoEmbedding(human);
+      const photo = await profilePhotoEmbeddings(human);
       if (photo === null || photo === "small") {
         // No face in the profile photo, or too small to compare: ask for a clearer one.
         setPhase(photo === "small" ? "mismatch" : "need_photo");
         return;
       }
-      if (!state.centerEmbedding) {
+      const centerEmbedding = state.centerEmbedding;
+      if (!centerEmbedding) {
         setPhase("failed");
         return;
       }
-      const similarity = human.match.similarity(state.centerEmbedding, photo);
+      const similarity = Math.max(...photo.map((embedding) => human.match.similarity(centerEmbedding, embedding)));
+      // For QA on a phone (PostHog has it too): the last score, never sent anywhere else.
+      (window as unknown as { __MINGLE_SELFIE_LAST_SIMILARITY__?: number }).__MINGLE_SELFIE_LAST_SIMILARITY__ = similarity;
       captureMingleClientEvent("mingle_selfie_verify", { step: "compared", similarity: Math.round(similarity * 100) / 100 });
       if (!isSameFace(similarity)) {
         setPhase("mismatch");
@@ -179,6 +242,7 @@ export default function SelfieVerifyScreen({
         setPhase(response.status === 409 ? "need_photo" : "failed");
         return;
       }
+      stopCamera();
       setPhase("passed");
       onVerified();
     } catch {
@@ -196,17 +260,12 @@ export default function SelfieVerifyScreen({
     setStep("center");
     setGauge(0);
     captureMingleClientEvent("mingle_selfie_verify", { step: "started" });
-    let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 640 } },
-        audio: false,
-      });
-    } catch {
+    // Usually already open from the intro; a retry opens it again.
+    const stream = await openCamera();
+    if (!stream) {
       setPhase("camera_denied");
       return;
     }
-    streamRef.current = stream;
     const run = ++runRef.current;
     let human: HumanInstance;
     try {
@@ -219,8 +278,10 @@ export default function SelfieVerifyScreen({
     if (run !== runRef.current) return;
     const video = videoRef.current;
     if (!video) return;
-    video.srcObject = stream;
-    await video.play().catch(() => undefined);
+    if (video.srcObject !== stream) {
+      video.srcObject = stream;
+      await video.play().catch(() => undefined);
+    }
     setPhase("camera");
 
     let state = initialLivenessState();
@@ -253,7 +314,7 @@ export default function SelfieVerifyScreen({
       }
       await new Promise((resolve) => window.setTimeout(resolve, FRAME_INTERVAL_MS));
     }
-  }, [finishWith, stopCamera]);
+  }, [finishWith, openCamera, stopCamera]);
 
   const close = useCallback(() => {
     stopCamera();
@@ -307,7 +368,7 @@ export default function SelfieVerifyScreen({
           muted
           autoPlay
           className="h-full w-full object-cover"
-          style={{ transform: "scaleX(-1)", visibility: phase === "camera" ? "visible" : "hidden" }}
+          style={{ transform: "scaleX(-1)", visibility: phase === "camera" || (previewing && phase !== "passed") ? "visible" : "hidden" }}
         />
         {phase === "camera" ? <TurnArrows step={step} /> : null}
         {phase === "loading" || phase === "comparing" ? (
@@ -389,34 +450,78 @@ export default function SelfieVerifyScreen({
 const LEFT_DONE: readonly LivenessStep[] = ["turn_right", "return", "done"];
 const RIGHT_DONE: readonly LivenessStep[] = ["return", "done"];
 
-/** Arrows on the side to turn toward, and a check on each side already done. */
+/**
+ * Over the camera, on the side to turn toward: chevrons that march toward the
+ * edge and a small head that turns that way, over and over, so the person sees
+ * the move to make. A side already done shows a check.
+ */
 function TurnArrows({ step }: { step: LivenessStep }) {
   const side = (which: "left" | "right") => {
     const active = step === (which === "left" ? "turn_left" : "turn_right");
     const done = (which === "left" ? LEFT_DONE : RIGHT_DONE).includes(step);
     if (!active && !done) return null;
-    const Icon = which === "left" ? ChevronsLeft : ChevronsRight;
+    const Icon = which === "left" ? ChevronLeft : ChevronRight;
+    // Toward the edge: the chevron nearest the edge lights first.
+    const order = which === "left" ? [0, 1, 2] : [2, 1, 0];
     return (
       <div
         data-qa={`selfie-verify-arrow-${which}`}
         data-state={done ? "done" : "active"}
-        className={`absolute inset-y-0 ${which === "left" ? "left-0 bg-gradient-to-r" : "right-0 bg-gradient-to-l"} flex w-[28%] items-center ${which === "left" ? "justify-start pl-2" : "justify-end pr-2"} ${done ? "from-emerald-600/70" : "from-[#F97316]/80"} to-transparent`}
+        className={`absolute inset-y-0 ${which === "left" ? "left-0 bg-gradient-to-r" : "right-0 bg-gradient-to-l"} flex w-[34%] items-center ${which === "left" ? "justify-start pl-1" : "justify-end pr-1"} ${done ? "from-emerald-600/70" : "from-[#F97316]/75"} to-transparent`}
       >
         {done ? (
           <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg">
             <Check size={24} strokeWidth={3} aria-hidden />
           </span>
         ) : (
-          <Icon size={46} strokeWidth={2.6} className="animate-pulse text-white drop-shadow" aria-hidden />
+          <span className="flex items-center" aria-hidden>
+            {order.map((delayIndex, index) => (
+              <Icon
+                key={index}
+                size={34}
+                strokeWidth={3.2}
+                className={`selfie-chevron-march -mx-2 text-white drop-shadow ${which === "left" ? "selfie-chevron-march-left" : "selfie-chevron-march-right"}`}
+                style={{ animationDelay: `${delayIndex * 160}ms` }}
+              />
+            ))}
+          </span>
         )}
       </div>
     );
   };
+  const turning = step === "turn_left" ? "left" : step === "turn_right" ? "right" : null;
   return (
     <>
       {side("left")}
       {side("right")}
+      {turning ? <TurnHeadDemo side={turning} /> : null}
     </>
+  );
+}
+
+/**
+ * A small head at the bottom of the camera circle that keeps turning toward
+ * the side to reach (the eyes and nose slide over, the head narrows), like
+ * the move the person should make.
+ */
+function TurnHeadDemo({ side }: { side: "left" | "right" }) {
+  return (
+    <div
+      data-qa="selfie-verify-head-demo"
+      data-side={side}
+      className="pointer-events-none absolute bottom-[9%] left-1/2 flex h-16 w-16 -translate-x-1/2 items-center justify-center rounded-full bg-black/35 backdrop-blur-[2px]"
+      aria-hidden
+    >
+      <svg viewBox="0 0 48 48" width="44" height="44" className={`selfie-head-turn selfie-head-turn-${side}`}>
+        <ellipse cx="24" cy="25" rx="14" ry="17" fill="none" stroke="white" strokeWidth="2.6" className="selfie-head-outline" />
+        <g className="selfie-head-features">
+          <circle cx="19" cy="22" r="1.9" fill="white" />
+          <circle cx="29" cy="22" r="1.9" fill="white" />
+          <path d="M24 24 L22.4 29.5 L25 29.5" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M20 33.5 Q24 35.5 28 33.5" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
+        </g>
+      </svg>
+    </div>
   );
 }
 

@@ -126,6 +126,26 @@ describe('selfie check steps', () => {
     expect(read('../components/first-message-gate.tsx')).toContain('await uploadProfilePhotoWithFaceCheck(file, userId)')
   })
 
+  // Owner, 2026-11-20: the camera should be on before Start, and the turn should be shown, not only told.
+  it('shows the camera on the intro and a moving head-turn demo over it', () => {
+    const screen = read('../components/selfie-verify-screen.tsx')
+    expect(screen).toContain('const LIVE_PREVIEW_PHASES: readonly string[] = ["intro", "mismatch", "failed", "need_photo"];')
+    expect(screen).toContain('phase === "camera" || (previewing && phase !== "passed")')
+    // The retry screen keeps the camera on: the comparison stops only the detection loop.
+    expect(screen).toContain('// Stop the detection loop; the camera stays on behind the result, for a retry.\n    runRef.current += 1;')
+    expect(screen).toContain('<TurnHeadDemo side={turning} />')
+    const css = read('../app/globals.css')
+    expect(css).toContain('.selfie-head-turn-left .selfie-head-features')
+    expect(css).toContain('@media (prefers-reduced-motion: reduce)')
+  })
+
+  // Owner failed with their own photo on the iPhone 14 (2026-11-20): an iPhone front-camera photo is saved mirrored.
+  it('compares the selfie with the photo as saved and mirrored, and keeps the better score', () => {
+    const screen = read('../components/selfie-verify-screen.tsx')
+    expect(screen).toContain('context.setTransform(-1, 0, 0, 1, canvas.width, 0);')
+    expect(screen).toContain('Math.max(...photo.map((embedding) => human.match.similarity(centerEmbedding, embedding)))')
+  })
+
   it('titles the first-message sheet by how many checks it shows', () => {
     expect(read('../components/first-message-gate.tsx')).toContain('showPhoneRow && showPhotoRow ? copy.title : copy.titleOne')
     for (const locale of PRIMARY_UI_LOCALES) {

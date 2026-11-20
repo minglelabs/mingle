@@ -315,3 +315,46 @@ html[data-hash-rush-open="true"] [data-sonner-toaster] {
 .keyboard-safe {
   bottom: var(--keyboard-inset, 0px) !important;
 }
+
+/* Selfie verification: the "turn your head" demo over the camera
+   (components/selfie-verify-screen.tsx). */
+@keyframes selfie-chevron-march-left {
+  0% { opacity: 0.2; transform: translateX(6px); }
+  45% { opacity: 1; transform: translateX(-2px); }
+  100% { opacity: 0.2; transform: translateX(-6px); }
+}
+@keyframes selfie-chevron-march-right {
+  0% { opacity: 0.2; transform: translateX(-6px); }
+  45% { opacity: 1; transform: translateX(2px); }
+  100% { opacity: 0.2; transform: translateX(6px); }
+}
+.selfie-chevron-march-left { animation: selfie-chevron-march-left 0.9s ease-in-out infinite; }
+.selfie-chevron-march-right { animation: selfie-chevron-march-right 0.9s ease-in-out infinite; }
+
+@keyframes selfie-head-features-left {
+  0%, 12% { transform: translateX(0); }
+  45%, 70% { transform: translateX(-7px); }
+  100% { transform: translateX(0); }
+}
+@keyframes selfie-head-features-right {
+  0%, 12% { transform: translateX(0); }
+  45%, 70% { transform: translateX(7px); }
+  100% { transform: translateX(0); }
+}
+@keyframes selfie-head-outline-turn {
+  0%, 12% { transform: scaleX(1); }
+  45%, 70% { transform: scaleX(0.86); }
+  100% { transform: scaleX(1); }
+}
+.selfie-head-turn .selfie-head-features,
+.selfie-head-turn .selfie-head-outline { transform-box: fill-box; transform-origin: center; }
+.selfie-head-turn-left .selfie-head-features { animation: selfie-head-features-left 1.6s ease-in-out infinite; }
+.selfie-head-turn-right .selfie-head-features { animation: selfie-head-features-right 1.6s ease-in-out infinite; }
+.selfie-head-turn .selfie-head-outline { animation: selfie-head-outline-turn 1.6s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .selfie-chevron-march-left,
+  .selfie-chevron-march-right,
+  .selfie-head-turn .selfie-head-features,
+  .selfie-head-turn .selfie-head-outline { animation: none; }
+}
