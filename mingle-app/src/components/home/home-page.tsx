@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BottomTabBar from "@/components/bottom-tab-bar";
+import MingleWordmark from "@/components/mingle-wordmark";
 import FlagEmoji from "@/components/flag-emoji";
 import HomeNoticeStrip from "@/components/home/home-notices";
 import ProfileStartCard from "@/components/home/profile-start-card";
@@ -172,7 +173,7 @@ export default function HomePage({ dictionary, locale }: HomePageProps) {
         className="shrink-0 border-b border-gray-100 bg-white px-4 pb-2.5"
         style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)" }}
       >
-        <h1 className="text-[20px] font-extrabold tracking-tight text-slate-950">HashChat</h1>
+        <h1 className="flex items-center" aria-label="HashChat"><MingleWordmark /></h1>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {sessionStatus === "authenticated" && viewerId ? <ProfileStartCard locale={locale} userId={viewerId} /> : null}

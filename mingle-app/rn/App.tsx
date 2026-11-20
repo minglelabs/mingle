@@ -119,7 +119,7 @@ import {
   resolveVersionPolicyLocale,
   resolveWebLocaleSegment,
 } from './src/i18n';
-import { pickLoadingMessage } from '../src/i18n/loading-messages';
+import { pickLoadingMessage, resolveBrandTagline } from '../src/i18n/loading-messages';
 import {
   createCheckingNativeAppUpdateSnapshot,
   createUnknownNativeAppUpdateSnapshot,
@@ -2697,9 +2697,15 @@ function AppInner(): React.JSX.Element {
   // The random line under the splash logo: a new one each time the splash
   // comes up, the same one while it (and the fade that follows it) is showing.
   const isStartupSplashShowing = startupSplashVisible || lastScreenSnapshotVisible;
+  // A device with no screen to restore (a first launch, or signed out) gets the
+  // brand line; a feature tip means nothing to someone who has not used the app.
+  const [startupSplashIsFirstLook] = useState(() => !initialRestoreUrlRef.current);
   const startupSplashMessage = useMemo(
-    () => (isStartupSplashShowing ? pickLoadingMessage(webLocale) : null),
-    [isStartupSplashShowing, webLocale],
+    () => {
+      if (!isStartupSplashShowing) return null;
+      return startupSplashIsFirstLook ? { text: resolveBrandTagline(webLocale), source: null } : pickLoadingMessage(webLocale);
+    },
+    [isStartupSplashShowing, startupSplashIsFirstLook, webLocale],
   );
   const lastScreenSnapshotHidingRef = useRef(false);
   const hideLastScreenSnapshot = useCallback((animated = true) => {

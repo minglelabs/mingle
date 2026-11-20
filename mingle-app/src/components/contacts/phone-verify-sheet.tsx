@@ -218,7 +218,7 @@ export default function PhoneVerifySheet({
             type="button"
             disabled={!phone || busy}
             onClick={() => { if (phone) void sendCode(phone); }}
-            className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-[15px] font-bold text-white transition active:bg-blue-700 disabled:opacity-40"
+            className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#FBBC32] text-[15px] font-bold text-slate-950 transition active:bg-[#F5A623] disabled:opacity-40"
           >
             {busy ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : null}
             {copy.sendCode}
@@ -252,7 +252,7 @@ export default function PhoneVerifySheet({
               <button
                 type="submit"
                 disabled={busy || code.length !== 6}
-                className="flex h-12 min-w-[84px] shrink-0 items-center justify-center rounded-xl bg-blue-600 px-4 text-[15px] font-bold text-white transition active:bg-blue-700 disabled:opacity-40"
+                className="flex h-12 min-w-[84px] shrink-0 items-center justify-center rounded-xl bg-[#FBBC32] px-4 text-[15px] font-bold text-slate-950 transition active:bg-[#F5A623] disabled:opacity-40"
               >
                 {busy ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : copy.confirm}
               </button>

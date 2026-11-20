@@ -2,6 +2,7 @@
 
 import { LoadingMessage } from "@/components/loading-message";
 import { resolveLastUsedSignInCopy } from "@/i18n/last-sign-in-method-copy";
+import { resolveBrandTagline } from "@/i18n/loading-messages";
 import {
   markPendingSignInMethod,
   readLastSignInMethod,
@@ -1495,15 +1496,28 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
 
         {/* Top HashChat text logo area */}
         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/mingle-icon.png"
+            alt=""
+            width={96}
+            height={96}
+            data-qa="login-brand-icon"
+            className="h-24 w-24 rounded-[1.6rem] shadow-[0_14px_30px_rgba(120,53,15,0.28)]"
+          />
           <span className="text-[2.8rem] font-extrabold leading-[1.08] text-[#2D2A1E]">
             HashChat
           </span>
+          {/* What the app is for, before anything asks for a sign-in. */}
+          <p data-qa="login-brand-tagline" className="max-w-[19rem] break-keep text-[1.05rem] font-bold leading-snug text-[#2D2A1E]">
+            {resolveBrandTagline(props.locale)}
+          </p>
           {socialSignInFailed ? (
             <p role="alert" className="text-lg font-bold leading-snug text-[#2D2A1E]">
               {resolveSignInFailedCopy(props.locale)}
             </p>
           ) : props.authNotice ? (
-            <p className="text-lg font-bold leading-snug text-[#2D2A1E]">{props.authNotice}</p>
+            <p className="text-[0.92rem] font-semibold leading-snug text-[#2D2A1E]/75">{props.authNotice}</p>
           ) : null}
           {/* Social sign-in in progress: the buttons below only dim, so say so here. */}
           {signingInProvider !== null ? (
@@ -1692,7 +1706,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                       type="button"
                       onClick={handleAgreeAndStart}
                       disabled={!selectedProvider || !hasAgreedAllRequiredTerms || disabled}
-                      className="mt-2 inline-flex h-11 w-full items-center justify-center rounded-xl bg-white/20 px-3 text-[0.96rem] font-semibold leading-none text-white transition disabled:cursor-not-allowed disabled:bg-white/15 disabled:text-white/45"
+                      className="mt-2 inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#FBBC32] px-3 text-[0.96rem] font-bold leading-none text-slate-950 transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-white/15 disabled:text-white/60 disabled:text-white/45"
                     >
                       {isSigningIn ? (
                         <Loader2 size={18} className="animate-spin" aria-hidden />

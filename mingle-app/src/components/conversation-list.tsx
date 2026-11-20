@@ -225,6 +225,7 @@ import type { MingleHomeRef } from "@/components/mingle-home";
 import { resolveAccessibilityCopy } from "@/i18n/accessibility-copy";
 import type { LatestUtterancePayload } from "@/components/LivePhoneDemo/LivePhoneDemo";
 import MingleWordmark from "@/components/mingle-wordmark";
+import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
 import AppTopHeader from "@/components/app-top-header";
 import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
 import { useUnreadNotifications } from "@/components/notifications/use-unread-notifications";
@@ -2172,6 +2173,8 @@ export default function ConversationList({
   // length choice. Read from storage after mount, so the server render matches.
   const [firstSpeakPending, setFirstSpeakPending] = useState(false);
   const showFirstSpeakCard = firstSpeakPending && sessionStatus === "authenticated";
+  // A new account's first screen: no ad banner (it showed other apps, a rival translator among them) until the first translation.
+  useNativeBannerSuppression(showFirstSpeakCard);
   // Signed out on a device that never signed in: speak for ten seconds first,
   // then the sign-in screen. Read after mount, so the server render matches.
   const [speakTrialPending, setSpeakTrialPending] = useState(false);
