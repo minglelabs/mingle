@@ -12,6 +12,7 @@ import { buildClientApiPath } from "@/lib/api-contract";
 import { registerFirstMessageSetupHandler, type FirstMessageNeed } from "@/lib/first-message-setup";
 import { checkPhotoForFace, type FaceCheckResult } from "@/lib/native-face-check";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
+import { uploadProfilePhotoWithFaceCheck } from "@/lib/profile-photo-upload";
 import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
 
 type PendingRequest = { needs: FirstMessageNeed[]; resolve: (ok: boolean) => void };
@@ -122,30 +123,17 @@ export default function FirstMessageGate() {
     event.target.value = "";
     if (!file) return;
     setPhotoState("checking");
-    const result = await checkPhotoForFace(file);
-    if (result === "no_face") {
+    const result = await uploadProfilePhotoWithFaceCheck(file, userId);
+    if (result.status === "no_face") {
       setPhotoState("no_face");
       return;
     }
-    setPhotoState("uploading");
-    try {
-      const form = new FormData();
-      form.append("file", file);
-      form.append("imageCropScale", "1");
-      form.append("imageCropX", "0");
-      form.append("imageCropY", "0");
-      form.append("faceCheck", result);
-      const response = await fetch(buildClientApiPath("/profile/image"), {
-        method: "POST",
-        headers: userId ? { "x-mingle-expected-account-id": userId } : undefined,
-        body: form,
-      });
-      if (!response.ok) throw new Error("profile_image_failed");
-      setNeeds((current) => current.filter((need) => need !== "face_photo" && need !== "face_check"));
-      setPhotoState("idle");
-    } catch {
+    if (result.status === "failed") {
       setPhotoState("failed");
+      return;
     }
+    setNeeds((current) => current.filter((need) => need !== "face_photo" && need !== "face_check"));
+    setPhotoState("idle");
   }, [userId]);
 
   if (!request) return null;
@@ -183,7 +171,7 @@ export default function FirstMessageGate() {
         <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-[#F97316]">
           <ShieldCheck size={26} strokeWidth={2.2} aria-hidden />
         </span>
-        <h2 className="mt-4 pr-8 text-[1.25rem] font-extrabold leading-snug text-gray-950">{copy.title}</h2>
+        <h2 className="mt-4 pr-8 text-[1.25rem] font-extrabold leading-snug text-gray-950">{showPhoneRow && showPhotoRow ? copy.title : copy.titleOne}</h2>
         <p className="mt-2 text-[0.92rem] leading-relaxed text-gray-600">{copy.body}</p>
 
         <div className="mt-5 space-y-3">

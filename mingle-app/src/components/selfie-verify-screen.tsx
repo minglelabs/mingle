@@ -4,6 +4,8 @@ import { Check, ChevronsLeft, ChevronsRight, Loader2, ShieldCheck, X } from "luc
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resolveSelfieVerifyCopy, type SelfieVerifyCopy } from "@/i18n/selfie-verify-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
+import { resolveFirstMessageGateCopy } from "@/i18n/first-message-gate-copy";
+import { uploadProfilePhotoWithFaceCheck } from "@/lib/profile-photo-upload";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
 import {
   advanceLiveness,
@@ -115,14 +117,21 @@ export default function SelfieVerifyScreen({
   hasPhoto,
   onClose,
   onVerified,
+  onPhotoUploaded,
 }: {
   locale: string;
   /** Whether the account has a profile photo with a face to compare with. */
   hasPhoto: boolean;
   onClose: () => void;
   onVerified: () => void;
+  /** A new profile photo was added from this screen (the "add a photo first" step). */
+  onPhotoUploaded?: (image: string | null) => void;
 }) {
   const copy = useMemo(() => resolveSelfieVerifyCopy(locale), [locale]);
+  // The photo row's words are shared with the first-message setup sheet.
+  const photoCopy = useMemo(() => resolveFirstMessageGateCopy(locale), [locale]);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const [photoState, setPhotoState] = useState<"idle" | "busy" | "no_face" | "failed">("idle");
   const [phase, setPhase] = useState<Phase>(hasPhoto ? "intro" : "need_photo");
   const [hint, setHint] = useState<LivenessHint>("center");
   const [step, setStep] = useState<LivenessStep>("center");
@@ -251,7 +260,24 @@ export default function SelfieVerifyScreen({
     onClose();
   }, [onClose, stopCamera]);
 
-  const message = phase === "need_photo" ? copy.needPhoto
+  // No usable profile photo: add one right here (checked for a face on the phone), then start.
+  const handlePhotoPicked = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setPhotoState("busy");
+    const result = await uploadProfilePhotoWithFaceCheck(file);
+    if (result.status !== "uploaded") {
+      setPhotoState(result.status);
+      return;
+    }
+    setPhotoState("idle");
+    onPhotoUploaded?.(result.image);
+    setPhase("intro");
+  }, [onPhotoUploaded]);
+
+  const message = phase === "need_photo"
+    ? photoState === "no_face" ? photoCopy.photoNoFace : photoState === "failed" ? photoCopy.photoFailed : copy.needPhoto
     : phase === "camera_denied" ? copy.cameraDenied
       : phase === "unsupported" ? copy.unsupported
         : phase === "mismatch" ? copy.mismatch
@@ -264,17 +290,17 @@ export default function SelfieVerifyScreen({
       role="dialog"
       aria-modal="true"
       aria-label={copy.title}
-      className="fixed inset-0 z-[240] flex flex-col bg-gray-950 text-white"
+      className="fixed inset-0 z-[240] flex flex-col bg-white text-gray-950"
       style={{ paddingTop: "env(safe-area-inset-top, 0px)", paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 20px)" }}
     >
       <div className="flex items-center justify-between px-3 py-2">
         <span className="pl-2 text-[1rem] font-bold">{copy.title}</span>
-        <button type="button" aria-label={copy.close} onClick={close} className="flex h-10 w-10 items-center justify-center rounded-full active:bg-white/10">
+        <button type="button" aria-label={copy.close} onClick={close} className="flex h-10 w-10 items-center justify-center rounded-full active:bg-gray-100">
           <X size={22} strokeWidth={2.2} />
         </button>
       </div>
 
-      <div className="relative mx-auto mt-2 aspect-square w-[min(84vw,360px)] overflow-hidden rounded-full bg-gray-800">
+      <div className="relative mx-auto mt-2 aspect-square w-[min(84vw,360px)] overflow-hidden rounded-full bg-gray-100">
         <video
           ref={videoRef}
           playsInline
@@ -286,7 +312,7 @@ export default function SelfieVerifyScreen({
         {phase === "camera" ? <TurnArrows step={step} /> : null}
         {phase === "loading" || phase === "comparing" ? (
           <div className="absolute inset-0 flex items-center justify-center">
-            <Loader2 size={34} className="animate-spin text-white/80" aria-label={copy.loading} />
+            <Loader2 size={34} className="animate-spin text-gray-400" aria-label={copy.loading} />
           </div>
         ) : phase === "passed" ? (
           <div className="absolute inset-0 flex items-center justify-center bg-emerald-600">
@@ -300,22 +326,22 @@ export default function SelfieVerifyScreen({
       <div className="mx-auto mt-6 w-full max-w-[400px] flex-1 px-6 text-center">
         {phase === "intro" ? (
           <>
-            <p className="text-[0.95rem] leading-relaxed text-white/85">{copy.body}</p>
-            <p className="mt-3 text-[0.8rem] text-white/60">{copy.privacy}</p>
+            <p className="text-[0.95rem] leading-relaxed text-gray-700">{copy.body}</p>
+            <p className="mt-3 text-[0.8rem] text-gray-500">{copy.privacy}</p>
           </>
         ) : phase === "camera" ? (
           <p data-qa="selfie-verify-hint" data-hint={hint} className="text-[1.15rem] font-bold">{hintText(copy, hint)}</p>
         ) : phase === "loading" ? (
-          <p className="text-[0.95rem] text-white/80">{copy.loading}</p>
+          <p className="text-[0.95rem] text-gray-600">{copy.loading}</p>
         ) : phase === "comparing" ? (
-          <p className="text-[0.95rem] text-white/80">{copy.comparing}</p>
+          <p className="text-[0.95rem] text-gray-600">{copy.comparing}</p>
         ) : phase === "passed" ? (
           <>
             <p className="text-[1.25rem] font-extrabold">{copy.passed}</p>
-            <p className="mt-2 text-[0.92rem] text-white/80">{copy.passedBody}</p>
+            <p className="mt-2 text-[0.92rem] text-gray-600">{copy.passedBody}</p>
           </>
         ) : message ? (
-          <p data-qa="selfie-verify-message" className="text-[0.95rem] leading-relaxed text-white/90">{message}</p>
+          <p data-qa="selfie-verify-message" className="text-[0.95rem] leading-relaxed text-gray-800">{message}</p>
         ) : null}
       </div>
 
@@ -329,11 +355,28 @@ export default function SelfieVerifyScreen({
           >
             {phase === "intro" ? copy.start : copy.retry}
           </button>
-        ) : phase === "passed" || phase === "need_photo" || phase === "camera_denied" || phase === "unsupported" ? (
+        ) : phase === "need_photo" ? (
+          <>
+            <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={(event) => void handlePhotoPicked(event)} />
+            <button
+              type="button"
+              data-qa="selfie-verify-add-photo"
+              disabled={photoState === "busy"}
+              onClick={() => photoInputRef.current?.click()}
+              className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#F97316] text-[1rem] font-extrabold text-white active:scale-[0.985] disabled:opacity-60"
+            >
+              {photoState === "busy" ? <Loader2 size={18} className="animate-spin" aria-hidden /> : null}
+              {photoState === "busy" ? photoCopy.photoChecking : photoCopy.photoAction}
+            </button>
+            <button type="button" onClick={close} className="mt-2 flex h-12 w-full items-center justify-center rounded-2xl text-[0.95rem] font-bold text-gray-500 active:bg-gray-100">
+              {copy.close}
+            </button>
+          </>
+        ) : phase === "passed" || phase === "camera_denied" || phase === "unsupported" ? (
           <button
             type="button"
             onClick={close}
-            className="flex h-14 w-full items-center justify-center rounded-2xl bg-white text-[1rem] font-extrabold text-gray-950 active:scale-[0.985]"
+            className="flex h-14 w-full items-center justify-center rounded-2xl bg-gray-950 text-[1rem] font-extrabold text-white active:scale-[0.985]"
           >
             {copy.close}
           </button>
@@ -389,20 +432,20 @@ function TurnGauge({ step, position }: { step: LivenessStep; position: number })
   const reached = (step === "turn_left" && position <= -target) || (step === "turn_right" && position >= target);
   return (
     <div data-qa="selfie-verify-gauge" className="relative mx-auto mt-5 h-8 w-[min(76vw,320px)]" aria-hidden>
-      <div className="absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-white/15" />
+      <div className="absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-gray-200" />
       {/* The stretch to cover on each side, from the middle to its target mark. */}
       <div
-        className={`absolute top-1/2 h-2 -translate-y-1/2 rounded-l-full ${leftDone ? "bg-emerald-500" : step === "turn_left" ? "bg-[#F97316]/70" : "bg-white/10"}`}
+        className={`absolute top-1/2 h-2 -translate-y-1/2 rounded-l-full ${leftDone ? "bg-emerald-500" : step === "turn_left" ? "bg-[#F97316]/70" : "bg-gray-100"}`}
         style={{ left: toPercent(-target), width: `${target * 50}%` }}
       />
       <div
-        className={`absolute top-1/2 h-2 -translate-y-1/2 rounded-r-full ${rightDone ? "bg-emerald-500" : step === "turn_right" ? "bg-[#F97316]/70" : "bg-white/10"}`}
+        className={`absolute top-1/2 h-2 -translate-y-1/2 rounded-r-full ${rightDone ? "bg-emerald-500" : step === "turn_right" ? "bg-[#F97316]/70" : "bg-gray-100"}`}
         style={{ left: "50%", width: `${target * 50}%` }}
       />
       {/* Target marks and the middle. */}
-      <div className="absolute top-0 h-8 w-1 -translate-x-1/2 rounded-full bg-white/80" style={{ left: toPercent(-target) }} />
-      <div className="absolute top-0 h-8 w-1 -translate-x-1/2 rounded-full bg-white/80" style={{ left: toPercent(target) }} />
-      <div className="absolute top-2 h-4 w-0.5 -translate-x-1/2 bg-white/40" style={{ left: "50%" }} />
+      <div className="absolute top-0 h-8 w-1 -translate-x-1/2 rounded-full bg-gray-500" style={{ left: toPercent(-target) }} />
+      <div className="absolute top-0 h-8 w-1 -translate-x-1/2 rounded-full bg-gray-500" style={{ left: toPercent(target) }} />
+      <div className="absolute top-2 h-4 w-0.5 -translate-x-1/2 bg-gray-300" style={{ left: "50%" }} />
       {/* Where the head is now. */}
       <div
         data-qa="selfie-verify-gauge-dot"

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { PRIMARY_UI_LOCALES } from '@/i18n/mingle-locales'
+import { resolveFirstMessageGateCopy } from '@/i18n/first-message-gate-copy'
 import { SELFIE_VERIFY_COPY_LOCALES, resolveSelfieVerifyCopy } from '@/i18n/selfie-verify-copy'
 import {
   FACE_MATCH_THRESHOLD,
@@ -111,5 +112,25 @@ describe('selfie check steps', () => {
       expect(() => read(`../../public/models/human/${model}.json`), model).not.toThrow()
     }
     expect(read('../../rn/App.tsx')).toContain('mediaCapturePermissionGrantType="grantIfSameHostElsePrompt"')
+  })
+
+  // QA on the iPhone 14, 2026-11-20.
+  it('lets a person with no photo add one right there, on a light screen the status bar shows on', () => {
+    const screen = read('../components/selfie-verify-screen.tsx')
+    expect(screen).toContain('data-qa="selfie-verify-add-photo"')
+    expect(screen).toContain('await uploadProfilePhotoWithFaceCheck(file)')
+    expect(screen).toContain('bg-white text-gray-950')
+    expect(screen).not.toContain('bg-gray-950 text-white"')
+    expect(read('../components/my-page.tsx')).toContain('onPhotoUploaded={(image) =>')
+    // The first-message sheet uploads through the same helper.
+    expect(read('../components/first-message-gate.tsx')).toContain('await uploadProfilePhotoWithFaceCheck(file, userId)')
+  })
+
+  it('titles the first-message sheet by how many checks it shows', () => {
+    expect(read('../components/first-message-gate.tsx')).toContain('showPhoneRow && showPhotoRow ? copy.title : copy.titleOne')
+    for (const locale of PRIMARY_UI_LOCALES) {
+      expect(resolveFirstMessageGateCopy(locale).titleOne.trim(), locale).not.toBe('')
+    }
+    expect(resolveFirstMessageGateCopy('ko').titleOne).toBe('처음 말 걸기 전에 하나만 확인할게요')
   })
 })

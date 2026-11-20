@@ -2786,6 +2786,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
               hasPhoto={Boolean(profile.image)}
               onClose={() => setSelfieVerifyOpen(false)}
               onVerified={() => setProfile((current) => ({ ...current, faceVerified: true }))}
+              onPhotoUploaded={(image) => setProfile((current) => ({ ...current, image: image ?? current.image, imageCropScale: 1, imageCropX: 0, imageCropY: 0, faceVerified: false }))}
             />
           ) : null}
         </section>

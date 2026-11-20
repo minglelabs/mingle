@@ -3,6 +3,8 @@ import { resolvePrimaryUiLocaleTag, type PrimaryUiLocale } from "@/i18n/mingle-l
 /** Copy for the sheet shown before a first message to someone new (see @/server/first-message-gate). */
 export type FirstMessageGateCopy = {
   title: string;
+  /** The title when only one row is shown (the number or the photo). */
+  titleOne: string;
   /** Why: everyone you talk to is a real person with a real face. */
   body: string;
   phoneRow: string;
@@ -25,6 +27,7 @@ export type FirstMessageGateCopy = {
 const COPY: Record<PrimaryUiLocale, FirstMessageGateCopy> = {
   ko: {
     title: "처음 말 걸기 전에 두 가지만 확인할게요",
+    titleOne: "처음 말 걸기 전에 하나만 확인할게요",
     body: "해시챗에서 대화하는 사람은 모두 진짜 얼굴과 번호가 확인된 사람이에요. 한 번만 하면 돼요.",
     phoneRow: "전화번호 인증", phoneAction: "인증하기",
     photoRow: "얼굴이 보이는 프로필 사진", photoHint: "내 얼굴이 잘 보이는 사진이면 돼요.", photoAction: "사진 올리기",
@@ -37,6 +40,7 @@ const COPY: Record<PrimaryUiLocale, FirstMessageGateCopy> = {
   },
   en: {
     title: "Two quick checks before your first message",
+    titleOne: "One quick check before your first message",
     body: "Everyone you talk to on HashChat has a real face and a verified number. You only do this once.",
     phoneRow: "Verify your phone number", phoneAction: "Verify",
     photoRow: "A profile photo that shows your face", photoHint: "Any photo where your face is clearly visible.", photoAction: "Add photo",
@@ -49,6 +53,7 @@ const COPY: Record<PrimaryUiLocale, FirstMessageGateCopy> = {
   },
   ja: {
     title: "初めて話しかける前に、2つだけ確認します",
+    titleOne: "初めて話しかける前に、1つだけ確認します",
     body: "HashChatで話す相手は、みんな顔と電話番号が確認された人です。一度だけで大丈夫です。",
     phoneRow: "電話番号の認証", phoneAction: "認証する",
     photoRow: "顔が見えるプロフィール写真", photoHint: "自分の顔がはっきり見える写真ならOKです。", photoAction: "写真を追加",
@@ -61,6 +66,7 @@ const COPY: Record<PrimaryUiLocale, FirstMessageGateCopy> = {
   },
   "zh-CN": {
     title: "第一次打招呼前，只需确认两件事",
+    titleOne: "第一次打招呼前，只需确认一件事",
     body: "在 HashChat 上和你聊天的人，都确认过真实面孔和手机号。只需做一次。",
     phoneRow: "验证手机号", phoneAction: "去验证",
     photoRow: "能看到脸的头像", photoHint: "能清楚看到你脸的照片就可以。", photoAction: "上传照片",
@@ -73,6 +79,7 @@ const COPY: Record<PrimaryUiLocale, FirstMessageGateCopy> = {
   },
   "zh-TW": {
     title: "第一次打招呼前，只需確認兩件事",
+    titleOne: "第一次打招呼前，只需確認一件事",
     body: "在 HashChat 上和你聊天的人，都確認過真實面孔和手機號碼。只需做一次。",
     phoneRow: "驗證手機號碼", phoneAction: "去驗證",
     photoRow: "看得到臉的大頭貼", photoHint: "能清楚看到你臉的照片就可以。", photoAction: "上傳照片",
@@ -85,6 +92,7 @@ const COPY: Record<PrimaryUiLocale, FirstMessageGateCopy> = {
   },
   fr: {
     title: "Deux vérifications rapides avant votre premier message",
+    titleOne: "Une vérification rapide avant votre premier message",
     body: "Sur HashChat, chaque personne a un vrai visage et un numéro vérifié. Il suffit de le faire une fois.",
     phoneRow: "Vérifier votre numéro", phoneAction: "Vérifier",
     photoRow: "Une photo de profil où l’on voit votre visage", photoHint: "N’importe quelle photo où votre visage se voit bien.", photoAction: "Ajouter une photo",
@@ -97,6 +105,7 @@ const COPY: Record<PrimaryUiLocale, FirstMessageGateCopy> = {
   },
   de: {
     title: "Zwei kurze Checks vor deiner ersten Nachricht",
+    titleOne: "Ein kurzer Check vor deiner ersten Nachricht",
     body: "Auf HashChat hat jede Person ein echtes Gesicht und eine bestätigte Nummer. Das machst du nur einmal.",
     phoneRow: "Telefonnummer bestätigen", phoneAction: "Bestätigen",
     photoRow: "Ein Profilfoto, auf dem man dein Gesicht sieht", photoHint: "Jedes Foto, auf dem dein Gesicht gut zu sehen ist.", photoAction: "Foto hinzufügen",
@@ -109,6 +118,7 @@ const COPY: Record<PrimaryUiLocale, FirstMessageGateCopy> = {
   },
   es: {
     title: "Dos comprobaciones rápidas antes de tu primer mensaje",
+    titleOne: "Una comprobación rápida antes de tu primer mensaje",
     body: "En HashChat todas las personas tienen una cara real y un número verificado. Solo lo haces una vez.",
     phoneRow: "Verificar tu número", phoneAction: "Verificar",
     photoRow: "Una foto de perfil donde se vea tu cara", photoHint: "Cualquier foto en la que se vea bien tu cara.", photoAction: "Añadir foto",
@@ -121,6 +131,7 @@ const COPY: Record<PrimaryUiLocale, FirstMessageGateCopy> = {
   },
   pt: {
     title: "Duas verificações rápidas antes da primeira mensagem",
+    titleOne: "Uma verificação rápida antes da primeira mensagem",
     body: "No HashChat, todas as pessoas têm um rosto real e um número verificado. Você só faz isso uma vez.",
     phoneRow: "Verificar seu número", phoneAction: "Verificar",
     photoRow: "Uma foto de perfil que mostre seu rosto", photoHint: "Qualquer foto em que seu rosto apareça bem.", photoAction: "Adicionar foto",
@@ -133,6 +144,7 @@ const COPY: Record<PrimaryUiLocale, FirstMessageGateCopy> = {
   },
   it: {
     title: "Due controlli veloci prima del primo messaggio",
+    titleOne: "Un controllo veloce prima del primo messaggio",
     body: "Su HashChat ogni persona ha un volto vero e un numero verificato. Basta farlo una volta.",
     phoneRow: "Verifica il tuo numero", phoneAction: "Verifica",
     photoRow: "Una foto profilo che mostri il tuo volto", photoHint: "Qualsiasi foto in cui il tuo volto si veda bene.", photoAction: "Aggiungi foto",
@@ -145,6 +157,7 @@ const COPY: Record<PrimaryUiLocale, FirstMessageGateCopy> = {
   },
   ru: {
     title: "Две быстрые проверки перед первым сообщением",
+    titleOne: "Одна быстрая проверка перед первым сообщением",
     body: "В HashChat у каждого настоящее лицо и подтверждённый номер. Это нужно сделать только один раз.",
     phoneRow: "Подтвердить номер телефона", phoneAction: "Подтвердить",
     photoRow: "Фото профиля, на котором видно лицо", photoHint: "Подойдёт любое фото, где хорошо видно ваше лицо.", photoAction: "Добавить фото",
@@ -157,6 +170,7 @@ const COPY: Record<PrimaryUiLocale, FirstMessageGateCopy> = {
   },
   ar: {
     title: "تحققان سريعان قبل رسالتك الأولى",
+    titleOne: "تحقق سريع قبل رسالتك الأولى",
     body: "كل من تتحدث معه على HashChat له وجه حقيقي ورقم موثّق. تفعل ذلك مرة واحدة فقط.",
     phoneRow: "توثيق رقم هاتفك", phoneAction: "توثيق",
     photoRow: "صورة شخصية يظهر فيها وجهك", photoHint: "أي صورة يظهر فيها وجهك بوضوح.", photoAction: "إضافة صورة",
@@ -169,6 +183,7 @@ const COPY: Record<PrimaryUiLocale, FirstMessageGateCopy> = {
   },
   hi: {
     title: "पहला मैसेज भेजने से पहले दो छोटी जाँचें",
+    titleOne: "पहला मैसेज भेजने से पहले एक छोटी जाँच",
     body: "HashChat पर हर व्यक्ति का असली चेहरा और वेरिफ़ाइड नंबर होता है। यह सिर्फ़ एक बार करना है।",
     phoneRow: "फ़ोन नंबर वेरिफ़ाई करें", phoneAction: "वेरिफ़ाई करें",
     photoRow: "ऐसी प्रोफ़ाइल फ़ोटो जिसमें आपका चेहरा दिखे", photoHint: "कोई भी फ़ोटो जिसमें आपका चेहरा साफ़ दिखे।", photoAction: "फ़ोटो जोड़ें",
@@ -181,6 +196,7 @@ const COPY: Record<PrimaryUiLocale, FirstMessageGateCopy> = {
   },
   th: {
     title: "ตรวจสอบสองอย่างก่อนส่งข้อความแรก",
+    titleOne: "ตรวจสอบหนึ่งอย่างก่อนส่งข้อความแรก",
     body: "ทุกคนที่คุยกันใน HashChat มีหน้าจริงและเบอร์ที่ยืนยันแล้ว ทำแค่ครั้งเดียวเท่านั้น",
     phoneRow: "ยืนยันเบอร์โทรศัพท์", phoneAction: "ยืนยัน",
     photoRow: "รูปโปรไฟล์ที่เห็นหน้าคุณ", photoHint: "รูปไหนก็ได้ที่เห็นหน้าคุณชัดเจน", photoAction: "เพิ่มรูป",
@@ -193,6 +209,7 @@ const COPY: Record<PrimaryUiLocale, FirstMessageGateCopy> = {
   },
   vi: {
     title: "Hai bước kiểm tra nhanh trước tin nhắn đầu tiên",
+    titleOne: "Một bước kiểm tra nhanh trước tin nhắn đầu tiên",
     body: "Mọi người bạn trò chuyện trên HashChat đều có khuôn mặt thật và số điện thoại đã xác minh. Chỉ cần làm một lần.",
     phoneRow: "Xác minh số điện thoại", phoneAction: "Xác minh",
     photoRow: "Ảnh đại diện thấy rõ khuôn mặt", photoHint: "Ảnh nào thấy rõ khuôn mặt bạn đều được.", photoAction: "Thêm ảnh",
