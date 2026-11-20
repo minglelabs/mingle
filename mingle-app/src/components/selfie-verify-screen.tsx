@@ -174,7 +174,10 @@ export default function SelfieVerifyScreen({
   /** Opens the front camera (once) and shows it in the circle. Null when it is refused or missing. */
   const openingRef = useRef<Promise<MediaStream | null> | null>(null);
   const openCamera = useCallback((): Promise<MediaStream | null> => {
-    if (streamRef.current) return Promise.resolve(streamRef.current);
+    // A stream whose track ended (the app went to the background, a reload) is opened again.
+    if (streamRef.current?.getVideoTracks().some((track) => track.readyState === "live")) return Promise.resolve(streamRef.current);
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
     openingRef.current ??= openCameraOnce().finally(() => {
       openingRef.current = null;
     });
@@ -467,7 +470,7 @@ function TurnArrows({ step }: { step: LivenessStep }) {
       <div
         data-qa={`selfie-verify-arrow-${which}`}
         data-state={done ? "done" : "active"}
-        className={`absolute inset-y-0 ${which === "left" ? "left-0 bg-gradient-to-r" : "right-0 bg-gradient-to-l"} flex w-[34%] items-center ${which === "left" ? "justify-start pl-1" : "justify-end pr-1"} ${done ? "from-emerald-600/70" : "from-[#F97316]/75"} to-transparent`}
+        className={`absolute inset-y-0 ${which === "left" ? "left-0 bg-gradient-to-r" : "right-0 bg-gradient-to-l"} flex w-[34%] items-center ${which === "left" ? "justify-start pl-6" : "justify-end pr-6"} ${done ? "from-emerald-600/70" : "from-[#F97316]/75"} to-transparent`}
       >
         {done ? (
           <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg">
@@ -509,10 +512,10 @@ function TurnHeadDemo({ side }: { side: "left" | "right" }) {
     <div
       data-qa="selfie-verify-head-demo"
       data-side={side}
-      className="pointer-events-none absolute bottom-[9%] left-1/2 flex h-16 w-16 -translate-x-1/2 items-center justify-center rounded-full bg-black/35 backdrop-blur-[2px]"
+      className="pointer-events-none absolute bottom-[8%] left-1/2 flex h-20 w-20 -translate-x-1/2 items-center justify-center rounded-full bg-black/40 backdrop-blur-[2px]"
       aria-hidden
     >
-      <svg viewBox="0 0 48 48" width="44" height="44" className={`selfie-head-turn selfie-head-turn-${side}`}>
+      <svg viewBox="0 0 48 48" width="58" height="58" className={`selfie-head-turn selfie-head-turn-${side}`}>
         <ellipse cx="24" cy="25" rx="14" ry="17" fill="none" stroke="white" strokeWidth="2.6" className="selfie-head-outline" />
         <g className="selfie-head-features">
           <circle cx="19" cy="22" r="1.9" fill="white" />
