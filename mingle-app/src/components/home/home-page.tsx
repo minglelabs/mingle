@@ -29,6 +29,12 @@ import { countryFlagEmoji, getCountryDisplayName } from "@/lib/nationality";
 import { normalizeProfileImageCrop } from "@/lib/profile-image-crop";
 import { requestProfileBasics } from "@/lib/profile-basics";
 import { useStartDirectConversation } from "@/lib/use-start-direct-conversation";
+import { resolveFirstRunCopy } from "@/i18n/first-run-copy";
+import { isFirstSpeakPending } from "@/lib/first-run";
+import { conversationsHref } from "@/lib/posting-feed-guard";
+import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
+import { BOTTOM_TAB_BAR_HEIGHT_PX } from "@/components/bottom-tab-bar";
+import { Mic } from "lucide-react";
 
 const InviteGate = lazy(() => import("@/components/onboarding/invite-gate"));
 const PhoneGate = lazy(() => import("@/components/onboarding/phone-gate"));
@@ -166,6 +172,19 @@ export default function HomePage({ dictionary, locale }: HomePageProps) {
 
   const heading = page?.viewerSide === "korean" ? peopleCopy.headingForKorean : peopleCopy.headingForForeigner;
   const gated = sessionStatus === "authenticated" && appAccess && !appAccess.allowed;
+  // A new account's "say something" card (see @/lib/first-run): read after mount so the first paint matches the server.
+  const firstRunCopy = useMemo(() => resolveFirstRunCopy(locale), [locale]);
+  const [firstSpeakPending, setFirstSpeakPending] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setFirstSpeakPending(isFirstSpeakPending()), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+  const showFirstSpeakCard = firstSpeakPending && sessionStatus === "authenticated" && !gated;
+  const handleFirstSpeak = useCallback(() => {
+    const params = new URLSearchParams(window.location.search);
+    params.set("firstSpeak", "1");
+    router.push(buildNativeAwareTabPath(conversationsHref(locale), params, { skipConversationRestore: true, tabRoot: true }));
+  }, [locale, router]);
 
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white" data-qa="home-tab">
@@ -175,7 +194,7 @@ export default function HomePage({ dictionary, locale }: HomePageProps) {
       >
         <h1 className="flex items-center" aria-label="HashChat"><MingleWordmark /></h1>
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" style={showFirstSpeakCard ? { paddingBottom: 150 } : undefined}>
         {sessionStatus === "authenticated" && viewerId ? <ProfileStartCard locale={locale} userId={viewerId} /> : null}
         <HomeNoticeStrip locale={locale} />
         {sessionStatus === "unauthenticated" ? (
@@ -230,6 +249,29 @@ export default function HomePage({ dictionary, locale }: HomePageProps) {
           </section>
         )}
       </div>
+      {showFirstSpeakCard ? (
+        // A new account's first try at speaking, offered among the people (it
+        // used to be only on the Chats tab, where a new account landed).
+        <div
+          data-qa="home-first-speak-card"
+          className="pointer-events-none absolute inset-x-0 z-20 px-4 pb-3"
+          style={{ bottom: `calc(${BOTTOM_TAB_BAR_HEIGHT_PX}px + env(safe-area-inset-bottom, 0px))` }}
+        >
+          <div className="pointer-events-auto rounded-[1.6rem] border border-amber-200 bg-amber-50 px-5 pb-4 pt-4 text-center shadow-[0_16px_36px_rgba(245,158,11,0.18)]">
+            <p className="text-[1.05rem] font-extrabold leading-snug tracking-[-0.02em] text-slate-950">{firstRunCopy.speakTitle}</p>
+            <button
+              type="button"
+              data-qa="home-first-speak"
+              onClick={handleFirstSpeak}
+              className="mt-3 flex h-12 w-full items-center justify-center gap-2.5 rounded-full text-[1rem] font-bold text-white shadow-[0_12px_26px_rgba(245,158,11,0.3)] active:scale-[0.99]"
+              style={{ backgroundImage: "linear-gradient(90deg, #f59e0b 0%, #f97316 100%)" }}
+            >
+              <Mic size={19} strokeWidth={2.4} aria-hidden />
+              <span>{firstRunCopy.speakButton}</span>
+            </button>
+          </div>
+        </div>
+      ) : null}
       <BottomTabBar activeRoute="home" dictionary={dictionary} locale={locale} />
       {gated ? (
         <Suspense fallback={null}>

@@ -11,6 +11,7 @@ import ContactSyncHost from "@/components/contacts/contact-sync-host";
 import ProfileBasicsGate from "@/components/profile-basics-gate";
 import FirstMessageGate from "@/components/first-message-gate";
 import KeyboardInsetVar from "@/components/keyboard-inset-var";
+import PushPermissionPrompt from "@/components/push-permission-prompt";
 import LastSignInMethodRecorder from "@/components/last-sign-in-method-recorder";
 import { AuthSessionProvider } from "@/components/auth-session-provider";
 import MobileCanvasShell from "@/components/mobile-canvas-shell";
@@ -137,6 +138,7 @@ export default async function RootLayout({
                 <ProfileBasicsGate />
                 <FirstMessageGate />
                 <KeyboardInsetVar />
+                <PushPermissionPrompt />
                 <LastSignInMethodRecorder />
                 <NativePushTapReceiver />
                 <NativeShareInboxReceiver />

@@ -11,6 +11,7 @@ import {
   rememberNativePushRegistration,
   type NativePushRegistration,
 } from "@/lib/native-push";
+import { isPushPromptHeld } from "@/lib/push-prompt";
 
 type NativePushWindow = Window & {
   __MINGLE_LAST_NATIVE_PUSH_TOKEN?: unknown;
@@ -81,10 +82,13 @@ export default function NativePushRegistration() {
 
     const cached = (window as NativePushWindow).__MINGLE_LAST_NATIVE_PUSH_TOKEN;
     if (cached) handleRegistration(cached);
-    postNativePushRegister();
+    // A new device is asked after its first conversation, by the sheet in
+    // push-permission-prompt.tsx; until then (or until the hold runs out)
+    // nothing here makes the system prompt come up.
+    if (!isPushPromptHeld()) postNativePushRegister();
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") postNativePushRegister();
+      if (document.visibilityState === "visible" && !isPushPromptHeld()) postNativePushRegister();
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
 

@@ -226,13 +226,15 @@ import { resolveAccessibilityCopy } from "@/i18n/accessibility-copy";
 import type { LatestUtterancePayload } from "@/components/LivePhoneDemo/LivePhoneDemo";
 import MingleWordmark from "@/components/mingle-wordmark";
 import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
+import { PUSH_PROMPT_CLOSED_EVENT, holdPushPrompt, requestPushPrompt } from "@/lib/push-prompt";
+import { homeHref } from "@/lib/home-routes";
 import AppTopHeader from "@/components/app-top-header";
 import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
 import { useUnreadNotifications } from "@/components/notifications/use-unread-notifications";
 import { feedHref } from "@/lib/feed-routes";
 import { requestProfileBasics } from "@/lib/profile-basics";
 import { feedCopy } from "@/i18n/feed-copy";import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
-import { NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY } from "@/lib/tab-navigation";
+import { NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY, buildNativeAwareTabPath } from "@/lib/tab-navigation";
 
 const MingleHome = lazy(() => import("@/components/mingle-home"));
 const SpeakTrial = lazy(() => import("@/components/onboarding/speak-trial"));
@@ -5601,6 +5603,8 @@ export default function ConversationList({
       markFirstSpeakPending();
       setFirstSpeakPending(true);
     }
+    // A new device is asked for notifications after its first conversation, with a reason.
+    holdPushPrompt();
     // Signup is finished: a pending invite is accepted now. The contact-sync
     // screen holds back while the first run is pending (set just above).
     requestContactSyncPromptCheck();
@@ -5639,6 +5643,38 @@ export default function ConversationList({
     void handleCreateConversation();
   }, [handleCreateConversation]);
 
+  // A new account that just signed in here goes to the Home tab: the app is
+  // for meeting people, so they are the first thing it shows. The "say
+  // something" card is on Home as well and comes back here with `firstSpeak=1`.
+  const signedOutHereRef = useRef(false);
+  useEffect(() => {
+    if (sessionStatus === "unauthenticated") {
+      signedOutHereRef.current = true;
+      return;
+    }
+    if (sessionStatus !== "authenticated" || !signedOutHereRef.current) return;
+    signedOutHereRef.current = false;
+    if (!isFirstSpeakPending() || activeConversation !== null) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("firstSpeak")) return;
+    captureMingleClientEvent("mingle_first_run_step", { step: "home_after_sign_in" });
+    router.replace(buildNativeAwareTabPath(homeHref(locale), params, { tabRoot: true }));
+  }, [activeConversation, locale, router, sessionStatus]);
+
+  // Home's "say something" card lands here with `firstSpeak=1`: open the room at once.
+  const firstSpeakFromHomeHandledRef = useRef(false);
+  useEffect(() => {
+    if (firstSpeakFromHomeHandledRef.current) return;
+    if (sessionStatus !== "authenticated" || languageOnboardingPhase !== "ready" || !firstSpeakPending) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("firstSpeak") !== "1") return;
+    firstSpeakFromHomeHandledRef.current = true;
+    params.delete("firstSpeak");
+    const query = params.toString();
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+    handleFirstSpeakRequested();
+  }, [firstSpeakPending, handleFirstSpeakRequested, languageOnboardingPhase, sessionStatus]);
+
   // Back on the list after the first room: ask where they heard of the app.
   // One thing at a time: leaving the first room is when the contact-sync
   // screen may open (it was held back so it would not cover the "say
@@ -5653,6 +5689,16 @@ export default function ConversationList({
     }
     const leftARoom = wasInConversationRef.current;
     wasInConversationRef.current = false;
+    // Back from a room on a new device: say why, then ask for notifications.
+    // The contact-sync screen waits for that sheet to close (one thing at a time).
+    if (leftARoom && requestPushPrompt()) {
+      const afterPushPrompt = () => {
+        window.removeEventListener(PUSH_PROMPT_CLOSED_EVENT, afterPushPrompt);
+        if (isDiscoveryPromptDue()) requestContactSyncPromptCheck();
+      };
+      window.addEventListener(PUSH_PROMPT_CLOSED_EVENT, afterPushPrompt);
+      return;
+    }
     if (!isDiscoveryPromptDue()) return;
     if (leftARoom) {
       requestContactSyncPromptCheck();

@@ -87,7 +87,9 @@ export function shouldOpenConversationsInsteadOfFeed(input: {
   speakTrialDue?: boolean
 }): boolean {
   if (!input.isNativeApp || input.hasPostTarget) return false
-  return !input.onboardingConfirmed || input.firstSpeakPending || input.speakTrialDue === true
+  // `firstSpeakPending` no longer moves the launch: the "say something" card
+  // is on the Home tab too, so a signed-in new account starts among people.
+  return !input.onboardingConfirmed || input.speakTrialDue === true
 }
 
 /**

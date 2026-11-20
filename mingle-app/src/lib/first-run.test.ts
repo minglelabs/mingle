@@ -56,8 +56,9 @@ describe('shouldOpenConversationsInsteadOfFeed', () => {
     expect(shouldOpenConversationsInsteadOfFeed(base)).toBe(true)
   })
 
-  it('keeps sending it there until the first translation', () => {
-    expect(shouldOpenConversationsInsteadOfFeed({ ...base, onboardingConfirmed: true, firstSpeakPending: true })).toBe(true)
+  // 2026-11-20: a signed-in new account starts on Home (people first); the "say something" card is there too.
+  it('opens Home for a signed-in new account that has not spoken yet', () => {
+    expect(shouldOpenConversationsInsteadOfFeed({ ...base, onboardingConfirmed: true, firstSpeakPending: true })).toBe(false)
   })
 
   it('leaves the feed as home once the first run is over, and for existing users', () => {

@@ -2,6 +2,15 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-20 — A new account lands on Home; notifications are asked after the first conversation, with a reason
+
+- Surface: `lib/first-run.ts`, `conversation-list.tsx` (after sign-in, `firstSpeak=1`, leaving a room), `home/home-page.tsx` (first-speak card), new `lib/push-prompt.ts`, `components/push-permission-prompt.tsx` (mounted in `app/layout.tsx`), `i18n/push-prompt-copy.ts` (15 languages), `native-push-registration.tsx`.
+- Issue: From the brand and onboarding review (owner: "바꿔줘"). A new account landed on the Chats tab, not among people, and the system notification prompt came up the moment it signed in, with no reason given.
+- Resolution:
+  - A device in its first run that signs in on the sign-in screen is taken to the Home tab, and later launches of a signed-in first-run device open Home too (`firstSpeakPending` no longer sends the launch to Chats). The "say something" card ("외국인 친구에게 건넬 첫 마디, 먼저 말해 볼까요?") sits above Home's tab bar as well; its button goes to Chats with `firstSpeak=1`, which opens the first room at once. The card on Chats stays.
+  - A device that goes through the onboarding is not asked for notifications at sign-in. When it comes back from its first room, a sheet says "답장이 오면 알려 드릴까요?"; "알림 받기" lets the system prompt come up, "나중에" leaves it. A hold nobody answers runs out after 24 hours, and the app then asks at launch as before. Devices that were already using the app register for pushes at every launch as before (they are never held). The contact-sync screen waits until the sheet closes.
+- Checked: unit tests (hold and release rules, copy in 15 languages, wiring). Not checked on a phone yet: the three test phones were locked or off USB.
+
 ## 2026-11-20 — First run speaks as the friends app (brand and onboarding review)
 
 - Surface: `i18n/loading-messages.ts` (`BRAND_TAGLINE`, 15 languages), app shell startup splash (`rn/App.tsx`), sign-in screen (`mingle-home.tsx`), `language-onboarding-copy.ts`, `i18n/speak-trial-copy.ts` (`hint`), `i18n/first-run-copy.ts` (`speakTitle`), `contacts/phone-verify-sheet.tsx`, `home/home-page.tsx` header, `conversation-list.tsx` (ad banner on a new account's first screen).
