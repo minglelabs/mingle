@@ -2,6 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-20 — First-message sheet title counts its rows; the selfie screen adds a missing photo and is light
+
+- Surface: `components/first-message-gate.tsx`, `i18n/first-message-gate-copy.ts` (`titleOne`, 15 languages), new `lib/profile-photo-upload.ts` (shared by the sheet and the selfie screen), `components/selfie-verify-screen.tsx`, My page (`onPhotoUploaded`).
+- Issue: QA on the iPhone 14 (2026-11-20): the first-message sheet said "두 가지만 확인할게요" (two checks) above a single row; the selfie screen without a profile photo only said to add one and offered Close; and on its dark background the app's dark status bar text was barely visible.
+- Resolution: The sheet's title says "하나만 확인할게요" when only one row shows. The selfie screen's "add a photo first" step has an Add photo button: the photo is checked for a face on the phone, uploaded, and the screen moves on to the selfie intro (a photo without a face is refused with the sheet's words). The screen is now white, so the status bar reads, with the gauge in greys; arrows over the camera stay white. The status bar colour itself is set by the app shell per URL, which would need a new app build.
+- Checked on the iPhone 14 (local devbox): the sheet showed "처음 말 걸기 전에 하나만 확인할게요" with the photo row; the selfie screen was white with a readable status bar and an Add photo button that opened iOS's Photo Library / Take Photo / Choose File menu. Picking a photo was not done (the phone's own photos).
+
 ## 2026-11-20 — Bottom buttons stay above the keyboard; height is a wheel that starts at 177 cm
 
 - Surface: new `components/keyboard-inset-var.tsx` (mounted in `app/layout.tsx`), `.keyboard-safe` in `app/globals.css`, the full-screen sheets and dialogs that hold a text field (onboarding questions, language pickers, profile edit and My page dialogs, follow list, invites, contact sync, report, coin gift, open-room dialog, invite code gate, first-message setup, chat search), new `components/profile-height-wheel.tsx`, `WheelColumn` exported from `signup-birth-date-picker.tsx`, `LanguageOnboardingModal.tsx` (height step), profile edit (`my-page.tsx`), `lib/profile-height.ts` (`DEFAULT_HEIGHT_CM`), `i18n/profile-height-copy.ts`.
