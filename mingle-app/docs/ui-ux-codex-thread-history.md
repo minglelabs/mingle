@@ -2,6 +2,16 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-20 — Selfie check: camera on before Start and on retry, a moving head-turn demo, the photo compared mirrored too
+
+- Surface: `components/selfie-verify-screen.tsx`, `app/globals.css` (demo keyframes), `lib/selfie-liveness.test.ts`.
+- Issue: The owner on the iPhone 14: the screen showed an empty grey circle before Start and on the retry screen ("뜬금없다"); "왼쪽으로 돌려 주세요" should be shown on the camera, not only written; and the owner failed the check with their own photo.
+- Resolution:
+  - The front camera opens when the screen opens (the face models load at the same time, so Start goes straight to the head turns) and stays on behind the result, the retry and the "add a photo" step. A camera whose track ended is opened again.
+  - While a turn is asked, three chevrons pulse toward that edge and a small head at the bottom of the circle keeps turning that way (off with reduced motion).
+  - Why the owner failed: their photo has a large, upright face (0.39 of the width), so the face size and orientation were fine. An iPhone front-camera photo is saved mirrored by default, while the live camera frames are not, and a face description differs for a mirrored face. The photo is now also compared mirrored, and the better score counts. The bar (0.55) is unchanged; the last score is kept in the page (`window.__MINGLE_SELFIE_LAST_SIMILARITY__`) for QA.
+- Checked on the iPhone 14 (local devbox): the camera live on the intro, and on the "couldn't finish" retry screen after a 45 s run with nobody in front; the demo's frames show the head and chevrons moving left. A pass with the owner's face after the mirror change is not checked yet.
+
 ## 2026-11-20 — First-message sheet title counts its rows; the selfie screen adds a missing photo and is light
 
 - Surface: `components/first-message-gate.tsx`, `i18n/first-message-gate-copy.ts` (`titleOne`, 15 languages), new `lib/profile-photo-upload.ts` (shared by the sheet and the selfie screen), `components/selfie-verify-screen.tsx`, My page (`onPhotoUploaded`).
