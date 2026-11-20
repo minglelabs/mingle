@@ -2,6 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-20 — Hash Rush: pickpocketing a third of the nibble time, bots that guard and steal
+
+- Surface: the app's Hash Rush engine copy (`src/features/hash-rush/engine/sim/constants.js`, `engine/ai/bot.js`); the Windows game server.
+- Issue: hash-rush made pickpocketing faster (half → a third of the nibble time: 1.1 s → 0.73 s in a four-hamster round) and taught the hard and ace computers to swing at a rival rubbing up against them, and the ace to go in and steal. The app and the game server still ran the 11-19 version; the app predicting its own hamster with the old rule against a server on the new one would make it jitter.
+- Resolution: The engine copy takes both changes; the game server is redeployed from the same hash-rush main. The RL computers stay web-only (the app's rooms offer the scripted levels).
+- Verification: hash-rush's pickpocket tests, including the two new bot tests, pass against the app's engine copy; Hash Rush unit tests. Not played on a phone.
+
 ## 2026-11-19 — 해씨: 켜고 끌 때 차감 속도 토스트, 소진 창의 친구 초대, 보이스톡 통역 잔액 0 차단
 
 - Surface: `src/lib/coin-rate-toast.ts`, `src/components/LivePhoneDemo/LivePhoneDemo.tsx`, `VoiceTalkPanel.tsx`, `src/components/coins/coin-exhausted-sheet.tsx`, `src/i18n/coin-copy.ts`, `coin-detail-copy.ts`; server `src/server/coins/free-grants.ts`, `ledger.ts`, `src/server/referral.ts`, `src/server/voice/voice-interpreter-reports.ts`, `voice-call-controller.ts`.
