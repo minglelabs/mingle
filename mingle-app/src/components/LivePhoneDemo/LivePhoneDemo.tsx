@@ -8288,7 +8288,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const actionPanelItems = useMemo<ChatActionPanelItem[]>(() => {
     const items: ChatActionPanelItem[] = []
     const closeThen = (action: () => void) => () => { setActionPanelOpen(false); action() }
-    if (conversationId && viewerUserId) {
+    // Voice mode has the photo and keyboard buttons in the bar itself: its "+" is
+    // just voice talk and PiP.
+    if (composerShown && conversationId && viewerUserId) {
       items.push({
         key: 'photo',
         label: conversationImageCopy.choose,
@@ -8325,22 +8327,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         onSelect: earphoneModeMenuItem.onToggle,
       })
     }
-    items.push(composerShown
-      ? {
-          key: 'voice-mode',
-          label: composerCopy.switchToVoiceModeLabel,
-          icon: <Mic size={21} strokeWidth={2} />,
-          onSelect: closeThen(handleToggleComposer),
-        }
-      : {
-          key: 'keyboard-mode',
-          label: composerCopy.switchToKeyboardModeLabel,
-          icon: <Keyboard size={21} strokeWidth={2} />,
-          onSelect: closeThen(handleToggleComposer),
-        })
+    if (composerShown) {
+      items.push({
+        key: 'voice-mode',
+        label: composerCopy.switchToVoiceModeLabel,
+        icon: <Mic size={21} strokeWidth={2} />,
+        onSelect: closeThen(handleToggleComposer),
+      })
+    }
     return items
   }, [
-    composerCopy.switchToKeyboardModeLabel,
     composerCopy.switchToVoiceModeLabel,
     composerShown,
     conversationId,
@@ -11457,9 +11453,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   transition={{ duration: 0.11, ease: [0.22, 1, 0.36, 1] }}
                   className="grid items-end"
                   style={{
-                    // minmax(0, 1fr) keeps Start centered once the left cell
-                    // also holds the earphone button; without it the layout
-                    // stays exactly as before.
+                    // minmax(0, 1fr) keeps Start centered whatever the side cells hold.
                     gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)',
                   }}
                 >
@@ -11468,71 +11462,30 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -12 }}
                     transition={{ duration: 0.09, ease: 'easeOut' }}
-                    // This room's talk time and message count on the far left,
-                    // the speaker / earphone button next to Start (voice talk,
-                    // photo and PiP are in the "+").
-                    className="flex w-full min-w-0 items-center justify-between gap-1 self-end pl-1"
+                    // "+" (voice talk, PiP) and photo on the left.
+                    className="flex w-full min-w-0 items-center gap-1 self-end"
                   >
-                    <div data-qa="live-demo-voice-usage" className="flex min-w-0 flex-col items-start justify-center leading-4">
-                      {isUsageLimited ? (
-                        <span className="flex min-w-0 max-w-full items-center gap-1.5">
-                          <span className="h-1.5 w-12 shrink-0 overflow-hidden rounded-full bg-gray-200">
-                            <span
-                              className={`block h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
-                              style={{ width: `${usagePercent}%` }}
-                            />
-                          </span>
-                          <span className={`text-[0.78rem] tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}`}>
-                            {formatLivePhoneDemoUsageDuration(remainingSec)}
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="max-w-full truncate text-[0.78rem] tabular-nums text-gray-400">
-                          {formatLivePhoneDemoUsageDuration(usageSec)}
-                        </span>
-                      )}
-                      <span className="max-w-full truncate text-[0.78rem] tabular-nums text-gray-400">
-                        {storedMessageCountLabel}
-                      </span>
-                    </div>
-                    {earphoneModeGate.controlVisible && (
+                    <ChatActionPlusButton
+                      open={actionPanelOpen}
+                      label={conversationImageCopy.attach}
+                      sizePx={VOICE_MODE_PLUS_BUTTON_SIZE_PX}
+                      onToggle={handleActionPanelToggle}
+                    />
+                    {conversationId && viewerUserId ? (
                       <button
                         type="button"
-                        data-qa="live-demo-earphone-mode-toggle"
-                        onPointerDown={(event) => event.preventDefault()}
-                        onClick={handleEarphoneModeToggle}
-                        disabled={voiceTalkState.joined}
-                        aria-label={earphoneModeControlLabel}
-                        aria-pressed={isEarphoneModeOn}
-                        // Dimmed like the mic button while the call decides what is read aloud.
-                        className={`relative inline-flex shrink-0 items-center justify-center transition-all duration-200 active:scale-95 disabled:pointer-events-none disabled:opacity-40 ${
-                          isEarphoneModeOn ? 'text-amber-500' : 'text-gray-500 hover:text-gray-700'
-                        }`}
+                        data-qa="live-demo-photo-button"
+                        onClick={() => photoPickerRef.current?.()}
+                        aria-label={conversationImageCopy.choose}
+                        className="inline-flex shrink-0 items-center justify-center text-gray-500 transition-all duration-200 hover:text-gray-700 active:scale-95"
                         style={{
                           width: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
                           height: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
                         }}
                       >
-                        {speakerModeOnSpeaker ? <Volume2 size={18} strokeWidth={2.15} /> : <Headphones size={18} strokeWidth={2.15} />}
-                        {isEarphoneModeOn && earphoneModeReadLanguage && (
-                          // The language it reads aloud, so a wrong pick is visible at a glance.
-                          <span
-                            aria-hidden="true"
-                            data-earphone-mode-read-language-flag={earphoneModeReadLanguage}
-                            className="pointer-events-none absolute bottom-[6px] right-[3px] flex h-[15px] min-w-[19px] items-center justify-center rounded-full bg-white px-[2px] text-[10px] leading-none ring-1 ring-gray-200"
-                          >
-                            <LanguageFlag language={earphoneModeReadLanguage} className="text-[10px] leading-none" />
-                          </span>
-                        )}
-                        {earphoneModeGate.waitingForEarphones && (
-                          <span
-                            aria-hidden="true"
-                            data-earphone-mode-waiting-dot
-                            className="pointer-events-none absolute right-[10px] top-[10px] h-[7px] w-[7px] rounded-full bg-gray-400 ring-2 ring-white"
-                          />
-                        )}
+                        <ImageIcon size={20} strokeWidth={2} />
                       </button>
-                    )}
+                    ) : null}
                   </motion.div>
 
                   <motion.div className="flex self-end justify-center">
@@ -11606,13 +11559,59 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     </button>
                   </motion.div>
 
-                  <div className="flex items-center gap-1 self-end justify-self-end">
-                    <ChatActionPlusButton
-                      open={actionPanelOpen}
-                      label={conversationImageCopy.attach}
-                      sizePx={VOICE_MODE_PLUS_BUTTON_SIZE_PX}
-                      onToggle={handleActionPanelToggle}
-                    />
+                  {/* Speaker / earphone next to Start, the keyboard on the far right. */}
+                  <div className="flex w-full min-w-0 items-center justify-end gap-1 self-end">
+                    {earphoneModeGate.controlVisible && (
+                      <button
+                        type="button"
+                        data-qa="live-demo-earphone-mode-toggle"
+                        onPointerDown={(event) => event.preventDefault()}
+                        onClick={handleEarphoneModeToggle}
+                        disabled={voiceTalkState.joined}
+                        aria-label={earphoneModeControlLabel}
+                        aria-pressed={isEarphoneModeOn}
+                        // Dimmed like the mic button while the call decides what is read aloud.
+                        className={`relative inline-flex shrink-0 items-center justify-center transition-all duration-200 active:scale-95 disabled:pointer-events-none disabled:opacity-40 ${
+                          isEarphoneModeOn ? 'text-amber-500' : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                        style={{
+                          width: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
+                          height: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
+                        }}
+                      >
+                        {speakerModeOnSpeaker ? <Volume2 size={18} strokeWidth={2.15} /> : <Headphones size={18} strokeWidth={2.15} />}
+                        {isEarphoneModeOn && earphoneModeReadLanguage && (
+                          // The language it reads aloud, so a wrong pick is visible at a glance.
+                          <span
+                            aria-hidden="true"
+                            data-earphone-mode-read-language-flag={earphoneModeReadLanguage}
+                            className="pointer-events-none absolute bottom-[6px] right-[3px] flex h-[15px] min-w-[19px] items-center justify-center rounded-full bg-white px-[2px] text-[10px] leading-none ring-1 ring-gray-200"
+                          >
+                            <LanguageFlag language={earphoneModeReadLanguage} className="text-[10px] leading-none" />
+                          </span>
+                        )}
+                        {earphoneModeGate.waitingForEarphones && (
+                          <span
+                            aria-hidden="true"
+                            data-earphone-mode-waiting-dot
+                            className="pointer-events-none absolute right-[10px] top-[10px] h-[7px] w-[7px] rounded-full bg-gray-400 ring-2 ring-white"
+                          />
+                        )}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      data-qa="live-demo-keyboard-mode-button"
+                      onClick={handleToggleComposer}
+                      aria-label={composerCopy.switchToKeyboardModeLabel}
+                      className="inline-flex shrink-0 items-center justify-center text-gray-500 transition-all duration-200 hover:text-gray-700 active:scale-95"
+                      style={{
+                        width: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
+                        height: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
+                      }}
+                    >
+                      <Keyboard size={20} strokeWidth={2} />
+                    </button>
                   </div>
                 </motion.div>
               )}

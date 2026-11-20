@@ -27,7 +27,7 @@ describe('earphone mode wiring', () => {
   })
 
   it('shows the controls only when the shell reports audio routes', () => {
-    const voiceBar = between(liveDemoSource, 'key="default-bottom-bar"', 'data-qa="live-demo-mic-button"')
+    const voiceBar = between(liveDemoSource, 'key="default-bottom-bar"', 'data-qa="live-demo-keyboard-mode-button"')
     expect(voiceBar).toContain('{earphoneModeGate.controlVisible && (')
     expect(voiceBar).toContain('data-qa="live-demo-earphone-mode-toggle"')
     expect(voiceBar).toContain('aria-pressed={isEarphoneModeOn}')

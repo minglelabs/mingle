@@ -15,12 +15,12 @@ function between(source: string, startMarker: string, endMarker: string): string
 }
 
 describe('voice talk in the bottom bar', () => {
-  it('is in the "+" panel; the voice bar left cell shows talk time and message count again', () => {
+  it('is in the "+" panel; the voice bar has "+" and photo on the left, no usage', () => {
     const voiceBar = between(liveDemoSource, 'key="default-bottom-bar"', 'data-qa="live-demo-mic-button"')
     expect(voiceBar).not.toContain('<VoiceTalkButton')
-    expect(voiceBar).toContain('data-qa="live-demo-voice-usage"')
-    expect(voiceBar).toContain('{storedMessageCountLabel}')
-    expect(voiceBar).toContain('formatLivePhoneDemoUsageDuration(usageSec)')
+    expect(voiceBar).not.toContain('data-qa="live-demo-voice-usage"')
+    expect(voiceBar).toContain('<ChatActionPlusButton')
+    expect(voiceBar).toContain('data-qa="live-demo-photo-button"')
     const panelItems = between(liveDemoSource, 'const actionPanelItems = useMemo', '  }, [')
     expect(panelItems).toContain("key: 'voice-talk'")
     expect(panelItems).toContain('onSelect: closeThen(voiceTalkMenuItem.onSelect)')
