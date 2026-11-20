@@ -2,6 +2,17 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-20 — First run speaks as the friends app (brand and onboarding review)
+
+- Surface: `i18n/loading-messages.ts` (`BRAND_TAGLINE`, 15 languages), app shell startup splash (`rn/App.tsx`), sign-in screen (`mingle-home.tsx`), `language-onboarding-copy.ts`, `i18n/speak-trial-copy.ts` (`hint`), `i18n/first-run-copy.ts` (`speakTitle`), `contacts/phone-verify-sheet.tsx`, `home/home-page.tsx` header, `conversation-list.tsx` (ad banner on a new account's first screen).
+- Issue: A walk through the first run on an iPhone 14 as a new user. The store listing and the Home tab say "make Korean friends / 외국인 친구", but every screen before Home still spoke as a translator: the splash showed a random feature tip ("메시지의 스피커 버튼을 누르면…"), the language step and the speak trial only talked about interpreting, the sign-in screen said only "계속 쓰려면 로그인해 주세요". Also: "동의하고 계속하기" was grey and read as disabled, the phone sheet's buttons were blue while the rest of the app is yellow/orange, "HashChat" was an orange wordmark on Chats but small black text on Home, and a new account's first screen had an ad banner on top (a rival translator app in the run).
+- Resolution:
+  - One brand line per language (Korean: "외국인 친구, 말이 안 통해도 사귈 수 있어요"; others: "Make Korean friends, even before your Korean is good", from `docs/positioning-korean-friends.md`). It shows under the name on the sign-in screen, with the app icon above, and on the startup splash when the device has no screen to restore (a first launch or signed out); a device that is coming back keeps the random tips.
+  - Language step: "외국인 친구와 이 언어로 이야기해요. 말하면 바로 통역되고…". Speak trial banner: "친구에게 건넬 인사를 10초 동안 말해 보세요…". First-speak card: "외국인 친구에게 건넬 첫 마디, 먼저 말해 볼까요?". All 15 languages.
+  - "동의하고 계속하기" and the phone sheet's buttons are the brand yellow (`#FBBC32`) with dark text. Home's header uses the same wordmark as Chats. No ad banner on the Chats tab while the first-speak card is up.
+- Not changed, for the owner to decide: the required terms come pre-ticked (deliberate in `mingle-home.auth-contract.ts`; the EU expects unticked boxes), a new account lands on Chats rather than Home, the notification permission is asked right after sign-in with no reason given, and the empty room's title still reads "Start 버튼을 누른 후 아무 언어로 말해보세요!" (shared with every empty room).
+- Checked in a phone-width browser on the local devbox (signed out): the language step, the speak trial banner, the sign-in screen with icon and brand line, the yellow agree button and phone button, and Home's wordmark. Not checked on a phone: the startup splash line (app shell), the missing ad on a new account's first screen and the first-speak card title; the three test phones were locked or off USB after the rebuild.
+
 ## 2026-11-20 — Selfie check: camera on before Start and on retry, a moving head-turn demo, the photo compared mirrored too
 
 - Surface: `components/selfie-verify-screen.tsx`, `app/globals.css` (demo keyframes), `lib/selfie-liveness.test.ts`.
