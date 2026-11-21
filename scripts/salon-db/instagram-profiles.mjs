@@ -12,7 +12,8 @@ import { pool, sleep } from './db.mjs';
 
 const MAX = Number(process.env.MAX || 200);
 const GAP = Number(process.env.GAP || 30) * 1000;
-const PROFILE_DIR = path.join(os.homedir(), 'salon-db', 'chrome-ig');
+// 수집 전용 크롬 프로필. 처음 한 번 이 창에서 직접 로그인하면 이후 유지된다.
+const PROFILE_DIR = process.env.PROFILE_DIR || path.join(os.homedir(), 'salon-db', 'chrome-ig');
 const PHOTO_DIR = path.join(os.homedir(), 'salon-db', 'photos', 'ig');
 
 const ctx = await chromium.launchPersistentContext(PROFILE_DIR, {
