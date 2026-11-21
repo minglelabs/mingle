@@ -87,7 +87,8 @@ export type HashRushLobby = {
   botLevel: string
 }
 
-export const HASH_RUSH_BOT_LEVELS = ['easy', 'normal', 'hard', 'ace'] as const
+// 'rl': the learned computer, run by the game server from hash-rush #265 on.
+export const HASH_RUSH_BOT_LEVELS = ['easy', 'normal', 'hard', 'ace', 'rl'] as const
 export const HASH_RUSH_FILL_MIN = 2
 export const HASH_RUSH_FILL_MAX = 8
 /** Sides a player can pick in team play (the server takes 0-3). */

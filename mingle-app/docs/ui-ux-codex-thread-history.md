@@ -2,6 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-22 — Hash Rush: the RL computer as a level
+
+- Surface: the lobby's per-computer level picker (`protocol.ts` `HASH_RUSH_BOT_LEVELS`); game server hash-rush #265.
+- Issue: The RL computer (the learned one, rl17) could not be picked in the app: the game server only ran the scripted levels, and since #263 a computer's own level changed only its label, not how it played.
+- Resolution: The server runs the RL computer (weights read from disk at start) and each computer plays at its own seat level. The app lists `RL` after 초고수.
+- Verification: server test (RL per seat, mixed levels, the RL computer moves); bench: 7 RL computers ≈ 2.5 ms a tick; Hash Rush unit tests. Not played on a phone.
+
 ## 2026-11-22 — Hash Rush: host can stop a round and play again, each computer has its own level, web players see computers and chat
 
 - Surface: Hash Rush lobby and result cards (`HashRushCards.tsx`), the quit dialog (`HashRushRoomLayer.tsx`), `client.ts`, `protocol.ts`; game server hash-rush #263.
