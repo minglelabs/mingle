@@ -49,6 +49,9 @@
  * `image`) talk to CHATGPT_POOL_URL, which on a Mac defaults to the Windows pool,
  * with CHATGPT_POOL_KEY or the key in ~/.mingle/chatgpt-pool/api-key.
  *
+ * CHATGPT_POOL_EXCLUDE (default namhk5741@gmail.com): comma-separated emails whose
+ * profiles the pool never uses, opens or closes.
+ *
  * Profile rotation (on by default on Windows; CHATGPT_POOL_ROTATE=1/0 to force):
  * every open profile costs a Chrome profile's memory, so only
  * CHATGPT_POOL_MIN_OPEN (5) stay open. A profile idle for
@@ -110,6 +113,15 @@ const WAKE_AFTER_WAIT_MS = envNumber('CHATGPT_POOL_WAKE_AFTER_MS', 30_000)
 const WAKE_GAP_MS = envNumber('CHATGPT_POOL_WAKE_GAP_MS', 20_000)
 const WAKE_CONNECT_MS = envNumber('CHATGPT_POOL_WAKE_CONNECT_MS', 3 * 60_000)
 const ROTATE_TICK_MS = envNumber('CHATGPT_POOL_ROTATE_TICK_MS', 15_000)
+/**
+ * Accounts the pool never uses, opens or closes (comma-separated emails). Their
+ * profiles may still connect; they just get no jobs and don't count as open.
+ */
+const EXCLUDED_EMAILS = new Set((process.env.CHATGPT_POOL_EXCLUDE ?? 'namhk5741@gmail.com')
+  .split(',').map((email) => email.trim().toLowerCase()).filter(Boolean))
+const excludedEmail = (agent) => Boolean(agent.email) && EXCLUDED_EMAILS.has(agent.email.toLowerCase())
+/** The whole profile is left out when either of its workers is signed in with an excluded email. */
+const excluded = (agent) => excludedEmail(agent) || siblings(agent).some(excludedEmail)
 
 const log = (...args) => console.error(new Date().toISOString(), ...args)
 
@@ -177,7 +189,7 @@ const accepts = (job, agent) => (job.provider ?? 'chatgpt') === providerOfWorker
   && (!job.account || job.account === agent.email || job.account === agent.id || job.account === agent.base)
 
 function eligible(agent, job) {
-  if (agent.busy || agent.parking || agent.signedOut || !agent.email || job.tried.has(agent.id) || !accepts(job, agent)) return false
+  if (agent.busy || agent.parking || agent.signedOut || !agent.email || excluded(agent) || job.tried.has(agent.id) || !accepts(job, agent)) return false
   if (siblings(agent).some((other) => other.parking)) return false // its profile is closing
   if (Date.now() < (agent.pausedUntil ?? 0)) return false
   if (resting(agent) || quotaFreeAt(agent)) return false
@@ -213,7 +225,7 @@ function failUnservable() {
       job.reject(job.lastError ?? new PoolError(504, 'queue_timeout', `no account took the job within ${Math.round((Date.now() - job.queuedAt) / 60_000)} min`))
       continue
     }
-    const candidates = [...agents.values()].filter((agent) => online(agent) && agent.email && !job.tried.has(agent.id) && accepts(job, agent))
+    const candidates = [...agents.values()].filter((agent) => online(agent) && agent.email && !excluded(agent) && !job.tried.has(agent.id) && accepts(job, agent))
     let error = null
     const paused = candidates.filter((agent) => Date.now() < (agent.pausedUntil ?? 0))
     const capped = candidates.filter((agent) => quotaFreeAt(agent))
@@ -491,7 +503,7 @@ const isOpen = (agent) => online(agent) && !agent.parking
 const waking = (agent) => !online(agent) && Date.now() - (agent.wokenAt ?? 0) < WAKE_CONNECT_MS
 /** A profile the pool may open: known folder, last seen signed in, not open, not just opened. */
 const closedCandidates = () => [...agents.values()]
-  .filter((agent) => agent.folder && agent.email && !agent.signedOut && !online(agent) && !waking(agent) && !siblings(agent).some(online))
+  .filter((agent) => agent.folder && agent.email && !excluded(agent) && !agent.signedOut && !online(agent) && !waking(agent) && !siblings(agent).some(online))
   .sort((a, b) => a.lastUsed - b.lastUsed)
 
 let lastWakeAt = 0
@@ -533,7 +545,7 @@ function wakeFor(job) {
 function rotate() {
   const now = Date.now()
   // Count and close profiles through their ChatGPT workers; a Gemini worker shares its profile's windows.
-  const all = [...agents.values()].filter((agent) => providerOfWorker(agent) === 'chatgpt')
+  const all = [...agents.values()].filter((agent) => providerOfWorker(agent) === 'chatgpt' && !excluded(agent))
   const open = all.filter(isOpen)
   // Too few open (after a restart or a reboot): open the next one.
   if (open.length + all.filter(waking).length < MIN_OPEN && now - lastWakeAt >= WAKE_GAP_MS) {
@@ -563,7 +575,7 @@ const lastActive = (agent) => Math.max(agent.lastUsed, agent.openedAt ?? 0, ...s
 
 function accountsStatus() {
   return [...agents.values()].filter(online).map((agent) => ({
-    provider: providerOfWorker(agent), email: agent.email, profile: agent.profile, agentId: agent.base ?? agent.id, busy: agent.busy, signedOut: agent.signedOut,
+    provider: providerOfWorker(agent), email: agent.email, profile: agent.profile, agentId: agent.base ?? agent.id, busy: agent.busy, signedOut: agent.signedOut, excluded: excluded(agent),
     imageLimitedUntil: agent.limitedUntil > Date.now() ? new Date(agent.limitedUntil).toISOString() : null,
     limitMessage: agent.limitedUntil > Date.now() ? agent.limitMessage : null,
     pausedUntil: (agent.pausedUntil ?? 0) > Date.now() ? new Date(agent.pausedUntil).toISOString() : null,
@@ -703,7 +715,7 @@ function serve() {
         const status = accountsStatus()
         const site = (provider) => {
           const mine = status.filter((a) => a.provider === provider)
-          return { accounts: mine.length, ready: mine.filter((a) => a.email && !a.signedOut && !a.pausedUntil && !a.cappedUntil).length }
+          return { accounts: mine.length, ready: mine.filter((a) => a.email && !a.excluded && !a.signedOut && !a.pausedUntil && !a.cappedUntil).length }
         }
         // The top-level counts stay ChatGPT's, as before Gemini was added.
         return reply(response, 200, { ok: true, ...site('chatgpt'), queued: queue.length, running: running.size, gemini: site('gemini') })
