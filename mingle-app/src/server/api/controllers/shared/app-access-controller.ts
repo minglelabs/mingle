@@ -34,7 +34,10 @@ export async function getAppAccess(request?: NextRequest) {
   if (!userId) return json({ error: 'unauthorized' }, 401)
   // The app asks this every time it opens: the place where an account is noted on its device.
   const device = request ? await touchDevice(userId, readDeviceHeader(request.headers)) : null
-  return json(await readAppAccess(userId, readLocale(request?.nextUrl.searchParams.get('locale')), { deviceBlocked: Boolean(device?.blocked) }))
+  // "korean": the first screen's "Are you Korean?" answer (1 / 0), when the device has one.
+  const rawKorean = request?.nextUrl.searchParams.get('korean')
+  const korean = rawKorean === '1' ? true : rawKorean === '0' ? false : null
+  return json(await readAppAccess(userId, readLocale(request?.nextUrl.searchParams.get('locale')), { deviceBlocked: Boolean(device?.blocked), korean }))
 }
 
 /** POST /account/access { code } — enters an invite code at the gate. */

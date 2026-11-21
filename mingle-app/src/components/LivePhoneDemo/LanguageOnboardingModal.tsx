@@ -1,5 +1,7 @@
 "use client";
 
+import { resolveKoreanCheckCopy } from "@/i18n/korean-check-copy";
+import { readKoreanAnswer, writeKoreanAnswer, type KoreanAnswer } from "@/lib/korean-signup";
 import { Check, ChevronLeft, Loader2, Search, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
@@ -92,10 +94,11 @@ interface LanguageOnboardingModalProps {
   onConfirm: (payload: LanguageOnboardingConfirmPayload) => void | Promise<void>;
 }
 
-export type OnboardingStep = "language" | "interest-language" | "usage-purpose" | "discovery-source" | "gender" | "birth-date" | "height";
+export type OnboardingStep = "language" | "korean" | "interest-language" | "usage-purpose" | "discovery-source" | "gender" | "birth-date" | "height";
 
-export const FIRST_RUN_ONBOARDING_STEPS: readonly OnboardingStep[] = ["language"];
-export const INVITE_ONBOARDING_STEPS: readonly OnboardingStep[] = ["language", "birth-date"];
+// "korean": asked on its own, since many Koreans pick English (owner, 2026-11-21; see @/lib/korean-signup).
+export const FIRST_RUN_ONBOARDING_STEPS: readonly OnboardingStep[] = ["language", "korean"];
+export const INVITE_ONBOARDING_STEPS: readonly OnboardingStep[] = ["language", "korean", "birth-date"];
 
 // Long enough to see the tapped gender light up before the next screen slides in.
 const GENDER_AUTO_ADVANCE_MS = 220;
@@ -144,6 +147,7 @@ export default function LanguageOnboardingModal({
   const [discoverySource, setDiscoverySource] = useState<DiscoverySource | null>(null);
   const [discoveryOptionCodes, setDiscoveryOptionCodes] = useState(shuffleDiscoverySourceCodes);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [koreanAnswer, setKoreanAnswer] = useState<KoreanAnswer | null>(() => readKoreanAnswer());
 
   // The modal's own copy previews in whichever language is tentatively tapped
   // (not just the checkmark) so the picker itself demonstrates the effect of
@@ -155,6 +159,7 @@ export default function LanguageOnboardingModal({
   const interestCopy = useMemo(() => resolveInterestLanguageCopy(language), [language]);
   const genderCopy = useMemo(() => resolveProfileGenderCopy(language), [language]);
   const heightCopy = useMemo(() => resolveProfileHeightCopy(language), [language]);
+  const koreanCopy = useMemo(() => resolveKoreanCheckCopy(language), [language]);
   const discoveryOptions = useMemo(() => {
     const optionsByCode = new Map(discoveryCopy.options.map((option) => [option.code, option]));
     return discoveryOptionCodes
@@ -298,6 +303,7 @@ export default function LanguageOnboardingModal({
 
   const isStepAnswered = (target: OnboardingStep): boolean => (
     target === "language" ? true
+      : target === "korean" ? koreanAnswer !== null
       : target === "interest-language" ? Boolean(interestCode)
       : target === "usage-purpose" ? Boolean(usagePurpose)
       : target === "discovery-source" ? Boolean(discoverySource)
@@ -573,6 +579,16 @@ export default function LanguageOnboardingModal({
                 />
               </div>
             </div>
+          ) : step === "korean" ? (
+            <div className="space-y-2 px-6 pb-4 pt-0 text-center">
+              <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
+                {koreanCopy.label}
+              </p>
+              <h2 id={titleId} className="text-[1.6rem] font-extrabold leading-tight tracking-[-0.02em] text-slate-950">
+                {koreanCopy.title}
+              </h2>
+              <p className="text-[0.92rem] leading-snug text-slate-500">{koreanCopy.description}</p>
+            </div>
           ) : step === "gender" ? (
             <div className="space-y-2 px-6 pb-4 pt-0 text-center">
               <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
@@ -717,6 +733,36 @@ export default function LanguageOnboardingModal({
                 ) : null}
               </div>
             )}
+          </div>
+        ) : step === "korean" ? (
+          <div
+            className="flex flex-1 flex-col justify-center overflow-y-auto px-6 py-4"
+            style={{ paddingBottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))" }}
+          >
+            <div className="mx-auto flex w-full max-w-sm flex-col gap-3" role="radiogroup" aria-labelledby={titleId}>
+              {(["yes", "no"] as const).map((answer) => {
+                const selected = koreanAnswer === answer;
+                return (
+                  <button
+                    key={answer}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    data-qa={`onboarding-korean-${answer}`}
+                    disabled={isConfirming}
+                    onClick={() => {
+                      setKoreanAnswer(answer);
+                      writeKoreanAnswer(answer);
+                    }}
+                    className={`flex h-[4.25rem] w-full items-center justify-center gap-2 rounded-[20px] border-2 text-[1.12rem] font-bold transition active:scale-[0.99] ${selected ? "border-amber-500 bg-amber-50 text-slate-950" : "border-[#e6dfd2] bg-white text-slate-700"}`}
+                  >
+                    {answer === "yes" ? <span aria-hidden>🇰🇷</span> : null}
+                    {answer === "yes" ? koreanCopy.yes : koreanCopy.no}
+                    {selected ? <Check size={20} strokeWidth={3} className="text-amber-600" aria-hidden /> : null}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         ) : step === "gender" ? (
           <div
@@ -880,7 +926,7 @@ export default function LanguageOnboardingModal({
             className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none"
           >
             {isConfirming ? <Loader2 size={16} className="animate-spin" aria-hidden /> : null}
-            {isLastStep && step === "language" ? copy.confirmButtonLabel : signupCopy.continueAction}
+            {isLastStep && (step === "language" || step === "korean") ? copy.confirmButtonLabel : signupCopy.continueAction}
           </button>
         </footer>
       </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { appAccessQuery } from "@/lib/korean-signup";
 import { Smartphone } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -36,7 +37,7 @@ export default function PhoneGate({ locale, onAccess }: { locale: string; onAcce
     setSheetOpen(false);
     captureMingleClientEvent("mingle_first_run_step", { step: "phone_gate_passed" });
     try {
-      const response = await fetch(`${buildClientApiPath("/account/access")}?locale=${encodeURIComponent(locale)}`, { cache: "no-store", headers: await resolveDeviceIdentityHeaders() });
+      const response = await fetch(`${buildClientApiPath("/account/access")}?${appAccessQuery(locale)}`, { cache: "no-store", headers: await resolveDeviceIdentityHeaders() });
       const body = response.ok ? await response.json() as Partial<Access> : null;
       if (body && typeof body.allowed === "boolean") {
         onAccess({ allowed: body.allowed, reason: body.reason ?? "unknown" });

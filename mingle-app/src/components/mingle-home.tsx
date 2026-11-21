@@ -26,7 +26,7 @@ import type { SpeechLengthLevel } from "@/lib/speech-length";
 import PhoneVerifySheet from "@/components/contacts/phone-verify-sheet";
 import { resolvePhoneFriendsCopy } from "@/i18n/phone-friends-copy";
 import { resolvePhoneSignInCopy } from "@/i18n/phone-sign-in-copy";
-import { isPhoneFirstSignInLocale } from "@/lib/korean-signup";
+import { isKoreanUser } from "@/lib/korean-signup";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { MessageReactionsProvider } from "./LivePhoneDemo/MessageReactions";
 import { MessageRecallProvider } from "./LivePhoneDemo/MessageRecall";
@@ -394,7 +394,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   const phoneSignInCopy = useMemo(() => resolvePhoneSignInCopy(props.locale), [props.locale]);
   // Someone who signed in another way before sees every option at once.
   const phoneFirstSignIn = phoneSignInAvailable
-    && isPhoneFirstSignInLocale(props.locale)
+    && isKoreanUser(props.locale)
     && (lastSignInMethod === null || lastSignInMethod === "phone");
   const phoneSheetCopy = useMemo(() => ({
     ...resolvePhoneFriendsCopy(props.locale),

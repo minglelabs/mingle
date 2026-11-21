@@ -12,7 +12,7 @@ import { fillInviteTicketCopy, resolveInviteTicketCopy } from "@/i18n/invite-tic
 import LazyOverlayBoundary from "@/components/lazy-overlay-boundary";
 import { runAfterStartup } from "@/lib/after-startup";
 import { isFirstSpeakPending } from "@/lib/first-run";
-import { isContactSyncRequiredLocale } from "@/lib/korean-signup";
+import { appAccessQuery, isKoreanAnswerUnsynced, isKoreanUser, markKoreanAnswerSynced, readKoreanAnswer } from "@/lib/korean-signup";
 import { resolveDeviceIdentityHeaders } from "@/lib/native-device-identity";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { refreshCoinWallet } from "@/lib/coin-wallet-client";
@@ -101,6 +101,37 @@ export default function ContactSyncHost() {
     }
   }, [router]);
 
+  /**
+   * Saves the first screen's "Are you Korean?" answer on the profile as its
+   * nationality: yes = KR; no clears a KR that was guessed from the language.
+   */
+  const syncKoreanAnswer = useCallback(async () => {
+    if (!isKoreanAnswerUnsynced()) return;
+    const answer = readKoreanAnswer();
+    try {
+      let nationalityCountry: string | null | undefined;
+      if (answer === "yes") {
+        nationalityCountry = "KR";
+      } else {
+        const profileResponse = await fetch(buildClientApiPath("/profile"), { cache: "no-store" });
+        if (!profileResponse.ok) return;
+        const profile = await profileResponse.json() as { nationalityCountry?: unknown };
+        nationalityCountry = profile.nationalityCountry === "KR" ? null : undefined;
+      }
+      if (nationalityCountry !== undefined) {
+        const response = await fetch(buildClientApiPath("/profile"), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nationalityCountry }),
+        });
+        if (!response.ok) return;
+      }
+      markKoreanAnswerSynced();
+    } catch {
+      // Tried again on the next launch.
+    }
+  }, []);
+
   /** Runs what is due once the person is signed in and through onboarding. */
   const runPostSignup = useCallback(async () => {
     if (busyRef.current || !hasConfirmedLanguageOnboarding()) return;
@@ -114,7 +145,7 @@ export default function ContactSyncHost() {
       // Korean sign-ups (2026-11-21) get the screen right after sign-up, once
       // their number is verified (the phone gate asks again when it closes);
       // they already tried the interpreter before signing in.
-      const requiredHere = isContactSyncRequiredLocale(localeRef.current);
+      const requiredHere = isKoreanUser(localeRef.current);
       // Everyone else is first asked to say something (the first-run card on
       // the conversation list). This screen would cover that card, so it
       // waits until they have left their first room, which asks again.
@@ -129,7 +160,7 @@ export default function ContactSyncHost() {
       if (requiredHere) {
         // Not over the phone gate (or the invite gate): asked again when it closes.
         const accessResponse = await fetch(
-          `${buildClientApiPath("/account/access")}?locale=${encodeURIComponent(localeRef.current)}`,
+          `${buildClientApiPath("/account/access")}?${appAccessQuery(localeRef.current)}`,
           { cache: "no-store", headers: await resolveDeviceIdentityHeaders() },
         );
         const access = accessResponse.ok ? await accessResponse.json() as { allowed?: unknown } : null;
@@ -201,7 +232,7 @@ export default function ContactSyncHost() {
 
   useEffect(() => {
     if (!signedIn) return;
-    const run = () => { void runPostSignup(); };
+    const run = () => { void syncKoreanAnswer(); void runPostSignup(); };
     const cancelStartup = runAfterStartup(run);
     // Sent when onboarding is confirmed (conversation list, feed sign-in gate).
     window.addEventListener(CONTACT_SYNC_PROMPT_CHECK_EVENT, run);
@@ -209,7 +240,7 @@ export default function ContactSyncHost() {
       cancelStartup();
       window.removeEventListener(CONTACT_SYNC_PROMPT_CHECK_EVENT, run);
     };
-  }, [runPostSignup, signedIn]);
+  }, [runPostSignup, signedIn, syncKoreanAnswer]);
 
   if (!signedIn) return null;
   return (

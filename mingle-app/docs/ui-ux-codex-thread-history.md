@@ -2,6 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-21 — "한국인이신가요?" asked right after the language
+
+- Surface: `LivePhoneDemo/LanguageOnboardingModal.tsx` (new step `korean` in `FIRST_RUN_ONBOARDING_STEPS` and `INVITE_ONBOARDING_STEPS`), new `i18n/korean-check-copy.ts` (15 languages), `lib/korean-signup.ts` (answer on the device, `isKoreanUser`, `appAccessQuery`), `contacts/contact-sync-host.tsx` (saves the answer as `nationalityCountry`), `onboarding/phone-gate.tsx`, `onboarding/invite-gate.tsx`, `mingle-home.tsx`, `server/app-access.ts` (`isPhoneRequiredFor`), `app-access-controller.ts` (`korean` query).
+- Issue: Owner: many Koreans pick English as the app language, so the Korean sign-up flow (phone first, required number, required contact sync) cannot go by the language; just ask.
+- Resolution: The first-run language screen's button now says 계속, and the next screen asks "한국인이신가요?" with two big buttons (🇰🇷 네, 한국인이에요 / 아니요); Continue (시작하기) waits for an answer. The answer is kept on the device: it decides the phone-first sign-in screen and the required contact sync, and is sent with every `/account/access` call (`korean=1|0`), where it decides the required phone number. Once signed in it is saved as the profile's nationality (yes = KR; no clears a KR guessed from the language). Without an answer (accounts from before) the profile's nationality, then the Korean app language, decide.
+- Checked in the browser pane at phone width (local devbox, signed out): English picked → the question in English → "Yes, I'm Korean" → after the trial the sign-in screen led with the phone number and "Other ways to sign in"; with "No" all sign-in buttons showed at once.
+
 ## 2026-11-21 — Korean sign-up: phone number first, then the contact sync must be passed
 
 - Surface: new `lib/korean-signup.ts`; `mingle-home.tsx` (sign-in buttons), `i18n/phone-sign-in-copy.ts` (`otherWays`), `server/app-access.ts` (`PHONE_REQUIRED_LOCALES`, `isPhoneRequiredLocale`), `components/onboarding/phone-gate.tsx`, `components/contacts/contact-sync-host.tsx`, `components/contacts/contact-sync-screen.tsx` (`required`), `i18n/contact-sync-copy.ts` (`next`).
