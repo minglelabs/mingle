@@ -1600,6 +1600,8 @@ interface LivePhoneDemoProps {
    * without saving it anywhere (there is no account yet).
    */
   trialSpeechLength?: SpeechLengthLevel
+  /** The speak trial's hint card sits over the top of the chat: the first bubble starts below it. */
+  trialTopInsetPx?: number
   backButtonLabel?: string
   onBack?: () => void
   onConversationDeleted?: () => void
@@ -1633,6 +1635,8 @@ interface LivePhoneDemoProps {
   enableNativeBannerBridge?: boolean
   onStartRecordingRequested?: () => Promise<LivePhoneDemoStartRecordingPreparation | void> | LivePhoneDemoStartRecordingPreparation | void
   onSttSessionRunningChange?: (isRunning: boolean) => void
+  /** True once the session is really listening (connected, Stop shown red), not while it connects. */
+  onSttListeningChange?: (isListening: boolean) => void
   onLatestUtteranceChange?: (payload: LatestUtterancePayload, isNewUtterance: boolean) => void
   onLatestUtterancePreviewChange?: (payload: LatestUtterancePayload | null) => void
   onConversationStatsChange?: (payload: {
@@ -2137,6 +2141,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   enableNativeBannerBridge = true,
   onStartRecordingRequested,
   onSttSessionRunningChange,
+  onSttListeningChange,
+  trialTopInsetPx,
   onLatestUtteranceChange,
   onLatestUtterancePreviewChange,
   onConversationStatsChange,
@@ -5391,6 +5397,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   useEffect(() => {
     onSttSessionRunningChangeRef.current?.(isSttSessionRunning)
   }, [isSttSessionRunning])
+
+  const isSttListening = isSttSessionRunning && !isConnecting && (isReady || isActive)
+  const onSttListeningChangeRef = useRef(onSttListeningChange)
+  useEffect(() => {
+    onSttListeningChangeRef.current = onSttListeningChange
+  }, [onSttListeningChange])
+  useEffect(() => {
+    onSttListeningChangeRef.current?.(isSttListening)
+  }, [isSttListening])
 
   const conversationStatsReportTimerRef = useRef<number | null>(null)
   const latestConversationStatsRef = useRef({
@@ -8736,7 +8751,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const copyToastBottomOffsetPx = scrollToBottomButtonBottomPx + SCROLL_TO_BOTTOM_BUTTON_SIZE_PX + 12
   const nativeChatTopSpacerPx = Math.max(0, Math.round(effectiveNativeTopInsetPx))
   const nativeChatBottomSpacerPx = Math.max(0, Math.round(effectiveNativeBottomBannerInsetPx))
-  const chatPaddingTop = '0.625rem'
+  const chatPaddingTop = trialTopInsetPx && trialTopInsetPx > 0 ? `${trialTopInsetPx}px` : '0.625rem'
   const chatPaddingBottom = '0.625rem'
   const chatViewportStyle = useMemo<CSSProperties>(() => ({
     WebkitOverflowScrolling: 'touch',
@@ -11211,7 +11226,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               </div>
             ) : null}
             {showEmptyState && !directPeerMember && (
-              <ConversationEmptyState uiLocale={uiLocale} />
+              <ConversationEmptyState uiLocale={uiLocale} topInsetPx={trialTopInsetPx} />
             )}
             <AnimatePresence>
               {showConnectingOverlay && (

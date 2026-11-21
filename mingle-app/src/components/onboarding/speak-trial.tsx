@@ -7,6 +7,7 @@ import SpeechLengthCard from "@/components/LivePhoneDemo/SpeechLengthCard";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { resolveFirstRunCopy } from "@/i18n/first-run-copy";
 import { resolveSpeakTrialCopy } from "@/i18n/speak-trial-copy";
+import { pickSpeakTrialPhrase } from "@/i18n/speak-trial-phrases";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
 import {
   SPEAK_TRIAL_SECONDS,
@@ -109,6 +110,19 @@ export default function SpeakTrial({
   // Finished messages in the room, and how many tries heard nothing.
   const messageCountRef = useRef(0);
   const [silentTries, setSilentTries] = useState(0);
+  // A line to read aloud, picked once per trial in the person's own language.
+  const [phrase] = useState(() => pickSpeakTrialPhrase(locale));
+  // The hint card covers the top of the chat: the first bubble starts below it.
+  const hintVisible = phase === "ready" || phase === "listening";
+  const hintCardRef = useRef<HTMLDivElement | null>(null);
+  const [hintCardHeight, setHintCardHeight] = useState(0);
+  useEffect(() => {
+    const node = hintCardRef.current;
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => setHintCardHeight(Math.ceil(node.getBoundingClientRect().height)));
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hintVisible]);
   // No ads in the first minute: the native banner would also cover the card.
   useNativeBannerSuppression(true);
 
@@ -124,19 +138,35 @@ export default function SpeakTrial({
     if (reason === "time_up") void roomRef.current?.stopRecording();
   }, []);
 
+  // The mic permission and the connection take a few seconds: the ten seconds
+  // start only once the room is really listening (Stop turns red), or at the
+  // first words if those come first.
+  const startedAtRef = useRef<number | null>(null);
+  const startCountdown = useCallback(() => {
+    if (phaseRef.current !== "listening" || startedAtRef.current !== null) return;
+    const current = Date.now();
+    startedAtRef.current = current;
+    setStartedAt(current);
+    setNow(current);
+  }, []);
+
   const handleRunningChange = useCallback((running: boolean) => {
     if (running && phaseRef.current === "ready") {
       phaseRef.current = "listening";
+      startedAtRef.current = null;
       setPhase("listening");
-      setStartedAt(Date.now());
-      setNow(Date.now());
+      setStartedAt(null);
       return;
     }
     if (!running) endListening("stopped");
   }, [endListening]);
 
+  const handleListeningChange = useCallback((listening: boolean) => {
+    if (listening) startCountdown();
+  }, [startCountdown]);
+
   useEffect(() => {
-    if (phase !== "listening") return;
+    if (phase !== "listening" || startedAt === null) return;
     const timer = window.setInterval(() => {
       const current = Date.now();
       setNow(current);
@@ -151,6 +181,7 @@ export default function SpeakTrial({
       if (messageCountRef.current === 0 && silentTries + 1 < MAX_SILENT_TRIES) {
         captureMingleClientEvent("mingle_first_run_step", { step: "speak_trial_nothing_heard" });
         setSilentTries((count) => count + 1);
+        startedAtRef.current = null;
         setStartedAt(null);
         phaseRef.current = "ready";
         setPhase("ready");
@@ -190,9 +221,17 @@ export default function SpeakTrial({
         locale={locale}
         storageNamespace="speak-trial"
         sessionKeyOverride="speak-trial"
-        trial={{ speechLength: DEFAULT_SPEECH_LENGTH_LEVEL, headerAccessory }}
+        trial={{
+          speechLength: DEFAULT_SPEECH_LENGTH_LEVEL,
+          headerAccessory,
+          topInsetPx: phase === "ready" || phase === "listening" ? hintCardHeight + 24 : undefined,
+        }}
         onSttSessionRunningChange={handleRunningChange}
-        onConversationStatsChange={(stats) => { messageCountRef.current = stats.messageCount; }}
+        onSttListeningChange={handleListeningChange}
+        onConversationStatsChange={(stats) => {
+          messageCountRef.current = stats.messageCount;
+          if (stats.messageCount > 0) startCountdown();
+        }}
       />
 
       <AnimatePresence>
@@ -205,16 +244,19 @@ export default function SpeakTrial({
             className="pointer-events-none absolute inset-x-0 z-30 flex justify-center px-4"
             style={{ top: "calc(54px + env(safe-area-inset-top, 0px) + 12px)" }}
           >
-            <div className="flex flex-col items-center gap-2">
-              <p data-qa="speak-trial-hint" className="max-w-[360px] rounded-2xl bg-slate-950/85 px-4 py-2.5 text-center text-[0.92rem] font-semibold leading-snug text-white shadow-lg">
+            <div ref={hintCardRef} className="w-full max-w-[380px] rounded-[1.4rem] bg-slate-950/90 px-5 pb-3.5 pt-4 text-center text-white shadow-[0_14px_32px_rgba(15,23,42,0.28)]">
+              <p data-qa="speak-trial-hint" className="text-[1.05rem] font-bold leading-snug">
                 {silentTries > 0 ? copy.retryHint : copy.hint}
+              </p>
+              <p data-qa="speak-trial-phrase" className="mt-2.5 rounded-2xl bg-white px-4 py-3 text-[1.3rem] font-extrabold leading-snug text-slate-950">
+                “{phrase}”
               </p>
               {phase === "ready" ? (
                 <button
                   type="button"
                   data-qa="speak-trial-have-account"
                   onClick={skip}
-                  className="pointer-events-auto rounded-full bg-white/90 px-3 py-1.5 text-[0.8rem] font-semibold text-slate-600 shadow ring-1 ring-slate-900/5"
+                  className="pointer-events-auto mt-2.5 rounded-full px-3 py-1.5 text-[0.85rem] font-semibold text-white/75 underline-offset-4 active:text-white"
                 >
                   {copy.haveAccount}
                 </button>

@@ -110,7 +110,7 @@ type MingleHomeProps = {
    * or saved settings, starting on `speechLength`, with `headerAccessory`
    * (the countdown) in the header.
    */
-  trial?: { speechLength: SpeechLengthLevel; headerAccessory: ReactNode };
+  trial?: { speechLength: SpeechLengthLevel; headerAccessory: ReactNode; topInsetPx?: number };
   /** Auth-only: a line under the logo, e.g. why sign-in is needed. */
   authNotice?: string | null;
   /**
@@ -125,6 +125,7 @@ type MingleHomeProps = {
     switchedFromLiveConversation: boolean;
   } | void;
   onSttSessionRunningChange?: (isRunning: boolean) => void;
+  onSttListeningChange?: (isListening: boolean) => void;
   onLatestUtteranceChange?: (payload: LatestUtterancePayload, isNewUtterance: boolean) => void;
   onLatestUtterancePreviewChange?: (payload: LatestUtterancePayload | null) => void;
   onConversationStatsChange?: (payload: {
@@ -2189,6 +2190,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           enableAccountPreferencesSync={!props.trial}
           headerAccessory={props.trial?.headerAccessory}
           trialSpeechLength={props.trial?.speechLength}
+          trialTopInsetPx={props.trial?.topInsetPx}
           headerMode={props.headerMode}
           backButtonLabel={props.dictionary.profile.emailBackLabel}
           onBack={props.onBack}
@@ -2214,6 +2216,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           enableNativeBannerBridge={props.enableNativeBannerBridge}
           onStartRecordingRequested={props.onStartRecordingRequested}
           onSttSessionRunningChange={props.onSttSessionRunningChange}
+          onSttListeningChange={props.onSttListeningChange}
           onLatestUtteranceChange={props.onLatestUtteranceChange}
           onLatestUtterancePreviewChange={props.onLatestUtterancePreviewChange}
           onConversationStatsChange={props.onConversationStatsChange}

@@ -2,6 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-21 — Speak trial: a big card with a line to read, kept clear of the first bubble, ten seconds from real listening
+
+- Surface: `components/onboarding/speak-trial.tsx`, `LivePhoneDemo/LivePhoneDemo.tsx` (`onSttListeningChange`, `trialTopInsetPx`), `LivePhoneDemo/ConversationEmptyState.tsx` (`topInsetPx`), `mingle-home.tsx` (pass-through), `i18n/speak-trial-copy.ts` (`hint`, 15 languages), new `i18n/speak-trial-phrases.ts`.
+- Issue: Owner: the hint "친구에게 건넬 인사를 10초 동안…" was small, two sentences long, and covered the first bubble; and the 10 s ran while the mic permission and the connection took 3–4 s.
+- Resolution: (1) The hint is now a dark card under the header (max 380 px): one short title ("10초 동안 아래 문장을 소리 내어 말해 보세요", 1.05rem bold) and, in a white box at 1.3rem extrabold, a line to read aloud picked at random from four friendly lines in the person's language ("안녕! 만나서 반가워.", "주말에 같이 커피 마실래?" …). The skip button sits inside the card before Start. (2) The chat's top padding and the empty-state placard start below the card (its measured height + 24 px), so the first bubble is never under it. (3) The countdown stays at 10 while connecting and starts only when the room is really listening (connected, Stop shown red) or at the first message, whichever is first; a failed connection leaves it at 10.
+- Checked in the browser pane at phone width (local devbox, signed out): the card shows the title and a phrase, the placard sits below it, and the ring stayed at 10 through "연결 중…" and the failed mic. Listening on a phone not yet checked.
+
 ## 2026-11-21 — Birth date must be picked: the wheels start on a grey suggestion and Continue waits
 
 - Surface: `components/signup-birth-date-picker.tsx` (`WheelColumn` `onPicked`/`picked`, picker `onPickedChange`), `LanguageOnboardingModal.tsx` (birth-date step), profile edit (`my-page.tsx`), `i18n/signup-copy.ts` (`birthDatePickHint`, 15 languages).
