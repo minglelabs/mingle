@@ -2,6 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-21 — Speak trial's skip button says "Skip and sign in"
+
+- Surface: `i18n/speak-trial-copy.ts` (`haveAccount`, 15 languages), `components/onboarding/speak-trial.tsx` (unchanged).
+- Issue: The only way past the ten-second speak trial was a button reading "이미 계정이 있어요" / "I already have an account", so a new user who could not or did not want to speak saw no way forward (owner: "바꿔").
+- Resolution: The button reads "건너뛰고 로그인하기" / "Skip and sign in" (and the same in every app language). It does what it did: marks the trial done and opens the sign-in screen.
+- Checked on a Galaxy S9 (local devbox, app data cleared): the trial showed "Skip and sign in" under the hint.
+
 ## 2026-11-21 — Every profile shows which member the account joined as ("해시챗 1,234번째 가입자")
 
 - Surface: new `server/member-number.ts`, `server/user-profile.ts` (`/api/profile`, My page, `/p/` page), `api/users/[userId]` (someone else's profile), new `components/member-number-line.tsx`, new `i18n/member-number-copy.ts` (15 languages), `my-page.tsx`, `my-page-profile-cache.ts`, `public-user-profile-screen.tsx`.
