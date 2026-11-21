@@ -15,6 +15,7 @@ import {
   forwardRef,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useImperativeHandle,
   useMemo,
   useRef,
@@ -374,27 +375,27 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   const [socialSignInFailed, setSocialSignInFailed] = useState(false);
   // Read after mount so the first paint matches the server render.
   const [lastSignInMethod, setLastSignInMethod] = useState<SignInMethod | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    queueMicrotask(() => {
-      if (!cancelled) setLastSignInMethod(readLastSignInMethod());
-    });
-    return () => {
-      cancelled = true;
-    };
+  // Before paint, so the buttons never show one layout and then switch to another.
+  useLayoutEffect(() => {
+    setLastSignInMethod(readLastSignInMethod());
   }, []);
   const [signingInProvider, setSigningInProvider] =
     useState<NativeAuthProvider | null>(null);
   const [authPanelStep, setAuthPanelStep] = useState<AuthPanelStep>("provider");
   // Sign-in by phone number: offered once the server says it can send codes.
-  const [phoneSignInAvailable, setPhoneSignInAvailable] = useState(false);
+  // null = the server has not answered yet.
+  const [phoneSignInAvailable, setPhoneSignInAvailable] = useState<boolean | null>(null);
   // Korean sign-in (2026-11-21): the phone number leads; Apple, Google and email open under "other ways".
   const [otherSignInOpen, setOtherSignInOpen] = useState(false);
   const [isPhoneSheetOpen, setIsPhoneSheetOpen] = useState(false);
   const phoneSignInCopy = useMemo(() => resolvePhoneSignInCopy(props.locale), [props.locale]);
   // Someone who signed in another way before sees every option at once.
-  const phoneFirstSignIn = phoneSignInAvailable
-    && isKoreanUser(props.locale)
+  const isKoreanSignIn = isKoreanUser(props.locale);
+  // A Korean sees the phone button from the first paint, before the server has
+  // answered (2026-11-22: the other buttons showed for a moment, then folded away).
+  const phoneButtonShown = phoneSignInAvailable === true || (phoneSignInAvailable === null && isKoreanSignIn);
+  const phoneFirstSignIn = phoneButtonShown
+    && isKoreanSignIn
     && (lastSignInMethod === null || lastSignInMethod === "phone");
   const phoneSheetCopy = useMemo(() => ({
     ...resolvePhoneFriendsCopy(props.locale),
@@ -1409,7 +1410,9 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       .then((body: { available?: unknown } | null) => {
         if (!cancelled) setPhoneSignInAvailable(body?.available === true);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setPhoneSignInAvailable(false);
+      });
     return () => { cancelled = true; };
   }, [status]);
 
@@ -1569,7 +1572,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                 <div className="flex w-1/2 shrink-0 flex-col justify-center">
                   {/* The "last used" badge sits on a button's top edge; room for it on the first one. */}
                   <div className={`space-y-3 ${lastSignInMethod ? "pt-2.5" : ""}`}>
-                    {phoneSignInAvailable ? (
+                    {phoneButtonShown ? (
                       <button
                         type="button"
                         data-qa="auth-phone-button"

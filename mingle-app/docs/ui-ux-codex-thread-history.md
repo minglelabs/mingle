@@ -2,6 +2,18 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-22 — iOS: speech never recognised because the app's mic input was muted app-wide
+
+- Surface: `rn/ios/mingle/NativeSTTModule.swift` (`configureAudioSession`), `mingle-stt/soniox-audio-relay.ts` (`peakAmplitude` in the audio snapshot log).
+- Issue: On an iPhone 11 Pro (iOS 18.6) the speak trial heard nothing, every time. The phone sent 12 s of audio at the right pace, permission granted, built-in mic, engine running, but every sample was 0 (phone log `rmsDbfs=-180 peak=0`, server `peakAmplitude":0`), so Soniox returned no words. The system audio log showed the app's session as `ShouldInputBeMuted=YES`, "Muted Input": iOS 17+ has an app-wide input mute (`AVAudioApplication.isInputMuted`; a call's mic mute sets it) and it had stayed on for this app.
+- Resolution: Before STT starts capturing, the app turns the app-wide input mute off if it is on (iOS 17+). The STT server's connection-close log line now includes the loudest sample it received (`peakAmplitude`; 0 = the phone sent pure silence), so this is visible from the server next time. Needs a new iOS build.
+
+## 2026-11-22 — Korean sign-in: no flash of the other buttons
+
+- Surface: `components/mingle-home.tsx`.
+- Issue: Owner: on the Korean sign-in screen Apple, Google and email showed for a moment and then folded away under "다른 방법으로 로그인", because the phone button waited for the server's "can send codes" answer and the last sign-in method was read after the first paint.
+- Resolution: For a Korean the phone-first layout is drawn from the first paint (the phone button is assumed available until the server says otherwise), and the last sign-in method is read before paint (`useLayoutEffect`).
+
 ## 2026-11-22 — Speak trial: say to tap Start, and make Start pulse
 
 - Surface: `onboarding/speak-trial.tsx` (`highlightStart`), `LivePhoneDemo.tsx` (`trialHighlightStart`), `mingle-home.tsx`, `i18n/speak-trial-copy.ts` (`hint`, 15 languages).

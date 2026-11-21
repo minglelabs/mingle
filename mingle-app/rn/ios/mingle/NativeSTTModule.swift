@@ -1083,6 +1083,21 @@ class NativeSTTModule: RCTEventEmitter {
         } catch {
             NSLog("[NativeSTTModule] setPreferredInput failed: %@", error.localizedDescription)
         }
+        // iOS 17+ keeps an app-wide "input muted" switch per app (the voice talk's mic
+        // mute sets it, and iOS remembers it). While it is on, the microphone delivers
+        // pure silence to this engine although permission and route look fine
+        // (iPhone 11 Pro, 2026-11-22: every STT session sent peak 0). STT always needs the mic.
+        if #available(iOS 17.0, *) {
+            let application = AVAudioApplication.shared
+            if application.isInputMuted {
+                do {
+                    try application.setInputMuted(false)
+                    NSLog("[NativeSTTModule] input was muted app-wide; unmuted for STT")
+                } catch {
+                    NSLog("[NativeSTTModule] unmute input failed: %@", error.localizedDescription)
+                }
+            }
+        }
         // Port types and numeric audio metadata only; never log device names or speech.
         let inputs = audioSession.currentRoute.inputs.map { $0.portType.rawValue }.joined(separator: ",")
         let outputs = audioSession.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ",")

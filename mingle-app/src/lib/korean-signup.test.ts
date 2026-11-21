@@ -54,7 +54,9 @@ describe('Korean sign-up: asked, phone first, then the contact sync', () => {
 
   it('leads the sign-in screen with the phone number for Koreans and folds the rest', () => {
     const login = read('../components/mingle-home.tsx')
-    expect(login).toContain('&& isKoreanUser(props.locale)')
+    expect(login).toContain('const isKoreanSignIn = isKoreanUser(props.locale);')
+    // No flash of the other buttons while the server is still answering.
+    expect(login).toContain('phoneSignInAvailable === true || (phoneSignInAvailable === null && isKoreanSignIn)')
     expect(login).toContain('{phoneFirstSignIn && !otherSignInOpen ? (')
   })
 
