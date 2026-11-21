@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { after, NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
@@ -319,6 +319,34 @@ export async function getHashRushPublicRedirect(request: NextRequest, room: stri
   const { ticket } = issueHashRushTicket({ room, ...player }, secret);
   const target = new URL(buildHashRushPcLink({ pageUrl: HASH_RUSH_PAGE_URL, server: HASH_RUSH_SERVER, room, ticket, lang }));
   target.searchParams.set("host", "1");
+  return NextResponse.redirect(target.toString(), { status: 302, headers: { "cache-control": "no-store" } });
+}
+
+/**
+ * GET /api/hash-rush/new: a web player makes a room on the game server (so
+ * HashChat app players can find and join it too). A fresh room id, a ticket
+ * for the visitor (their HashChat name when signed in, else a guest), and the
+ * page sent in: the first one in hosts it. Listed by default, as rooms made on
+ * the web always were; the host can turn that off.
+ */
+export async function getHashRushNewRoomRedirect(request: NextRequest) {
+  const secret = (process.env.HASH_RUSH_TICKET_SECRET || "").trim();
+  const lang = (new URL(request.url).searchParams.get("lang") || request.headers.get("accept-language") || "en").split(",")[0].trim().slice(0, 12);
+  if (!secret || !HASH_RUSH_PAGE_URL || !HASH_RUSH_SERVER) return NextResponse.json({ error: "hash_rush_unavailable" }, { status: 503 });
+  const session = await getServerSession(getAuthOptions());
+  const resolvedUser = await resolveOrCreateUserIdForRequest({ request, session }).catch(() => ({ userId: null as string | null }));
+  let player: { userId: string; name: string };
+  if (resolvedUser.userId && session?.user) {
+    const user = await prisma.user.findUnique({ where: { id: resolvedUser.userId }, select: { name: true } });
+    player = { userId: resolvedUser.userId, name: (user?.name || "").trim().slice(0, 8) };
+  } else {
+    player = newHashRushGuest();
+  }
+  const room = `web-${randomBytes(6).toString("hex")}`;
+  const { ticket } = issueHashRushTicket({ room, ...player }, secret);
+  const target = new URL(buildHashRushPcLink({ pageUrl: HASH_RUSH_PAGE_URL, server: HASH_RUSH_SERVER, room, ticket, lang }));
+  target.searchParams.set("host", "1");
+  target.searchParams.set("listed", "1");
   return NextResponse.redirect(target.toString(), { status: 302, headers: { "cache-control": "no-store" } });
 }
 
