@@ -2,6 +2,12 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-22 — Sign-in button panel takes 40% of the screen
+
+- Surface: `components/mingle-home.auth-contract.ts` (`AUTH_GATE_PANEL_CLASSNAME`), `mingle-home.tsx` (buttons half of the panel).
+- Issue: Owner: with the phone button added, the dark button panel at the bottom of the sign-in screen took about 30% of the screen and looked cramped.
+- Resolution: The panel is at least 40% of the screen height (`min-h-[40dvh]`, no shrinking) and the buttons sit in its middle. The terms step slides in the same panel. (In the desktop browser pane's phone emulation `dvh` follows the real pane height, so it measures about 37%; on a phone it is 40%.)
+
 ## 2026-11-21 — Phone gate: "한국인이 아니에요" for a mistaken "Korean"
 
 - Surface: `components/onboarding/phone-gate.tsx`, `i18n/phone-gate-copy.ts` (`notKorean`, 15 languages).

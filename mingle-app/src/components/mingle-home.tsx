@@ -1566,7 +1566,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                   authPanelStep === "terms" ? "-translate-x-1/2" : "translate-x-0"
                 }`}
               >
-                <div className="w-1/2 shrink-0">
+                <div className="flex w-1/2 shrink-0 flex-col justify-center">
                   {/* The "last used" badge sits on a button's top edge; room for it on the first one. */}
                   <div className={`space-y-3 ${lastSignInMethod ? "pt-2.5" : ""}`}>
                     {phoneSignInAvailable ? (

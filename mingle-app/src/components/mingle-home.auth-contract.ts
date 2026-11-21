@@ -9,8 +9,10 @@ export type AuthGateSessionStatus = "loading" | "authenticated" | "unauthenticat
 
 export const AUTH_GATE_BACKGROUND_STYLE =
   "linear-gradient(160deg, #FBBC32 0%, #F97316 100%)";
+// At least 40% of the screen (owner, 2026-11-22: with the phone button added the
+// panel took ~30% and felt cramped); the buttons sit in the middle of it.
 export const AUTH_GATE_PANEL_CLASSNAME =
-  "rounded-t-[2rem] bg-[#1C1C1E] px-5 pb-[calc(1.05rem+env(safe-area-inset-bottom))] pt-4";
+  "flex min-h-[40dvh] shrink-0 flex-col justify-center rounded-t-[2rem] bg-[#1C1C1E] px-5 pb-[calc(1.05rem+env(safe-area-inset-bottom))] pt-4";
 
 export type AuthPanelDraftState = {
   authPanelStep: AuthPanelStep;

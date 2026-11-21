@@ -16,6 +16,7 @@ describe("mingle-home auth contracts", () => {
       "pb-[calc(1.05rem+env(safe-area-inset-bottom))]",
     );
     expect(AUTH_GATE_PANEL_CLASSNAME).toContain("bg-[#1C1C1E]");
+    expect(AUTH_GATE_PANEL_CLASSNAME).toContain("min-h-[40dvh]");
   });
 
   it("slides provider selection into the terms step with both required agreements prechecked", () => {
