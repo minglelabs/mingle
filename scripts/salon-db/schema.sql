@@ -69,3 +69,23 @@ CREATE TABLE IF NOT EXISTS crawl_queries (
   started_at  timestamptz,
   finished_at timestamptz
 );
+
+-- 네이버 플레이스 / 인스타 (playwright 수집)
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS naver_place_id text;
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS naver_visitor_reviews int;
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS naver_score numeric(3,2);
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS naver_blog_reviews int;
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS naver_booking boolean;
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS naver_talktalk text;
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS stylist_instagrams text[];
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS raw_naver jsonb;
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS instagram_full_name text;
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS instagram_bio text;
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS instagram_category text;
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS instagram_external_url text;
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS instagram_following int;
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS instagram_is_business boolean;
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS instagram_contact text;   -- business_contact_method (CALL/EMAIL/TEXT)
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS raw_instagram jsonb;
+ALTER TABLE salon_photos ADD COLUMN IF NOT EXISTS local_path text;   -- ~/salon-db/photos/... (인스타 이미지 URL은 만료돼서 파일로 받음)
+CREATE UNIQUE INDEX IF NOT EXISTS salons_naver_place_id ON salons(naver_place_id) WHERE naver_place_id IS NOT NULL;
