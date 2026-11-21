@@ -2,6 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-21 — Birth date must be picked: the wheels start on a grey suggestion and Continue waits
+
+- Surface: `components/signup-birth-date-picker.tsx` (`WheelColumn` `onPicked`/`picked`, picker `onPickedChange`), `LanguageOnboardingModal.tsx` (birth-date step), profile edit (`my-page.tsx`), `i18n/signup-copy.ts` (`birthDatePickHint`, 15 languages).
+- Issue: A read-only production query (2026-11-21): of 986 real accounts, 214 had a birth date and 55 of them (26%) were exactly 2000-01-01, the wheels' starting value; the next most common date had 3. All ordinary sign-ups (gmail, Apple relay, qq…), none test-like. With birth dates now locked, a tapped-through default would stay forever. Owner: "없애줘".
+- Resolution: The wheels still open on 2000-01-01 but show it grey, as a suggestion. A column counts as picked only when the person scrolls it or taps a value (a programmatic scroll does not count); it then turns black. Until year, month and day are all picked, the box under the wheels says "연도·월·일을 직접 골라 주세요. 한 번 정하면 바꿀 수 없어요." and Continue stays off. In profile edit (no birth date yet) the date is saved only once all three are picked. Accounts already on 2000-01-01 are unchanged.
+- Checked on a Galaxy S9 (local devbox, new account): the step opened grey with the hint and Continue off; after scrolling the year only, Continue stayed off; after month and day too, the values were black, the box showed the age rule, and Continue turned on.
+
 ## 2026-11-21 — Speak trial's skip button says "Skip and sign in"
 
 - Surface: `i18n/speak-trial-copy.ts` (`haveAccount`, 15 languages), `components/onboarding/speak-trial.tsx` (unchanged).

@@ -1872,10 +1872,9 @@ function ProfileEditPanel({
                 ) : (
                   <SignupBirthDatePicker
                     value={birthDate}
-                    onChange={(nextBirthDate) => {
-                      setBirthDate(nextBirthDate);
-                      setHasBirthDate(true);
-                    }}
+                    onChange={setBirthDate}
+                    // Saved only once year, month and day were each picked.
+                    onPickedChange={setHasBirthDate}
                     yearLabel={signupCopy.yearLabel}
                     monthLabel={signupCopy.monthLabel}
                     dayLabel={signupCopy.dayLabel}

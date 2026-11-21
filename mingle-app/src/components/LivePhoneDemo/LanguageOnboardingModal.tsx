@@ -137,6 +137,8 @@ export default function LanguageOnboardingModal({
   const [interestCode, setInterestCode] = useState<string | null>(null);
   const [interestLevel, setInterestLevel] = useState(1);
   const [birthDate, setBirthDate] = useState<BirthDateParts>(initialBirthDate);
+  // The wheels start on a grey suggestion; Continue waits until the person picked year, month and day.
+  const [birthDatePicked, setBirthDatePicked] = useState(false);
   const [usagePurpose, setUsagePurpose] = useState<UsagePurpose | null>(null);
   const [usagePurposeNote, setUsagePurposeNote] = useState("");
   const [discoverySource, setDiscoverySource] = useState<DiscoverySource | null>(null);
@@ -301,7 +303,7 @@ export default function LanguageOnboardingModal({
       : target === "discovery-source" ? Boolean(discoverySource)
       : target === "gender" ? Boolean(gender)
       : target === "height" ? heightCm > 0
-        : isEligibleAge
+        : birthDatePicked && isEligibleAge
   );
 
   const handleFinalConfirm = async () => {
@@ -749,6 +751,7 @@ export default function LanguageOnboardingModal({
               <SignupBirthDatePicker
                 value={birthDate}
                 onChange={setBirthDate}
+                onPickedChange={setBirthDatePicked}
                 yearLabel={signupCopy.yearLabel}
                 monthLabel={signupCopy.monthLabel}
                 dayLabel={signupCopy.dayLabel}
@@ -761,7 +764,7 @@ export default function LanguageOnboardingModal({
                     : "border-rose-200 bg-rose-50 text-rose-700"
                 }`}
               >
-                {isEligibleAge ? signupCopy.birthDateAgeHint : signupCopy.birthDateUnderage}
+                {!birthDatePicked ? signupCopy.birthDatePickHint : isEligibleAge ? signupCopy.birthDateAgeHint : signupCopy.birthDateUnderage}
               </div>
             </div>
           </div>

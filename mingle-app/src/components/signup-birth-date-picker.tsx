@@ -6,7 +6,7 @@ import {
   getSignupBirthYearOptions,
   type BirthDateParts,
 } from "@/lib/birth-date";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const WHEEL_ITEM_HEIGHT_PX = 48;
 const WHEEL_VIEWPORT_HEIGHT_PX = 216;
@@ -15,6 +15,13 @@ const WHEEL_SIDE_PADDING_PX = (WHEEL_VIEWPORT_HEIGHT_PX - WHEEL_ITEM_HEIGHT_PX) 
 type SignupBirthDatePickerProps = {
   value: BirthDateParts;
   onChange: (value: BirthDateParts) => void;
+  /**
+   * Called with true once the person has picked the year, the month and the
+   * day themself. Until then the wheels show a grey suggestion: a quarter of
+   * the accounts with a birth date had kept the preselected 2000-01-01
+   * (production, 2026-11-21), and birth dates are locked once saved.
+   */
+  onPickedChange?: (picked: boolean) => void;
   yearLabel: string;
   monthLabel: string;
   dayLabel: string;
@@ -27,14 +34,21 @@ export function WheelColumn({
   label,
   formatValue,
   onChange,
+  onPicked,
+  picked = true,
 }: {
   values: readonly number[];
   selectedValue: number;
   label: string;
   formatValue?: (value: number) => string;
   onChange: (value: number) => void;
+  /** The person scrolled this column or tapped a value in it (a programmatic scroll does not count). */
+  onPicked?: () => void;
+  /** False until the person has picked: the value shows grey, as a suggestion only. */
+  picked?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const userScrollingRef = useRef(false);
   const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selectedIndex = Math.max(0, values.indexOf(selectedValue));
 
@@ -77,10 +91,17 @@ export function WheelColumn({
           ref={scrollRef}
           role="listbox"
           aria-label={label}
+          onPointerDown={() => { userScrollingRef.current = true; }}
+          onTouchStart={() => { userScrollingRef.current = true; }}
+          onWheel={() => { userScrollingRef.current = true; }}
           onScroll={() => {
             if (scrollEndTimerRef.current) clearTimeout(scrollEndTimerRef.current);
             scrollEndTimerRef.current = setTimeout(() => {
               syncSelectedValue();
+              if (userScrollingRef.current) {
+                userScrollingRef.current = false;
+                onPicked?.();
+              }
               scrollToSelected("smooth");
             }, 90);
           }}
@@ -98,6 +119,7 @@ export function WheelColumn({
                 aria-selected={selected}
                 onClick={() => {
                   onChange(value);
+                  onPicked?.();
                   const index = values.indexOf(value);
                   scrollRef.current?.scrollTo({
                     top: index * WHEEL_ITEM_HEIGHT_PX,
@@ -105,7 +127,7 @@ export function WheelColumn({
                   });
                 }}
                 className={`flex h-12 w-full snap-center items-center justify-center rounded-[16px] text-[1.08rem] tabular-nums transition-[color,transform,font-size] duration-150 ${selected
-                  ? "scale-[1.04] font-bold text-slate-950"
+                  ? picked ? "scale-[1.04] font-bold text-slate-950" : "font-semibold text-slate-400"
                   : "text-slate-400 hover:text-slate-700"}`}
               >
                 {formatValue?.(value) ?? value}
@@ -127,8 +149,17 @@ export default function SignupBirthDatePicker({
   yearLabel,
   monthLabel,
   dayLabel,
+  onPickedChange,
 }: SignupBirthDatePickerProps) {
   const years = useMemo(() => getSignupBirthYearOptions(), []);
+  // Without onPickedChange the wheels behave as before (always "picked").
+  const [pickedColumns, setPickedColumns] = useState(() => ({ year: !onPickedChange, month: !onPickedChange, day: !onPickedChange }));
+  const markPicked = (column: "year" | "month" | "day") => {
+    if (pickedColumns[column]) return;
+    const next = { ...pickedColumns, [column]: true };
+    setPickedColumns(next);
+    onPickedChange?.(next.year && next.month && next.day);
+  };
   const months = useMemo(() => getSignupBirthMonthOptions(value.year), [value.year]);
   const days = useMemo(() => getSignupBirthDayOptions(value.year, value.month), [value.month, value.year]);
 
@@ -154,6 +185,8 @@ export default function SignupBirthDatePicker({
         label={yearLabel}
         formatValue={(year) => `${year}`}
         onChange={updateYear}
+        onPicked={() => markPicked("year")}
+        picked={pickedColumns.year}
       />
       <WheelColumn
         values={months}
@@ -161,6 +194,8 @@ export default function SignupBirthDatePicker({
         label={monthLabel}
         formatValue={(month) => String(month).padStart(2, "0")}
         onChange={updateMonth}
+        onPicked={() => markPicked("month")}
+        picked={pickedColumns.month}
       />
       <WheelColumn
         values={days}
@@ -168,6 +203,8 @@ export default function SignupBirthDatePicker({
         label={dayLabel}
         formatValue={(day) => String(day).padStart(2, "0")}
         onChange={(day) => onChange({ ...value, day })}
+        onPicked={() => markPicked("day")}
+        picked={pickedColumns.day}
       />
     </div>
   );
