@@ -52,6 +52,8 @@ const ALLOWED_EVENT_TYPES = new Set([
   'conversation_hydration_order_preserved',
   // Temporary field diagnostics, see src/lib/ui-diagnostics.ts.
   'ui_diagnostic',
+  // Coin store and purchase failures, see src/lib/coin-store-diagnostics.ts.
+  'coin_store_event',
 ])
 
 // This is a defensive ceiling for a client-reported single-turn duration, not a

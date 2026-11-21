@@ -168,12 +168,13 @@ export async function createCoinPurchase(request: NextRequest) {
     if (error instanceof IapVerificationError) {
       // pending (e.g. Ask to Buy, slow payment): the client keeps the transaction and retries later.
       if (error.code === 'purchase_pending') return json({ error: error.code }, 202)
+      console.warn('[coins] purchase rejected', { userId, platform, code: error.code })
       if (error.code === 'purchase_belongs_to_another_account') return json({ error: error.code }, 409)
       if (CLIENT_ERROR_CODES.has(error.code)) return json({ error: error.code }, 400)
       console.error('[coins] purchase verification unavailable', error.code)
       return json({ error: error.code }, 503)
     }
-    console.error('[coins] purchase failed', error instanceof Error ? error.message : 'unknown')
+    console.error('[coins] purchase failed', { userId, platform }, error instanceof Error ? error.message : 'unknown')
     return json({ error: 'purchase_failed' }, 500)
   }
 }
