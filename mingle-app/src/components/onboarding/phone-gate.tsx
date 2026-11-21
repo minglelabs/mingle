@@ -1,6 +1,6 @@
 "use client";
 
-import { appAccessQuery } from "@/lib/korean-signup";
+import { appAccessQuery, markKoreanAnswerSynced, writeKoreanAnswer } from "@/lib/korean-signup";
 import { Smartphone } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -33,9 +33,9 @@ export default function PhoneGate({ locale, onAccess }: { locale: string; onAcce
     captureMingleClientEvent("mingle_first_run_step", { step: "phone_gate_shown" });
   }, []);
 
-  const handleVerified = useCallback(async () => {
+  const handleVerified = useCallback(async (passedBy: "number" | "not_korean" = "number") => {
     setSheetOpen(false);
-    captureMingleClientEvent("mingle_first_run_step", { step: "phone_gate_passed" });
+    if (passedBy === "number") captureMingleClientEvent("mingle_first_run_step", { step: "phone_gate_passed" });
     try {
       const response = await fetch(`${buildClientApiPath("/account/access")}?${appAccessQuery(locale)}`, { cache: "no-store", headers: await resolveDeviceIdentityHeaders() });
       const body = response.ok ? await response.json() as Partial<Access> : null;
@@ -54,6 +54,32 @@ export default function PhoneGate({ locale, onAccess }: { locale: string; onAcce
     onAccess({ allowed: true, reason: "unknown" });
     requestContactSyncPromptCheck();
   }, [locale, onAccess]);
+
+  // Tapped "Korean" by mistake on the first screen (2026-11-21): the number is
+  // asked of Koreans only, so the answer is corrected and the gate asked again.
+  const [isLeavingAsForeigner, setIsLeavingAsForeigner] = useState(false);
+  const handleNotKorean = useCallback(async () => {
+    if (isLeavingAsForeigner) return;
+    setIsLeavingAsForeigner(true);
+    writeKoreanAnswer("no");
+    captureMingleClientEvent("mingle_first_run_step", { step: "phone_gate_not_korean" });
+    try {
+      const profileResponse = await fetch(buildClientApiPath("/profile"), { cache: "no-store" });
+      const profile = profileResponse.ok ? await profileResponse.json() as { nationalityCountry?: unknown } : null;
+      if (profile?.nationalityCountry === "KR") {
+        await fetch(buildClientApiPath("/profile"), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nationalityCountry: null }),
+        });
+      }
+      markKoreanAnswerSynced();
+    } catch {
+      // Saved by the contact-sync host on the next launch.
+    }
+    await handleVerified("not_korean");
+    setIsLeavingAsForeigner(false);
+  }, [handleVerified, isLeavingAsForeigner]);
 
   return (
     <div
@@ -77,6 +103,15 @@ export default function PhoneGate({ locale, onAccess }: { locale: string; onAcce
           className="mt-8 flex h-14 w-full max-w-[360px] items-center justify-center rounded-2xl bg-slate-950 text-[1rem] font-extrabold text-white transition active:scale-[0.985]"
         >
           {copy.start}
+        </button>
+        <button
+          type="button"
+          data-qa="phone-gate-not-korean"
+          disabled={isLeavingAsForeigner}
+          onClick={() => void handleNotKorean()}
+          className="mt-4 h-11 px-4 text-[0.95rem] font-bold text-slate-950/80 underline underline-offset-4 disabled:opacity-50"
+        >
+          {copy.notKorean}
         </button>
       </div>
       <button

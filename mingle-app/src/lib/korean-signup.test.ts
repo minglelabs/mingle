@@ -66,6 +66,8 @@ describe('Korean sign-up: asked, phone first, then the contact sync', () => {
     expect(host).toContain('if (!requiredHere && isFirstSpeakPending()) return;')
     expect(host).toContain('if (access?.allowed !== true) return;')
     expect(read('../components/onboarding/phone-gate.tsx')).toContain('requestContactSyncPromptCheck()')
+    // A foreigner who tapped "Korean" by mistake leaves the number screen with "I'm not Korean".
+    expect(read('../components/onboarding/phone-gate.tsx')).toContain('writeKoreanAnswer("no");')
     const screen = read('../components/contacts/contact-sync-screen.tsx')
     expect(screen).toContain('const mustStay = required && !permissionAnswered;')
     expect(screen).toContain('onClose={closeUnlessRequired}')

@@ -2,6 +2,12 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-21 — Phone gate: "한국인이 아니에요" for a mistaken "Korean"
+
+- Surface: `components/onboarding/phone-gate.tsx`, `i18n/phone-gate-copy.ts` (`notKorean`, 15 languages).
+- Issue: Owner: a foreigner who taps "네, 한국인이에요" by mistake on the first screen is then made to verify a (Korean) phone number.
+- Resolution: The phone gate has a "한국인이 아니에요" link under the verify button. It sets the device's answer to no, clears a KR nationality on the profile, and asks `/account/access` again (`korean=0`), which lets the account in without a number. A Korean could use it to skip the number; accepted for now.
+
 ## 2026-11-21 — "한국인이신가요?" asked right after the language
 
 - Surface: `LivePhoneDemo/LanguageOnboardingModal.tsx` (new step `korean` in `FIRST_RUN_ONBOARDING_STEPS` and `INVITE_ONBOARDING_STEPS`), new `i18n/korean-check-copy.ts` (15 languages), `lib/korean-signup.ts` (answer on the device, `isKoreanUser`, `appAccessQuery`), `contacts/contact-sync-host.tsx` (saves the answer as `nationalityCountry`), `onboarding/phone-gate.tsx`, `onboarding/invite-gate.tsx`, `mingle-home.tsx`, `server/app-access.ts` (`isPhoneRequiredFor`), `app-access-controller.ts` (`korean` query).
