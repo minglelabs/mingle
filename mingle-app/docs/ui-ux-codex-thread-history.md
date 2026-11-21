@@ -2,6 +2,12 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-21 — Contact sync screen in brand yellow
+
+- Surface: `components/contacts/contact-sync-screen.tsx`.
+- Issue: The contact sync screen ("연락처 연동") still had blue buttons (verify my number, allow contacts, invite) and a blue shield, unlike the brand-yellow phone verify sheet it opens. Owner: "바꿔줘".
+- Resolution: The three buttons are brand yellow (`#FBBC32`, pressed `#F5A623`) with dark text; the shield icon is amber. `brand-first-run.test.ts` keeps blue out of the screen.
+
 ## 2026-11-21 — Speak trial: a big card with a line to read, kept clear of the first bubble, ten seconds from real listening
 
 - Surface: `components/onboarding/speak-trial.tsx`, `LivePhoneDemo/LivePhoneDemo.tsx` (`onSttListeningChange`, `trialTopInsetPx`), `LivePhoneDemo/ConversationEmptyState.tsx` (`topInsetPx`), `mingle-home.tsx` (pass-through), `i18n/speak-trial-copy.ts` (`hint`, 15 languages), new `i18n/speak-trial-phrases.ts`.

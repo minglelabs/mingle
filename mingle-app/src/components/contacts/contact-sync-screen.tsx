@@ -321,7 +321,7 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
             {ownPhone === null ? (
               <>
                 <div className="flex items-start gap-3">
-                  <ShieldCheck size={22} strokeWidth={2} className="mt-0.5 shrink-0 text-blue-600" aria-hidden="true" />
+                  <ShieldCheck size={22} strokeWidth={2} className="mt-0.5 shrink-0 text-amber-600" aria-hidden="true" />
                   <div className="min-w-0">
                     <p className="text-[15px] font-bold leading-snug">{phoneCopy.findTitle}</p>
                     <p className="mt-1 text-[13px] leading-relaxed text-gray-500">{phoneCopy.findBody}</p>
@@ -330,7 +330,7 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
                 <button
                   type="button"
                   onClick={() => setVerifySheetOpen(true)}
-                  className="mt-3 flex h-11 w-full items-center justify-center rounded-xl bg-blue-600 text-[14.5px] font-bold text-white transition active:bg-blue-700"
+                  className="mt-3 flex h-11 w-full items-center justify-center rounded-xl bg-[#FBBC32] text-[14.5px] font-bold text-slate-950 transition active:bg-[#F5A623]"
                 >
                   {phoneCopy.verifyButton}
                 </button>
@@ -411,7 +411,7 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
                 type="button"
                 disabled={isLoadingContacts}
                 onClick={permissionBlocked ? () => { postNativeLocationSettings(); } : loadContacts}
-                className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-[15px] font-bold text-white transition active:bg-blue-700 disabled:opacity-60"
+                className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#FBBC32] text-[15px] font-bold text-slate-950 transition active:bg-[#F5A623] disabled:opacity-60"
               >
                 {isLoadingContacts ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : null}
                 {permissionBlocked ? copy.openSettings : copy.syncButton}
@@ -468,7 +468,7 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
                           onClick={() => handleInvite(contact)}
                           className={invited
                             ? "h-9 shrink-0 rounded-full border border-gray-200 px-4 text-[13.5px] font-semibold text-gray-500 transition active:bg-gray-50"
-                            : "h-9 shrink-0 rounded-full bg-blue-600 px-4 text-[13.5px] font-semibold text-white transition active:bg-blue-700 disabled:opacity-40"}
+                            : "h-9 shrink-0 rounded-full bg-[#FBBC32] px-4 text-[13.5px] font-semibold text-slate-950 transition active:bg-[#F5A623] disabled:opacity-40"}
                         >
                           {invited ? copy.invited : copy.invite}
                         </button>
