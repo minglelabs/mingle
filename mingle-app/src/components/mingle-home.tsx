@@ -52,6 +52,7 @@ import LivePhoneDemo, {
 import {
   AUTH_GATE_BACKGROUND_STYLE,
   AUTH_GATE_PANEL_CLASSNAME,
+  AUTH_GATE_PANEL_STYLE,
   createProviderResetAuthPanelState,
   createProviderSelectionAuthPanelState,
   resolveAuthGateVisualState,
@@ -1547,6 +1548,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
         <section
           aria-busy={isLoading || disabled}
           className={AUTH_GATE_PANEL_CLASSNAME}
+          style={AUTH_GATE_PANEL_STYLE}
         >
           {isLoading ? (
             /* Loading state: spinner and a random loading line */
@@ -1569,7 +1571,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                   authPanelStep === "terms" ? "-translate-x-1/2" : "translate-x-0"
                 }`}
               >
-                <div className="flex w-1/2 shrink-0 flex-col justify-center">
+                <div className="w-1/2 shrink-0" style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
                   {/* The "last used" badge sits on a button's top edge; room for it on the first one. */}
                   <div className={`space-y-3 ${lastSignInMethod ? "pt-2.5" : ""}`}>
                     {phoneButtonShown ? (
