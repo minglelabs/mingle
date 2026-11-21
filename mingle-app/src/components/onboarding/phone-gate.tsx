@@ -8,6 +8,7 @@ import { resolvePhoneFriendsCopy } from "@/i18n/phone-friends-copy";
 import { resolvePhoneGateCopy } from "@/i18n/phone-gate-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { resolveDeviceIdentityHeaders } from "@/lib/native-device-identity";
+import { requestContactSyncPromptCheck } from "@/lib/native-contacts";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
 import { requestProfileBasics } from "@/lib/profile-basics";
 import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
@@ -42,13 +43,15 @@ export default function PhoneGate({ locale, onAccess }: { locale: string; onAcce
         // Next step after the number: gender and birth date, if the profile
         // still lacks them (the same two screens a first follow would show).
         // Not while the invite gate is still in the way.
-        if (body.allowed) void requestProfileBasics();
+        // Then the contact sync (Korean sign-ups must pass it, see contact-sync-host).
+        if (body.allowed) void requestProfileBasics().finally(() => requestContactSyncPromptCheck());
         return;
       }
     } catch {
       // The number is saved; open the app rather than keep a verified user here.
     }
     onAccess({ allowed: true, reason: "unknown" });
+    requestContactSyncPromptCheck();
   }, [locale, onAccess]);
 
   return (

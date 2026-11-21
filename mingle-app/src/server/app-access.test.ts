@@ -104,6 +104,16 @@ describe('required phone number', () => {
   it('asks nobody while the server cannot send a code', () => {
     expect(needsPhoneNumber(noPhone, on, false)).toBe(false)
   })
+
+  // 2026-11-21: Koreans verify their number first (the SMS provider texts Korean numbers only).
+  it('asks only Korean-language accounts by default; PHONE_REQUIRED_LOCALES widens it', () => {
+    expect(needsPhoneNumber(noPhone, on, true, 'ko')).toBe(true)
+    expect(needsPhoneNumber(noPhone, on, true, 'ko-KR')).toBe(true)
+    expect(needsPhoneNumber(noPhone, on, true, 'en')).toBe(false)
+    expect(needsPhoneNumber(noPhone, on, true, 'ja')).toBe(false)
+    const everyone = { ...on, PHONE_REQUIRED_LOCALES: '*' } as unknown as NodeJS.ProcessEnv
+    expect(needsPhoneNumber(noPhone, everyone, true, 'en')).toBe(true)
+  })
 })
 
 describe('permanent ban', () => {

@@ -2,6 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-21 — Korean sign-up: phone number first, then the contact sync must be passed
+
+- Surface: new `lib/korean-signup.ts`; `mingle-home.tsx` (sign-in buttons), `i18n/phone-sign-in-copy.ts` (`otherWays`), `server/app-access.ts` (`PHONE_REQUIRED_LOCALES`, `isPhoneRequiredLocale`), `components/onboarding/phone-gate.tsx`, `components/contacts/contact-sync-host.tsx`, `components/contacts/contact-sync-screen.tsx` (`required`), `i18n/contact-sync-copy.ts` (`next`).
+- Issue: Owner: inviting friends from the contacts is a core feature; Koreans should verify their phone number at sign-in and then go through the contact sync, instead of finding it later on My page (it opened by itself only after the first room).
+- Resolution: "Korean" = the app language picked on the first screen is Korean. (1) Sign-in screen: the phone number button leads, larger; Apple, Google and email open under "다른 방법으로 로그인" (all shown at once for someone who last signed in another way). (2) Server: with `PHONE_REQUIRED=on`, the required phone number now applies only to the languages in `PHONE_REQUIRED_LOCALES` (default `ko`), since production texts Korean numbers only; an Apple/Google sign-up in Korean verifies its number at the phone gate. (3) Right after that (or right after onboarding for a phone sign-up), the contact sync opens by itself, without waiting for the first room; it has no back button or "later", and Back does nothing, until the contacts permission is answered (allowed, or refused in the system dialog, or already blocked); then a "다음" button at the bottom leaves it. Refusing never blocks the app (store rules). Other languages: unchanged.
+- To turn on in production: `PHONE_REQUIRED=on` on Railway (not set yet).
+
 ## 2026-11-21 — Contact sync screen in brand yellow
 
 - Surface: `components/contacts/contact-sync-screen.tsx`.

@@ -12,6 +12,8 @@ import { fillInviteTicketCopy, resolveInviteTicketCopy } from "@/i18n/invite-tic
 import LazyOverlayBoundary from "@/components/lazy-overlay-boundary";
 import { runAfterStartup } from "@/lib/after-startup";
 import { isFirstSpeakPending } from "@/lib/first-run";
+import { isContactSyncRequiredLocale } from "@/lib/korean-signup";
+import { resolveDeviceIdentityHeaders } from "@/lib/native-device-identity";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { refreshCoinWallet } from "@/lib/coin-wallet-client";
 import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";
@@ -58,6 +60,7 @@ export default function ContactSyncHost() {
   const [screenMounted, setScreenMounted] = useState(false);
   const [screenOpen, setScreenOpen] = useState(false);
   const [prompt, setPrompt] = useState(false);
+  const [required, setRequired] = useState(false);
   const [ticketMounted, setTicketMounted] = useState(false);
   const [ticketOpen, setTicketOpen] = useState(false);
   const [inviteScreenMounted, setInviteScreenMounted] = useState(false);
@@ -108,18 +111,36 @@ export default function ContactSyncHost() {
       // to offer, and an older app shell (before the contacts module) would
       // show a dead screen and use up the one-time prompt before an update.
       if (promptSettledRef.current || !isNativeContactsSupported()) return;
-      // A new user is first asked to say something (the first-run card on the
-      // conversation list). This screen would cover that card, so it waits
-      // until they have left their first room, which asks again.
-      if (isFirstSpeakPending()) return;
+      // Korean sign-ups (2026-11-21) get the screen right after sign-up, once
+      // their number is verified (the phone gate asks again when it closes);
+      // they already tried the interpreter before signing in.
+      const requiredHere = isContactSyncRequiredLocale(localeRef.current);
+      // Everyone else is first asked to say something (the first-run card on
+      // the conversation list). This screen would cover that card, so it
+      // waits until they have left their first room, which asks again.
+      if (!requiredHere && isFirstSpeakPending()) return;
       const response = await fetch(buildClientApiPath("/referral"), { cache: "no-store" });
       if (!response.ok) return;
       const body = await response.json() as { shouldPromptContactSync?: unknown };
+      if (body.shouldPromptContactSync !== true) {
+        promptSettledRef.current = true;
+        return;
+      }
+      if (requiredHere) {
+        // Not over the phone gate (or the invite gate): asked again when it closes.
+        const accessResponse = await fetch(
+          `${buildClientApiPath("/account/access")}?locale=${encodeURIComponent(localeRef.current)}`,
+          { cache: "no-store", headers: await resolveDeviceIdentityHeaders() },
+        );
+        const access = accessResponse.ok ? await accessResponse.json() as { allowed?: unknown } : null;
+        if (access?.allowed !== true) return;
+      }
       promptSettledRef.current = true;
-      if (body.shouldPromptContactSync !== true) return;
       setPrompt(true);
+      setRequired(requiredHere);
       setScreenMounted(true);
       setScreenOpen(true);
+      captureMingleClientEvent("mingle_first_run_step", { step: requiredHere ? "contact_sync_required_shown" : "contact_sync_prompt_shown" });
       // Shown once per account, whatever the person does with it.
       void fetch(buildClientApiPath("/referral"), {
         method: "PATCH",
@@ -155,6 +176,7 @@ export default function ContactSyncHost() {
 
     const openScreen = () => {
       setPrompt(false);
+      setRequired(false);
       setScreenMounted(true);
       setScreenOpen(true);
     };
@@ -194,7 +216,7 @@ export default function ContactSyncHost() {
     <>
       {screenMounted ? (
         <LazyOverlayBoundary onFail={() => { setScreenOpen(false); setScreenMounted(false); }}>
-          <ContactSyncScreen open={screenOpen} onClose={() => setScreenOpen(false)} locale={locale} prompt={prompt} />
+          <ContactSyncScreen open={screenOpen} onClose={() => setScreenOpen(false)} locale={locale} prompt={prompt} required={required} />
         </LazyOverlayBoundary>
       ) : null}
       {ticketMounted ? (

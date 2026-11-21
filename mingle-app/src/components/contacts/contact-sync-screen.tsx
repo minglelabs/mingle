@@ -42,6 +42,13 @@ type ContactSyncScreenProps = {
   locale: string;
   /** Opened by itself right after signup: adds a "Maybe later" button. */
   prompt?: boolean;
+  /**
+   * Korean sign-ups (2026-11-21): the screen cannot be left until the contacts
+   * permission was answered (allowed, or refused in the system dialog, which is
+   * the person's way out: the store rules forbid blocking the app on it). Then
+   * a Next button replaces back and "Maybe later".
+   */
+  required?: boolean;
 };
 
 type ReferralState = {
@@ -52,7 +59,7 @@ type ReferralState = {
 // Rows drawn at once; the rest appear as the list is scrolled.
 const CONTACT_PAGE_SIZE = 80;
 
-export default function ContactSyncScreen({ open, onClose, locale, prompt = false }: ContactSyncScreenProps) {
+export default function ContactSyncScreen({ open, onClose, locale, prompt = false, required = false }: ContactSyncScreenProps) {
   const { data: session } = useSession();
   const copy = useMemo(() => resolveContactSyncCopy(locale), [locale]);
   const [referral, setReferral] = useState<ReferralState | null>(null);
@@ -74,6 +81,8 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
   const [invitedPhones, setInvitedPhones] = useState<Set<string>>(() => new Set());
   const requestSequenceRef = useRef(0);
   const pendingRequestIdRef = useRef("");
+  // Required mode: true once the contacts permission was answered (or cannot be asked).
+  const [permissionAnswered, setPermissionAnswered] = useState(false);
 
   // Friends already on HashChat: needs the user's own verified number, then
   // the contacts' numbers are matched as hashes (see contact-match-client).
@@ -115,7 +124,10 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
     const requestId = `contacts-${requestSequenceRef.current}`;
     pendingRequestIdRef.current = requestId;
     setIsLoadingContacts(true);
-    if (!postNativeContactsRequest(requestId)) setIsLoadingContacts(false);
+    if (!postNativeContactsRequest(requestId)) {
+      setIsLoadingContacts(false);
+      setPermissionAnswered(true);
+    }
   }, []);
 
   // Everything the screen needs is read when it opens, so a reopen shows fresh state.
@@ -159,6 +171,7 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
       if (cancelled) return;
       setNativeSupported(supported);
       setInvitedPhones(readInvitedPhones());
+      if (!supported) setPermissionAnswered(true);
     });
     if (!supported) return () => { cancelled = true; };
 
@@ -168,13 +181,17 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
         if (event.requestId === "contacts-check") {
           // Already allowed earlier: show the list without another tap.
           if (event.permission === "granted") loadContacts();
+          // Refused for good earlier (only the settings can change it), or no contacts on this device.
+          else if (event.permission === "blocked" || event.permission === "unavailable") setPermissionAnswered(true);
         } else if (event.permission !== "granted") {
           setIsLoadingContacts(false);
+          setPermissionAnswered(true);
         }
         return;
       }
       if (event.requestId && event.requestId !== pendingRequestIdRef.current) return;
       setIsLoadingContacts(false);
+      setPermissionAnswered(true);
       if (event.type === "contacts") {
         setContacts(Array.isArray(event.contacts) ? event.contacts : []);
         setVisibleCount(CONTACT_PAGE_SIZE);
@@ -260,11 +277,15 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
   }, [filteredContacts.length]);
 
   const permissionBlocked = permission === "blocked";
+  const mustStay = required && !permissionAnswered;
+  const closeUnlessRequired = useCallback(() => {
+    if (!mustStay) onClose();
+  }, [mustStay, onClose]);
 
   return (
     <SlideSurface
       open={open}
-      onClose={onClose}
+      onClose={closeUnlessRequired}
       ariaLabel={copy.title}
       zIndex={130}
       nativeBackPriority={130}
@@ -278,14 +299,16 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
           paddingTop: "env(safe-area-inset-top, 44px)",
         }}
       >
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-gray-100"
-          aria-label={copy.later}
-        >
-          <ChevronLeft size={25} strokeWidth={2.1} aria-hidden="true" />
-        </button>
+        {required ? <div aria-hidden="true" /> : (
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-gray-100"
+            aria-label={copy.later}
+          >
+            <ChevronLeft size={25} strokeWidth={2.1} aria-hidden="true" />
+          </button>
+        )}
         <h2 className="truncate text-center text-[17px] font-bold">{copy.title}</h2>
         <div aria-hidden="true" />
       </header>
@@ -481,7 +504,7 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
           )}
         </section>
 
-        {prompt ? (
+        {prompt && !required ? (
           <button
             type="button"
             onClick={onClose}
@@ -491,6 +514,22 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
           </button>
         ) : null}
       </div>
+      {required ? (
+        <div
+          className="shrink-0 border-t border-gray-100 bg-white px-5 pt-3"
+          style={{ paddingBottom: "calc(12px + env(safe-area-inset-bottom, 0px))" }}
+        >
+          <button
+            type="button"
+            data-qa="contact-sync-next"
+            disabled={mustStay}
+            onClick={onClose}
+            className="flex h-12 w-full items-center justify-center rounded-xl bg-slate-950 text-[15px] font-bold text-white transition active:opacity-85 disabled:opacity-30"
+          >
+            {copy.next}
+          </button>
+        </div>
+      ) : null}
       {verifySheetOpen ? (
         <PhoneVerifySheet
           copy={phoneCopy}

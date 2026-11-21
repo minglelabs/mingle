@@ -21,8 +21,11 @@ import { ReferralError, redeemReferralCode } from '@/server/referral'
  * Off by default: until INVITE_GATE=on nothing changes for anyone.
  *
  * Required phone number, checked before the invite gate: with PHONE_REQUIRED=on
- * every account, old or new and in every app language, verifies its own phone
- * number once after sign-in ('needs_phone'), however it signed in. Operators,
+ * every account, old or new, whose app language is in PHONE_REQUIRED_LOCALES
+ * (comma-separated, default "ko"; "*" = every language) verifies its own phone
+ * number once after sign-in ('needs_phone'), however it signed in. Korean is
+ * the default because the SMS provider in production texts Korean numbers only
+ * (2026-11-21: Koreans verify their number, then are shown the contact sync). Operators,
  * the official account and store-review accounts skip it. While this server
  * cannot send a code (no SMS provider set up) nobody is asked, so turning the
  * switch on before the keys are in locks no one out.
@@ -78,13 +81,25 @@ export function isPhoneRequiredOn(env: NodeJS.ProcessEnv = process.env): boolean
   return ['1', 'on', 'true'].includes((env.PHONE_REQUIRED ?? '').trim().toLowerCase())
 }
 
+/** Whether the required phone number applies to an app language. No language sent counts as included. */
+export function isPhoneRequiredLocale(rawLocale: string | null | undefined, env: NodeJS.ProcessEnv = process.env): boolean {
+  const locales = (env.PHONE_REQUIRED_LOCALES ?? 'ko').split(',').map((entry) => entry.trim().toLowerCase()).filter(Boolean)
+  if (locales.length === 0 || locales.includes('*')) return true
+  const locale = (rawLocale ?? '').trim().toLowerCase()
+  if (!locale) return true
+  const language = locale.split(/[-_]/)[0]
+  return locales.some((entry) => entry === locale || entry === language)
+}
+
 /** Whether this account still has to verify a phone number before using the app. */
 export function needsPhoneNumber(
   user: Pick<AppAccessUser, 'isOperator' | 'isOfficial' | 'phoneE164' | 'email'>,
   env: NodeJS.ProcessEnv = process.env,
   canSendCodes: boolean = isPhoneVerificationAvailable(),
+  locale?: string | null,
 ): boolean {
   if (!isPhoneRequiredOn(env) || !canSendCodes) return false
+  if (!isPhoneRequiredLocale(locale, env)) return false
   if (user.phoneE164) return false
   if (user.isOperator || user.isOfficial) return false
   return !isReviewAccount(user, env)
@@ -108,7 +123,7 @@ const ACCESS_SELECT = {
 } as const
 
 export async function readAppAccess(userId: string, locale?: string | null, options: { deviceBlocked?: boolean } = {}): Promise<AppAccess> {
-  const phoneRequired = isPhoneRequiredOn() && isPhoneVerificationAvailable()
+  const phoneRequired = isPhoneRequiredOn() && isPhoneVerificationAvailable() && isPhoneRequiredLocale(locale)
   const user = await prisma.user.findUnique({ where: { id: userId }, select: ACCESS_SELECT })
   if (user?.bannedAt) return { allowed: false, reason: 'banned' }
   if (options.deviceBlocked && user && !user.isOperator && !user.isOfficial) return { allowed: false, reason: 'banned' }
@@ -117,7 +132,7 @@ export async function readAppAccess(userId: string, locale?: string | null, opti
     if (!isInviteGateLocale(locale)) return { allowed: true, reason: 'other_locale' }
   }
   if (!user) return phoneRequired && !isInviteGateOn() ? { allowed: true, reason: 'gate_off' } : { allowed: false, reason: 'needs_invite' }
-  if (phoneRequired && needsPhoneNumber(user, process.env, true)) return { allowed: false, reason: 'needs_phone' }
+  if (phoneRequired && needsPhoneNumber(user, process.env, true, locale)) return { allowed: false, reason: 'needs_phone' }
   const access = resolveAppAccess(user, process.env, locale)
   if (access.reason !== 'needs_invite') return access
   // Stopped by the gate for the first time: onto the waitlist, no button needed.

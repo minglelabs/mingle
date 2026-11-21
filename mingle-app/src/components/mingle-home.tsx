@@ -26,6 +26,7 @@ import type { SpeechLengthLevel } from "@/lib/speech-length";
 import PhoneVerifySheet from "@/components/contacts/phone-verify-sheet";
 import { resolvePhoneFriendsCopy } from "@/i18n/phone-friends-copy";
 import { resolvePhoneSignInCopy } from "@/i18n/phone-sign-in-copy";
+import { isPhoneFirstSignInLocale } from "@/lib/korean-signup";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { MessageReactionsProvider } from "./LivePhoneDemo/MessageReactions";
 import { MessageRecallProvider } from "./LivePhoneDemo/MessageRecall";
@@ -387,8 +388,14 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   const [authPanelStep, setAuthPanelStep] = useState<AuthPanelStep>("provider");
   // Sign-in by phone number: offered once the server says it can send codes.
   const [phoneSignInAvailable, setPhoneSignInAvailable] = useState(false);
+  // Korean sign-in (2026-11-21): the phone number leads; Apple, Google and email open under "other ways".
+  const [otherSignInOpen, setOtherSignInOpen] = useState(false);
   const [isPhoneSheetOpen, setIsPhoneSheetOpen] = useState(false);
   const phoneSignInCopy = useMemo(() => resolvePhoneSignInCopy(props.locale), [props.locale]);
+  // Someone who signed in another way before sees every option at once.
+  const phoneFirstSignIn = phoneSignInAvailable
+    && isPhoneFirstSignInLocale(props.locale)
+    && (lastSignInMethod === null || lastSignInMethod === "phone");
   const phoneSheetCopy = useMemo(() => ({
     ...resolvePhoneFriendsCopy(props.locale),
     sheetTitle: phoneSignInCopy.sheetTitle,
@@ -1569,7 +1576,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                         aria-label={phoneSignInCopy.button}
                         onClick={() => handleProviderSelect("phone")}
                         disabled={disabled}
-                        className="relative inline-flex w-full items-center justify-center rounded-2xl bg-[#FBBC32] py-[0.92rem] text-[0.95rem] font-bold text-slate-950 transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                        className={`relative inline-flex w-full items-center justify-center rounded-2xl bg-[#FBBC32] font-bold text-slate-950 transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${phoneFirstSignIn ? "py-[1.1rem] text-[1.05rem]" : "py-[0.92rem] text-[0.95rem]"}`}
                       >
                         <span className="absolute left-5">
                           <Smartphone className="h-5 w-5" aria-hidden />
@@ -1578,6 +1585,17 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                         {lastSignInMethod === "phone" ? lastUsedBadge : null}
                       </button>
                     ) : null}
+                    {phoneFirstSignIn && !otherSignInOpen ? (
+                      <button
+                        type="button"
+                        data-qa="auth-other-ways"
+                        onClick={() => setOtherSignInOpen(true)}
+                        disabled={disabled}
+                        className="inline-flex w-full items-center justify-center py-2 text-[0.92rem] font-semibold text-white/75 underline underline-offset-4 transition active:text-white disabled:opacity-50"
+                      >
+                        {phoneSignInCopy.otherWays}
+                      </button>
+                    ) : (<>
                     <button
                       type="button"
                       aria-label={
@@ -1627,6 +1645,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                       {props.dictionary.profile.loginEmail}
                       {lastSignInMethod === "email" ? lastUsedBadge : null}
                     </button>
+                    </>)}
 
                     {!props.appleOAuthEnabled ? (
                       <p className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-300">
