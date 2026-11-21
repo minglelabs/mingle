@@ -110,6 +110,11 @@ function ActivityCard({ item, nowMs, korean, active }: { item: ActivityItem; now
         <Link href={href} prefetch={false} aria-current={active ? 'page' : undefined} className={`${className} active:bg-slate-50`}>
           {body}
         </Link>
+      ) : item.type === 'follow' ? (
+        // A follow has no thread: open the follower's public profile instead.
+        <a href={`/p/${encodeURIComponent(item.actor.userId)}`} target="_blank" rel="noreferrer" className={`${className} active:bg-slate-50`}>
+          {body}
+        </a>
       ) : (
         <div className={className}>{body}</div>
       )}
