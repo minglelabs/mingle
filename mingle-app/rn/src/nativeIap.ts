@@ -97,8 +97,10 @@ export function createNativeIapBridge(options: {
   };
 
   // Sent to the web side, which logs it (src/lib/coin-store-diagnostics.ts).
-  const describeError = (error: unknown): string =>
-    String((error as { message?: unknown } | null)?.message ?? error ?? '').slice(0, 300);
+  const describeError = (error: unknown): string | undefined => {
+    const message = (error as { message?: unknown } | null)?.message;
+    return typeof message === 'string' && message ? message.slice(0, 300) : undefined;
+  };
 
   const handleError = (error: PurchaseError) => {
     const productId = error.productId || activeProductId;
