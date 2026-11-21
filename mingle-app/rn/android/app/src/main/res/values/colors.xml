@@ -1,0 +1,4 @@
+<resources>
+    <!-- Same as STARTUP_SPLASH_BACKGROUND in App.tsx and the iOS launch screen. -->
+    <color name="startup_splash_background">#FCC12F</color>
+</resources>

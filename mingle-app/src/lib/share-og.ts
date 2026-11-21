@@ -5,10 +5,11 @@ import type { Metadata } from "next";
 // invite tickets (/i/). Previews are cached by image URL, and /og-image.png showed the
 // Mingle card before the rename, so the HashChat card lives at its own URL.
 export const HASHCHAT_OG_IMAGE = {
-  url: "/og-hashchat.png?v=20261112",
+  // v=20261121: the card's line is now the brand line (it was the old "translated for you" feed line).
+  url: "/og-hashchat.png?v=20261121",
   width: 1200,
   height: 630,
-  alt: "HashChat: make Korean friends, interpreted as you talk",
+  alt: "HashChat: make Korean friends, even before your Korean is good",
 };
 
 export const HASHCHAT_OG_TITLE = "HashChat: make Korean friends";

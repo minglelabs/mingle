@@ -19,13 +19,18 @@ img{{position:absolute;left:{lx}px;top:{ly}px;width:{ls}px;height:{ls}px}}
 h1{{margin:0;font-size:{h1}px;font-weight:800;letter-spacing:-0.02em;line-height:1}}
 p{{margin:{gap}px 0 0;font-size:{p}px;font-weight:600;line-height:1.25;color:#4A3B12;white-space:nowrap}}
 </style></head><body><img src="{logo}"><div class="t"><h1>HashChat</h1>
-<p>Posts and chats from everywhere,<br>translated for you</p></div></body></html>"""
+<p>Make Korean friends,<br>even before your Korean is good</p></div></body></html>"""
 
 TARGETS = [
     # (output, width, height, logo size, text left, h1, p, gap)
-    ("mingle-app/rn/google-play-console-info/assets/feature-graphic.png", 1024, 500, 480, 480, 96, 32, 18),
-    ("mingle-app/public/og-image.png", 2400, 1260, 1180, 1150, 210, 70, 40),
-    ("mingle-landing/public/og-image.png", 2400, 1260, 1180, 1150, 210, 70, 40),
+    # The brand line (docs/positioning-korean-friends.md); it was the old feed line until 2026-11-21.
+    ("mingle-app/rn/google-play-console-info/assets/feature-graphic.png", 1024, 500, 480, 480, 96, 29, 18),
+    ("mingle-app/public/og-image.png", 2400, 1260, 1180, 1150, 210, 62, 40),
+    ("mingle-landing/public/og-image.png", 2400, 1260, 1180, 1150, 210, 62, 40),
+    # The share card used by in-app links and the homepage (1200x630).
+    ("mingle-app/public/og-hashchat.png", 1200, 630, 590, 575, 105, 31, 20),
+    ("mingle-app/public/legal/og-image.png", 1200, 630, 590, 575, 105, 31, 20),
+    ("mingle-app/public/legal/assets/og-hashchat.png", 1200, 630, 590, 575, 105, 31, 20),
 ]
 
 with tempfile.TemporaryDirectory() as tmp:

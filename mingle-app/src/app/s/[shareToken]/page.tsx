@@ -142,6 +142,6 @@ export async function generateMetadata({ params }: ConversationSpectatePageProps
   }
   const title = "A conversation shared from HashChat";
   const description =
-    "Read it in your own language. HashChat (formerly Mingle) interprets conversations as people talk.";
+    "Read it in your own language. HashChat interprets conversations as people talk, so friends can talk across languages.";
   return { title, description, ...shareLinkPreview(title, description) };
 }

@@ -1,11 +1,11 @@
 # HashChat (formerly Mingle)
 
-> HashChat is a social network and voice messenger without language barriers: a translated feed, profiles that show the languages people speak and want, and chats with real-time voice interpreting, for making foreign friends, joining global communities, and talking while traveling. It was called Mingle until October 2026; HashChat and Mingle are the same app, with the same accounts and the same App Store and Google Play listings. It is made by Mingle Labs.
+> HashChat is an app for Koreans and people from other countries to become friends, even before they share a language: chats show in each person's own language and voice talks are interpreted live, so language exchange works from day one. People abroad use it to make Korean friends (and to get local tips before a trip to Korea); Koreans use it to make foreign friends. It also has a translated feed and a mini game to play together. It was called Mingle until October 2026; HashChat and Mingle are the same app, with the same accounts and the same App Store and Google Play listings. It is made by Mingle Labs.
 
 - App Store: https://apps.apple.com/app/id6759795134
 - Google Play: https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn
+- Download (picks the store for your phone): https://hashchat.minglelabs.app/get
 - Company: https://minglelabs.app/
-- The old site at translator.minglelabs.xyz has moved to hashchat.minglelabs.app. The .xyz domain no longer works; links to it should point here.
 - Earlier store names: "Mingle: The Easiest Translator", "Mingle: 제일 쉬운 번역기", "Mingle: いちばん簡単な翻訳機", "Mingle: Global Hangout". All are this app, now HashChat.
 
 ## Key facts

@@ -544,7 +544,7 @@
             "promotionalText": "Make Korean friends, even before your Korean is good. Chats show in your own language and voice talks are interpreted live. Language exchange from day one.",
             "whatsNew": "What's New in Version 2.5.0:\n• Voice talk: call everyone in a room at once and hear each other interpreted, with live captions and translations read aloud\n• Hash Rush: play a quick party game with the people in your room\n• Rotate or flip a photo before you send it\n• Stability and performance improvements",
             "description": "Make Korean friends, even before your Korean is good. That's HashChat.\n\nTalk in your own language\n• Chat messages show up in each person's own language.\n• Voice talks are interpreted live, so you can just speak.\n• Language exchange works from day one. Pick up Korean as you chat.\n\nHonest conversations\n• Make real friends without worrying about creeps or scammers.\n• Report or block anyone in one tap, and our team reviews reports.\n\nThings to enjoy together\n• Read your friends' posts in your own language and leave comments.\n• Play mini games like Hash Rush with your friends.\n\nTips from local friends\n• Planning a trip to Korea? Make local friends before you go.\n• Ask them about the hair salons, clinics and restaurants they love.\n• Need a booking? Make the call, and HashChat interprets it for you.\n\nFor K-pop and K-drama fans, Korean learners, and anyone heading to Korea.\n\nAlso in HashChat: live voice translator, simultaneous interpretation, real-time captions, call translation and multilingual chat translation. HashChat (Mingle): the easiest translator for your global hangout.",
-            "keywords": "language,exchange,penpal,learn,korea,travel,trip,kpop,chat,translator,easiest,global,hangout,mingle",
+            "keywords": "language,exchange,penpal,learn,korea,travel,kpop,translator,easiest,global,hangout,mingle,captions",
             "supportUrl": "https://hashchat.minglelabs.app",
             "marketingUrl": "https://minglelabs.app"
           },
@@ -678,7 +678,7 @@
           "ja": "HashChat: 韓国人の友達づくり",
           "ko": "HashChat: 외국인 친구 사귀기",
           "pt": "HashChat: Faça amigos coreanos",
-          "ru": "HashChat: найди друзей в Корее",
+          "ru": "HashChat: дружи с корейцами",
           "th": "HashChat: หาเพื่อนเกาหลี",
           "vi": "HashChat: Kết bạn Hàn Quốc",
           "zh-cn": "HashChat：结交韩国朋友",
