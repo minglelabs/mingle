@@ -31,3 +31,18 @@ psql salon_db -c "select * from outreach limit 50"
   `https://places.googleapis.com/v1/{url}/media?maxWidthPx=800&key=KEY` 로 보기, 작성자 표기(`attribution`) 필수.
   인스타 사진 URL은 만료되니 필요할 때 `enrich:instagram` 재실행.
 - Fresha: 공개 API 없음. 한국 매장 수가 적어 수동으로 `fresha_url`에 기입.
+
+## 카카오맵 브라우저 수집 (현재 주력)
+
+API 키 없이 크롬(로그인된 프로필)에서 카카오맵을 직접 돌며 모은다. 네이버 지도는 Claude in Chrome 정책상 접근 불가.
+
+1. `pnpm migrate` 후 `crawl_queries`에 `dong-queries.txt`(서울 426 + 부산 206 행정동 × "미용실") 적재
+   `psql salon_db -c "\copy crawl_queries(query) FROM 'dong-queries.txt'"`
+2. `node collector-server.mjs` (127.0.0.1:4777, 결과를 salon_db에 저장)
+3. 크롬 탭 두 개에 스크립트 붙여넣기 (처음 한 번 "로컬 네트워크 접근" 허용 필요)
+   - `map.kakao.com` 탭 → `browser/kakao-list.js`: 동별 검색, 목록 34페이지(최대 ~500곳)까지 넘기며 이름·주소·전화·평점·블로그 리뷰수
+   - `place.map.kakao.com/<아무 id>` 탭 → `browser/kakao-details.js`: 블로그 리뷰 많은 순으로 상세 JSON → 인스타 링크, 전화, 사진 20장, 메뉴·가격, 태그
+4. 진행 확인: `curl 127.0.0.1:4777/stats`
+5. 멈추기: 탭 콘솔에서 `window.__salonListStop = true` / `window.__salonDetailStop = true`
+
+카카오 목록의 "리뷰 N"은 블로그 리뷰 수 → `blog_review_count`. 카카오 자체 별점 리뷰는 `kakao_review_count`.

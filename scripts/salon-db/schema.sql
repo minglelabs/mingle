@@ -49,3 +49,23 @@ CREATE TABLE IF NOT EXISTS salon_photos (
   fetched_at  timestamptz DEFAULT now(),
   UNIQUE (salon_id, source, url)
 );
+
+-- 카카오맵 브라우저 수집 (collector-server.mjs)
+ALTER TABLE salons ALTER COLUMN city DROP NOT NULL;
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS category text;
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS kakao_rating numeric(2,1);
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS kakao_review_count int;
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS blog_review_count int;
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS photo_count int;
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS tags text[];
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS raw_kakao jsonb;
+CREATE UNIQUE INDEX IF NOT EXISTS salons_kakao_place_id ON salons(kakao_place_id);
+
+CREATE TABLE IF NOT EXISTS crawl_queries (
+  query       text PRIMARY KEY,
+  status      text DEFAULT 'todo',            -- todo | running | done
+  total       int,
+  collected   int,
+  started_at  timestamptz,
+  finished_at timestamptz
+);
