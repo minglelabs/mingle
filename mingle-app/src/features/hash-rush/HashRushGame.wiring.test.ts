@@ -322,7 +322,7 @@ describe('hash rush stage 2 device fixes', () => {
     // Messages go the room's own way.
     expect(liveDemoSource).toContain('<HashRushQuickChatBar uiLocale={uiLocale} onSend={handleHashRushQuickChat} />')
     // In the game: bubbles over hamsters, floating lines, the conversation over the composer.
-    expect(gameSource).toContain("client?.hearRoom(post, { quiet: started || post.userId === latestRef.current.viewerKey })")
+    expect(gameSource).toContain("client?.hearRoom(post, { quiet: started || mine, mine: mine && !started })")
     expect(gameSource).toContain('clientRef.current?.setChatting(chatOpen)')
     expect(gameSource).toContain('bottom: chat.dockHeightPx,')
     expect(gameSource).toContain('never past the back pill at the top')

@@ -93,12 +93,17 @@ export const HASH_RUSH_FILL_MAX = 8
 /** Sides a player can pick in team play (the server takes 0-3). */
 export const HASH_RUSH_TEAMS = 4
 
-export type HashRushSetup = { teams?: boolean, map?: string, bots?: string, fill?: number }
+/** `bots` with a `seat` sets that computer's own level; without, every computer's. */
+export type HashRushSetup = { teams?: boolean, map?: string, bots?: string, fill?: number, seat?: number }
 
 export function setupMessage(patch: HashRushSetup) {
   return { t: 'setup' as const, ...patch }
 }
 export const GO_MESSAGE = { t: 'go' as const }
+/** The host stops the round (or skips the result): everybody goes to the lobby. */
+export const END_MESSAGE = { t: 'end' as const }
+/** The host starts the next round straight from the result. */
+export const AGAIN_MESSAGE = { t: 'again' as const }
 export function handHostMessage(seat: number) {
   return { t: 'host' as const, seat }
 }

@@ -27,6 +27,8 @@ import { setLanguage, t } from './engine/client/i18n.js'
 import { joinServerRoom } from './engine/client/net.js'
 import {
   GO_MESSAGE,
+  END_MESSAGE,
+  AGAIN_MESSAGE,
   HASH_RUSH_BOT_LEVELS,
   HASH_RUSH_FILL_MAX,
   HASH_RUSH_FILL_MIN,
@@ -70,7 +72,7 @@ import {
   type HashRushTitleWords,
   type HashRushVerdict,
 } from './score'
-import { createChatBubbles, type HashRushBubble, type HashRushChatEntry } from './room-chat'
+import { createChatBubbles, lineLife, type HashRushBubble, type HashRushChatEntry } from './room-chat'
 import type { HashRushTicketGrant } from './ticket'
 
 export type HashRushGameElements = {
@@ -160,8 +162,10 @@ export type HashRushLobbyView = {
   /** "🌻 Meadow · Free-for-all" (#35: team or not, plain to see). */
   mode: string
   seats: HashRushLobbySeat[]
-  /** Free seats. */
+  /** Seats no person is in (the computers the round brings in sit in some of them). */
   open: number
+  /** The computers as the server seats them (hash-rush #243 on): seat and level, in row order. Empty from an older server. */
+  botRows: { seat: number, level: string }[]
   /** Computers the next round brings in to fill seats. */
   bots: number
   /** "👀 2 watching: …", '' when nobody is. */
@@ -260,6 +264,12 @@ export type HashRushGameClient = {
   setup(patch: HashRushSetup): void
   /** The host starts the round. */
   go(): void
+  /** The host stops the round, or skips its result: everybody back to the lobby. */
+  endRound(): void
+  /** The host starts the next round straight from the result. */
+  again(): void
+  /** This viewer hosts and a round (or its result) is up: endRound() would do something. */
+  canEndRound(): boolean
   /** The host hands the room to the person in `seat`. */
   handHost(seat: number): void
   /** Picks this viewer's side in team play. */
@@ -271,7 +281,7 @@ export type HashRushGameClient = {
    * speaker's hamster. The same id again is its translation come in. `quiet`:
    * no chime (the viewer's own line, or one heard again).
    */
-  hearRoom(entry: Pick<HashRushChatEntry, 'id' | 'userId' | 'text'>, options?: { quiet?: boolean }): void
+  hearRoom(entry: Pick<HashRushChatEntry, 'id' | 'userId' | 'text'>, options?: { quiet?: boolean, mine?: boolean }): void
   /**
    * The room's composer is up over the game: the controls take no touch and no
    * key, and this hamster stands still. Once it goes down they come back a
@@ -351,6 +361,9 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
   // What the room said over whose hamster: seat -> bubble, as the renderer draws it.
   const bubbles = new Map<number, HashRushBubble>()
   const sayInBubble = createChatBubbles(bubbles)
+  let webChatCount = 0
+  // This viewer's own room lines already passed to the game's talk, for the web pages in the room.
+  const toldWeb = new Set<string>()
   const pid = newPid()
   const listening = new AbortController()
 
@@ -538,7 +551,20 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
       nope = why === 'needTeams' ? String(t('needTeams')) : why ? String(t('needOpponent')) : ''
       if (!game) showLobby()
     }
-    // 'chat' and 'rename' are the game's own talk: in the app the talk is the room's.
+    // The game's own talk. App players talk in the room (and hear each other
+    // there), so a line from a seat with a mingle user is the room's and is
+    // left to it. A line from a web page (an invite link, no mingle user) has
+    // nowhere else to show: it goes up over its speaker's hamster.
+    if (type === 'chat') {
+      const m = message as { look?: unknown, name?: unknown, text?: unknown, sys?: unknown }
+      const look = Number.isInteger(m.look) ? m.look as number : -1
+      const seat = look >= 0 ? lobby?.seats[look] : null
+      const text = typeof m.text === 'string' ? m.text.replace(/\s+/g, ' ').trim().slice(0, 80) : ''
+      if (m.sys || !seat || seat.kind !== 'remote' || seat.userId || !text) return
+      webChatCount += 1
+      bubbles.set(look, { id: `web-${webChatCount}`, name: String(seat.name || m.name || ''), text, until: performance.now() + lineLife(text) })
+      if (visible && !document.hidden) audio.play.chat()
+    }
   }
 
   // A seat somebody new has just come into glows for a moment, so everyone sees
@@ -605,7 +631,12 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
         host: !!at?.hosted && at.hostSeat === index,
         web: seat.web,
       }))
-    const open = seats.filter((seat) => seat.kind === 'open').length
+    // A newer server lists the round's computers in their seats; either way a
+    // seat without a person counts as free here, as it always did.
+    const open = seats.filter((seat) => seat.kind !== 'remote').length
+    const botRows = seats
+      .map((seat, index) => ({ seat: index, level: seat.kind.startsWith('bot:') ? seat.kind.slice(4) : '' }))
+      .filter((row) => row.level)
     const map = at?.map ?? 'meadow'
     // The race as the seats stand: everyone seated and any seat with wins in it.
     const sides = seats
@@ -621,6 +652,7 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
       mode: `${MAP_ICONS[map] ?? '🌻'} ${(t('mapNames') as Record<string, string>)[map] ?? map} · ${t(teams ? 'modeTeam' : 'modeSolo')}`,
       seats: people,
       open,
+      botRows,
       bots: people.length && at?.fill ? Math.max(0, at.fill - people.length) : 0,
       spectators: names.length ? `👀 ${t('spectators', names.length)}: ${names.join(', ')}` : '',
       you,
@@ -1170,6 +1202,18 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
       nope = ''
       line.send(GO_MESSAGE)
     },
+    endRound() {
+      if (destroyed || !line || !game || !lobby?.amHost) return
+      line.send(END_MESSAGE)
+    },
+    again() {
+      if (destroyed || !line || !game || game.phase !== 'over' || !lobby?.amHost) return
+      nope = ''
+      line.send(AGAIN_MESSAGE)
+    },
+    canEndRound() {
+      return !destroyed && !!line && !!game && !!lobby?.amHost
+    },
     handHost(seat) {
       if (destroyed || !line || !lobby?.amHost || seat === lobby.you) return
       line.send(handHostMessage(seat))
@@ -1184,6 +1228,14 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
     hearRoom(entry, options) {
       if (destroyed) return
       const { fresh } = sayInBubble(lobby?.seats, entry, performance.now())
+      // Web pages in the room (invite link) are not in the chat room: this
+      // viewer's own new lines also go out as the game's talk, once each, so
+      // they read them. Only while a web page is seated.
+      if (fresh && options?.mine && line && !toldWeb.has(entry.id) && lobby?.seats.some((seat) => seat.web)) {
+        toldWeb.add(entry.id)
+        if (toldWeb.size > 200) toldWeb.delete(toldWeb.values().next().value as string)
+        line.send({ t: 'chat', text: entry.text.replace(/\s+/g, ' ').trim().slice(0, 80) })
+      }
       // A soft chime for what somebody else says, as the game's own chat had (it is the game's sound).
       if (fresh && !options?.quiet && visible && !document.hidden) audio.play.chat()
     },
