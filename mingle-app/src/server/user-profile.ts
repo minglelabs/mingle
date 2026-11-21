@@ -1,5 +1,6 @@
 import { getPublishedBioText } from "./profile-bio";
 import { prisma } from "@/lib/prisma";
+import { getMemberNumber } from "@/server/member-number";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 import { zipInterestLanguages, type InterestLanguage } from "@/lib/interest-languages";
 import { identityBadgeFlags } from "@/server/identity/user-identity-select";
@@ -43,6 +44,7 @@ export const userProfileSelect = {
   isOperator: true,
   faceVerifiedAt: true,
   heightCm: true,
+  createdAt: true,
   _count: {
     select: {
       followerRelations: {
@@ -123,6 +125,8 @@ export type UserProfile = {
   faceVerified?: boolean;
   /** Height in cm, as the user typed it; present only when set. */
   heightCm?: number;
+  /** "Member #N": the order the account joined in (see @/server/member-number); absent for staff accounts. */
+  memberNumber?: number;
 };
 
 export function calculateProfileAge(
@@ -240,5 +244,10 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     select: userProfileSelect,
   });
 
-  return profile ? { ...serializeUserProfile(profile), bio: await getPublishedBioText(userId, profile.bio), bioDraft: profile.bio } : null;
+  if (!profile) return null;
+  const [bio, memberNumber] = await Promise.all([
+    getPublishedBioText(userId, profile.bio),
+    getMemberNumber(profile),
+  ]);
+  return { ...serializeUserProfile(profile), bio, bioDraft: profile.bio, ...(memberNumber ? { memberNumber } : {}) };
 }

@@ -42,6 +42,7 @@ import ProfileNationalityBadge from "@/components/profile-nationality-badge";
 import { resolveProfileNationalityCopy } from "@/i18n/profile-nationality-copy";
 import { normalizeNationalityCountry, resolveNationalityCountry } from "@/lib/nationality";
 import ProfileGenderAgeBadge from "@/components/profile-gender-age-badge";
+import MemberNumberLine from "@/components/member-number-line";
 import { resolveProfileGenderCopy } from "@/i18n/profile-gender-copy";
 import { normalizeProfileGender, type ProfileGender } from "@/lib/profile-gender";
 import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
@@ -2245,6 +2246,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           followingCount: typeof data.followingCount === "number" ? data.followingCount : 0,
           isOfficial: data.isOfficial === true,
           faceVerified: data.faceVerified === true,
+          memberNumber: typeof data.memberNumber === "number" ? data.memberNumber : null,
         });
       })
       .catch(() => {
@@ -2712,6 +2714,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
               <ProfileGenderAgeBadge gender={profile.gender} age={profile.age} heightCm={profile.heightCm} locale={locale} />
               {profile.handle ? <span className="min-w-0 truncate text-[13px] text-gray-500">{formatHandle(profile.handle)}</span> : null}
             </p>
+            <MemberNumberLine memberNumber={profile.memberNumber} locale={locale} />
             <ProfileLanguageLevels
               primaryLanguages={primaryLanguages}
               interestLanguages={profile.interestLanguages ?? NO_INTEREST_LANGUAGES}

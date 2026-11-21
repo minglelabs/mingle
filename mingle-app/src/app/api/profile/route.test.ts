@@ -177,6 +177,7 @@ describe("/api/profile route", () => {
         isOperator: true,
         faceVerifiedAt: true,
         heightCm: true,
+        createdAt: true,
         _count: {
           select: {
             followerRelations: {
@@ -259,6 +260,7 @@ describe("/api/profile route", () => {
         isOperator: true,
         faceVerifiedAt: true,
         heightCm: true,
+        createdAt: true,
         _count: {
           select: {
             followerRelations: {

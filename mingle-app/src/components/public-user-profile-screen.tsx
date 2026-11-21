@@ -6,6 +6,7 @@ import FaceVerifiedBadge from "@/components/face-verified-badge";
 import ProfileBio from "@/components/profile-bio";
 import { sameBioLanguage } from "@/lib/profile-bio";
 import ProfileGenderAgeBadge from "@/components/profile-gender-age-badge";
+import MemberNumberLine from "@/components/member-number-line";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import { getConversationDictionary } from "@/i18n/conversations";
@@ -108,6 +109,8 @@ type PublicUserProfile = {
   isOperator?: boolean;
   /** Passed the selfie check for the current photo; absent means false. */
   faceVerified?: boolean;
+  /** "Member #N" (see @/server/member-number); absent for staff accounts. */
+  memberNumber?: number;
 };
 
 type ReportReason = "spam" | "harassment" | "inappropriate" | "impersonation" | "ai_generated" | "other";
@@ -694,6 +697,7 @@ export default function PublicUserProfileScreen({
                   <ProfileGenderAgeBadge gender={profile.gender} age={profile.age} heightCm={profile.heightCm} locale={locale} />
                   {profile.handle ? <span className="min-w-0 truncate text-[13px] text-gray-500">{formatHandle(profile.handle)}</span> : null}
                 </p>
+                <MemberNumberLine memberNumber={profile.memberNumber} locale={locale} />
                 <ProfileLanguageLevels
                   primaryLanguages={primaryLanguages}
                   interestLanguages={sanitizeInterestLanguages(profile.interestLanguages, primaryLanguages)}

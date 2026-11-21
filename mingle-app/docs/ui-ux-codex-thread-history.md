@@ -2,6 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-21 — Every profile shows which member the account joined as ("해시챗 1,234번째 가입자")
+
+- Surface: new `server/member-number.ts`, `server/user-profile.ts` (`/api/profile`, My page, `/p/` page), `api/users/[userId]` (someone else's profile), new `components/member-number-line.tsx`, new `i18n/member-number-copy.ts` (15 languages), `my-page.tsx`, `my-page-profile-cache.ts`, `public-user-profile-screen.tsx`.
+- Issue: Owner request: show on My page, for everyone to see, the order in which the account joined HashChat.
+- Resolution: A line under the name row on My page and on other people's profiles: "해시챗 {n}번째 가입자" / "HashChat member #{n}" (grouped digits). N = accounts made no later than this one (sign-up time, id breaks a tie), counted on request with the `created_at` index. Staff-run operator accounts and the official account are not members: no number, and not counted (operator accounts are already labelled publicly, so the missing number reveals nothing). Deleted, banned and merged accounts still count, so a number never changes once shown. No database change.
+- Checked on a Galaxy S9 (local devbox, 101 members and 41 staff accounts): a new account's My page showed "HashChat member #101"; QA Agent's profile opened from Home showed "#94"; the server's count matched a plain sort for the three newest accounts. The Korean wording is covered by the unit test (the phone ran in English).
+
 ## 2026-11-21 — Brand review outside the app: homepage, store, share cards; onboarding hints; Android cold start
 
 - Surface: homepage `public/legal/index.html` (15 languages) and `llms.txt`; store metadata (`appstore-connect-info.i18n.json`, `google-play-console-info.i18n.json`) and screenshot upload folders; `branding/hashchat/banner.py` and the share images it renders (`public/og-hashchat.png`, `public/legal/og-image.png`, `public/legal/assets/og-hashchat.png`, `public/og-image.png`, `mingle-landing/public/og-image.png`, Play `feature-graphic.png`); `lib/share-og.ts`; share pages `p/[userId]`, `i/[code]`, `s/[shareToken]`; `i18n/profile-gender-copy.ts` (`publicHint`), `i18n/signup-copy.ts` (`birthDateDescription`), `i18n/conversations.ts` (`emptyDescription`); Android `styles.xml`, new `values/colors.xml`.

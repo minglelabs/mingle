@@ -10,6 +10,7 @@ import { USER_IDENTITY_SELECT, identityBadgeFlags } from "@/server/identity/user
 import { calculateProfileAge } from "@/server/user-profile";
 import { normalizeProfileGender } from "@/lib/profile-gender";
 import { resolveNationalityCountry } from "@/lib/nationality";
+import { getMemberNumber } from "@/server/member-number";
 
 export const runtime = "nodejs";
 
@@ -51,6 +52,7 @@ const userProfileSelect = {
   locationCountryCode: true,
   faceVerifiedAt: true,
   heightCm: true,
+  createdAt: true,
   _count: {
     select: {
       followerRelations: {
@@ -129,6 +131,10 @@ export async function GET(_request: NextRequest, { params }: UserProfileRoutePro
     user.primaryLanguages,
     user.nationality ? [user.nationality] : [],
   );
+  const [bio, memberNumber] = await Promise.all([
+    getPublishedBioText(user.id, user.bio),
+    getMemberNumber(user),
+  ]);
   return responseJson({
     id: user.id,
     handle: user.handle,
@@ -139,7 +145,7 @@ export async function GET(_request: NextRequest, { params }: UserProfileRoutePro
     imageCropY: user.imageCropY,
     age: calculateProfileAge(user.birthDate),
     ...(normalizeProfileGender(user.gender) ? { gender: normalizeProfileGender(user.gender) } : {}),
-    bio: await getPublishedBioText(user.id, user.bio),
+    bio,
     nationality: user.nationality,
     nationalityCountry: resolveNationalityCountry(user.nationalityCountry, primaryLanguages),
     primaryLanguages,
@@ -166,5 +172,7 @@ export async function GET(_request: NextRequest, { params }: UserProfileRoutePro
     // Passed the selfie check for the current photo.
     ...(user.faceVerifiedAt ? { faceVerified: true } : {}),
     ...(typeof user.heightCm === "number" ? { heightCm: user.heightCm } : {}),
+    // "Member #N" (the order the account joined in); staff accounts have none.
+    ...(memberNumber ? { memberNumber } : {}),
   });
 }

@@ -35,12 +35,14 @@ export type MyPageProfileRecord = {
   isOfficial?: boolean;
   /** Passed the selfie check for the current photo (memory only, from the API). */
   faceVerified?: boolean;
+  /** "Member #N" (see @/server/member-number); absent for staff accounts. */
+  memberNumber?: number | null;
 };
 
 // Only what the profile header shows is written to disk. Location, birth date,
 // gender/age and the unpublished bio draft stay in memory and are restored by the API
 // refresh that follows every mount.
-type PersistedMyPageProfile = Omit<MyPageProfileRecord, "bioDraft" | "birthDate" | "gender" | "age" | "heightCm" | "location" | "faceVerified">;
+type PersistedMyPageProfile = Omit<MyPageProfileRecord, "bioDraft" | "birthDate" | "gender" | "age" | "heightCm" | "location" | "faceVerified" | "memberNumber">;
 
 type PersistedMyPageProfileRecord = {
   savedAt: number;
