@@ -1602,6 +1602,8 @@ interface LivePhoneDemoProps {
   trialSpeechLength?: SpeechLengthLevel
   /** The speak trial's hint card sits over the top of the chat: the first bubble starts below it. */
   trialTopInsetPx?: number
+  /** The speak trial before Start: the Start button pulses so nobody just talks at a dead screen. */
+  trialHighlightStart?: boolean
   backButtonLabel?: string
   onBack?: () => void
   onConversationDeleted?: () => void
@@ -2143,6 +2145,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onSttSessionRunningChange,
   onSttListeningChange,
   trialTopInsetPx,
+  trialHighlightStart = false,
   onLatestUtteranceChange,
   onLatestUtterancePreviewChange,
   onConversationStatsChange,
@@ -11668,6 +11671,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             opacity: 0.25,
                             borderRadius: `${VOICE_MODE_STT_BUTTON_RADIUS_PX}px`,
                           }}
+                        />
+                      )}
+
+                      {trialHighlightStart && !isReady && !showConnectingOverlay && (
+                        <span
+                          data-qa="speak-trial-start-pulse"
+                          className="pointer-events-none absolute inset-0 bg-amber-400 opacity-50 animate-ping"
+                          style={{ borderRadius: `${VOICE_MODE_STT_BUTTON_RADIUS_PX}px` }}
                         />
                       )}
 

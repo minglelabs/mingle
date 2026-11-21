@@ -2,6 +2,12 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-22 — Speak trial: say to tap Start, and make Start pulse
+
+- Surface: `onboarding/speak-trial.tsx` (`highlightStart`), `LivePhoneDemo.tsx` (`trialHighlightStart`), `mingle-home.tsx`, `i18n/speak-trial-copy.ts` (`hint`, 15 languages).
+- Issue: Owner: a new user may not know Start must be tapped and just talk at the screen.
+- Resolution: The card's title now starts with the button ("Start를 누르고, 10초 동안 아래 문장을 말해 보세요"), and until Start is tapped the Start button has an amber pulsing ring (gone while connecting and listening).
+
 ## 2026-11-22 — Sign-in button panel takes 40% of the screen
 
 - Surface: `components/mingle-home.auth-contract.ts` (`AUTH_GATE_PANEL_CLASSNAME`), `mingle-home.tsx` (buttons half of the panel).

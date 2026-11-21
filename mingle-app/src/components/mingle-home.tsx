@@ -111,7 +111,7 @@ type MingleHomeProps = {
    * or saved settings, starting on `speechLength`, with `headerAccessory`
    * (the countdown) in the header.
    */
-  trial?: { speechLength: SpeechLengthLevel; headerAccessory: ReactNode; topInsetPx?: number };
+  trial?: { speechLength: SpeechLengthLevel; headerAccessory: ReactNode; topInsetPx?: number; highlightStart?: boolean };
   /** Auth-only: a line under the logo, e.g. why sign-in is needed. */
   authNotice?: string | null;
   /**
@@ -2210,6 +2210,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           headerAccessory={props.trial?.headerAccessory}
           trialSpeechLength={props.trial?.speechLength}
           trialTopInsetPx={props.trial?.topInsetPx}
+          trialHighlightStart={props.trial?.highlightStart}
           headerMode={props.headerMode}
           backButtonLabel={props.dictionary.profile.emailBackLabel}
           onBack={props.onBack}

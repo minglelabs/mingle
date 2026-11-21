@@ -225,6 +225,7 @@ export default function SpeakTrial({
           speechLength: DEFAULT_SPEECH_LENGTH_LEVEL,
           headerAccessory,
           topInsetPx: phase === "ready" || phase === "listening" ? hintCardHeight + 24 : undefined,
+          highlightStart: phase === "ready",
         }}
         onSttSessionRunningChange={handleRunningChange}
         onSttListeningChange={handleListeningChange}
