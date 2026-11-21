@@ -1167,3 +1167,17 @@ td.wins {
 .hostNext .button {
   min-height: 46px;
 }
+
+/* The host's public room list switch. */
+.listedSwitch {
+  width: 22px;
+  height: 22px;
+  accent-color: #10b981;
+}
+
+.listedHint {
+  margin-left: 6px;
+  color: #8a7a60;
+  font-size: 12px;
+  font-weight: 700;
+}

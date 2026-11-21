@@ -39,6 +39,9 @@ export type HashRushGameCopy = {
   nextRoundByHost: string
   /** The host's buttons on the result card, and in the quit dialog mid-round. */
   toLobbyAll: string
+  /** The host's switch for the public room list. */
+  listedLabel: string
+  listedHint: string
   playAgain: string
   stopRound: string
   /** By the clock while the result card is put away. */
@@ -102,6 +105,8 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushGameCopy> = {
     nextRoundSoon: '다음 판은 곧 자동으로 시작해요',
     nextRoundByHost: '방장이 시작하면 다음 판이 시작돼요',
     toLobbyAll: '다같이 대기실로',
+    listedLabel: '방 목록 공개',
+    listedHint: '켜면 누구나 방 목록에서 들어와요',
     playAgain: '다시 시작',
     stopRound: '게임 중단 · 다같이 대기실로',
     nextChip: (s) => `⏱ 다음 판 ${s}초`,
@@ -157,6 +162,8 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushGameCopy> = {
     nextRoundSoon: 'The next round starts by itself soon',
     nextRoundByHost: 'The next round starts when the host starts it',
     toLobbyAll: 'Everyone to the lobby',
+    listedLabel: 'Public',
+    listedHint: 'Anyone can join from the room list',
     playAgain: 'Play again',
     stopRound: 'Stop the round · everyone to the lobby',
     nextChip: (s) => `⏱ Next round ${s}s`,
@@ -212,6 +219,8 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushGameCopy> = {
     nextRoundSoon: '次のラウンドはまもなく自動で始まります',
     nextRoundByHost: 'ホストが始めると次のラウンドが始まります',
     toLobbyAll: 'みんなでロビーへ',
+    listedLabel: '一覧に公開',
+    listedHint: 'オンにするとだれでもルーム一覧から入れます',
     playAgain: 'もう一度',
     stopRound: 'ゲームを中断 · みんなでロビーへ',
     nextChip: (s) => `⏱ 次まで${s}秒`,

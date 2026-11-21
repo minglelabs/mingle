@@ -208,6 +208,120 @@ export async function getHashRushInviteRedirect(request: NextRequest, code: stri
   return NextResponse.redirect(target.toString(), { status: 302, headers: { "cache-control": "no-store" } });
 }
 
+// ---------- public rooms ----------
+
+/** A hosted game room its host listed (game server GET /rooms). */
+export type HashRushPublicRoom = {
+  id: string
+  host: string
+  people: number
+  seats: number
+  /** The computers the next round seats. */
+  bots: number
+  open: number
+  map: string
+  teams: boolean
+  playing: boolean
+}
+
+const PUBLIC_ROOM_ID = /^[a-z0-9][a-z0-9_-]{2,63}$/;
+
+export function readHashRushPublicRooms(body: unknown): HashRushPublicRoom[] {
+  const rows = (body && typeof body === "object" && Array.isArray((body as { rooms?: unknown }).rooms)) ? (body as { rooms: unknown[] }).rooms : [];
+  const count = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.max(0, Math.min(Math.floor(v), 99)) : 0);
+  return rows.flatMap((row) => {
+    if (!row || typeof row !== "object") return [];
+    const r = row as Record<string, unknown>;
+    if (typeof r.id !== "string" || !PUBLIC_ROOM_ID.test(r.id)) return [];
+    return [{
+      id: r.id,
+      host: typeof r.host === "string" ? r.host.slice(0, 8) : "",
+      people: count(r.people),
+      seats: count(r.seats) || 8,
+      bots: count(r.bots),
+      open: count(r.open),
+      map: typeof r.map === "string" ? r.map.slice(0, 16) : "meadow",
+      teams: r.teams === true,
+      playing: r.playing === true,
+    }];
+  }).slice(0, 100);
+}
+
+// The game server's public list (its wss address, read over https).
+let fetchPublicRooms = async (): Promise<HashRushPublicRoom[]> => {
+  if (!HASH_RUSH_SERVER) return [];
+  const url = `${HASH_RUSH_SERVER.replace(/^ws/i, "http").replace(/\/+$/, "")}/rooms`;
+  const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(3000) });
+  if (!response.ok) throw new Error(`hash_rush_rooms_${response.status}`);
+  return readHashRushPublicRooms(await response.json());
+};
+export function setHashRushPublicRoomsForTests(next: typeof fetchPublicRooms | null) {
+  if (next) fetchPublicRooms = next;
+}
+
+/** GET: the listed rooms, for the app's room list. */
+export async function getHashRushPublicRoomsResponse(request: NextRequest) {
+  const session = await getServerSession(getAuthOptions());
+  const resolvedUser = await resolveOrCreateUserIdForRequest({ request, session });
+  if (!resolvedUser.userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  try {
+    return NextResponse.json({ rooms: await fetchPublicRooms() });
+  } catch (error) {
+    console.error("[hash-rush] rooms_failed", error instanceof Error ? error.message : "unknown");
+    return NextResponse.json({ rooms: [], error: "hash_rush_rooms_unavailable" }, { status: 502 });
+  }
+}
+
+async function listedRoom(room: string): Promise<HashRushPublicRoom | null> {
+  if (!PUBLIC_ROOM_ID.test(room)) return null;
+  const rooms = await fetchPublicRooms().catch(() => []);
+  return rooms.find((r) => r.id === room) ?? null;
+}
+
+/** POST: a ticket into a listed room for this app player (not a member of its chat room). */
+export async function postHashRushPublicTicketResponse(request: NextRequest, room: string) {
+  const secret = (process.env.HASH_RUSH_TICKET_SECRET || "").trim();
+  if (!secret) return NextResponse.json({ error: "hash_rush_unavailable" }, { status: 503 });
+  const session = await getServerSession(getAuthOptions());
+  const resolvedUser = await resolveOrCreateUserIdForRequest({ request, session });
+  if (!resolvedUser.userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!await listedRoom(room)) return NextResponse.json({ error: "room_not_listed" }, { status: 404 });
+  const user = await prisma.user.findUnique({ where: { id: resolvedUser.userId }, select: { name: true } });
+  const name = (user?.name || "").trim().slice(0, 8);
+  const { ticket, exp, expiresIn } = issueHashRushTicket({ room, userId: resolvedUser.userId, name }, secret);
+  return NextResponse.json({ ticket, room, name, exp, expiresIn });
+}
+
+/**
+ * GET /api/hash-rush/public/<room>: the web page's way into a listed room (the
+ * room list's Join). A signed-in HashChat user plays under their name, anyone
+ * else as a guest. A room no longer listed opens the ended page.
+ */
+export async function getHashRushPublicRedirect(request: NextRequest, room: string) {
+  const secret = (process.env.HASH_RUSH_TICKET_SECRET || "").trim();
+  const lang = (new URL(request.url).searchParams.get("lang") || request.headers.get("accept-language") || "en").split(",")[0].trim().slice(0, 12);
+  if (!secret || !HASH_RUSH_PAGE_URL || !HASH_RUSH_SERVER) return NextResponse.json({ error: "hash_rush_unavailable" }, { status: 503 });
+  if (!await listedRoom(room)) {
+    const ended = new URL(HASH_RUSH_PAGE_URL);
+    ended.searchParams.set("ended", "1");
+    if (lang) ended.searchParams.set("lang", lang);
+    return NextResponse.redirect(ended.toString(), { status: 302, headers: { "cache-control": "no-store" } });
+  }
+  const session = await getServerSession(getAuthOptions());
+  const resolvedUser = await resolveOrCreateUserIdForRequest({ request, session }).catch(() => ({ userId: null as string | null }));
+  let player: { userId: string; name: string };
+  if (resolvedUser.userId && session?.user) {
+    const user = await prisma.user.findUnique({ where: { id: resolvedUser.userId }, select: { name: true } });
+    player = { userId: resolvedUser.userId, name: (user?.name || "").trim().slice(0, 8) };
+  } else {
+    player = newHashRushGuest();
+  }
+  const { ticket } = issueHashRushTicket({ room, ...player }, secret);
+  const target = new URL(buildHashRushPcLink({ pageUrl: HASH_RUSH_PAGE_URL, server: HASH_RUSH_SERVER, room, ticket, lang }));
+  target.searchParams.set("host", "1");
+  return NextResponse.redirect(target.toString(), { status: 302, headers: { "cache-control": "no-store" } });
+}
+
 // ---------- rankings ----------
 
 function sameSecret(given: string, expected: string): boolean {

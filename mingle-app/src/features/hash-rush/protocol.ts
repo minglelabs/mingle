@@ -78,6 +78,8 @@ export type HashRushLobby = {
   hosted: boolean
   /** People against computers in a team game: the computers' side, else -1. */
   computersTeam: number
+  /** The host listed the room in the public room list (hash-rush #267 on). */
+  listed: boolean
   /** The host's seat, -1 when the host watches (or there is none). */
   hostSeat: number
   hostName: string
@@ -95,7 +97,7 @@ export const HASH_RUSH_FILL_MAX = 8
 export const HASH_RUSH_TEAMS = 4
 
 /** `bots` with a `seat` sets that computer's own level; without, every computer's. */
-export type HashRushSetup = { teams?: boolean, map?: string, bots?: string, fill?: number, seat?: number }
+export type HashRushSetup = { teams?: boolean, map?: string, bots?: string, fill?: number, seat?: number, listed?: boolean }
 
 export function setupMessage(patch: HashRushSetup) {
   return { t: 'setup' as const, ...patch }
@@ -392,6 +394,7 @@ export function readLobby(message: unknown): HashRushLobby | null {
     seasons: readSeasons(m.hist),
     hosted: m.hosted === true,
     computersTeam: Number.isInteger(m.ct) ? m.ct as number : -1,
+    listed: m.listed === true,
     hostSeat: Number.isInteger(m.host) ? m.host as number : -1,
     hostName: text(m.hostName),
     amHost: m.me === true,
