@@ -37,17 +37,17 @@ const listData: ActivityListData = {
 
 const thread: OperatorPostThread = {
   post: {
-    id: 'p1', author: operator, text: 'Bom dia', koText: '좋은 아침', hasImage: false,
+    id: 'p1', author: operator, text: 'Bom dia', koText: '좋은 아침', translations: [{ language: 'en', text: 'Good morning' }], hasImage: false,
     likeCount: 3, commentCount: 2, publishedAt: '2026-10-02T08:00:00.000Z',
   },
   operator: { ...operator, personaLanguage: 'pt', isActive: true },
   operators: [{ ...operator, personaLanguage: 'pt', isActive: true }],
   replyUnavailableReason: null,
   comments: [{
-    id: 'c1', parentId: null, author: actor, replyTo: null, text: 'Que legal!', koText: '멋져요!', hasImage: false,
+    id: 'c1', parentId: null, author: actor, replyTo: null, text: 'Que legal!', koText: '멋져요!', translations: [], hasImage: false,
     isDeleted: false, likeCount: 1, createdAt: '2026-10-02T09:58:00.000Z',
     replies: [{
-      id: 'c2', parentId: 'c1', author: operator, replyTo: { userId: 'user_1', label: 'João' }, text: 'Obrigada!', koText: null,
+      id: 'c2', parentId: 'c1', author: operator, replyTo: { userId: 'user_1', label: 'João' }, text: 'Obrigada!', koText: null, translations: [],
       hasImage: false, isDeleted: false, likeCount: 0, createdAt: '2026-10-02T09:59:00.000Z', replies: [],
     }],
   }],
@@ -80,6 +80,8 @@ describe('admin activity screens', () => {
     expect(html).toContain('답글 달기')
     expect(html).toContain('계정으로 게시됩니다')
     expect(html).toContain('id="comment-c1"')
+    expect(html).toContain('번역본 <!-- -->1<!-- -->개 보기')
+    expect(html).toContain('Good morning')
   })
 
   it('shows no composer for a retired operator', () => {

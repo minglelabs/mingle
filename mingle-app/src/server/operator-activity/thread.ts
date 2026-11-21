@@ -43,6 +43,8 @@ export type ThreadOperator = InboxPerson & {
   isActive: boolean
 }
 
+export type StoredTranslation = { language: string; text: string }
+
 export type ThreadComment = {
   id: string
   parentId: string | null
@@ -52,6 +54,8 @@ export type ThreadComment = {
   /** Null for a deleted comment kept only for its replies. */
   text: string | null
   koText: string | null
+  /** Every stored translation of the current text, for staff to check. */
+  translations: StoredTranslation[]
   hasImage: boolean
   isDeleted: boolean
   likeCount: number
@@ -65,6 +69,7 @@ export type OperatorPostThread = {
     author: InboxPerson
     text: string | null
     koText: string | null
+    translations: StoredTranslation[]
     hasImage: boolean
     likeCount: number
     commentCount: number
@@ -105,6 +110,21 @@ function toThreadOperator(user: ThreadUser): ThreadOperator {
     personaLanguage: sanitizeSttLanguageSelection(user.primaryLanguages)[0] ?? null,
     isActive: user.isActive !== false,
   }
+}
+
+type TranslationRow = { bodyVersion: number; language: string; text: string | null }
+
+/** Ready translations of the current body version, source language excluded. */
+function currentTranslations(rows: TranslationRow[], bodyVersion: number, sourceLanguage: string | null): StoredTranslation[] {
+  const source = canonicalizeTranslationLanguageCode(sourceLanguage || '') || ''
+  return rows
+    .filter((row) => row.bodyVersion === bodyVersion && row.text?.trim() && row.language !== source)
+    .map((row) => ({ language: row.language, text: (row.text as string).trim() }))
+    .sort((a, b) => a.language.localeCompare(b.language))
+}
+
+function koreanRows(rows: TranslationRow[]): TranslationRow[] {
+  return rows.filter((row) => row.language === STAFF_TRANSLATION_LANGUAGE)
 }
 
 function isKorean(language: string | null | undefined): boolean {
@@ -172,8 +192,8 @@ export async function loadOperatorPostThread(args: {
       publishedAt: true,
       author: { select: USER_IDENTITY_SELECT },
       translations: {
-        where: { status: 'ready', language: STAFF_TRANSLATION_LANGUAGE },
-        select: { bodyVersion: true, text: true },
+        where: { status: 'ready' },
+        select: { bodyVersion: true, language: true, text: true },
       },
     },
   })
@@ -195,8 +215,8 @@ export async function loadOperatorPostThread(args: {
       author: { select: USER_IDENTITY_SELECT },
       replyToUser: { select: { id: true, name: true, handle: true } },
       translations: {
-        where: { status: 'ready', language: STAFF_TRANSLATION_LANGUAGE },
-        select: { bodyVersion: true, text: true },
+        where: { status: 'ready' },
+        select: { bodyVersion: true, language: true, text: true },
       },
     },
   })
@@ -206,7 +226,7 @@ export async function loadOperatorPostThread(args: {
   if (postText) {
     postKoText = isKorean(post.sourceLanguage)
       ? postText
-      : post.translations.find((row) => row.bodyVersion === post.bodyVersion && row.text?.trim())?.text?.trim() ?? null
+      : koreanRows(post.translations).find((row) => row.bodyVersion === post.bodyVersion && row.text?.trim())?.text?.trim() ?? null
   }
 
   const flat = rows.map((row) => {
@@ -218,7 +238,8 @@ export async function loadOperatorPostThread(args: {
       author: toActivityPerson(row.author),
       replyTo: row.replyToUser ? { userId: row.replyToUser.id, label: personLabel(row.replyToUser) } : null,
       text,
-      koText: text ? storedCommentKorean(row) : null,
+      koText: text ? storedCommentKorean({ ...row, translations: koreanRows(row.translations) }) : null,
+      translations: text ? currentTranslations(row.translations, row.bodyVersion, row.sourceLanguage) : [],
       hasImage: !isDeleted && Boolean(row.imageObjectKey),
       isDeleted,
       likeCount: row.likeCount,
@@ -273,6 +294,7 @@ export async function loadOperatorPostThread(args: {
         author: toActivityPerson(post.author),
         text: postText,
         koText: postKoText,
+        translations: postText ? currentTranslations(post.translations, post.bodyVersion, post.sourceLanguage) : [],
         hasImage: Boolean(post.imageObjectKey),
         likeCount: post.likeCount,
         commentCount: post.commentCount,

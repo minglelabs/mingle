@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { ChevronLeft, Heart, Loader2, MessageCircle, SendHorizontal, X } from 'lucide-react'
 import type { OperatorPostStats } from '@/lib/operator-post-stats'
-import type { OperatorPostThread, ThreadComment } from '@/server/operator-activity/thread'
+import type { OperatorPostThread, StoredTranslation, ThreadComment } from '@/server/operator-activity/thread'
 import { OperatorPostStatsRow } from '../../_components/operator-post-stats-row'
 import { InboxAvatar, KoreanViewSwitch } from '../../inbox/_components/inbox-ui'
 import { useAdminInboxRealtime } from '../../inbox/_components/use-admin-inbox-realtime'
@@ -34,6 +34,24 @@ function goToLogin(): void {
 
 function threadPath(postId: string): string {
   return `/admin/activity/posts/${encodeURIComponent(postId)}`
+}
+
+/** Every stored translation of a post or comment, folded by default. */
+function StoredTranslations({ translations }: { translations: StoredTranslation[] }) {
+  if (translations.length === 0) return null
+  return (
+    <details className="mt-1.5 rounded-lg bg-slate-100/70 px-2.5 py-1 text-sm">
+      <summary className="flex min-h-9 cursor-pointer items-center text-xs font-medium text-slate-600">번역본 {translations.length}개 보기</summary>
+      <ul className="space-y-1.5 pb-1.5">
+        {translations.map((translation) => (
+          <li key={translation.language} className="break-words leading-5 text-slate-800">
+            <span className="mr-1.5 text-xs font-semibold text-slate-500">{inboxLanguageName(translation.language) || translation.language}</span>
+            <span className="whitespace-pre-wrap">{translation.text}</span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  )
 }
 
 function CommentRow({ postId, comment, korean, nowMs, focused, isReply, canReply, onReply }: {
@@ -66,6 +84,7 @@ function CommentRow({ postId, comment, korean, nowMs, focused, isReply, canReply
               {comment.replyTo ? <span className="mr-1 text-sky-700">@{comment.replyTo.label.replace(/^@/, '')}</span> : null}
               {text || (comment.hasImage ? '' : '(내용 없음)')}
             </p>
+            <StoredTranslations translations={comment.translations ?? []} />
             {comment.hasImage ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -277,6 +296,7 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
           {postText ? (
             <p className="mt-2 whitespace-pre-wrap break-words text-[15px] leading-6 text-slate-800">{postText}</p>
           ) : null}
+          <StoredTranslations translations={post.translations ?? []} />
           {post.hasImage ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={`/admin/api/posts/${postId}/image`} alt="글 사진" loading="lazy" className="mt-2 max-h-[28rem] w-auto max-w-full rounded-xl border border-slate-200" />
