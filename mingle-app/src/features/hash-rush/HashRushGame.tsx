@@ -314,11 +314,19 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
         if (cancelled) return
         const latest = latestRef.current
         setArt(hashRushArt)
+        let ticketTaken = false
         client = createHashRushGameClient(elements, {
           server: HASH_RUSH_SERVER,
           language: latest.uiLocale || 'en',
           playerName: latest.playerName,
-          getTicket: (fresh) => requestHashRushTicket({ conversationId, viewerKey: latestRef.current.viewerKey, fresh }),
+          // A game window's first ticket is a fresh one: each game the chat room
+          // starts has a room of its own, and a ticket held from the last game
+          // would lead back into that one. Reconnects in the same window reuse it.
+          getTicket: (fresh) => {
+            const first = !ticketTaken
+            ticketTaken = true
+            return requestHashRushTicket({ conversationId, viewerKey: latestRef.current.viewerKey, fresh: fresh || first })
+          },
           classes: CLASSES,
           onView: setView,
         })

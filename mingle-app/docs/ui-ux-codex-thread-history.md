@@ -2,6 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-22 — Hash Rush: one game room per game; a game left to web players goes on without the chat room
+
+- Surface: `src/server/hash-rush/ticket.ts` (`hashRushRoomId`), `rankings.ts`, the ticket and invite handlers (`hash-rush-controller.ts`), `HashRushGame.tsx` (first ticket per game window); game server and web page hash-rush #266.
+- Issue: A chat room had one game room for good. When everybody from the chat room left while web players (invite link) stayed, those players were stuck with no host, and the chat room's next game reopened the same room. The owner's call: the host passes on; with nobody from the chat room left the game is no longer the chat room's (its card shows it ended), the chat room's next game is a new room, and a web player opening an ended game's link gets an ended screen with a new room or the room list.
+- Resolution: Each game gets its own room (`mingle-<chat room>-g<8 hex of the game's session>`); tickets and invite links point at the running game's room, and an app game window takes a fresh ticket first. With no game running, the invite link opens the web page with `?ended=1`. On the server an app player hosts first, else the first seated web player, who gets the host controls on the web page. Rankings read the chat room from either room id.
+- Verification: unit tests (room ids, rankings); at phone width against a local server, a scripted app host in a per-game room left and the web player hosted, changed settings, started and ended a round; the invite link with no live game redirected to `?ended=1` and the modal opened the room list.
+
 ## 2026-11-22 — Hash Rush: the RL computer as a level
 
 - Surface: the lobby's per-computer level picker (`protocol.ts` `HASH_RUSH_BOT_LEVELS`); game server hash-rush #265.
