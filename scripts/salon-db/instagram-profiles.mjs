@@ -27,7 +27,8 @@ const page = ctx.pages()[0] || (await ctx.newPage());
 async function ensureLogin() {
   await page.goto('https://www.instagram.com/', { waitUntil: 'domcontentloaded' });
   for (let i = 0; ; i++) {
-    const loggedIn = await page.evaluate(() => document.cookie.includes('ds_user_id'));
+    // 쿠키로 판단: 로그인 중 페이지가 이동해도 깨지지 않는다
+    const loggedIn = (await ctx.cookies('https://www.instagram.com')).some((c) => c.name === 'sessionid' && c.value);
     if (loggedIn) return;
     if (i === 0) console.log('>>> 열린 크롬 창에서 인스타그램에 로그인해 주세요. 로그인되면 자동으로 시작합니다.');
     await sleep(5000);
