@@ -17,10 +17,10 @@ export type HashRushRoundReport = {
 
 const count = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.min(Math.floor(v), 10_000) : 0);
 
-/** The chat room behind a game room id (`mingle-<channel id>`, src/server/hash-rush/ticket.ts). */
+/** The chat room behind a game room id (`mingle-<channel id>[-g<game>]`, src/server/hash-rush/ticket.ts). */
 export function channelIdOfHashRushRoom(room: unknown): string | null {
   if (typeof room !== "string" || !room.startsWith("mingle-")) return null;
-  const id = room.slice("mingle-".length);
+  const id = room.slice("mingle-".length).replace(/-g[0-9a-f]{8}$/, "");
   return /^[a-z0-9_-]{8,64}$/.test(id) ? id : null;
 }
 

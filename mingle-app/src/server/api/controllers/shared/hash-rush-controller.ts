@@ -74,7 +74,9 @@ export async function postHashRushTicketResponse(request: NextRequest, conversat
 
   const user = await prisma.user.findUnique({ where: { id: member.userId }, select: { name: true } });
   const name = (user?.name || "").trim().slice(0, 8);
-  const room = hashRushRoomId(conversationId);
+  // The room of the chat room's running game (one room per game).
+  const record = await store.read(conversationId);
+  const room = hashRushRoomId(conversationId, isHashRushGameLive(record, new Date()) ? record.sessionId : null);
   const { ticket, exp, expiresIn } = issueHashRushTicket({ room, userId: member.userId, name }, secret);
   return NextResponse.json({ ticket, room, name, exp, expiresIn });
 }
@@ -189,7 +191,16 @@ export async function getHashRushInviteRedirect(request: NextRequest, code: stri
   } else {
     player = newHashRushGuest();
   }
-  const room = hashRushRoomId(channel.id);
+  // The link goes into the chat room's running game. With none running, the
+  // page says the game is over and offers a new room or the room list.
+  const record = await store.read(channel.id);
+  if (!isHashRushGameLive(record, new Date())) {
+    const ended = new URL(HASH_RUSH_PAGE_URL);
+    ended.searchParams.set("ended", "1");
+    if (lang) ended.searchParams.set("lang", lang);
+    return NextResponse.redirect(ended.toString(), { status: 302, headers: { "cache-control": "no-store" } });
+  }
+  const room = hashRushRoomId(channel.id, record.sessionId);
   const { ticket } = issueHashRushTicket({ room, ...player }, secret);
   const target = new URL(buildHashRushPcLink({ pageUrl: HASH_RUSH_PAGE_URL, server: HASH_RUSH_SERVER, room, ticket, lang }));
   // The app's rooms are hosted ones: the page joins as a guest of the host.
