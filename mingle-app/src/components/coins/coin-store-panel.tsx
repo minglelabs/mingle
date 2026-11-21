@@ -243,12 +243,14 @@ export default function CoinStorePanel({
                                 : ""}
                           </p>
                         </div>
+                        {/* No tap highlight: the StoreKit sheet takes the touch before touchend,
+                            so iOS left its gray highlight box over the spinner. */}
                         <button
                           type="button"
                           disabled={Boolean(store.purchasingProductId) || pending}
                           onClick={() => startCoinPurchase(product.productId)}
                           aria-label={`${formatCoinCount(product.totalCoins, locale)} ${copy.coin} ${product.displayPrice ?? ""}`}
-                          className="flex min-h-11 min-w-[92px] shrink-0 items-center justify-center rounded-full bg-slate-900 px-4 text-[14px] font-bold text-white transition active:bg-slate-700 disabled:opacity-50"
+                          className="flex min-h-11 min-w-[92px] shrink-0 select-none items-center justify-center rounded-full bg-slate-900 px-4 text-[14px] font-bold text-white transition [-webkit-tap-highlight-color:transparent] active:bg-slate-700 disabled:opacity-50"
                         >
                           {purchasing ? <Loader2 size={17} className="animate-spin" aria-label={copy.purchasing} /> : product.displayPrice}
                         </button>
