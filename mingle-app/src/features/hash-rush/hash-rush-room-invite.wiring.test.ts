@@ -30,7 +30,9 @@ describe('hash rush started from the room, like a voice talk', () => {
 
   it('has a Quit next to the back pill that asks, then ends the game for this phone', () => {
     expect(game).toContain('data-qa="hash-rush-game-quit"')
-    expect(layer).toContain('onQuit={onQuit ? (alone: boolean) => setConfirmQuit({ alone }) : undefined}')
+    expect(layer).toContain('onQuit={onQuit ? (alone: boolean, endRound?: () => void) => setConfirmQuit({ alone, endRound }) : undefined}')
+    // The host, mid-round, can stop it for everybody from the same dialog.
+    expect(layer).toContain('data-qa="hash-rush-stop-round"')
     expect(layer).toContain('onClick={() => { const alone = confirmQuit ? confirmQuit.alone : false; setConfirmQuit(null); onQuit(alone) }}')
     // The last one out ends the room's game now.
     expect(liveDemo).toContain('if (alone ?? hashRushOthersHereRef.current === 0) void leaveHashRushRoomGame()')

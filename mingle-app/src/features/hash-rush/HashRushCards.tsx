@@ -121,6 +121,12 @@ export function HashRushLobbyCard({ view, copy, art, chatBelow, onSit, onStand, 
   const computers = hosting ? Math.max(0, Math.min(fill - humans, view.open)) : 0
   const openRows = hosting ? Math.max(0, view.open - computers) : 0
   const botLabel = hosting?.botLevels.find((level) => level.id === botLevel)?.label ?? ''
+  const [botLevelAt, setBotLevelAt] = useState<Record<number, string>>({})
+  const chooseBotLevel = (seat: number, level: string) => {
+    setBotLevelAt((current) => ({ ...current, [seat]: level }))
+    window.setTimeout(() => setBotLevelAt((current) => { const next = { ...current }; delete next[seat]; return next }), 4000)
+    onSetup?.({ seat, bots: level })
+  }
   const setFill = (next: number) => {
     if (!hosting) return
     setup({ fill: Math.max(hosting.fillMin, Math.min(hosting.fillMax, next)) })
@@ -172,21 +178,38 @@ export function HashRushLobbyCard({ view, copy, art, chatBelow, onSit, onStand, 
           ))}
           {hosting ? (
             <>
-              {Array.from({ length: computers }, (_, index) => (
-                <li key={`bot-${index}`} className={cx(styles.seat, styles.seatBot)} data-qa="hash-rush-seat-bot">
-                  <span className={styles.botFace} aria-hidden="true">🤖</span>
-                  <span className={styles.seatName}>
-                    <b>{copy.computer}</b>
-                    {botLabel ? <i className={styles.meTag}>{botLabel}</i> : null}
-                    {hosting.computersColor ? <i className={styles.teamDot} style={{ '--t': hosting.computersColor } as CSSProperties} /> : null}
-                  </span>
-                  {amHost ? (
-                    <button type="button" className={styles.handHost} disabled={!canRemoveComputer} onClick={() => setFill(humans + computers - 1)} data-qa="hash-rush-remove-bot">
-                      {copy.removeComputer}
-                    </button>
-                  ) : <span />}
-                </li>
-              ))}
+              {Array.from({ length: computers }, (_, index) => {
+                // Each computer's own level, set on its row (the server lists
+                // them from hash-rush #243 on; before, one level for all).
+                const row = view.botRows[index]
+                const level = (row ? botLevelAt[row.seat] ?? row.level : null) ?? botLevel
+                const label = hosting.botLevels.find((option) => option.id === level)?.label ?? botLabel
+                return (
+                  <li key={`bot-${index}`} className={cx(styles.seat, styles.seatBot)} data-qa="hash-rush-seat-bot">
+                    <span className={styles.botFace} aria-hidden="true">🤖</span>
+                    <span className={styles.seatName}>
+                      <b>{copy.computer}</b>
+                      {amHost && row ? (
+                        <select
+                          className={styles.botLevel}
+                          value={level}
+                          aria-label={copy.botLevel}
+                          onChange={(event) => chooseBotLevel(row.seat, event.target.value)}
+                          data-qa="hash-rush-bot-level"
+                        >
+                          {hosting.botLevels.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                        </select>
+                      ) : label ? <i className={styles.meTag}>{label}</i> : null}
+                      {hosting.computersColor ? <i className={styles.teamDot} style={{ '--t': hosting.computersColor } as CSSProperties} /> : null}
+                    </span>
+                    {amHost ? (
+                      <button type="button" className={styles.handHost} disabled={!canRemoveComputer} onClick={() => setFill(humans + computers - 1)} data-qa="hash-rush-remove-bot">
+                        {copy.removeComputer}
+                      </button>
+                    ) : <span />}
+                  </li>
+                )
+              })}
               {Array.from({ length: openRows }, (_, index) => (
                 <li key={`open-${index}`} className={cx(styles.seat, styles.seatOpen)} data-qa="hash-rush-seat-open">
                   {amHost ? (
@@ -242,7 +265,8 @@ export function HashRushLobbyCard({ view, copy, art, chatBelow, onSit, onStand, 
                 ))}
               </div>
             </div>
-            <div className={styles.setupRow}>
+            {/* One level for every computer: only while the rows cannot set their own. */}
+            <div className={styles.setupRow} hidden={view.botRows.length > 0}>
               <span className={styles.setupLabel}>{copy.botLevel}</span>
               <div className={styles.options}>
                 {hosting.botLevels.map((level) => (
@@ -455,13 +479,16 @@ type ResultProps = TableProps & {
   hosted?: boolean
   /** This viewer is that host. */
   amHost?: boolean
+  /** The host's two ways on: the next round now, or everybody to the lobby. */
+  onAgain?: () => void
+  onToLobby?: () => void
   at: number
   copy: HashRushGameCopy
   onClose: () => void
 }
 
 /** The round's verdict and its table, until the room goes back to the lobby by itself. */
-export function HashRushResultCard({ verdict, board, nextAt, hosted, amHost, at, copy, scoreView, onScoreView, onClose }: ResultProps) {
+export function HashRushResultCard({ verdict, board, nextAt, hosted, amHost, at, copy, scoreView, onScoreView, onClose, onAgain, onToLobby }: ResultProps) {
   const seconds = useSecondsLeft(nextAt)
   const { close, onBackdrop } = useCardClose(at, onClose)
   return (
@@ -479,9 +506,16 @@ export function HashRushResultCard({ verdict, board, nextAt, hosted, amHost, at,
         {verdict.winner ? <p className={styles.winnerLine}>{verdict.winner}</p> : null}
         {verdict.why ? <p className={styles.why}>{verdict.why}</p> : null}
         <HashRushScoreTable board={board} scoreView={scoreView} onScoreView={onScoreView} />
-        <p className={styles.nextLine} data-qa="hash-rush-next-round">
-          {seconds != null ? copy.nextRoundIn(seconds) : hosted ? (amHost ? copy.nextRoundByMe : copy.nextRoundByHost) : copy.nextRoundSoon}
-        </p>
+        {hosted && amHost && onAgain && onToLobby ? (
+          <div className={styles.hostNext} data-qa="hash-rush-host-next">
+            <button type="button" className={styles.button} onClick={onToLobby} data-qa="hash-rush-to-lobby">{copy.toLobbyAll}</button>
+            <button type="button" className={cx(styles.button, styles.primary)} onClick={onAgain} data-qa="hash-rush-again">{copy.playAgain}</button>
+          </div>
+        ) : (
+          <p className={styles.nextLine} data-qa="hash-rush-next-round">
+            {seconds != null ? copy.nextRoundIn(seconds) : hosted ? copy.nextRoundByHost : copy.nextRoundSoon}
+          </p>
+        )}
       </div>
     </div>
   )

@@ -28,6 +28,7 @@ const view = (h: HashRushLobbyHosting): HashRushLobbyView => ({
   mode: 'Meadow',
   seats: [{ seat: 0, name: 'Mia', team: -1, color: '#f00', me: h.amHost, winsText: '', fresh: false, host: true, web: false }],
   open: 7,
+  botRows: [],
   bots: Math.max(0, h.fill - 1),
   spectators: '',
   you: h.amHost ? 0 : -1,

@@ -1141,3 +1141,29 @@ td.wins {
 .startButton:active {
   box-shadow: 0 1px 0 #c98400;
 }
+
+/* A computer's own level, picked on its row by the host. */
+.botLevel {
+  margin-left: 6px;
+  min-height: 30px;
+  padding: 0 6px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+/* The host's two ways on from a result: the lobby, or the next round now. */
+.hostNext {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.hostNext .button {
+  min-height: 46px;
+}

@@ -2,6 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-22 — Hash Rush: host can stop a round and play again, each computer has its own level, web players see computers and chat
+
+- Surface: Hash Rush lobby and result cards (`HashRushCards.tsx`), the quit dialog (`HashRushRoomLayer.tsx`), `client.ts`, `protocol.ts`; game server hash-rush #263.
+- Issue: (1) Only the host saw the computers (a web player's lobby showed empty seats). (2) One level for all computers, set far below the rows. (3) The host could not stop a round or take everybody to the lobby; the only buttons were 채팅 and 나가기. (4) After a round the host had no choice between playing again and the lobby. (5) An app player's chat never reached a web player (the app's talk is the chat room's, which a web page is not in), and a web player's chat never showed in the app.
+- Resolution: (1) The server lists the computers in the lobby for everybody. (2) The host picks each computer's level on its own row. (3) The host's 나가기 dialog has `게임 중단 · 다같이 대기실로` during a round. (4) The host's result card has `다같이 대기실로` and `다시 시작`; the result waits 30 s for the choice. (5) While a web page is seated, an app player's own new lines also go out as the game's talk, and a web player's line goes up over its hamster in the app.
+- Verification: unit tests (Hash Rush, server room), `tsc`; a scripted app host with a phone-width web guest (computers and levels visible, chat received, back to the lobby on stop). The app's new buttons were not tapped on a phone (both phones were in use by another session). "My own bubble does not show over my hamster" was not reproduced from the code; to check on a phone.
+
 ## 2026-11-20 — Hash Rush: pickpocketing a third of the nibble time, bots that guard and steal
 
 - Surface: the app's Hash Rush engine copy (`src/features/hash-rush/engine/sim/constants.js`, `engine/ai/bot.js`); the Windows game server.

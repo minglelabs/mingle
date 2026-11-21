@@ -122,7 +122,8 @@ type Props = {
   /** How many other people are in the game room (null before it is known), on every change of screen. */
   onOthersHere?: (count: number | null) => void
   /** Quit; `alone`: nobody else is in the game room (so the room's game can end now). */
-  onQuit?: (alone: boolean) => void
+  /** `endRound` is there when this viewer hosts a round in play: it stops the round for everybody. */
+  onQuit?: (alone: boolean, endRound?: () => void) => void
   /** How to play, from the lobby. */
   onHowTo?: () => void
 }
@@ -387,7 +388,8 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
     // loading once it is there).
     const client = clientRef.current
     for (const post of step.posts) {
-      client?.hearRoom(post, { quiet: started || post.userId === latestRef.current.viewerKey })
+      const mine = post.userId === latestRef.current.viewerKey
+      client?.hearRoom(post, { quiet: started || mine, mine: mine && !started })
     }
     setFloating((lines) => floatLines(lines, step.posts, now))
     setFloatAt(now)
@@ -835,6 +837,8 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
           nextAt={view.nextAt}
           hosted={view.hosted}
           amHost={view.amHost}
+          onAgain={() => clientRef.current?.again()}
+          onToLobby={() => clientRef.current?.endRound()}
           at={view.at}
           copy={copy}
           scoreView={scoreView}
@@ -912,7 +916,7 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
         <button
           ref={quitRef}
           type="button"
-          onClick={() => onQuit(clientRef.current?.othersHere() === 0)}
+          onClick={() => { const client = clientRef.current; onQuit(client?.othersHere() === 0, client?.canEndRound() ? () => client.endRound() : undefined) }}
           className={styles.quit}
           aria-label={inviteCopy.quit}
           title={inviteCopy.quit}
