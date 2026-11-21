@@ -211,6 +211,7 @@ describe('hash rush protocol: server to app', () => {
       seasons: [{ games: 18, stopped: false, rows: [{ name: 'Cloud', look: 1, wins: 10, champ: true }, { name: 'Mia', look: 0, wins: 6, champ: false }] }],
       hosted: false,
       computersTeam: -1,
+      listed: false,
       hostSeat: -1,
       hostName: '',
       amHost: false,

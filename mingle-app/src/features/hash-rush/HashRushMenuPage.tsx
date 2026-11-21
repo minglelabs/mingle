@@ -4,7 +4,7 @@
 // it (create one, join the running one, or back to the one this phone is in),
 // the computer link, the rankings and how to play.
 
-import { BookOpen, ChevronRight, Gamepad2, Link2, Trophy } from 'lucide-react'
+import { BookOpen, ChevronRight, Gamepad2, LayoutList, Link2, Trophy } from 'lucide-react'
 import type { HashRushRoomGame } from '@/lib/hash-rush-message'
 import { hashRushInviteCopy } from './invite-copy'
 
@@ -17,6 +17,8 @@ type Props = {
   /** Absent when no computer page is set up. */
   onCopyPcLink?: () => void
   onOpenRanking: () => void
+  /** The listed games of every chat room. */
+  onOpenRooms?: () => void
   onOpenHowTo: () => void
 }
 
@@ -38,7 +40,7 @@ function Row({ icon, label, hint, onClick, qa }: { icon: React.ReactNode, label:
   )
 }
 
-export default function HashRushMenuPage({ uiLocale, game, playing, viewerUserId, onEnter, onCopyPcLink, onOpenRanking, onOpenHowTo }: Props) {
+export default function HashRushMenuPage({ uiLocale, game, playing, viewerUserId, onEnter, onCopyPcLink, onOpenRanking, onOpenRooms, onOpenHowTo }: Props) {
   const copy = hashRushInviteCopy(uiLocale)
   const starter = game?.startedBy
   const starterName = starter && starter.userId !== viewerUserId ? (starter.name ?? '').trim() : ''
@@ -69,6 +71,7 @@ export default function HashRushMenuPage({ uiLocale, game, playing, viewerUserId
       </div>
 
       <div>
+        {onOpenRooms ? <Row qa="hash-rush-menu-rooms" icon={<LayoutList size={18} strokeWidth={2.2} />} label={copy.rooms} hint={copy.roomsHint} onClick={onOpenRooms} /> : null}
         <Row qa="hash-rush-menu-ranking" icon={<Trophy size={18} strokeWidth={2.2} />} label={copy.ranking} onClick={onOpenRanking} />
         <Row qa="hash-rush-menu-howto" icon={<BookOpen size={18} strokeWidth={2.2} />} label={copy.howTo} onClick={onOpenHowTo} />
         {onCopyPcLink ? (

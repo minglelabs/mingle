@@ -45,7 +45,7 @@ import {
   type HashRushChatFeed,
   type HashRushRoomChat,
 } from './room-chat'
-import { requestHashRushTicket } from './ticket'
+import { requestHashRushPublicTicket, requestHashRushTicket } from './ticket'
 import {
   HashRushBoard,
   HashRushLobbyCard,
@@ -104,6 +104,8 @@ const PAD_KEYS = [
 const cx = (...names: (string | false | null | undefined)[]) => names.filter(Boolean).join(' ')
 
 type Props = {
+  /** Somebody else's listed game (the room list): its own ticket, no chat room behind it. */
+  publicRoom?: string | null
   conversationId: string
   /** Who is playing; entry tickets are kept per viewer and room. */
   viewerKey: string
@@ -141,7 +143,7 @@ const typing = () => {
   return node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement || (node instanceof HTMLElement && node.isContentEditable)
 }
 
-export default function HashRushGame({ conversationId, viewerKey, playerName, uiLocale, visible, voiceActive, chat, onBack, onQuit, onHowTo, onOthersHere }: Props) {
+export default function HashRushGame({ conversationId, publicRoom, viewerKey, playerName, uiLocale, visible, voiceActive, chat, onBack, onQuit, onHowTo, onOthersHere }: Props) {
   const copy = hashRushGameCopy(uiLocale)
   const inviteCopy = hashRushInviteCopy(uiLocale)
   const chatOpen = !!chat?.open
@@ -325,6 +327,7 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
           getTicket: (fresh) => {
             const first = !ticketTaken
             ticketTaken = true
+            if (publicRoom) return requestHashRushPublicTicket(publicRoom)
             return requestHashRushTicket({ conversationId, viewerKey: latestRef.current.viewerKey, fresh: fresh || first })
           },
           classes: CLASSES,
@@ -351,7 +354,7 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
       client?.destroy()
       if (clientRef.current === client) clientRef.current = null
     }
-  }, [conversationId, loadAttempt])
+  }, [conversationId, publicRoom, loadAttempt])
 
   // The last few lines of the room's talk float up again, crisp for a few
   // seconds however old: the composer went down, the conversation folded, or

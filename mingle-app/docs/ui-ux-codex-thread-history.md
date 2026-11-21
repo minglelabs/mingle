@@ -2,6 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-22 — Hash Rush: a room list in the app, and public rooms
+
+- Surface: the room menu's Hash Rush page (`HashRushMenuPage.tsx`, new `HashRushRoomsPage.tsx`), the game layer for somebody else's room (`HashRushRoomLayer` / `HashRushGame` `publicRoom`), the host's `방 목록 공개` switch in the lobby; `/api/hash-rush/rooms`, `/api/hash-rush/public/[room]/ticket`, `/api/hash-rush/public/[room]`; game server and web page hash-rush #267.
+- Issue: Inside a chat room's Hash Rush there was no way to see other games. The web room list only had browser-hosted rooms, which the app cannot join, and game server rooms were in no list at all.
+- Resolution: The owner's choice: rooms are private by default and the host can make one public (`방 목록 공개`). The Hash Rush page has `방 목록 보기`, listing the public rooms (host, waiting/playing, people, computers, open seats); `들어가기` plays that room in this room's game layer with a ticket the server gives once it sees the room listed. The web room list shows the same rooms with a HashChat badge, and its Join goes through `/api/hash-rush/public/<room>`. A game in somebody else's room leaves nothing in this chat room. Web players make rooms on the game server too (`/api/hash-rush/new`, listed by default), so app players see and join those as well.
+- Verification: unit tests and namespace route guards; against a local setup at phone width: a scripted host listed its room, the app list (signed in as another account, not a member) showed it and `들어가기` seated that account in it; the web rooms page showed it and Join seated a web guest; an unlisted room's ticket was refused (404). Not checked on a phone.
+
 ## 2026-11-22 — Hash Rush: one game room per game; a game left to web players goes on without the chat room
 
 - Surface: `src/server/hash-rush/ticket.ts` (`hashRushRoomId`), `rankings.ts`, the ticket and invite handlers (`hash-rush-controller.ts`), `HashRushGame.tsx` (first ticket per game window); game server and web page hash-rush #266.
