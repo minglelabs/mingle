@@ -1,0 +1,17 @@
+{
+  "name": "salon-db",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "migrate": "psql \"${SALON_DB_URL:-postgresql://localhost/salon_db}\" -f schema.sql",
+    "import:public": "node import-public.mjs",
+    "enrich:kakao": "node enrich-kakao.mjs",
+    "enrich:naver": "node enrich-naver.mjs",
+    "enrich:google": "node enrich-google.mjs",
+    "enrich:instagram": "node enrich-instagram.mjs",
+    "rank": "psql \"${SALON_DB_URL:-postgresql://localhost/salon_db}\" -f rank.sql"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  }
+}
