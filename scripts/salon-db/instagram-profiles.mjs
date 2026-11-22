@@ -138,6 +138,7 @@ const { rows } = await pool.query(
   [MAX],
 );
 console.log(`instagram: ${rows.length} profiles`);
+let fails = 0;
 for (const [i, s] of rows.entries()) {
   try {
     const r = await scrape(s.instagram_handle);
@@ -167,10 +168,15 @@ for (const [i, s] of rows.entries()) {
           [s.id, p.url, p.url, p.likes != null ? `likes ${p.likes} · comments ${p.comments}` : null, p.taken_at || null, local],
         );
       }
+      fails = 0;
       console.log(`${new Date().toLocaleTimeString()} ${i + 1}/${rows.length} @${s.instagram_handle} followers=${toNum(u.follower_count ?? r.dom.followers)} posts=${posts.length}`);
     }
   } catch (e) {
-    console.warn(`@${s.instagram_handle}: ${e.message}`);
+    console.warn(`@${s.instagram_handle}: ${e.message.split('\n')[0]}`);
+    if (++fails >= 5) {
+      console.warn('5 errors in a row → 종료 (브라우저 재시작 필요)');
+      break;
+    }
     if (e.stop) {
       console.warn('챌린지/로그인 화면 감지 → 중단. 창에서 확인 후 다시 실행하세요.');
       break;

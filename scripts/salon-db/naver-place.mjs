@@ -140,9 +140,9 @@ for (const [i, s] of rows.entries()) {
   } catch (e) {
     console.warn(`#${s.id} ${s.name}: ${e.message.split('\n')[0]}`);
     if (++errors >= 5) {
-      console.warn('5 errors in a row, pausing 10 min');
-      await sleep(10 * 60_000);
-      errors = 0;
+      // 브라우저가 멈춘 경우가 많아 종료 → 바깥 루프가 새 브라우저로 다시 시작
+      console.warn('5 errors in a row, exiting (outer loop restarts)');
+      break;
     }
   }
   if (i % 20 === 0) console.log(`${new Date().toLocaleTimeString()} ${i}/${rows.length} matched=${hit}`);
