@@ -27,9 +27,15 @@ const listData: ActivityListData = {
       postId: null, postExcerpt: null, postUnavailable: false,
       commentId: null, commentText: null, commentKoText: null, commentHasImage: false, commentUnavailable: false,
     },
+    {
+      id: 'up-p9', type: 'user_post', isRead: false, createdAt: '2026-10-02T08:30:00.000Z', operator: null, actor, target: null,
+      postId: 'p9', postExcerpt: 'Primeiro post', postUnavailable: false,
+      commentId: null, commentText: null, commentKoText: null, commentHasImage: false, commentUnavailable: false,
+    },
   ],
   nextCursor: 'n2',
-  unreadTotal: 1,
+  unreadTotal: 2,
+  userActivityUnread: 1,
   operators: [{ ...operator, isActive: true, itemCount: 2, unreadCount: 1 }],
   readBefore: '2026-10-02T10:00:00.000Z',
   serverNowMs: Date.parse('2026-10-02T10:00:00.000Z'),
@@ -70,6 +76,9 @@ describe('admin activity screens', () => {
     expect(html).toContain('모두 읽음')
     expect(html).toContain('href="/admin/activity/posts/p1?as=op_1&amp;comment=c1"')
     expect(html).toContain('더 보기')
+    expect(html).toContain('님이 글을 올렸습니다')
+    expect(html).toContain('href="/admin/activity/posts/p9"')
+    expect(html).toContain('일반 유저')
   })
 
   it('renders the thread with a composer for the operator', () => {

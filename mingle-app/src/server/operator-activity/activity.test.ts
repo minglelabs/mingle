@@ -11,6 +11,12 @@ vi.mock('@/lib/prisma', () => ({
   prisma: { userNotification: { findMany: mockFindMany, count: mockCount, updateMany: mockUpdateMany } },
 }))
 vi.mock('@/server/admin/audit', () => ({ writeAdminAudit: mockAudit }))
+vi.mock('./user-activity', () => ({
+  USER_ACTIVITY_FILTER: 'users',
+  countUserActivityUnread: vi.fn(async () => 0),
+  listUserActivity: vi.fn(async () => ({ items: [], hasMore: false })),
+  markUserActivityRead: vi.fn(async () => false),
+}))
 vi.mock('@/server/operator-inbox/staff-translate', () => ({
   STAFF_TRANSLATION_LANGUAGE: 'ko',
   translateForStaff: vi.fn(async (requests: Array<{ messageId: string }>) => (

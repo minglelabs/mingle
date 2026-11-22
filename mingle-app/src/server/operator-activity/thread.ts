@@ -176,6 +176,18 @@ export async function loadOperatorPostThread(args: {
     operatorsById.set(named.id, toThreadOperator(named))
   }
   if (!viewerId) viewerId = operatorsById.keys().next().value ?? null
+  if (!viewerId) {
+    // A thread between real users only (일반 유저 activity): read it as the oldest active operator.
+    const fallback = await prisma.user.findFirst({
+      where: { isOperator: true, isDeleted: false, isActive: true },
+      orderBy: { createdAt: 'asc' },
+      select: THREAD_USER_SELECT,
+    })
+    if (fallback) {
+      operatorsById.set(fallback.id, toThreadOperator(fallback))
+      viewerId = fallback.id
+    }
+  }
   const operator = viewerId ? operatorsById.get(viewerId) : undefined
   if (!viewerId || !operator) return { ok: false, error: 'operator_required' }
 
