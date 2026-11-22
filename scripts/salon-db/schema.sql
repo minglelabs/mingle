@@ -89,3 +89,15 @@ ALTER TABLE salons ADD COLUMN IF NOT EXISTS instagram_contact text;   -- busines
 ALTER TABLE salons ADD COLUMN IF NOT EXISTS raw_instagram jsonb;
 ALTER TABLE salon_photos ADD COLUMN IF NOT EXISTS local_path text;   -- ~/salon-db/photos/... (인스타 이미지 URL은 만료돼서 파일로 받음)
 CREATE UNIQUE INDEX IF NOT EXISTS salons_naver_place_id ON salons(naver_place_id) WHERE naver_place_id IS NOT NULL;
+
+-- 병원(성형외과·피부과·미용의원)도 같은 테이블에 kind로 구분
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'hair';  -- hair | plastic | derm
+CREATE INDEX IF NOT EXISTS salons_kind ON salons(kind);
+ALTER TABLE crawl_queries ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'hair';
+-- 병원 웹사이트에서 찾은 연락처/채널
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS email text;
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS kakao_channel text;
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS website_links jsonb;   -- 사이트에서 찾은 SNS·상담 링크
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS foreign_langs text[];  -- 사이트의 영어/중국어/일본어 페이지 여부
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS gangnamunni_url text;
+ALTER TABLE salons ADD COLUMN IF NOT EXISTS raw_gangnamunni jsonb;

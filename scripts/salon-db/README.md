@@ -46,3 +46,15 @@ API 키 없이 크롬(로그인된 프로필)에서 카카오맵을 직접 돌�
 5. 멈추기: 탭 콘솔에서 `window.__salonListStop = true` / `window.__salonDetailStop = true`
 
 카카오 목록의 "리뷰 N"은 블로그 리뷰 수 → `blog_review_count`. 카카오 자체 별점 리뷰는 `kakao_review_count`.
+
+## 병원 (성형외과·피부과·미용의원)
+
+같은 `salons` 테이블에 `kind`(`hair` | `plastic` | `derm`)로 구분해 넣는다. 미용의원은 카카오에서 대부분 피부과 카테고리라 `derm`.
+
+1. `clinic-queries.txt`(행정동 × 성형외과/피부과)를 `crawl_queries`에 적재 (`kind` 지정)
+2. `node kakao-pw.mjs list` / `node kakao-pw.mjs details` — 카카오 수집을 헤드리스 크롬에서 (내 크롬 탭 불필요)
+3. `naver-place.mjs` — 병원은 `/hospital` 경로로 매칭, 병원 먼저 처리
+4. `clinic-websites.mjs` — 병원 홈페이지에서 인스타·카카오톡 채널·이메일·전화·외국어 페이지 (robots.txt가 막은 사이트는 건너뜀)
+5. 실행은 `./run-loop.sh <script>`로 (메모리 여유 확인 후 반복 실행)
+
+강남언니(unni.app)와 성예사는 robots.txt가 자동 수집을 막고 있어(성예사는 Claude 계열 봇 명시 차단) 수집하지 않는다.

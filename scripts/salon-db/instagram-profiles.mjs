@@ -135,7 +135,7 @@ await ensureLogin();
 const { rows } = await pool.query(
   `SELECT id, name, instagram_handle FROM salons
    WHERE instagram_handle IS NOT NULL AND raw_instagram IS NULL
-   ORDER BY coalesce(naver_visitor_reviews,0) + coalesce(blog_review_count,0) DESC, id LIMIT $1`,
+   ORDER BY (kind <> 'hair') DESC, coalesce(naver_visitor_reviews,0) + coalesce(blog_review_count,0) DESC, id LIMIT $1`,
   [MAX],
 );
 console.log(`instagram: ${rows.length} profiles`);

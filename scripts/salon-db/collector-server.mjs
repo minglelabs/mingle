@@ -14,6 +14,17 @@ const num = (s) => {
   return Number.isFinite(n) && String(s ?? '').match(/\d/) ? n : null;
 };
 
+// 검색 결과 한 건의 종류. 병원 검색이면 카테고리로 성형외과/피부과(미용의원 포함)를 가른다.
+function kindOf(query, it) {
+  const cat = it.cat || '';
+  if (!/성형외과|피부과/.test(query || '')) return /미용실|헤어/.test(cat) ? 'hair' : null;
+  if (/성형외과/.test(cat)) return 'plastic';
+  if (/피부과/.test(cat)) return 'derm';
+  // 미용의원: 카테고리는 미용·피부관리·두피 등인데 이름이 의원/병원/클리닉
+  if (/미용|피부관리|두피|탈모|비만/.test(cat) && /의원|병원|클리닉|메디/.test(it.name || '')) return 'derm';
+  return null;
+}
+
 const routes = {
   async 'GET /stats'() {
     const { rows } = await pool.query(`
@@ -21,7 +32,9 @@ const routes = {
              (SELECT count(*) FROM crawl_queries) queries_total,
              count(*) FILTER (WHERE kakao_place_id IS NOT NULL) places,
              count(*) FILTER (WHERE raw_kakao IS NOT NULL) details,
-             count(*) FILTER (WHERE instagram_handle IS NOT NULL) instagram
+             count(*) FILTER (WHERE instagram_handle IS NOT NULL) instagram,
+             count(*) FILTER (WHERE kind<>'hair') clinics,
+             count(*) FILTER (WHERE kind<>'hair' AND raw_kakao IS NOT NULL) clinic_details
       FROM salons`);
     return rows[0];
   },
@@ -40,17 +53,18 @@ const routes = {
     let kept = 0;
     for (const it of body.items || []) {
       const city = cityOf(it.addr);
-      if (!it.id || !city || !/미용실|헤어/.test(it.cat || '')) continue;
+      const kind = kindOf(body.query, it);
+      if (!it.id || !city || !kind) continue;
       await pool.query(
         `INSERT INTO salons (kakao_place_id, kakao_url, name, category, city, district, road_address, phone,
-                             kakao_rating, blog_review_count, status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'영업/정상')
+                             kakao_rating, blog_review_count, status, kind)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'영업/정상',$11)
          ON CONFLICT (kakao_place_id) DO UPDATE SET
            name=EXCLUDED.name, category=EXCLUDED.category, road_address=EXCLUDED.road_address,
            phone=COALESCE(EXCLUDED.phone, salons.phone), kakao_rating=EXCLUDED.kakao_rating,
            blog_review_count=COALESCE(EXCLUDED.blog_review_count, salons.blog_review_count), updated_at=now()`,
         [it.id, `https://place.map.kakao.com/${it.id}`, it.name, it.cat, city, guOf(it.addr), it.addr,
-         it.tel || null, num(it.rating), num(it.reviews)],
+         it.tel || null, num(it.rating), num(it.reviews), kind],
       );
       kept++;
     }
@@ -69,7 +83,7 @@ const routes = {
     const { rows } = await pool.query(
       `SELECT kakao_place_id FROM salons
        WHERE kakao_place_id IS NOT NULL AND raw_kakao IS NULL
-       ORDER BY blog_review_count DESC NULLS LAST, id LIMIT $1`,
+       ORDER BY (kind <> 'hair') DESC, blog_review_count DESC NULLS LAST, id LIMIT $1`,
       [n + leases.size],
     );
     const ids = rows.map((r) => r.kakao_place_id).filter((id) => !(leases.get(id) > now)).slice(0, n);

@@ -9,6 +9,8 @@ import { isMatch, instagramHandle } from './match.mjs';
 const UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
 const jitter = (ms) => sleep(ms + Math.random() * ms);
+// 미용실은 /hairshop, 병원(성형외과·피부과)은 /hospital — 구조는 같다
+const sect = (s) => (s.kind && s.kind !== 'hair' ? 'hospital' : 'hairshop');
 
 // 메모리 절약: 디스크 캐시 끔, 이미지·폰트·영상은 받지 않음 (필요한 건 __APOLLO_STATE__ 뿐)
 const browser = await chromium.launch({
@@ -32,7 +34,7 @@ async function findPlace(s) {
   const y = s.lat || 37.4979;
   const q = s.lat ? s.name : `${s.district || ''} ${s.name}`;
   const st = await apollo(
-    `https://m.place.naver.com/hairshop/list?query=${encodeURIComponent(q)}&x=${x}&y=${y}&clientX=${x}&clientY=${y}`,
+    `https://m.place.naver.com/${sect(s)}/list?query=${encodeURIComponent(q)}&x=${x}&y=${y}&clientX=${x}&clientY=${y}`,
   );
   const items = Object.entries(st)
     .filter(([k]) => k.startsWith('PlaceListBusinessesItem:'))
@@ -110,7 +112,7 @@ async function save(s, id, d) {
        instagram_handle=COALESCE(instagram_handle,$10), phone=COALESCE(phone,$11), raw_naver=$12,
        enriched_at = enriched_at || jsonb_build_object('naver', now()), updated_at=now()
      WHERE id=$1`,
-    [s.id, id, `https://m.place.naver.com/hairshop/${id}/home`, d.base.visitorReviewsTotal ?? null,
+    [s.id, id, `https://m.place.naver.com/${sect(s)}/${id}/home`, d.base.visitorReviewsTotal ?? null,
      d.base.visitorReviewsScore ?? null, d.base.cafeBlogReviewsTotal ?? null, d.booking, d.base.talktalkUrl || null,
      d.stylistIg.length ? d.stylistIg : null, d.shopIg, d.base.phone || d.base.virtualPhone || null, d],
   );
@@ -118,14 +120,14 @@ async function save(s, id, d) {
     await pool.query(
       `INSERT INTO salon_photos (salon_id, source, url, permalink, attribution) VALUES ($1,'naver',$2,$3,$4)
        ON CONFLICT DO NOTHING`,
-      [s.id, p.url, `https://m.place.naver.com/hairshop/${id}/photo`, p.title || null],
+      [s.id, p.url, `https://m.place.naver.com/${sect(s)}/${id}/photo`, p.title || null],
     );
   }
 }
 
 const { rows } = await pool.query(
-  `SELECT * FROM salons WHERE kakao_place_id IS NOT NULL AND NOT (enriched_at ? 'naver')
-   ORDER BY blog_review_count DESC NULLS LAST, id ${LIMIT ? `LIMIT ${LIMIT}` : ''}`,
+  `SELECT * FROM salons WHERE kakao_place_id IS NOT NULL AND NOT (enriched_at ? 'naver') AND (kind = 'hair' OR raw_kakao IS NOT NULL)
+   ORDER BY (kind <> 'hair') DESC, blog_review_count DESC NULLS LAST, id ${LIMIT ? `LIMIT ${LIMIT}` : ''}`,
 );
 console.log(`naver: ${rows.length} salons`);
 let hit = 0;
@@ -135,7 +137,7 @@ for (const [i, s] of rows.entries()) {
     const it = await findPlace(s);
     if (it) {
       await jitter(1200);
-      const st = await apollo(`https://m.place.naver.com/hairshop/${it.id}/home`);
+      const st = await apollo(`https://m.place.naver.com/${sect(s)}/${it.id}/home`);
       try {
         await save(s, it.id, summarize(st, it.id));
         hit++;

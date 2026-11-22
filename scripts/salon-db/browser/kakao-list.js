@@ -78,7 +78,7 @@
         await W(30000); // 서버 재시작 중
         continue;
       }
-      if (!query) return 'all done';
+      if (!query) { window.__salonListDone = true; return 'all done'; }
       try {
         const n = await runQuery(query);
         log(`${new Date().toLocaleTimeString()} ${query} ${n}`);
