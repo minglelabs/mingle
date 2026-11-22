@@ -131,6 +131,8 @@ export type HashRushLobbySeat = {
   host: boolean
   /** A web page (invite link): no host controls, so the room is never handed to it. */
   web: boolean
+  /** What this seat just said, while its bubble is up ('' otherwise): the lobby has no map to float it over. */
+  said: string
 }
 
 /** A hosted room's lobby: who hosts, how it is set up, and what this viewer may change. */
@@ -404,6 +406,7 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
   // Seats somebody just came into, until when they glow.
   const freshUntil = new Map<number, number>()
   let freshTimer = 0
+  let saidTimer = 0
   const session: HashRushSession = { round: 0, tick: -1, snap: null }
   // Where this hamster was played ahead to (main.js net.mine).
   let mine: Partial<HashRushPlayer> | null = null
@@ -565,6 +568,7 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
       if (m.sys || !seat || seat.kind !== 'remote' || seat.userId || !text) return
       webChatCount += 1
       bubbles.set(look, { id: `web-${webChatCount}`, name: String(seat.name || m.name || ''), text, until: performance.now() + lineLife(text) })
+      lobbyTalk()
       if (visible && !document.hidden) audio.play.chat()
     }
   }
@@ -612,6 +616,23 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
   }
 
   // Between rounds: who is in, the countdown, and the way to watch or to join.
+  // What a seat just said, while its bubble is up: in the lobby it shows on
+  // the seat's row (there is no map to put it over), and goes when the bubble would.
+  function saidAt(seat: number, now: number) {
+    const up = bubbles.get(seat)
+    return up && up.until > now ? up.text : ''
+  }
+
+  function lobbyTalk() {
+    window.clearTimeout(saidTimer)
+    saidTimer = 0
+    if (destroyed || game) return
+    showLobby()
+    const now = performance.now()
+    const soonest = Math.min(...[...bubbles.values()].map((up) => up.until).filter((until) => until > now))
+    if (Number.isFinite(soonest)) saidTimer = window.setTimeout(lobbyTalk, soonest - now + 50)
+  }
+
   function showLobby() {
     if (!line) return
     const at = lobby
@@ -632,6 +653,7 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
         fresh: (freshUntil.get(index) ?? 0) > now,
         host: !!at?.hosted && at.hostSeat === index,
         web: seat.web,
+        said: saidAt(index, now),
       }))
     // A newer server lists the round's computers in their seats; either way a
     // seat without a person counts as free here, as it always did.
@@ -1230,7 +1252,8 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
     },
     hearRoom(entry, options) {
       if (destroyed) return
-      const { fresh } = sayInBubble(lobby?.seats, entry, performance.now())
+      const { seat, fresh } = sayInBubble(lobby?.seats, entry, performance.now())
+      if (seat >= 0) lobbyTalk()
       // Web pages in the room (invite link) are not in the chat room: this
       // viewer's own new lines also go out as the game's talk, once each, so
       // they read them. Only while a web page is seated.
@@ -1296,6 +1319,7 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
       window.clearTimeout(resultTimer)
       window.clearTimeout(bannerTimer)
       window.clearTimeout(freshTimer)
+      window.clearTimeout(saidTimer)
       window.clearTimeout(chatGuardTimer)
       window.clearInterval(lineCheck)
       listening.abort()

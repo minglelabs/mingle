@@ -209,6 +209,7 @@
 
 .seatName {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   min-width: 0;
@@ -220,6 +221,46 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* What the seat just said (the lobby has no map to float it over): a small
+   speech bubble under the name, its tail toward the face, gone with the
+   in-round bubble's time. */
+.seatSaid {
+  position: relative;
+  flex-basis: 100%;
+  max-width: max-content;
+  margin-top: 2px;
+  padding: 3px 9px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1.5px solid color-mix(in srgb, var(--c) 55%, #e8dcc4);
+  color: #3a2a12;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  quotes: none;
+  animation: seatSaidIn 0.18s ease-out;
+}
+
+.seatSaid::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 7px;
+  border: 5px solid transparent;
+  border-right-color: color-mix(in srgb, var(--c) 55%, #e8dcc4);
+  border-left: 0;
+}
+
+@keyframes seatSaidIn {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seatSaid { animation: none; }
 }
 
 /* The viewer's own row, so on a crowded list they find themselves (#224). */

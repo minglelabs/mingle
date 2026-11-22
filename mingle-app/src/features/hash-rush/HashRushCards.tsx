@@ -166,6 +166,7 @@ export function HashRushLobbyCard({ view, copy, art, chatBelow, onSit, onStand, 
                 {seat.host ? <i className={styles.hostTag} data-qa="hash-rush-host-tag">👑 {copy.host}</i> : null}
                 {seat.me ? <i className={styles.meBadge} data-qa="hash-rush-me-badge">{view.words.me}</i> : null}
                 {seat.team >= 0 ? <i className={styles.teamDot} style={{ '--t': seat.color } as CSSProperties} /> : null}
+                {seat.said ? <q className={styles.seatSaid} data-qa="hash-rush-seat-said">{seat.said}</q> : null}
               </span>
               {hosting?.amHost && !seat.me && !seat.web && onHandHost ? (
                 <button type="button" className={styles.handHost} onClick={() => setHandTo(seat.seat)} data-qa="hash-rush-hand-host">
