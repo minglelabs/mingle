@@ -284,7 +284,7 @@ export function decodeReviewCursor(value: string | undefined): Pick<TimelineRow,
  * Paged by cursor, so items answered on one page never push unseen ones
  * past the next.
  */
-export async function listReviewQueue(options: { cursor?: string; now?: Date; userId?: string } = {}): Promise<ReviewQueue> {
+export async function listReviewQueue(options: { cursor?: string; now?: Date; userId?: string; kind?: ReviewItem['kind'] } = {}): Promise<ReviewQueue> {
   const now = options.now ?? new Date()
   const after = decodeReviewCursor(options.cursor)
   const order = `ORDER BY rank, late, round, "authorAt", "kindOrder", id`
@@ -298,6 +298,11 @@ export async function listReviewQueue(options: { cursor?: string; now?: Date; us
   if (options.userId) {
     params.push(options.userId)
     conditions.push(`"userId" = $${params.length}::text`)
+  }
+  // `kind`: only accounts or only posts (the review page's two tabs).
+  if (options.kind) {
+    params.push(options.kind)
+    conditions.push(`kind = $${params.length}::text`)
   }
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
   const rows = (await prisma.$queryRawUnsafe<TimelineRow[]>(`${TIMELINE_SQL} ${where} ${order} LIMIT ${REVIEW_ITEMS_PER_PAGE + 1}`, ...params))

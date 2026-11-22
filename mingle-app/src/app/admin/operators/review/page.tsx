@@ -2,8 +2,9 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { requireAdmin } from '@/server/admin/guard'
 import { listReviewQueue, REVIEW_ITEMS_PER_PAGE } from '@/server/operator-review/review'
-import { AdminEmptyState, AdminPage, AdminPageHeader } from '../../_components/ui'
+import { AdminEmptyState, AdminFilterLink, AdminPage, AdminPageHeader } from '../../_components/ui'
 import { ReviewBoard } from './review-board'
+import { parseReviewTab, reviewTabHref, reviewTabKind } from './review-tab'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,25 +25,34 @@ function takeFirst(value: string | string[] | undefined): string {
 export default async function OperatorReviewPage({ searchParams }: ReviewPageProps) {
   await requireAdmin('/admin/operators/review')
   const params = await searchParams
+  const tab = parseReviewTab(takeFirst(params.tab).trim())
   const cursor = takeFirst(params.after).trim()
-  const queue = await listReviewQueue({ cursor: cursor || undefined })
+  const queue = await listReviewQueue({ cursor: cursor || undefined, kind: reviewTabKind(tab) })
+  const accounts = tab === 'accounts'
 
   return (
     <AdminPage>
       <AdminPageHeader
-        title="계정·글 검토"
-        description={`검토할 계정 ${queue.totalProfiles}개 · 글 ${queue.totalPosts}개. '맨 앞으로' 고정한 것이 먼저, 나머지는 기본 순서예요.`}
-        back={cursor ? { href: '/admin/operators/review', label: '처음부터' } : undefined}
+        title={accounts ? '계정 검토' : '글 검토'}
+        description="'맨 앞으로' 고정한 것이 먼저, 나머지는 기본 순서예요."
+        back={cursor ? { href: reviewTabHref(tab), label: '처음부터' } : undefined}
       />
+      <nav aria-label="검토 종류" className="mx-auto mb-4 flex w-full max-w-[440px] gap-2">
+        <AdminFilterLink href={reviewTabHref('posts')} active={!accounts}>글 {queue.totalPosts}</AdminFilterLink>
+        <AdminFilterLink href={reviewTabHref('accounts')} active={accounts}>계정 {queue.totalProfiles}</AdminFilterLink>
+      </nav>
       {queue.items.length === 0 ? (
-        <AdminEmptyState title="검토할 항목이 없어요" description="새로 만든 계정과 글이 여기에 모여요." />
+        <AdminEmptyState
+          title={accounts ? '검토할 계정이 없어요' : '검토할 글이 없어요'}
+          description={accounts ? '새로 만든 계정이 여기에 모여요.' : '새로 만든 글이 여기에 모여요.'}
+        />
       ) : (
         <>
-          <ReviewBoard key={`${cursor}:${queue.items.map((item) => item.key).join(',')}`} items={queue.items} />
+          <ReviewBoard key={`${tab}:${cursor}:${queue.items.map((item) => item.key).join(',')}`} items={queue.items} />
           {queue.nextCursor ? (
             <div className="mx-auto mt-6 w-full max-w-[440px]">
               <Link
-                href={`/admin/operators/review?after=${encodeURIComponent(queue.nextCursor)}`}
+                href={reviewTabHref(tab, queue.nextCursor)}
                 className="block rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm font-semibold text-sky-700"
               >
                 다음 {REVIEW_ITEMS_PER_PAGE}개
