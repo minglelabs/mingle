@@ -150,6 +150,7 @@ export async function loadOperatorPostThread(args: {
   const base = await prisma.post.findFirst({
     where: { id: args.postId, OR: [{ isDeleted: null }, { isDeleted: false }] },
     select: {
+      sourceLanguage: true,
       author: { select: THREAD_USER_SELECT },
       comments: {
         where: { author: { isOperator: true, isDeleted: false }, OR: [{ isDeleted: null }, { isDeleted: false }] },
@@ -177,12 +178,17 @@ export async function loadOperatorPostThread(args: {
   }
   if (!viewerId) viewerId = operatorsById.keys().next().value ?? null
   if (!viewerId) {
-    // A thread between real users only (일반 유저 activity): read it as the oldest active operator.
-    const fallback = await prisma.user.findFirst({
-      where: { isOperator: true, isDeleted: false, isActive: true },
-      orderBy: { createdAt: 'asc' },
-      select: THREAD_USER_SELECT,
-    })
+    // A thread between real users only (일반 유저 activity): read it as an active operator
+    // who writes in the post's language when there is one, else the oldest active operator.
+    const activeOperator = { isOperator: true, isDeleted: false, isActive: true }
+    const postLanguage = base.sourceLanguage?.trim()
+    const fallback = (postLanguage
+      ? await prisma.user.findFirst({
+        where: { ...activeOperator, primaryLanguages: { has: postLanguage } },
+        orderBy: { createdAt: 'asc' },
+        select: THREAD_USER_SELECT,
+      })
+      : null) ?? await prisma.user.findFirst({ where: activeOperator, orderBy: { createdAt: 'asc' }, select: THREAD_USER_SELECT })
     if (fallback) {
       operatorsById.set(fallback.id, toThreadOperator(fallback))
       viewerId = fallback.id
