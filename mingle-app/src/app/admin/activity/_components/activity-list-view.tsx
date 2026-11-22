@@ -3,8 +3,8 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { CheckCheck, Heart, Loader2, MessageCircle, RefreshCw, Reply, UserPlus, type LucideIcon } from 'lucide-react'
-import type { ActivityItem, ActivityListData, ActivityOperatorStat, OperatorActivityType } from '@/server/operator-activity/activity'
+import { CheckCheck, Heart, Loader2, MessageCircle, PenLine, RefreshCw, Reply, UserPlus, type LucideIcon } from 'lucide-react'
+import type { ActivityItem, ActivityListData, ActivityOperatorStat } from '@/server/operator-activity/activity'
 import { InboxAvatar, KoreanViewSwitch } from '../../inbox/_components/inbox-ui'
 import { useAdminInboxRealtime } from '../../inbox/_components/use-admin-inbox-realtime'
 import { useStaffKoreanView } from '../../inbox/_components/use-staff-korean-view'
@@ -18,6 +18,8 @@ const MAX_REFRESH_SIZE = 100
 const CLOCK_TICK_MS = 30_000
 const ADMIN_INBOX_UPDATED_EVENT = 'mingle:admin-inbox-updated'
 const OPERATOR_ID_PATTERN = /^[\w-]{1,128}$/
+// `operator` value of the 일반 유저 chip (USER_ACTIVITY_FILTER in user-activity.ts).
+const USER_ACTIVITY_FILTER = 'users'
 
 class ActivityUnauthorizedError extends Error {}
 
@@ -37,20 +39,26 @@ async function fetchActivity(args: { operatorId: string | null; cursor?: string 
   return await response.json() as ActivityListData
 }
 
-const TYPE_COPY: Record<OperatorActivityType, { icon: LucideIcon; tone: string; text: string }> = {
+const TYPE_COPY: Record<ActivityItem['type'], { icon: LucideIcon; tone: string; text: string }> = {
   follow: { icon: UserPlus, tone: 'bg-violet-500', text: '님이 팔로우했습니다' },
   post_like: { icon: Heart, tone: 'bg-rose-500', text: '님이 글을 좋아합니다' },
   comment: { icon: MessageCircle, tone: 'bg-sky-500', text: '님이 댓글을 남겼습니다' },
   comment_reply: { icon: Reply, tone: 'bg-sky-500', text: '님이 답글을 남겼습니다' },
   comment_like: { icon: Heart, tone: 'bg-rose-500', text: '님이 댓글을 좋아합니다' },
+  user_post: { icon: PenLine, tone: 'bg-emerald-500', text: '님이 글을 올렸습니다' },
+  user_comment: { icon: MessageCircle, tone: 'bg-sky-500', text: '님이 댓글을 남겼습니다' },
+  user_post_like: { icon: Heart, tone: 'bg-rose-500', text: '님이 글을 좋아합니다' },
+  user_comment_like: { icon: Heart, tone: 'bg-rose-500', text: '님이 댓글을 좋아합니다' },
+  user_follow: { icon: UserPlus, tone: 'bg-violet-500', text: '님이 팔로우했습니다' },
 }
 
 /** The thread an item opens, read as the operator that received it; null when there is nothing to open. */
 export function activityItemHref(item: Pick<ActivityItem, 'postId' | 'postUnavailable' | 'commentId' | 'operator'>): string | null {
   if (!item.postId || item.postUnavailable) return null
-  const params = new URLSearchParams({ as: item.operator.userId })
+  const params = new URLSearchParams(item.operator ? { as: item.operator.userId } : {})
   if (item.commentId) params.set('comment', item.commentId)
-  return `${LIST_PATH}/posts/${encodeURIComponent(item.postId)}?${params.toString()}`
+  const query = params.toString()
+  return `${LIST_PATH}/posts/${encodeURIComponent(item.postId)}${query ? `?${query}` : ''}`
 }
 
 function ActivityCard({ item, nowMs, korean, active }: { item: ActivityItem; nowMs: number; korean: boolean; active: boolean }) {
@@ -58,6 +66,7 @@ function ActivityCard({ item, nowMs, korean, active }: { item: ActivityItem; now
   const Icon = copy.icon
   const href = activityItemHref(item)
   const isOwnComment = item.type === 'comment_like'
+  const isFollow = item.type === 'follow' || item.type === 'user_follow'
   const commentText = (korean && item.commentKoText) || item.commentText
   const body = (
     <>
@@ -78,13 +87,27 @@ function ActivityCard({ item, nowMs, korean, active }: { item: ActivityItem; now
             <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-sky-500" aria-label="안 읽음" />
           )}
         </span>
-        <span className="mt-1 flex min-w-0 items-center">
-          <span className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-800 ring-1 ring-sky-200">
-            <span className="shrink-0 text-sky-600">받은 계정</span>
-            <span aria-hidden="true" className="shrink-0 text-sky-400">·</span>
-            <span className="truncate">{inboxPersonLabel(item.operator)}</span>
+        {item.operator ? (
+          <span className="mt-1 flex min-w-0 items-center">
+            <span className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-800 ring-1 ring-sky-200">
+              <span className="shrink-0 text-sky-600">받은 계정</span>
+              <span aria-hidden="true" className="shrink-0 text-sky-400">·</span>
+              <span className="truncate">{inboxPersonLabel(item.operator)}</span>
+            </span>
           </span>
-        </span>
+        ) : (
+          <span className="mt-1 flex min-w-0 items-center">
+            <span className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800 ring-1 ring-emerald-200">
+              <span className="shrink-0 text-emerald-600">일반 유저</span>
+              {item.target ? (
+                <>
+                  <span aria-hidden="true" className="shrink-0 text-emerald-400">·</span>
+                  <span className="truncate">대상 {inboxPersonLabel(item.target)}</span>
+                </>
+              ) : null}
+            </span>
+          </span>
+        )}
         {commentText || item.commentHasImage ? (
           <span className="mt-1.5 line-clamp-3 break-words rounded-xl bg-slate-100 px-2.5 py-1.5 text-sm leading-5 text-slate-800">
             {isOwnComment ? <span className="text-slate-500">내 댓글 · </span> : null}
@@ -110,7 +133,7 @@ function ActivityCard({ item, nowMs, korean, active }: { item: ActivityItem; now
         <Link href={href} prefetch={false} aria-current={active ? 'page' : undefined} className={`${className} active:bg-slate-50`}>
           {body}
         </Link>
-      ) : item.type === 'follow' ? (
+      ) : isFollow ? (
         // A follow has no thread: open the follower's public profile instead.
         <a href={`/p/${encodeURIComponent(item.actor.userId)}`} target="_blank" rel="noreferrer" className={`${className} active:bg-slate-50`}>
           {body}
@@ -309,7 +332,9 @@ export function ActivityListView({ initialData }: { initialData: ActivityListDat
     ? decodeURIComponent(pathname.slice(`${LIST_PATH}/posts/`.length).split('/')[0])
     : null
   const activeOperator = operatorId ? data.operators.find((operator) => operator.userId === operatorId) ?? null : null
-  const visibleUnread = activeOperator ? activeOperator.unreadCount : data.unreadTotal
+  const visibleUnread = operatorId === USER_ACTIVITY_FILTER
+    ? data.userActivityUnread ?? 0
+    : activeOperator ? activeOperator.unreadCount : data.unreadTotal
 
   return (
     <div className="min-h-dvh bg-slate-50 px-4 pb-[calc(env(safe-area-inset-bottom)+6rem)] pt-4 text-slate-900 lg:min-h-full lg:pb-6">
@@ -335,13 +360,19 @@ export function ActivityListView({ initialData }: { initialData: ActivityListDat
         </header>
 
         <p className="break-words text-sm text-slate-500">
-          운영 계정이 받은 팔로우, 좋아요, 댓글, 답글입니다. 댓글을 열면 그 운영 계정으로 답글을 달 수 있습니다.
+          운영 계정이 받은 팔로우, 좋아요, 댓글, 답글과 일반 유저끼리의 글, 댓글, 좋아요, 팔로우입니다. 댓글을 열면 운영 계정으로 답글을 달 수 있습니다.
         </p>
 
-        {data.operators.length > 0 ? (
+        {data.operators.length > 0 || (data.userActivityUnread ?? 0) > 0 || data.items.some((item) => !item.operator) ? (
           <nav aria-label="운영 계정별 보기" className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none]">
             <div className="flex w-max gap-2 pb-1">
               <FilterChip label="전체" count={data.unreadTotal} active={!operatorId} onSelect={() => selectOperator(null)} />
+              <FilterChip
+                label="일반 유저"
+                count={data.userActivityUnread ?? 0}
+                active={operatorId === USER_ACTIVITY_FILTER}
+                onSelect={() => selectOperator(USER_ACTIVITY_FILTER)}
+              />
               {data.operators.map((operator) => (
                 <FilterChip
                   key={operator.userId}
