@@ -4395,6 +4395,15 @@ export default function ConversationList({
     setTimeLabelsReady(true);
   }, []);
 
+  // The room screen is a separate, large download. Fetch it while the list is
+  // idle so the first room opened does not wait for it on a slow connection.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void import("@/components/mingle-home").catch(() => {});
+    }, 1_500);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   useEffect(() => {
     if (!rowActionMenu) return;
 
