@@ -5,6 +5,7 @@ vi.mock('@/server/operator-avatars/generate', () => ({ requestAvatarImage: vi.fn
 vi.mock('@/server/posts/post-image-storage', () => ({ putPostImage: vi.fn() }))
 
 import { buildPostImagePrompt, pickPostImageStyle } from './post-image'
+import { PHOTO_AXES, PHOTO_LIGHTS } from '@/server/operator-avatars/photo-realism'
 
 describe('post photo prompt', () => {
   it('describes a phone snapshot without people', () => {
@@ -125,5 +126,60 @@ describe('sun direction rule', () => {
   it('is only told for scenes with a low sun, so it does not pull every photo toward a sunset', () => {
     expect(buildPostImagePrompt('a bowl of ramen on a counter')).not.toMatch(/sunset|setting sun/i)
     expect(buildPostImagePrompt('the sea at sunset from a pier')).toContain('a setting sun only ever appears in a view facing west')
+  })
+})
+
+describe('time of day', () => {
+  const person = { look: 'a young woman', hasReference: true }
+
+  it('gives a photo with no stated time a time and weather, mostly bright daytime', () => {
+    expect(buildPostImagePrompt('[self] a selfie at a café table', null, () => 0, person)).toContain('Time and light, like this: a bright café with floor-to-ceiling windows at noon')
+    expect(buildPostImagePrompt('[self] a selfie on a bench in a park', null, () => 0, person)).toContain('Time and light, like this: a bright, clear day around noon')
+    expect(buildPostImagePrompt('a bowl of ramen on the kitchen table at home', null, () => 0)).toContain('morning sun through an east window')
+    expect(buildPostImagePrompt('[self] a selfie at the office desk', null, () => 0, person)).toContain('an open-plan office at noon')
+  })
+
+  it('keeps the time the description already gives', () => {
+    expect(buildPostImagePrompt('[self] a selfie on a rainy street', null, () => 0, person)).not.toContain('Time and light')
+    expect(buildPostImagePrompt('[self] a selfie in the street at night', null, () => 0, person)).not.toContain('Time and light')
+  })
+
+  it('has 125 indoor and 40 outdoor light situations, none of them a sunset', () => {
+    const indoor = PHOTO_LIGHTS.home.length + PHOTO_LIGHTS.eatery.length + PHOTO_LIGHTS.transit.length + PHOTO_LIGHTS.work.length + PHOTO_LIGHTS.indoor.length
+    expect(indoor).toBe(125)
+    expect(PHOTO_LIGHTS.outdoor).toHaveLength(40)
+    const all = Object.values(PHOTO_LIGHTS).flat()
+    expect(new Set(all).size).toBe(all.length)
+    for (const line of all) expect(line).not.toMatch(/sunset|dusk|golden hour|twilight/i)
+  })
+
+  it('only tells dim-light face rules for dim photos', () => {
+    expect(buildPostImagePrompt('[self] a selfie at a café table', null, () => 0, person)).not.toContain('In dim evening or night light')
+    expect(buildPostImagePrompt('[self] a selfie in the street at night', null, () => 0, person)).toContain('In dim evening or night light')
+  })
+})
+
+describe('photo look variation', () => {
+  const person = { look: 'a young man', hasReference: true }
+
+  it('picks one option per axis the description leaves open', () => {
+    const prompt = buildPostImagePrompt('[self] a friend took it on a bench in a park', null, () => 0, person)
+    expect(prompt).toContain("This photo's look: nobody else around, the place quiet; a sparse, minimal place")
+    expect(prompt).toContain('framed close, head and shoulders')
+    expect(prompt).toContain('shot at eye level')
+    expect(prompt).toContain('warm wood and beige tones')
+  })
+
+  it('keeps what the description settles, a selfie its framing and a home its quiet', () => {
+    const selfie = buildPostImagePrompt('[self] a front-camera selfie in a crowded street', null, () => 0, person)
+    expect(selfie).not.toContain('framed close')
+    expect(selfie).not.toContain('shot at eye level')
+    expect(selfie).not.toContain('nobody else around')
+    expect(buildPostImagePrompt('[self] a friend took it on the sofa at home', null, () => 0, person)).not.toContain('nobody else around')
+    expect(buildPostImagePrompt('a bowl of ramen on a counter', null, () => 0)).toContain('a close-up, the subject filling most of the frame')
+  })
+
+  it('never names a sunset, a glow or a rim light', () => {
+    for (const line of Object.values(PHOTO_AXES).flatMap((axis) => axis.options)) expect(line).not.toMatch(/sunset|dusk|golden hour|glow|rim light/i)
   })
 })
