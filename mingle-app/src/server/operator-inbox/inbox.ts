@@ -271,7 +271,8 @@ async function operatorMembershipsCte(filter: { operatorUserId?: string | null; 
           AND member.channel_id = ANY(${officialRoomIds}::text[])
         )`
     : Prisma.empty
-  return Prisma.sql`memberships AS (
+  // MATERIALIZED: the short room list is built once, then each query probes messages per room.
+  return Prisma.sql`memberships AS MATERIALIZED (
     SELECT
       member.channel_id,
       member.user_id AS operator_user_id,
@@ -295,24 +296,31 @@ async function operatorMembershipsCte(filter: { operatorUserId?: string | null; 
   )`
 }
 
-/** Unread per (room, operator): visible messages from real users after the operator's lastReadAt. */
+/**
+ * Unread per (room, operator): visible messages from real users after the operator's lastReadAt.
+ * Counted room by room through the (session_key, created_at) index. Written as a plain
+ * join, the planner read the whole app_messages table on every badge poll, which filled
+ * the database's disk budget and stalled every other query (outage 2026-11-22).
+ */
 const UNREAD_CTE = Prisma.sql`unread AS (
   SELECT
     membership.channel_id,
     membership.operator_user_id,
-    COUNT(message.id)::int AS unread_count
+    counted.unread_count
   FROM memberships AS membership
-  LEFT JOIN app.app_messages AS message
-    ON message.session_key = membership.session_key
-    AND (message.is_deleted = false OR message.is_deleted IS NULL)
-    AND message.user_id IS NOT NULL
-    AND message.user_id <> membership.operator_user_id
-    AND (membership.last_read_at IS NULL OR message.created_at > membership.last_read_at)
-    AND message.user_id NOT IN (
-      SELECT staff.id FROM app.app_users AS staff
-      WHERE staff.is_operator = true OR staff.id IN (${STAFF_ANSWERED_OFFICIAL_IDS_SQL})
-    )
-  GROUP BY membership.channel_id, membership.operator_user_id
+  CROSS JOIN LATERAL (
+    SELECT COUNT(*)::int AS unread_count
+    FROM app.app_messages AS message
+    WHERE message.session_key = membership.session_key
+      AND (message.is_deleted = false OR message.is_deleted IS NULL)
+      AND message.user_id IS NOT NULL
+      AND message.user_id <> membership.operator_user_id
+      AND (membership.last_read_at IS NULL OR message.created_at > membership.last_read_at)
+      AND message.user_id NOT IN (
+        SELECT staff.id FROM app.app_users AS staff
+        WHERE staff.is_operator = true OR staff.id IN (${STAFF_ANSWERED_OFFICIAL_IDS_SQL})
+      )
+  ) AS counted
 )`
 
 type UnreadRow = { channelId: string; operatorUserId: string; unreadCount: number | bigint }
