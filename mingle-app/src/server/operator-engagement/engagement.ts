@@ -1,4 +1,7 @@
+import { HAMZZI_USER_ID } from '@/lib/hamzzi'
 import { prisma } from '@/lib/prisma'
+import { ROYCE_USER_ID } from '@/lib/signup-welcome-onboarding'
+import { createPostNotification } from '@/server/notifications/create-post-notification'
 import type { AdminContext } from '@/server/admin/guard'
 import { markPostViewed } from '@/server/feed/post-view'
 import { commentOnPostAsOperator, replyToCommentAsOperator } from '@/server/operator-comments/comment'
@@ -19,6 +22,10 @@ import { visiblePostWhere } from '@/server/posts/post-visibility'
  * (`planRealCommentEngagement`): the operator it was left for likes it and,
  * now and then, answers it (Claude Sonnet 5.5, `operator-comments/generate.ts`).
  * Comments and replies are AI-written, so each run writes at most a few.
+ *
+ * A real person's own post gets a light plan too (`planRealPostEngagement`):
+ * a few operator likes and at most two comments, hours apart, from operators
+ * who already talked with that person first, else ones writing its language.
  */
 
 const HOUR_MS = 60 * 60_000
@@ -29,6 +36,12 @@ export const ENGAGEMENT_WINDOW_MS = 4 * 24 * HOUR_MS
 const MAX_WRITTEN_PER_RUN = 2
 /** Replies to real people's comments per run, on top of `MAX_WRITTEN_PER_RUN`. */
 const MAX_REAL_REPLIES_PER_RUN = 3
+/** Comments on real people's posts per run, on top of the above. */
+const MAX_REAL_POST_COMMENTS_PER_RUN = 1
+/** Real people's posts get operator reactions for this long after they go up. */
+export const REAL_POST_WINDOW_MS = 3 * 24 * HOUR_MS
+/** Team accounts whose posts are not real people's (sign-up auto-follows, the mascot). */
+const TEAM_USER_IDS = [ROYCE_USER_ID, HAMZZI_USER_ID]
 
 type Random = () => number
 const WORKER_CONTEXT: AdminContext = { sessionId: null, ip: null, userAgent: 'operator-engagement' }
@@ -117,6 +130,25 @@ export function planRealCommentEngagement(commentId: string, isRoot: boolean): R
   return { like, reply: isRoot && replies ? replyAt : null }
 }
 
+export type RealPostEngagementPlan = {
+  /** Delays after publishing, ascending: one operator comment each (0-2, hours apart). */
+  comments: number[]
+  /** Delays after publishing, ascending: one operator like each. */
+  likes: number[]
+}
+
+/** How a real person's own post is liked and commented on: lightly, so it never looks staged. */
+export function planRealPostEngagement(postId: string): RealPostEngagementPlan {
+  const random = seededRandom(`engage-real-post:${postId}`)
+  const commentCount = weightedCount(random, [15, 60, 25])
+  const first = delay(random, 25 * MINUTE_MS, 6 * HOUR_MS)
+  const second = first + delay(random, 2 * HOUR_MS, 14 * HOUR_MS)
+  const comments = [first, second].slice(0, commentCount)
+  const likeCount = 1 + weightedCount(random, [30, 30, 20, 12, 8])
+  const likes = Array.from({ length: likeCount }, () => delay(random, 3 * MINUTE_MS, 18 * HOUR_MS)).sort((a, b) => a - b)
+  return { comments, likes }
+}
+
 /** `ids` in an order fixed by `seed`, so the same accounts are picked again on the next run. */
 export function seededOrder(ids: readonly string[], seed: string): string[] {
   const random = seededRandom(seed)
@@ -128,24 +160,37 @@ export function seededOrder(ids: readonly string[], seed: string): string[] {
   return order
 }
 
-export type EngagementRunResult = { likes: number; comments: number; replies: number; commentLikes: number; realLikes: number; realReplies: number }
+export type EngagementRunResult = {
+  likes: number
+  comments: number
+  replies: number
+  commentLikes: number
+  realLikes: number
+  realReplies: number
+  realPostLikes: number
+  realPostComments: number
+}
 
 type CommentRow = { id: string; postId: string; authorId: string; parentId: string | null; createdAt: Date; likes: Array<{ userId: string }> }
 
 /** One run: adds every reaction that is due and missing on recent operator posts. */
 export async function runOperatorEngagement(now: Date = new Date(), options: { maxWritten?: number } = {}): Promise<EngagementRunResult> {
-  const result: EngagementRunResult = { likes: 0, comments: 0, replies: 0, commentLikes: 0, realLikes: 0, realReplies: 0 }
+  const result: EngagementRunResult = {
+    likes: 0, comments: 0, replies: 0, commentLikes: 0, realLikes: 0, realReplies: 0, realPostLikes: 0, realPostComments: 0,
+  }
   let writeBudget = options.maxWritten ?? MAX_WRITTEN_PER_RUN
   const nowMs = now.getTime()
   const since = new Date(nowMs - ENGAGEMENT_WINDOW_MS)
 
-  const operators = (await prisma.user.findMany({
+  const operatorRows = await prisma.user.findMany({
     where: { isOperator: true, isActive: true, isDeleted: false, operatorAccount: { reviewState: 'approved' } },
-    select: { id: true },
-  })).map((user) => user.id)
+    select: { id: true, primaryLanguages: true },
+  })
+  const operators = operatorRows.map((user) => user.id)
   if (operators.length === 0) return result
   const isOperator = new Set(operators)
   await engageRealComments(now, isOperator, result)
+  await engageRealPosts(now, operatorRows, result)
   if (operators.length < 2) return result
 
   const posts = await prisma.post.findMany({
@@ -292,4 +337,99 @@ async function engageRealComments(now: Date, isOperator: Set<string>, result: En
       if (written.ok) result.realReplies += 1
     }
   }
+}
+
+/**
+ * Real people's own posts from the last `REAL_POST_WINDOW_MS`: the due operator
+ * likes (each one notifies the author, like a person's like) and, at most one
+ * per run, the due operator comment. Commenters are operators who already
+ * talked with the author (notifications either way) first, then operators whose
+ * persona writes the post's language, then any other.
+ */
+async function engageRealPosts(
+  now: Date,
+  operators: Array<{ id: string; primaryLanguages: string[] }>,
+  result: EngagementRunResult,
+): Promise<void> {
+  const nowMs = now.getTime()
+  let commentBudget = MAX_REAL_POST_COMMENTS_PER_RUN
+  const isOperator = new Set(operators.map((operator) => operator.id))
+  const posts = await prisma.post.findMany({
+    where: {
+      ...visiblePostWhere(null),
+      author: { id: { notIn: TEAM_USER_IDS }, isOperator: { not: true }, isOfficial: { not: true }, isDeleted: { not: true } },
+      publishedAt: { gte: new Date(nowMs - REAL_POST_WINDOW_MS), lte: now },
+    },
+    orderBy: { publishedAt: 'asc' },
+    select: {
+      id: true, authorId: true, sourceLanguage: true, publishedAt: true,
+      likes: { select: { userId: true } },
+      comments: { where: { parentId: null, OR: [{ isDeleted: null }, { isDeleted: false }] }, select: { authorId: true } },
+    },
+  })
+  for (const post of posts) {
+    const plan = planRealPostEngagement(post.id)
+    const start = post.publishedAt.getTime()
+
+    // Likes from operators, in a fixed order per post.
+    const liked = new Set(post.likes.map((like) => like.userId))
+    const operatorLikes = post.likes.filter((like) => isOperator.has(like.userId)).length
+    const dueLikes = plan.likes.filter((at) => start + at <= nowMs)
+    const likers = seededOrder([...isOperator], `real-post-like:${post.id}`)
+      .filter((id) => !liked.has(id))
+      .slice(0, Math.max(0, dueLikes.length - operatorLikes))
+    for (const [index, userId] of likers.entries()) {
+      const createdAt = new Date(Math.min(nowMs, start + dueLikes[operatorLikes + index]))
+      const created = await prisma.postLike.createMany({ data: [{ postId: post.id, userId, createdAt }], skipDuplicates: true })
+      if (!created.count) continue
+      await prisma.post.update({ where: { id: post.id }, data: { likeCount: { increment: created.count } } })
+      await markPostViewed(userId, post.id)
+      await createPostNotification({ type: 'post_like', recipientId: post.authorId, actorId: userId, postId: post.id })
+      result.realPostLikes += 1
+    }
+
+    const commented = new Set(post.comments.map((comment) => comment.authorId))
+    const operatorComments = post.comments.filter((comment) => isOperator.has(comment.authorId)).length
+    const dueComments = plan.comments.filter((at) => start + at <= nowMs).length
+    if (commentBudget <= 0 || dueComments <= operatorComments) continue
+    const commenter = (await realPostCommenters(post, operators)).find((id) => !commented.has(id))
+    if (!commenter) continue
+    commentBudget -= 1
+    const written = await commentOnPostAsOperator(WORKER_CONTEXT, { operatorUserId: commenter, postId: post.id, now })
+    if (written.ok) result.realPostComments += 1
+  }
+}
+
+/** Operators in the order they should comment on a real person's post. */
+async function realPostCommenters(
+  post: { id: string; authorId: string; sourceLanguage: string | null },
+  operators: Array<{ id: string; primaryLanguages: string[] }>,
+): Promise<string[]> {
+  const ids = operators.map((operator) => operator.id)
+  const talked = await prisma.userNotification.findMany({
+    where: {
+      OR: [
+        { actorId: post.authorId, recipientId: { in: ids } },
+        { recipientId: post.authorId, actorId: { in: ids } },
+      ],
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 50,
+    select: { actorId: true, recipientId: true },
+  })
+  const known: string[] = []
+  for (const row of talked) {
+    const id = row.actorId === post.authorId ? row.recipientId : row.actorId
+    if (id && !known.includes(id)) known.push(id)
+  }
+  const language = post.sourceLanguage?.trim().toLowerCase() ?? ''
+  const base = language.split('-')[0]
+  const sameLanguage = operators
+    .filter((operator) => !known.includes(operator.id) && operator.primaryLanguages.some((code) => {
+      const value = code.toLowerCase()
+      return value === language || (base !== '' && value.split('-')[0] === base)
+    }))
+    .map((operator) => operator.id)
+  const rest = ids.filter((id) => !known.includes(id) && !sameLanguage.includes(id))
+  return [...known, ...seededOrder(sameLanguage, `real-post-comment:${post.id}`), ...seededOrder(rest, `real-post-comment:${post.id}`)]
 }

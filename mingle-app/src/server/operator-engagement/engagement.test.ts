@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { planCommentEngagement, planPostEngagement, planRealCommentEngagement, seededOrder } from './engagement'
+import { planCommentEngagement, planPostEngagement, planRealCommentEngagement, planRealPostEngagement, seededOrder } from './engagement'
 
 describe('post engagement plan', () => {
   it('is fixed per post, with likes and comments that come in over time', () => {
@@ -53,5 +53,23 @@ describe('seededOrder', () => {
     expect(seededOrder(ids, 's1')).toEqual(seededOrder([...ids].reverse(), 's1'))
     expect([...seededOrder(ids, 's1')].sort()).toEqual(ids)
     expect(seededOrder(ids, 's1')).not.toEqual(seededOrder(ids, 's2'))
+  })
+})
+
+describe('real post engagement plan', () => {
+  it('is fixed per post, with at most two comments hours apart and a few likes', () => {
+    expect(planRealPostEngagement('p1')).toEqual(planRealPostEngagement('p1'))
+    const plans = Array.from({ length: 2000 }, (_, index) => planRealPostEngagement(`real-${index}`))
+    const share = (count: number) => plans.filter((plan) => plan.comments.length === count).length / plans.length
+    expect(share(0)).toBeCloseTo(0.15, 1)
+    expect(share(1)).toBeCloseTo(0.6, 1)
+    expect(share(2)).toBeCloseTo(0.25, 1)
+    for (const plan of plans) {
+      expect(plan.comments.length).toBeLessThanOrEqual(2)
+      if (plan.comments[0] !== undefined) expect(plan.comments[0]).toBeGreaterThanOrEqual(25 * 60_000)
+      if (plan.comments.length === 2) expect(plan.comments[1] - plan.comments[0]).toBeGreaterThanOrEqual(2 * 3_600_000)
+      expect(plan.likes.length).toBeGreaterThanOrEqual(1)
+      expect(plan.likes.length).toBeLessThanOrEqual(5)
+    }
   })
 })
