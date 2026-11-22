@@ -694,8 +694,12 @@ function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDelete
   return (
     <AdminCard as="article" id={`profile-${profile.userId}`} className={`${CARD_CLASS} scroll-mt-4`}>
       <div className="mb-2 flex items-center justify-between gap-2">
-        <Link href={profileHref(profile.userId, reviewPath)} className="text-xs font-semibold text-slate-500">새 계정 · 가입 {formatAt(at)} · 프로필 보기 ›</Link>
-        <div className="flex items-center">
+        {/* Two short lines so the header never breaks a word at phone width ("프로필 보/기"). */}
+        <Link href={profileHref(profile.userId, reviewPath)} className="min-w-0 text-xs font-semibold leading-5 text-slate-500">
+          <span className="block truncate">새 계정 · 가입 {formatAt(at)}</span>
+          <span className="block whitespace-nowrap">프로필 보기 ›</span>
+        </Link>
+        <div className="flex shrink-0 items-center">
           <EditLink userId={profile.userId} />
           <PinButton kind="profile" id={profile.userId} pinned={pinned} />
         </div>
