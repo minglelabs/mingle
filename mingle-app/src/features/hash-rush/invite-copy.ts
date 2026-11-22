@@ -36,6 +36,17 @@ export type HashRushInviteCopy = {
   rankingAll: string
   rankingRoom: string
   rankingEmpty: string
+  /** The room list: listed games of any chat room. */
+  rooms: string
+  roomsHint: string
+  roomsEmpty: string
+  roomsFailed: string
+  roomOf: (name: string) => string
+  roomPeople: (people: number, bots: number, open: number) => string
+  roomPlaying: string
+  roomWaiting: string
+  roomJoin: string
+  roomsBusy: string
   rankingWins: string
   rankingRounds: string
   rankingSeeds: string
@@ -76,6 +87,16 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushInviteCopy> = {
     rankingAll: '전체',
     rankingRoom: '이 대화방',
     rankingEmpty: '아직 기록이 없어요. 한 판 해보세요!',
+    rooms: '방 목록 보기',
+    roomsHint: '방장이 공개한 게임에 누구나 들어갈 수 있어요',
+    roomsEmpty: '지금 공개된 방이 없어요',
+    roomsFailed: '방 목록을 불러오지 못했어요',
+    roomOf: (name) => (name ? `${name}님의 방` : '해시러시 방'),
+    roomPeople: (people, bots, open) => `사람 ${people} · 컴퓨터 ${bots} · 빈자리 ${open}`,
+    roomPlaying: '게임 중',
+    roomWaiting: '대기 중',
+    roomJoin: '들어가기',
+    roomsBusy: '지금 하고 있는 게임에서 먼저 나와 주세요',
     rankingWins: '승',
     rankingRounds: '판',
     rankingSeeds: '해씨',
@@ -114,6 +135,16 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushInviteCopy> = {
     rankingAll: 'Everyone',
     rankingRoom: 'This chat',
     rankingEmpty: 'No games yet. Play one!',
+    rooms: 'Browse rooms',
+    roomsHint: 'Games their hosts made public: anyone can join',
+    roomsEmpty: 'No public rooms right now',
+    roomsFailed: 'Could not load the rooms',
+    roomOf: (name) => (name ? `${name}'s room` : 'Hash Rush room'),
+    roomPeople: (people, bots, open) => `${people} people · ${bots} computers · ${open} open`,
+    roomPlaying: 'Playing',
+    roomWaiting: 'Waiting',
+    roomJoin: 'Join',
+    roomsBusy: 'Leave the game you are in first',
     rankingWins: 'W',
     rankingRounds: 'Rounds',
     rankingSeeds: 'Seeds',
@@ -152,6 +183,16 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushInviteCopy> = {
     rankingAll: '全体',
     rankingRoom: 'このチャット',
     rankingEmpty: 'まだ記録がありません。一戦どうぞ！',
+    rooms: 'ルーム一覧',
+    roomsHint: 'ホストが公開したゲームにだれでも入れます',
+    roomsEmpty: 'いま公開中のルームはありません',
+    roomsFailed: 'ルーム一覧を読み込めませんでした',
+    roomOf: (name) => (name ? `${name}さんのルーム` : 'Hash Rush ルーム'),
+    roomPeople: (people, bots, open) => `${people}人 · コンピューター${bots} · 空き${open}`,
+    roomPlaying: 'ゲーム中',
+    roomWaiting: '待機中',
+    roomJoin: '入る',
+    roomsBusy: 'いまのゲームを先に抜けてください',
     rankingWins: '勝',
     rankingRounds: '戦',
     rankingSeeds: '種',

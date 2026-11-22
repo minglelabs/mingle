@@ -51,6 +51,8 @@ type Props = {
   /** Up over the room. Lowered, the game keeps running out of sight. */
   open: boolean
   conversationId: string
+  /** Somebody else's listed game (the room list), played here with a ticket for that room. */
+  publicRoom?: string | null
   /** Who is playing; entry tickets are kept per viewer and room. */
   viewerKey: string
   playerName: string
@@ -67,7 +69,7 @@ type Props = {
   onOthersHere?: (count: number | null) => void
 }
 
-export default function HashRushRoomLayer({ open, conversationId, viewerKey, playerName, uiLocale, voiceActive, chat, onClose, onQuit, onOthersHere }: Props) {
+export default function HashRushRoomLayer({ open, conversationId, publicRoom, viewerKey, playerName, uiLocale, voiceActive, chat, onClose, onQuit, onOthersHere }: Props) {
   const copy = hashRushGameCopy(uiLocale)
   const inviteCopy = hashRushInviteCopy(uiLocale)
   const [confirmQuit, setConfirmQuit] = useState<{ alone: boolean, endRound?: () => void } | null>(null)
@@ -122,6 +124,7 @@ export default function HashRushRoomLayer({ open, conversationId, viewerKey, pla
     >
       <HashRushGame
         conversationId={conversationId}
+        publicRoom={publicRoom}
         viewerKey={viewerKey}
         playerName={playerName}
         uiLocale={uiLocale}

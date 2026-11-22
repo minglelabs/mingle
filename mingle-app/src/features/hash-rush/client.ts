@@ -150,6 +150,8 @@ export type HashRushLobbyHosting = {
   myTeam: number
   /** The computers' side colour (people against computers), else ''. */
   computersColor: string
+  /** In the public room list. */
+  listed: boolean
   /** Why the last start was turned down, '' when it was not. */
   notice: string
   /** The game's own words for these (its i18n); the app's are in copy.ts. */
@@ -686,6 +688,7 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
       teamChoices: Array.from({ length: HASH_RUSH_TEAMS }, (_, team) => ({ team, label: teamNames[team] ?? String(team + 1), color: seatColor(true, team, team) })),
       myTeam: at.you >= 0 ? at.seats[at.you]?.team ?? -1 : -1,
       computersColor: at.teams && at.computersTeam >= 0 ? seatColor(true, at.computersTeam, at.computersTeam) : '',
+      listed: at.listed,
       notice: nope,
       words: {
         start: String(t('start')),

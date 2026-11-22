@@ -69,3 +69,15 @@ export async function requestHashRushTicket(input: { conversationId: string, vie
   if (isHashRushTicketGrantReusable(grant, Date.now())) grants.set(key, grant)
   return grant
 }
+
+/** A ticket into somebody else's listed room (the room list), for this app player. */
+export async function requestHashRushPublicTicket(room: string): Promise<HashRushTicketGrant> {
+  const response = await fetch(
+    buildClientApiPath(`/hash-rush/public/${encodeURIComponent(room)}/ticket` as `/${string}`),
+    { method: 'POST', credentials: 'include' },
+  )
+  if (!response.ok) throw new Error(`hash_rush_ticket_${response.status}`)
+  const grant = parseHashRushTicketGrant(await response.json(), Date.now())
+  if (!grant) throw new Error('hash_rush_ticket_missing')
+  return grant
+}

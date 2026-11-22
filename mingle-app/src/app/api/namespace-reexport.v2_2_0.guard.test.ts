@@ -41,8 +41,10 @@ const EXCLUDED_TOP_LEVEL_SEGMENTS = new Set(["auth", "native-auth", "well-known"
 // outside payment, so the namespaces deliberately leave it out.
 // `hash-rush/results` is the game server's (server to server, behind a shared
 // secret): no app ever calls it. `hash-rush/invite/[code]` is the invite
-// link itself, opened in a browser, never through a namespace.
-const EXCLUDED_ROUTES = new Set(["translate", "messages", "account/delete", "coins/web-checkout", "hash-rush/results", "hash-rush/invite/[code]"]);
+// link itself, opened in a browser, never through a namespace; so is
+// `hash-rush/public/[room]`, the web room list's Join for a listed room, and
+// `hash-rush/new`, the web page's way to make a room on the game server.
+const EXCLUDED_ROUTES = new Set(["translate", "messages", "account/delete", "coins/web-checkout", "hash-rush/results", "hash-rush/invite/[code]", "hash-rush/public/[room]", "hash-rush/new"]);
 
 function listRouteFiles(dir: string): string[] {
   const out: string[] = [];

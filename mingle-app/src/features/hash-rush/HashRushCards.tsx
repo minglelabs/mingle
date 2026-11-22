@@ -265,6 +265,20 @@ export function HashRushLobbyCard({ view, copy, art, chatBelow, onSit, onStand, 
                 ))}
               </div>
             </div>
+            {/* The room list: anyone can find this game and join it (off by default). */}
+            <label className={styles.setupRow} data-qa="hash-rush-listed">
+              <span className={styles.setupLabel}>{copy.listedLabel}</span>
+              <span className={styles.options}>
+                <input
+                  type="checkbox"
+                  className={styles.listedSwitch}
+                  checked={mine.listed ?? hosting.listed}
+                  disabled={!amHost}
+                  onChange={(event) => setup({ listed: event.target.checked })}
+                />
+                <small className={styles.listedHint}>{copy.listedHint}</small>
+              </span>
+            </label>
             {/* One level for every computer: only while the rows cannot set their own. */}
             <div className={styles.setupRow} hidden={view.botRows.length > 0}>
               <span className={styles.setupLabel}>{copy.botLevel}</span>
