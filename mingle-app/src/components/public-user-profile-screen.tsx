@@ -562,6 +562,17 @@ export default function PublicUserProfileScreen({
 
   return (
     <>
+      {onClose ? null : (
+        // As its own route the profile has no screen under it: once it slides
+        // away, the page is bare until the router commits the previous route
+        // (a server round-trip on a slow network). Keep a loading layer there.
+        <div
+          aria-hidden="true"
+          className="fixed inset-0 z-[105] flex items-center justify-center bg-white text-gray-400"
+        >
+          <Loader2 size={26} className="animate-spin" />
+        </div>
+      )}
       <SlideSurface
         open={open}
         onClose={navigateBack}
