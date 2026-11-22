@@ -136,6 +136,7 @@ describe('time of day', () => {
     expect(buildPostImagePrompt('[self] a selfie at a café table', null, () => 0, person)).toContain('Time and light, like this: a bright café with floor-to-ceiling windows at noon')
     expect(buildPostImagePrompt('[self] a selfie on a bench in a park', null, () => 0, person)).toContain('Time and light, like this: a bright, clear day around noon')
     expect(buildPostImagePrompt('a bowl of ramen on the kitchen table at home', null, () => 0)).toContain('morning sun through an east window')
+    expect(buildPostImagePrompt('[self] a selfie at the office desk', null, () => 0, person)).toContain('an open-plan office at noon')
   })
 
   it('keeps the time the description already gives', () => {
@@ -143,9 +144,9 @@ describe('time of day', () => {
     expect(buildPostImagePrompt('[self] a selfie in the street at night', null, () => 0, person)).not.toContain('Time and light')
   })
 
-  it('has 100 indoor and 40 outdoor light situations, none of them a sunset', () => {
-    const indoor = PHOTO_LIGHTS.home.length + PHOTO_LIGHTS.eatery.length + PHOTO_LIGHTS.transit.length + PHOTO_LIGHTS.indoor.length
-    expect(indoor).toBe(100)
+  it('has 125 indoor and 40 outdoor light situations, none of them a sunset', () => {
+    const indoor = PHOTO_LIGHTS.home.length + PHOTO_LIGHTS.eatery.length + PHOTO_LIGHTS.transit.length + PHOTO_LIGHTS.work.length + PHOTO_LIGHTS.indoor.length
+    expect(indoor).toBe(125)
     expect(PHOTO_LIGHTS.outdoor).toHaveLength(40)
     const all = Object.values(PHOTO_LIGHTS).flat()
     expect(new Set(all).size).toBe(all.length)

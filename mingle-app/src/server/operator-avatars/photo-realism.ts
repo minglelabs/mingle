@@ -91,10 +91,37 @@ const COLORS = 'Colors are true to life, like an uncorrected phone photo: clear 
  * drew nearly every post photo in the same grey-blue, not-quite-bright light
  * or at dusk (staff, 2026-11), so a post photo whose description names no time
  * or weather gets one light situation from its kind of place, picked evenly:
- * 100 indoor (home, eatery, transit, other indoor places) and 40 outdoor,
+ * 125 indoor (home, eatery, transit, workplace, other indoor places) and 40 outdoor,
  * mostly daytime. None names a sunset or dusk: naming one pulls photos toward it.
  */
-export const PHOTO_LIGHTS: Readonly<Record<'home' | 'eatery' | 'transit' | 'indoor' | 'outdoor', readonly string[]>> = {
+export const PHOTO_LIGHTS: Readonly<Record<'home' | 'eatery' | 'transit' | 'work' | 'indoor' | 'outdoor', readonly string[]>> = {
+  work: [
+    'an open-plan office at noon: cool LED ceiling panels and bright windows along one side',
+    'an office late at night, half the ceiling lights off, a desk lamp and monitor glow',
+    'a glass-walled meeting room in flat, bright ceiling light',
+    'a small startup office with big windows, afternoon sun falling across the desks',
+    'a design studio with white walls and daylight from a skylight',
+    'a cubicle under long fluorescent tubes, the windows far away',
+    'an office pantry in bright light by the coffee machine',
+    'a co-working lounge with warm pendant lamps and daylight from tall windows',
+    'a desk by the window on a rainy day: grey window light and a warm desk lamp',
+    'an empty office early in the morning, fresh sunlight just coming in low',
+    'a hospital or clinic staff room in bright white fluorescent light',
+    'a lab in bright, clean, clinical white light',
+    'a classroom or academy at night under fluorescent light, the windows black',
+    'a shop counter after closing time, only half the lights still on',
+    'a photo studio lit by big soft studio lights',
+    'a recording studio, dim, warm lamps and small glowing equipment lights',
+    'a restaurant kitchen during service, bright light on stainless steel',
+    'behind a café counter in the morning, sun on the coffee machine',
+    'a warehouse under high bay lights',
+    'a home-office corner at night, a monitor glow and a desk lamp',
+    'an office lobby with tall windows at lunchtime, bright and airy',
+    'a university lab room in the afternoon, sunlight through half-closed blinds',
+    'an architecture studio with big north windows, soft even daylight over the desks',
+    'rows of desks and screens in cool, even office light',
+    'a beauty salon workstation under bright white task lamps',
+  ],
   home: [
     'morning sun through an east window, bright stripes of sunlight across the bedding and floor',
     'bright overcast daylight from a big window, soft even light filling the room',
@@ -177,13 +204,13 @@ export const PHOTO_LIGHTS: Readonly<Record<'home' | 'eatery' | 'transit' | 'indo
     'a bookstore in daytime, warm shelf lights and daylight from the entrance',
     'a library with tall windows in soft afternoon light',
     'a gym under bright overhead LED panels, mirrors along the wall',
-    'an office desk under cool ceiling panels, a bright window behind',
+    'a bowling alley under bright lane lights',
     'a gallery with white walls and track spotlights',
     'an elevator with brushed-steel walls and a bright ceiling panel',
     'a photo booth in flat, bright white light',
     'a cinema lobby at night, glowing posters and neon trim',
-    'a co-working space with big windows, daylight and plants',
-    'a university lecture hall: fluorescent light mixed with daylight',
+    'a drugstore aisle in bright white shop light',
+    'a sauna lounge with warm wooden walls and soft yellow lights',
     'a hair salon in front of a bright lit mirror',
     'an underground shopping arcade lit by the shops\' bright fronts',
     'a botanical glasshouse, bright diffuse light through the glass',
@@ -249,9 +276,13 @@ export const PHOTO_LIGHTS: Readonly<Record<'home' | 'eatery' | 'transit' | 'indo
 
 const STATED_TIME = /\b(night|evening|dusk|sunset|sunrise|dawn|twilight|after dark|morning|noon|midday|afternoon|daylight|daytime|sunny|sunshine|sunlit|sunlight|rain|rainy|raining|snow|snowy|overcast|cloudy|golden hour|neon|street ?lamps?)\b/i
 
+/** A workplace: checked before the other places, since a work desk would otherwise read as home. */
+const WORKPLACE = /\b(office|workplace|at work|work desk|meeting room|conference room|co-?working|coworkers?|colleagues?|design studio|photo studio|recording studio|lab|laboratory|clinic|hospital|ward|classroom|academy|hagwon|warehouse|overtime|shift|behind the counter)\b/i
+
 /** The time and light line for a post photo, from its kind of place, or null when the description already says when it was taken. */
 export function pickPhotoTime(random: Random, scene: string): string | null {
   if (STATED_TIME.test(scene)) return null
+  if (WORKPLACE.test(scene)) return PHOTO_LIGHTS.work[Math.floor(random() * PHOTO_LIGHTS.work.length)]
   const kind = sceneKindOf(scene)
   const pool = PHOTO_LIGHTS[kind === 'nature' || kind === 'street' ? 'outdoor' : kind]
   return pool[Math.floor(random() * pool.length)]
