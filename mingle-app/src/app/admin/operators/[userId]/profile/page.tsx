@@ -14,7 +14,8 @@ import { safeBackPath, withBack } from '../../../_lib/back-path'
 import { OperatorPostStatsRow } from '../../../_components/operator-post-stats-row'
 import { OperatorPostEditor } from '../../../feed/_components/operator-post-editor'
 import { PostTakedownButton } from '../../../feed/_components/post-takedown-button'
-import { OperatorAvatar, OperatorsMain } from '../../_components/operator-ui'
+import { OperatorsMain } from '../../_components/operator-ui'
+import { ZoomableAvatar } from '../../_components/zoomable-avatar'
 import { ReviewBoard, ReviewPhotos } from '../../review/review-board'
 import { reviewImageUrl } from '../../review/review-image-url'
 
@@ -154,7 +155,7 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
         {/* Profile header, laid out like the app's My Page. */}
         <section className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-4">
-            <OperatorAvatar image={user.image} name={user.name} size={84} languages={primaryLanguages} />
+            <ZoomableAvatar image={user.image} name={user.name} size={84} languages={primaryLanguages} />
             <div className="grid flex-1 grid-cols-3 text-center">
               <div><p className="text-lg font-bold text-slate-900">{publishedCount}</p><p className="text-xs text-slate-500">게시물</p></div>
               <div><p className="text-lg font-bold text-slate-900">{user._count.followerRelations}</p><p className="text-xs text-slate-500">팔로워</p></div>
