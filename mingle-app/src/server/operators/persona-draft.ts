@@ -1,6 +1,6 @@
 import { SchemaType, type ResponseSchema } from '@google/generative-ai'
 import { prisma } from '@/lib/prisma'
-import { generateJson, LlmError, type GenerateJsonRequest } from '@/server/llm/generate-json'
+import { generateJson, LlmError, type GenerateJsonRequest, OPERATOR_TEXT_MODEL } from '@/server/llm/generate-json'
 import { findPersonaCountry, PERSONA_COUNTRIES, type PersonaCity, type PersonaCountry } from './persona-countries'
 import { operatorHandleCandidates, withHandleSuffix } from './operator-handles'
 import {
@@ -365,7 +365,8 @@ async function requestChunk(
     },
     responseSchema: PERSONA_RESPONSE_SCHEMA,
     validate: readPersonaItems,
-    model: process.env.MINGLE_PERSONA_LLM_MODEL,
+    model: process.env.MINGLE_PERSONA_LLM_MODEL?.trim() || OPERATOR_TEXT_MODEL,
+    provider: 'direct',
     temperature: 1,
     maxOutputTokens: 4096,
     timeoutMs,

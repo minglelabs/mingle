@@ -66,8 +66,8 @@ export type DetectSourceLanguageArgs = {
    */
   clientHint?: string | null
   modelSelection?: TranslateTextsInput['modelSelection']
-  /** `chatgpt-pool` for operator text (operatorTextProvider). */
-  provider?: 'chatgpt-pool'
+  /** `operator` for operator text (operatorTextProvider). */
+  provider?: TranslateTextsInput['provider']
 }
 
 /**

@@ -1,6 +1,6 @@
 import { SchemaType, type ResponseSchema } from '@google/generative-ai'
 import { getSttLanguageDisplayName } from '@/lib/stt-languages'
-import { generateJson, type GenerateJsonRequest } from '@/server/llm/generate-json'
+import { generateJson, type GenerateJsonRequest, OPERATOR_TEXT_MODEL } from '@/server/llm/generate-json'
 import { reserveLearnerPlan, reservePosterProfile, type LearningLanguage } from '@/server/operator-post-reserve/generate'
 import { hasContactDetails } from '@/server/operators/persona-rules'
 
@@ -13,8 +13,8 @@ import { hasContactDetails } from '@/server/operators/persona-rules'
  */
 export const OPERATOR_COMMENT_GENERATED_MAX_CHARS = 200
 const CALL_TIMEOUT_MS = 60_000
-/** Every operator comment and reply: Claude Sonnet 5.5 on the Anthropic API, not the ChatGPT pool (staff decided 2026-11-19). */
-export const OPERATOR_COMMENT_DEFAULT_MODEL = 'claude-sonnet-5-5'
+/** Every operator comment and reply: Claude Haiku 5.5 on the Anthropic API, not the ChatGPT pool (staff decided 2026-11-22). */
+export const OPERATOR_COMMENT_DEFAULT_MODEL = OPERATOR_TEXT_MODEL
 
 /** Comments between operator accounts (OPERATOR_COMMENT_MODEL overrides). */
 export function resolveOperatorCommentModel(env: NodeJS.ProcessEnv = process.env): string {

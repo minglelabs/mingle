@@ -20,6 +20,20 @@ import { isOpenAITextModel, OPENAI_TEXT_MODEL, OpenAIChatError, openaiChat } fro
  */
 export const DEFAULT_JSON_MODEL = OPENAI_TEXT_MODEL
 
+/**
+ * Operator text runs on the Anthropic API, never the ChatGPT pool (staff
+ * decided 2026-11-22; the pool only draws photos): post text on Claude Opus
+ * 5.5, everything else (comments, chat replies, persona drafts, translations)
+ * on Claude Haiku 5.5.
+ */
+export const OPERATOR_POST_TEXT_MODEL = 'claude-opus-5-5'
+export const OPERATOR_TEXT_MODEL = 'claude-haiku-5-5'
+
+/** Haiku has no server-side refusal fallback; the bigger models take `fallbacks: 'default'`. */
+export function claudeSupportsServerFallback(model: string): boolean {
+  return !model.startsWith('claude-haiku-')
+}
+
 const DEFAULT_TIMEOUT_MS = 30_000
 const MIN_TIMEOUT_MS = 1_000
 const MAX_TIMEOUT_MS = 180_000
@@ -183,14 +197,14 @@ async function generateJsonWithClaude<T>(request: GenerateJsonRequest<T>, model:
       format: { type: 'json_schema' as const, schema: toClaudeJsonSchema(request.responseSchema) },
     },
     // Newer than this SDK's types: routes a policy decline to a fallback model in the same call.
-    fallbacks: 'default',
+    ...(claudeSupportsServerFallback(model) ? { fallbacks: 'default' } : {}),
   }
   let message: Anthropic.Message
   try {
     message = await client.messages.create(body as Anthropic.MessageCreateParamsNonStreaming, {
       timeout: clampTimeout(request.timeoutMs),
       signal: request.signal,
-      headers: { 'anthropic-beta': 'server-side-fallback-2026-07-01' },
+      ...(claudeSupportsServerFallback(model) ? { headers: { 'anthropic-beta': 'server-side-fallback-2026-07-01' } } : {}),
     })
   } catch (error) {
     if (error instanceof Anthropic.APIConnectionTimeoutError) throw new LlmError('llm_timeout', { cause: error })

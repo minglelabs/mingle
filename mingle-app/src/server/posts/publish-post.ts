@@ -15,6 +15,7 @@ import { prisma } from '@/lib/prisma'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import { isKnownBackgroundKey, randomBackgroundKey } from '@/lib/post-backgrounds'
 import { detectSourceLanguageVerdict } from '@/server/translation/detect-source-language'
+import type { TextProvider } from '@/server/translation/translate-texts'
 import {
   resolveDefaultPostTranslationLanguages,
   translatePostBodySettled,
@@ -58,8 +59,8 @@ export type PublishPostInput = {
   extraImages?: ReadonlyArray<{ objectKey: string; dimensions: ImageDimensions | null }>
   /** Translations already made from `text` (staff review): used as is, only the other languages are translated. */
   knownTranslations?: ReadonlyArray<{ language: string; text: string }>
-  /** `chatgpt-pool` for an operator's post (operatorTextProvider); a real user's post leaves it unset. */
-  translationProvider?: 'chatgpt-pool'
+  /** `operator` for an operator's post (operatorTextProvider); a real user's post leaves it unset. */
+  translationProvider?: TextProvider
   /** Client language hint; the server detection is authoritative. */
   clientHint?: string | null
   /** Raw idempotency key; a malformed value is ignored (server id, no dedupe). */

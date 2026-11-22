@@ -1,6 +1,6 @@
 import { SchemaType, type ResponseSchema } from '@google/generative-ai'
 import { getSttLanguageDisplayName } from '@/lib/stt-languages'
-import { generateJson, type GenerateJsonRequest } from '@/server/llm/generate-json'
+import { generateJson, type GenerateJsonRequest, OPERATOR_POST_TEXT_MODEL } from '@/server/llm/generate-json'
 import { hasContactDetails } from '@/server/operators/persona-rules'
 import { encodePostPhoto, pickPostPhoto } from './post-photo'
 import { canonicalizeSttLanguageCode } from '@/lib/stt-languages'
@@ -19,8 +19,8 @@ const IMAGE_PROMPT_MAX_CHARS = 600
 const AVOID_SAMPLE_MAX = 40
 const AVOID_SAMPLE_CHARS = 60
 const CALL_TIMEOUT_MS = 120_000
-/** Post text: Claude Sonnet 5.5 on the Anthropic API, never the ChatGPT pool (staff decided 2026-11-19; photos stay on the pool). */
-export const RESERVE_DEFAULT_MODEL = 'claude-sonnet-5-5'
+/** Post text: Claude Opus 5.5 on the Anthropic API, never the ChatGPT pool (staff decided 2026-11-22; photos stay on the pool). */
+export const RESERVE_DEFAULT_MODEL = OPERATOR_POST_TEXT_MODEL
 
 export function resolveReserveModel(env: NodeJS.ProcessEnv = process.env): string {
   return env.OPERATOR_POST_RESERVE_MODEL?.trim() || RESERVE_DEFAULT_MODEL

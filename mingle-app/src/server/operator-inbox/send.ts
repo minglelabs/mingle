@@ -17,7 +17,7 @@ import { notifyConversationMessage } from '@/server/conversation-realtime'
 import { notifyOperatorInboxActivity } from '@/server/operator-inbox/notify'
 import { requireOperatorAccount, type OperatorAccountRecord } from '@/server/operators/operator-guard'
 import { sendPushNotificationForConversationMessage } from '@/server/push-notifications'
-import { operatorTextProvider, translateTexts, type TranslateTextsResult, type TranslationUsage } from '@/server/translation/translate-texts'
+import { operatorTextProvider, translateTexts, type TextProvider, type TranslateTextsResult, type TranslationUsage } from '@/server/translation/translate-texts'
 
 /**
  * Operator replies from the admin inbox (contract §5 "Reply language"):
@@ -214,7 +214,7 @@ async function translateStaffReply(args: {
    * person is waiting for it to send). Only the AI's replies go through the
    * ChatGPT pool, which takes 10-25 s an answer.
    */
-  provider: 'chatgpt-pool' | undefined
+  provider: TextProvider | undefined
 }): Promise<TranslatedReply> {
   const { text, personaLanguage, provider } = args
   const targets = sanitizeSttLanguageUnion([personaLanguage, ...args.roomLanguages])

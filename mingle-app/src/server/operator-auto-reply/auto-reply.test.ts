@@ -26,7 +26,7 @@ vi.mock('@/lib/prisma', () => ({
 }))
 vi.mock('@/server/admin/audit', () => ({ writeAdminAudit: mocks.audit }))
 vi.mock('@/server/operator-inbox/send', () => ({ sendOperatorMessage: mocks.send }))
-vi.mock('@/server/llm/generate-json', () => ({ resolveJsonProvider: () => 'gemini', extractJsonText: (t: string) => t, generateJson: mocks.generateJson }))
+vi.mock('@/server/llm/generate-json', () => ({ OPERATOR_POST_TEXT_MODEL: 'claude-opus-5-5', OPERATOR_TEXT_MODEL: 'claude-haiku-5-5', resolveJsonProvider: () => 'gemini', extractJsonText: (t: string) => t, generateJson: mocks.generateJson }))
 
 import { ageOn, buildAutoReplyInstructions, loadAutoReplyContext, resolveAutoReplyModel, validateAutoReply } from './generate'
 import { normalizeAutoReplySettings, parseAutoReplyDelayMinutes, updateAutoReplySettings } from './settings'
@@ -92,8 +92,8 @@ describe('auto-reply settings', () => {
 describe('auto-reply prompt', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('uses Claude Sonnet 5.5 unless overridden', () => {
-    expect(resolveAutoReplyModel({} as NodeJS.ProcessEnv)).toBe('claude-sonnet-5-5')
+  it('uses Claude Haiku 5.5 unless overridden', () => {
+    expect(resolveAutoReplyModel({} as NodeJS.ProcessEnv)).toBe('claude-haiku-5-5')
     expect(resolveAutoReplyModel({ OPERATOR_AUTO_REPLY_MODEL: 'x' } as unknown as NodeJS.ProcessEnv)).toBe('x')
   })
 
@@ -228,7 +228,7 @@ describe('auto-reply worker', () => {
     mocks.queryRaw.mockResolvedValue([candidate])
     const summary = await runOperatorAutoReplies({ now: () => NOW })
     expect(summary).toMatchObject({ enabled: true, candidates: 1, sent: 1 })
-    expect(mocks.generateJson.mock.calls[0][0]).toMatchObject({ model: 'claude-sonnet-5-5', provider: 'direct' })
+    expect(mocks.generateJson.mock.calls[0][0]).toMatchObject({ model: 'claude-haiku-5-5', provider: 'direct' })
     expect(mocks.send).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: null }),
       { operatorUserId: 'op_1', conversationId: 'conv_1', text: 'Oi!', clientRequestId: 'auto-msg9' },
