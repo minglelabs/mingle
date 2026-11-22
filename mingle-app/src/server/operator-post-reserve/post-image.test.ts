@@ -5,7 +5,7 @@ vi.mock('@/server/operator-avatars/generate', () => ({ requestAvatarImage: vi.fn
 vi.mock('@/server/posts/post-image-storage', () => ({ putPostImage: vi.fn() }))
 
 import { buildPostImagePrompt, pickPostImageStyle } from './post-image'
-import { PHOTO_LIGHTS } from '@/server/operator-avatars/photo-realism'
+import { PHOTO_AXES, PHOTO_LIGHTS } from '@/server/operator-avatars/photo-realism'
 
 describe('post photo prompt', () => {
   it('describes a phone snapshot without people', () => {
@@ -156,5 +156,30 @@ describe('time of day', () => {
   it('only tells dim-light face rules for dim photos', () => {
     expect(buildPostImagePrompt('[self] a selfie at a café table', null, () => 0, person)).not.toContain('In dim evening or night light')
     expect(buildPostImagePrompt('[self] a selfie in the street at night', null, () => 0, person)).toContain('In dim evening or night light')
+  })
+})
+
+describe('photo look variation', () => {
+  const person = { look: 'a young man', hasReference: true }
+
+  it('picks one option per axis the description leaves open', () => {
+    const prompt = buildPostImagePrompt('[self] a friend took it on a bench in a park', null, () => 0, person)
+    expect(prompt).toContain("This photo's look: nobody else around, the place quiet; a sparse, minimal place")
+    expect(prompt).toContain('framed close, head and shoulders')
+    expect(prompt).toContain('shot at eye level')
+    expect(prompt).toContain('warm wood and beige tones')
+  })
+
+  it('keeps what the description settles, a selfie its framing and a home its quiet', () => {
+    const selfie = buildPostImagePrompt('[self] a front-camera selfie in a crowded street', null, () => 0, person)
+    expect(selfie).not.toContain('framed close')
+    expect(selfie).not.toContain('shot at eye level')
+    expect(selfie).not.toContain('nobody else around')
+    expect(buildPostImagePrompt('[self] a friend took it on the sofa at home', null, () => 0, person)).not.toContain('nobody else around')
+    expect(buildPostImagePrompt('a bowl of ramen on a counter', null, () => 0)).toContain('a close-up, the subject filling most of the frame')
+  })
+
+  it('never names a sunset, a glow or a rim light', () => {
+    for (const line of Object.values(PHOTO_AXES).flatMap((axis) => axis.options)) expect(line).not.toMatch(/sunset|dusk|golden hour|glow|rim light/i)
   })
 })

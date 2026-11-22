@@ -276,6 +276,110 @@ export const PHOTO_LIGHTS: Readonly<Record<'home' | 'eatery' | 'transit' | 'work
 
 const STATED_TIME = /\b(night|evening|dusk|sunset|sunrise|dawn|twilight|after dark|morning|noon|midday|afternoon|daylight|daytime|sunny|sunshine|sunlit|sunlight|rain|rainy|raining|snow|snowy|overcast|cloudy|golden hour|neon|street ?lamps?)\b/i
 
+/**
+ * More ways two photos of the same place differ (staff, 2026-11): how many
+ * people are around, how full the place is, how the light falls, how close
+ * and from where the camera is. One option per axis, picked evenly, so the
+ * 165 light situations multiply into many thousands of looks. An axis the
+ * description already settles is left out, and selfies and mirror shots keep
+ * their own framing and angle. Each option stays mild: many strong
+ * instructions at once make a photo look staged.
+ */
+type Axis = { skip: RegExp; options: readonly string[] }
+export const PHOTO_AXES = {
+  crowd: {
+    skip: /\b(crowd|crowded|empty|alone|nobody|busy|people|passers?-by|queue|packed|deserted)\b/i,
+    options: [
+      'nobody else around, the place quiet',
+      'one or two other people far off in the background',
+      'a few other people around, going about their own business, small and soft in the background',
+      'a moderately busy place, several people in the background, none looking at the camera',
+      'busy and lively, plenty of people around, the background full of soft, out-of-focus figures',
+      'someone walking past at the edge of the frame, half cut off',
+    ],
+  },
+  stuff: {
+    skip: /\b(clutter|cluttered|minimal|plants?|messy|tidy|greenery)\b/i,
+    options: [
+      'a sparse, minimal place: plain surfaces and lots of empty space',
+      'a few everyday things around, nothing styled',
+      'a lived-in, fuller place, each thing big and clear rather than many tiny objects',
+      'plenty of green: plants or trees fill part of the frame',
+      'one large plant or tree standing out in the frame',
+      'mostly hard surfaces (concrete, glass, metal, tile), almost no greenery',
+    ],
+  },
+  light: {
+    skip: /\b(backlit|backlight|silhouette|shade|shadows?|side light|spotlight)\b/i,
+    options: [
+      'the light is soft and diffuse, almost no shadows',
+      'the light is strong and direct, with clear-edged shadows',
+      'the light comes from one side, so one side of the subject is brighter',
+      'the light comes from behind the subject: the background brighter and a little washed out, the subject slightly darker',
+      'the light comes from behind the camera, the subject evenly and fully lit',
+      'the light falls from above, short shadows under things',
+      'patchy light: bright patches and shade mixed across the scene',
+      'a bright, airy exposure, the whole photo light and clean',
+      'an exposure a little darker than usual, everything still clearly visible',
+    ],
+  },
+  framing: {
+    skip: /\b(close|close-up|full body|full-length|waist|frame|fills|wide|small in|zoom)\b/i,
+    options: [
+      'framed close, head and shoulders filling much of the photo',
+      'framed from the waist up',
+      'framed full length, head to shoes, with room around',
+      'taken from farther away, the person fairly small and the place dominating',
+      'framed from the knees up, a casual crop',
+    ],
+  },
+  framingScene: {
+    skip: /\b(close|close-up|frame|fills|wide|zoom)\b/i,
+    options: [
+      'a close-up, the subject filling most of the frame',
+      'a medium shot with some of the surroundings',
+      'a wide shot showing the whole place',
+    ],
+  },
+  angle: {
+    skip: /\b(above|below|overhead|low angle|high angle|looking down|looking up|from the side|crouch)\b/i,
+    options: [
+      'shot at eye level',
+      'shot from slightly above',
+      'shot from slightly below',
+      'shot from a low position, like someone sitting or crouching',
+      'shot a little from the side rather than straight on',
+    ],
+  },
+  palette: {
+    skip: /\b(colou?rs?|colou?rful|pastel|monochrome|black and white)\b/i,
+    options: [
+      'the place has warm wood and beige tones',
+      'the place is in cool whites and greys',
+      'the place is colourful, a few bright colours around',
+      'the place has earthy greens and browns',
+      'the place has soft pastel tones',
+      'the place is mostly black, white and concrete',
+      'the place mixes warm and cool colours',
+    ],
+  },
+} satisfies Record<string, Axis>
+
+/** The extra look line of a post photo: one option for each axis the description leaves open. */
+export function pickPhotoVariation(random: Random, scene: string, people: boolean): string | null {
+  const own = /\b(selfie|mirror|front[- ]camera)\b/i.test(scene)
+  const home = sceneKindOf(scene) === 'home'
+  const axes: Axis[] = [
+    ...(home ? [] : [PHOTO_AXES.crowd]),
+    PHOTO_AXES.stuff,
+    PHOTO_AXES.light,
+    ...(own ? [] : [people ? PHOTO_AXES.framing : PHOTO_AXES.framingScene, PHOTO_AXES.angle]),
+    PHOTO_AXES.palette,
+  ]
+  const picks = axes.filter((axis) => !axis.skip.test(scene)).map((axis) => axis.options[Math.floor(random() * axis.options.length)])
+  return picks.length ? `This photo's look: ${picks.join('; ')}.` : null
+}
+
 /** A workplace: checked before the other places, since a work desk would otherwise read as home. */
 const WORKPLACE = /\b(office|workplace|at work|work desk|meeting room|conference room|co-?working|coworkers?|colleagues?|design studio|photo studio|recording studio|lab|laboratory|clinic|hospital|ward|classroom|academy|hagwon|warehouse|overtime|shift|behind the counter)\b/i
 
@@ -401,10 +505,12 @@ export function phonePhotoRealism(
   const faces = options.faces ?? people
   const offColor = offColorObject(random, sceneKindOf(options.scene ?? '', environment))
   const time = options.pickTime ? pickPhotoTime(random, options.scene ?? '') : null
+  const variation = options.pickTime ? pickPhotoVariation(random, options.scene ?? '', people) : null
   return [
     ...(people ? [options.focusOnPerson ? CAMERA_FOCUSED : CAMERA[0], CAMERA[1]] : [CAMERA_NO_PEOPLE, CAMERA[1]]),
     ...(options.lens ? [LENS[options.lens]] : []),
     ...(time ? [`Time and light, like this: ${time}. Take only the time, weather and light from it; the place stays the one described above.`] : []),
+    ...(variation ? [variation] : []),
     LIGHT,
     WORLD,
     ...(LOW_SUN.test(options.scene ?? '') ? [SUN] : []),
