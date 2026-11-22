@@ -3201,6 +3201,8 @@ function buildDebugTextPreview(rawText: string): string {
 
 const OLDER_SERVER_PAGES_PER_LOAD = 5
 const OLDER_SERVER_PAGE_TIMEOUT_MS = 15_000
+const SERVER_HYDRATION_TIMEOUT_MS = 10_000
+const MOUNT_HYDRATION_RETRY_COUNT = 2
 const LOAD_BATCH_SIZE = LOCAL_UTTERANCE_CACHE_LIMIT
 
 export default function useRealtimeSTT({
@@ -4154,19 +4156,22 @@ export default function useRealtimeSTT({
   // already-open room, since nothing else here re-fetches after mount).
   const performServerHydrationRefresh = useCallback((
     trigger: ConversationHydrationRefreshTrigger,
-  ): Promise<void> => {
-    if (!conversationId) return Promise.resolve()
+  ): Promise<boolean> => {
+    if (!conversationId) return Promise.resolve(true)
 
     return fetch(buildConversationHydrationApiPath(conversationId), {
       cache: 'no-store',
       headers: buildConversationHydrationHeaders(),
+      // A request that never settles on a weak network would hold every later
+      // refresh (push, poll) behind it and leave the room blank.
+      signal: AbortSignal.timeout(SERVER_HYDRATION_TIMEOUT_MS),
     })
       .then(async (response) => {
         if (!response.ok) return null
         return response.json() as Promise<ConversationHydrationPayload>
       })
       .then((payload) => {
-        if (!payload) return
+        if (!payload) return false
 
         if (payload.conversation) {
           setIsSharedRoom(payload.conversation.isMultiMember === true)
@@ -4206,7 +4211,7 @@ export default function useRealtimeSTT({
 
         if (utterancesFromServer.length === 0) {
           setHasOlderUtterances(hasOlderUtterancesFromRefs())
-          return
+          return true
         }
 
         reportConversationHydrationOrderConflicts(trigger, utterancesFromServer)
@@ -4221,9 +4226,11 @@ export default function useRealtimeSTT({
           return nextStore
         })
         queueHasOlderUtterancesRefresh()
+        return true
       })
       .catch(() => {
         // Keep local state when server hydration fails.
+        return false
       })
   }, [
     applyRecalledMessageIds,
@@ -4251,7 +4258,12 @@ export default function useRealtimeSTT({
       let nextTrigger: ConversationHydrationRefreshTrigger | null = trigger
       while (nextTrigger) {
         queuedServerHydrationTriggerRef.current = null
-        await performServerHydrationRefresh(nextTrigger)
+        let loaded = await performServerHydrationRefresh(nextTrigger)
+        // Entering a room is the one load the user is staring at: try again
+        // right away instead of waiting for the next push or poll.
+        for (let attempt = 0; !loaded && nextTrigger === 'mount' && attempt < MOUNT_HYDRATION_RETRY_COUNT; attempt += 1) {
+          loaded = await performServerHydrationRefresh(nextTrigger)
+        }
         nextTrigger = queuedServerHydrationTriggerRef.current
       }
     })().finally(() => {

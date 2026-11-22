@@ -10921,6 +10921,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   onOpenProfile={handleOpenProfileForBubble}
                 />
               )}
+              {/* Until the server answers, an empty room is "still loading", not "no messages". */}
+              {conversationId && isInitialServerHydrationPending && timelineItems.length === 0 && (
+                <div className="flex justify-center py-6 text-gray-300" data-qa="live-demo-chat-loading">
+                  <Loader2 size={20} className="animate-spin" aria-hidden="true" />
+                </div>
+              )}
               {timelineItems.map((item, index) => {
                 const previousItem = timelineItems[index - 1]
                 const spacingClass = item.kind === 'message' && previousItem?.kind === 'message'
