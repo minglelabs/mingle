@@ -5,6 +5,7 @@ vi.mock('@/server/operator-avatars/generate', () => ({ requestAvatarImage: vi.fn
 vi.mock('@/server/posts/post-image-storage', () => ({ putPostImage: vi.fn() }))
 
 import { buildPostImagePrompt, pickPostImageStyle } from './post-image'
+import { PHOTO_LIGHTS } from '@/server/operator-avatars/photo-realism'
 
 describe('post photo prompt', () => {
   it('describes a phone snapshot without people', () => {
@@ -132,19 +133,26 @@ describe('time of day', () => {
   const person = { look: 'a young woman', hasReference: true }
 
   it('gives a photo with no stated time a time and weather, mostly bright daytime', () => {
-    expect(buildPostImagePrompt('[self] a selfie at a café table', null, () => 0, person)).toContain('When: a bright, clear day around noon')
-    expect(buildPostImagePrompt('a bowl of ramen on a counter', null, () => 0.99)).toContain('When: evening indoors')
+    expect(buildPostImagePrompt('[self] a selfie at a café table', null, () => 0, person)).toContain('Time and light, like this: a bright café with floor-to-ceiling windows at noon')
+    expect(buildPostImagePrompt('[self] a selfie on a bench in a park', null, () => 0, person)).toContain('Time and light, like this: a bright, clear day around noon')
+    expect(buildPostImagePrompt('a bowl of ramen on the kitchen table at home', null, () => 0)).toContain('morning sun through an east window')
   })
 
   it('keeps the time the description already gives', () => {
-    expect(buildPostImagePrompt('[self] a selfie on a rainy street', null, () => 0, person)).not.toContain('When:')
-    expect(buildPostImagePrompt('[self] a selfie in the street at night', null, () => 0, person)).not.toContain('When:')
+    expect(buildPostImagePrompt('[self] a selfie on a rainy street', null, () => 0, person)).not.toContain('Time and light')
+    expect(buildPostImagePrompt('[self] a selfie in the street at night', null, () => 0, person)).not.toContain('Time and light')
   })
 
-  it('never picks a sunset and only tells dim-light face rules for dim photos', () => {
-    for (const roll of [0, 0.2, 0.4, 0.6, 0.8, 0.99]) {
-      expect(buildPostImagePrompt('[self] a selfie at a café table', null, () => roll, person)).not.toMatch(/sunset|dusk|golden hour/i)
-    }
+  it('has 100 indoor and 40 outdoor light situations, none of them a sunset', () => {
+    const indoor = PHOTO_LIGHTS.home.length + PHOTO_LIGHTS.eatery.length + PHOTO_LIGHTS.transit.length + PHOTO_LIGHTS.indoor.length
+    expect(indoor).toBe(100)
+    expect(PHOTO_LIGHTS.outdoor).toHaveLength(40)
+    const all = Object.values(PHOTO_LIGHTS).flat()
+    expect(new Set(all).size).toBe(all.length)
+    for (const line of all) expect(line).not.toMatch(/sunset|dusk|golden hour|twilight/i)
+  })
+
+  it('only tells dim-light face rules for dim photos', () => {
     expect(buildPostImagePrompt('[self] a selfie at a café table', null, () => 0, person)).not.toContain('In dim evening or night light')
     expect(buildPostImagePrompt('[self] a selfie in the street at night', null, () => 0, person)).toContain('In dim evening or night light')
   })

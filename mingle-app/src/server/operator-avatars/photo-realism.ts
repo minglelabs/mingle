@@ -83,38 +83,178 @@ const LIGHT = 'Light: only what the place itself gives, with its natural falloff
 const FACE_LIGHT = 'Any face is lit like its surroundings and no more brightly: no extra light falling on the face. Sunlit skin stays matte, a broad soft brightness with no shiny specular spots on the nose, forehead, cheekbones or lips.'
 /** Only for dim scenes: said to every photo, it pulled daytime photos toward dusk too (staff, 2026-11). */
 const FACE_DIM = 'In dim evening or night light the face is as dim and slightly soft as the street around it, never cleanly and evenly lit.'
-const DIM = /\b(night|evening|dusk|sunset|twilight|after dark|street ?lamps?|neon|candle ?lit|lamp-lit)\b/i
+const DIM = /\b(dim|night|evening|dusk|sunset|twilight|after dark|street ?lamps?|neon|candle ?lit|lamp-lit)\b/i
 const COLORS = 'Colors are true to life, like an uncorrected phone photo: clear and bright in sunshine, softer under clouds; no boosted saturation, no HDR halo, no color grade, no glow, no rim light, no dramatic shadows.'
 
 /**
- * When the photo was taken. Left unsaid, the model drew nearly every post
- * photo in the same grey-blue, not-quite-bright light or at dusk (staff,
- * 2026-11), so a post photo whose description names no time or weather gets
- * one, mostly bright daytime. The picks never name a sunset: naming one pulls
- * photos toward it.
+ * When the photo was taken and how the place is lit. Left unsaid, the model
+ * drew nearly every post photo in the same grey-blue, not-quite-bright light
+ * or at dusk (staff, 2026-11), so a post photo whose description names no time
+ * or weather gets one light situation from its kind of place, picked evenly:
+ * 100 indoor (home, eatery, transit, other indoor places) and 40 outdoor,
+ * mostly daytime. None names a sunset or dusk: naming one pulls photos toward it.
  */
-export const PHOTO_TIMES: ReadonlyArray<{ key: string; weight: number; line: string }> = [
-  { key: 'clear_noon', weight: 28, line: 'a bright, clear day around noon: full sunshine, a deep blue sky with a few white clouds, crisp short shadows; indoors, strong daylight floods in through the windows and the room is bright' },
-  { key: 'morning_sun', weight: 14, line: 'a fresh, sunny morning: clean bright sunlight from low in the east, a pale clear blue sky, long soft shadows; indoors, morning sun falls in patches across the room' },
-  { key: 'afternoon_clouds', weight: 16, line: 'a bright afternoon with big white clouds in a blue sky: plenty of light, the sun now and then behind a cloud; indoors, bright and airy' },
-  { key: 'overcast', weight: 8, line: 'a cloudy day: an even white-grey sky, soft shadowless light, still well lit' },
-  { key: 'rain', weight: 5, line: 'a rainy day: wet shiny pavement, umbrellas, droplets, a grey sky; indoors, rain on the window and cosy lights on' },
-  { key: 'night_city', weight: 16, line: 'night after dark: a black sky, the scene lit by street lamps, shop signs, neon and windows in warm and cool colors; indoors, ceiling lights and lamps on with the windows dark' },
-  { key: 'warm_indoor', weight: 6, line: 'evening indoors or under a roof: warm yellow lamps and pendant lights, the windows dark or deep blue' },
-]
+export const PHOTO_LIGHTS: Readonly<Record<'home' | 'eatery' | 'transit' | 'indoor' | 'outdoor', readonly string[]>> = {
+  home: [
+    'morning sun through an east window, bright stripes of sunlight across the bedding and floor',
+    'bright overcast daylight from a big window, soft even light filling the room',
+    'around noon, sunlight bouncing off white walls, the room airy and bright',
+    'sheer white curtains diffusing strong daylight, everything soft and bright',
+    'blinds half shut, slatted bars of sunlight across the wall and furniture',
+    'a rainy afternoon: grey light from the window and a warm desk lamp switched on',
+    'night, one warm bedside lamp on, the rest of the room in soft shadow',
+    'night, a flat cool-white LED ceiling light, the plain bright light of an ordinary apartment',
+    'night, only a string of small warm fairy lights and a desk lamp on',
+    'late at night, the TV casting a soft changing glow, one small lamp on',
+    'a kitchen at night under a bright fluorescent ceiling light',
+    'a kitchen in morning sun, light falling across the counter, steam from a kettle',
+    'a snowy day outside, bright cold white light reflecting into the room',
+    'afternoon sun through a plant on the windowsill, leaf shadows on the wall',
+    'evening, a warm yellow pendant over the dining table, the windows black',
+    'bright white vanity lights around a bathroom mirror',
+    'a small studio flat at noon, one window of daylight plus a cool LED panel',
+    'a dorm room where fluorescent ceiling light mixes with daylight from one window',
+    'a glassed-in balcony at midday, full sun, a laundry rack in the corner',
+    'a warm floor lamp bounced off the ceiling, cosy and evenly dim',
+    'mid-afternoon with the curtains open, a bright sunlit rectangle on the floor',
+    'night, a desk lit by a colourful LED strip and a white desk lamp',
+    'a couple of candles and a dim lamp, a quiet cosy evening',
+    'bright daylight pouring down from a skylight',
+    'night, the living room lamps on and city lights twinkling beyond the big window',
+    'morning sun through yellow curtains, giving the room a warm cast',
+    'a cloudy morning with the lights off, soft grey-white window light',
+    'the entrance hallway by the front door, a warm entry light and a full-length mirror',
+    'a traditional room with paper-screen windows glowing bright with daylight',
+    'a sunny weekend late morning, the window open and the room full of light',
+  ],
+  eatery: [
+    'a bright café with floor-to-ceiling windows at noon, white walls and pale wood',
+    'a moody café at night, warm spotlights over each table, the windows dark',
+    'a café window seat in morning sun, the drink and table brightly lit',
+    'a Korean barbecue place: bright fluorescent light, a little smoke haze under the steel exhaust hoods',
+    'a street tent bar at night, an orange tarp glowing from bare bulbs inside',
+    'a small pub with warm amber lanterns and wooden walls',
+    'a convenience store at night: bright white fluorescent light, the windows black',
+    'a bakery in daytime, warm display-case lights on the bread',
+    'a busy food court under bright even LED ceiling light',
+    'a café terrace at noon under a parasol: bright shade, sunlit street beyond',
+    'a basement bar with pink and blue neon signs tinting everything',
+    'a noodle shop on a rainy day, steamed-up windows, bright inside',
+    'a brunch spot with white tiles and a big skylight, very bright',
+    'a traditional restaurant with paper lanterns and dark wood, afternoon light from the door',
+    'a pastel dessert café in soft, bright daylight',
+    'a late-night ramen counter under warm bare bulbs',
+    'a karaoke room: dark, with coloured disco lights sweeping the walls',
+    'a campus cafeteria under bright fluorescent tubes',
+    'a chain coffee shop in the evening, bright white LED light, the street dark outside',
+    'a wine bar with candles on every table, warm and dim',
+    'a beer pub, bright and lively, sports on the TVs on the wall',
+    'a café on a cloudy day: soft grey window light and warm pendant lamps',
+    'a street-side café on a sunny afternoon, hard window light and strong shadows across the table',
+    'a hotel lounge with chandeliers and warm wall lamps',
+    'a sushi bar with bright, clean white counter lights',
+    'a snack bar in daytime, bright plain ceiling lights, steam rising from the pan',
+    'a café full of plants under a glass greenhouse roof, bright and green',
+    'a book café on a rainy evening, warm reading lamps over the tables',
+    'a bubble tea shop, bright glowing menu boards behind the counter',
+    'a big brewery hall with industrial pendant lights and daylight from high windows',
+  ],
+  transit: [
+    'a subway car in daytime: bright cool fluorescent light, dark tunnel walls in the windows',
+    'a subway train running above ground in sunshine, light streaming across the seats',
+    'a city bus in morning sun, light flickering through the windows',
+    'a night bus: a dim interior, city lights streaking past outside',
+    'a train with big windows on a bright overcast day, countryside rolling by',
+    'an airplane window seat, bright white clouds and sun outside',
+    'a taxi back seat at night, street lights sliding past',
+    'a subway platform under bright LED light, glass screen doors',
+    'an airport terminal with huge glass walls around noon',
+    'a bus on a rainy day, droplets on the window, grey but bright',
+  ],
+  indoor: [
+    'a department store floor in bright, even white light',
+    'a clothing-shop fitting room with a warm spotlight overhead',
+    'a bookstore in daytime, warm shelf lights and daylight from the entrance',
+    'a library with tall windows in soft afternoon light',
+    'a gym under bright overhead LED panels, mirrors along the wall',
+    'an office desk under cool ceiling panels, a bright window behind',
+    'a gallery with white walls and track spotlights',
+    'an elevator with brushed-steel walls and a bright ceiling panel',
+    'a photo booth in flat, bright white light',
+    'a cinema lobby at night, glowing posters and neon trim',
+    'a co-working space with big windows, daylight and plants',
+    'a university lecture hall: fluorescent light mixed with daylight',
+    'a hair salon in front of a bright lit mirror',
+    'an underground shopping arcade lit by the shops\' bright fronts',
+    'a botanical glasshouse, bright diffuse light through the glass',
+    'an arcade game centre, dark with colourful glowing machines',
+    'a climbing gym under bright warehouse lights',
+    'an aquarium, dark except for the blue glow of the tanks',
+    'a flower shop with a sunlit front window',
+    'a hotel room in daytime, sheer curtains glowing with sunlight',
+    'a stairwell lit by a tall window, a stripe of sun on the steps',
+    'a cosmetics store in very bright white light',
+    'a small record shop, warm and dim',
+    'a pottery workshop with daylight from big windows',
+    'an indoor market hall under skylights',
+    'a building lobby at night, warm downlights, the glass doors dark',
+    'a study café: dim room, each desk under its own lamp',
+    'a laundromat at night under bright fluorescent light',
+    'a PC café, dim, the room lit by monitor glow',
+    'inside a parked car in daylight, sun on the dashboard',
+  ],
+  outdoor: [
+    'a bright, clear day around noon: full sunshine, a deep blue sky, crisp short shadows',
+    'a fresh sunny morning: clean bright sunlight, a pale clear blue sky, long soft shadows',
+    'a bright afternoon with big white clouds in a blue sky, the sun now and then behind a cloud',
+    'a hot, cloudless midday, harsh overhead sun and deep shadows under trees',
+    'a crisp autumn day, bright sun, vivid yellow and red leaves',
+    'a clear winter day, bright cold sun, a sharp blue sky, breath slightly visible',
+    'a light snowfall in daytime, everything soft white and bright',
+    'just after snow: sunshine on white snow, very bright',
+    'a cloudy but bright day, even white-grey sky, soft shadowless light',
+    'a light drizzle: wet shiny pavement, umbrellas, a grey sky',
+    'just after rain: puddles reflecting a clearing blue sky, everything washed clean',
+    'a windy sunny day, hair and leaves blowing, bright light',
+    'spring sunshine, soft warm light, fresh green leaves',
+    'a hazy bright day, the sky pale and whitish, soft sunlight',
+    'late morning sun from the side, bright with clear shadows',
+    'early afternoon in dappled shade under trees, spots of sunlight',
+    'bright sun reflecting off glass buildings, sparkling and clear',
+    'a summer day with strong sunlight and saturated green trees',
+    'a mild sunny day with a few thin high clouds',
+    'bright sun in a narrow street: one side in sunlight, the other in cool shade',
+    'night in a busy street: shop signs, neon and street lamps in warm and cool colours',
+    'night by the water: city lights reflected on the surface, a black sky',
+    'night in a quiet residential street under yellow street lamps',
+    'night at a lit-up market or festival, strings of bulbs overhead',
+    'night in the rain, coloured lights reflected on the wet ground',
+    'night in front of a brightly lit shop window',
+    'a foggy morning, soft and pale, things far away fading out',
+    'bright midday on a beach, white sand, sparkling water',
+    'a sunny day in a park, kids and dogs around, bright green grass',
+    'on a mountain trail around noon, clear air, bright sun',
+    'a sunny day at a viewpoint, a clear view far into the distance',
+    'a bright overcast day in the city, soft light, colours clear',
+    'a sunny crosswalk at noon, strong shadows of people on the stripes',
+    'a breezy autumn afternoon, sun low in the south, warm side light',
+    'a bright, cool morning with a little mist rising from the river',
+    'mid-afternoon under a striped awning, bright street behind',
+    'a sunny rooftop at noon, a wide blue sky',
+    'a light rain under a clear umbrella, the street a little blurred and grey',
+    'a clear day with a bright blue sky reflected in shop windows',
+    'night under bright stadium or plaza floodlights',
+  ],
+}
 
 const STATED_TIME = /\b(night|evening|dusk|sunset|sunrise|dawn|twilight|after dark|morning|noon|midday|afternoon|daylight|daytime|sunny|sunshine|sunlit|sunlight|rain|rainy|raining|snow|snowy|overcast|cloudy|golden hour|neon|street ?lamps?)\b/i
 
-/** The time and weather line for a post photo, or null when the description already says when it was taken. */
+/** The time and light line for a post photo, from its kind of place, or null when the description already says when it was taken. */
 export function pickPhotoTime(random: Random, scene: string): string | null {
   if (STATED_TIME.test(scene)) return null
-  const total = PHOTO_TIMES.reduce((sum, time) => sum + time.weight, 0)
-  let roll = random() * total
-  for (const time of PHOTO_TIMES) {
-    roll -= time.weight
-    if (roll < 0) return time.line
-  }
-  return PHOTO_TIMES[0].line
+  const kind = sceneKindOf(scene)
+  const pool = PHOTO_LIGHTS[kind === 'nature' || kind === 'street' ? 'outdoor' : kind]
+  return pool[Math.floor(random() * pool.length)]
 }
 
 /**
@@ -233,7 +373,7 @@ export function phonePhotoRealism(
   return [
     ...(people ? [options.focusOnPerson ? CAMERA_FOCUSED : CAMERA[0], CAMERA[1]] : [CAMERA_NO_PEOPLE, CAMERA[1]]),
     ...(options.lens ? [LENS[options.lens]] : []),
-    ...(time ? [`When: ${time}.`] : []),
+    ...(time ? [`Time and light, like this: ${time}. Take only the time, weather and light from it; the place stays the one described above.`] : []),
     LIGHT,
     WORLD,
     ...(LOW_SUN.test(options.scene ?? '') ? [SUN] : []),
