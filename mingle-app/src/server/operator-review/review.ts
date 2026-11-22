@@ -680,8 +680,8 @@ export async function setReviewPostText(
 }
 
 /**
- * A new text for a post in review, written by the model (the ChatGPT pool
- * where the server has its key) for the same person, language and photo,
+ * A new text for a post in review, written by the model (Claude Opus 5.5,
+ * never the ChatGPT pool) for the same person, language and photo,
  * with optional staff feedback. Nothing is saved: staff read it in the editor
  * and save it with setReviewPostText.
  */

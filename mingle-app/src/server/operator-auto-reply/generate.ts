@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { zipInterestLanguages } from '@/lib/interest-languages'
 import { getSttLanguageDisplayName, sanitizeSttLanguageSelection } from '@/lib/stt-languages'
 import { reserveLearnerPlan, reservePosterProfile } from '@/server/operator-post-reserve/generate'
-import { generateJson, type GenerateJsonRequest } from '@/server/llm/generate-json'
+import { generateJson, type GenerateJsonRequest, OPERATOR_TEXT_MODEL } from '@/server/llm/generate-json'
 import { isPhotoMessageMetadata } from '@/server/operator-inbox/staff-translate'
 
 /**
@@ -14,8 +14,8 @@ import { isPhotoMessageMetadata } from '@/server/operator-inbox/staff-translate'
  * anything; `./worker.ts` decides when to call it and sends the result
  * through the same path as a staff reply.
  */
-/** Claude Sonnet 5.5 on the Anthropic API, never the ChatGPT pool (staff decided 2026-11-19). */
-export const AUTO_REPLY_DEFAULT_MODEL = 'claude-sonnet-5-5'
+/** Claude Haiku 5.5 on the Anthropic API, never the ChatGPT pool (staff decided 2026-11-22). */
+export const AUTO_REPLY_DEFAULT_MODEL = OPERATOR_TEXT_MODEL
 export const AUTO_REPLY_TRANSCRIPT_TURNS = 30
 export const AUTO_REPLY_MAX_POSTS = 50
 export const AUTO_REPLY_MAX_COMMENTS = 20

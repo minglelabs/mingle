@@ -737,7 +737,7 @@ type TranslateBodySettledArgs = {
   targetLanguages: string[]
   budgetMs?: number
   modelSelection?: TranslateTextsInput['modelSelection']
-  /** `chatgpt-pool` for operator text (operatorTextProvider); the budget then allows for the pool's 10-25 s answers. */
+  /** `operator` for operator text (operatorTextProvider); `chatgpt-pool` gets a longer budget for the pool's 10-25 s answers. */
   provider?: TranslateTextsInput['provider']
   /** The body mixes languages (detection verdict); see MIXED_SOURCE_RULE. */
   sourceLanguagesMixed?: boolean

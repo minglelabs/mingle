@@ -29,10 +29,10 @@ vi.mock('@/server/operator-posts/operator-check', () => ({
   checkOperatorForPosting: mocks.checkOperator,
   personaLanguageOf: () => 'ko',
 }))
-vi.mock('@/server/llm/generate-json', () => ({ resolveJsonProvider: () => 'gemini', extractJsonText: (t: string) => t, generateJson: mocks.generateJson }))
+vi.mock('@/server/llm/generate-json', () => ({ OPERATOR_POST_TEXT_MODEL: 'claude-opus-5-5', OPERATOR_TEXT_MODEL: 'claude-haiku-5-5', resolveJsonProvider: () => 'gemini', extractJsonText: (t: string) => t, generateJson: mocks.generateJson }))
 
 import { DEFAULT_SEED_PLAN, defaultSeedRows, parseSeedCount, seedPlanTotal } from '@/app/admin/operators/seed/seed-plan'
-import { cleanReservePost, generateReservePosts, pickReserveTopics, RESERVE_TOPICS, reservePostKey } from './generate'
+import { cleanReservePost, generateReservePosts, pickReserveTopics, RESERVE_TOPICS, reservePostKey, resolveReserveModel } from './generate'
 import { avoidLocalNight, nextReleaseAt, utcOffsetHoursOf } from './schedule'
 import { normalizePostReserveSettings, parsePostReserveDailyPercent, parsePostReserveTarget, postsPerDay } from './settings'
 import { reserveClientPostId, runOperatorPostReserve } from './worker'
@@ -94,6 +94,10 @@ describe('release schedule', () => {
 })
 
 describe('reserve post generation', () => {
+  it('writes post text with Claude Opus 5.5 unless overridden', () => {
+    expect(resolveReserveModel({} as NodeJS.ProcessEnv)).toBe('claude-opus-5-5')
+  })
+
   beforeEach(() => vi.clearAllMocks())
 
   it('picks varied topics from the catalog', () => {
