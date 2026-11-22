@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { ChevronLeft, Heart, Loader2, MessageCircle, SendHorizontal, X } from 'lucide-react'
 import type { OperatorPostStats } from '@/lib/operator-post-stats'
 import type { OperatorPostThread, StoredTranslation, ThreadComment } from '@/server/operator-activity/thread'
@@ -54,6 +54,15 @@ function StoredTranslations({ translations }: { translations: StoredTranslation[
   )
 }
 
+/** Avatar (and name) that open the person's public profile in a new tab. */
+function ProfileLink({ userId, children, className = '' }: { userId: string; children: ReactNode; className?: string }) {
+  return (
+    <a href={`/p/${encodeURIComponent(userId)}`} target="_blank" rel="noreferrer" className={`shrink-0 rounded-full active:opacity-70 ${className}`}>
+      {children}
+    </a>
+  )
+}
+
 function CommentRow({ postId, comment, korean, nowMs, focused, isReply, canReply, onReply }: {
   postId: string
   comment: ThreadComment
@@ -70,14 +79,20 @@ function CommentRow({ postId, comment, korean, nowMs, focused, isReply, canReply
       id={`comment-${comment.id}`}
       className={`flex gap-2.5 rounded-xl px-2 py-2 ${focused ? 'bg-sky-50 ring-1 ring-sky-200' : ''} ${isReply ? 'ml-9' : ''}`}
     >
-      <InboxAvatar person={comment.isDeleted ? null : comment.author} size={isReply ? 28 : 36} />
+      {comment.isDeleted ? (
+        <InboxAvatar person={null} size={isReply ? 28 : 36} />
+      ) : (
+        <ProfileLink userId={comment.author.userId}>
+          <InboxAvatar person={comment.author} size={isReply ? 28 : 36} />
+        </ProfileLink>
+      )}
       <div className="min-w-0 flex-1">
         {comment.isDeleted ? (
           <p className="py-1.5 text-sm text-slate-400">삭제된 댓글입니다.</p>
         ) : (
           <>
             <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
-              <span className="min-w-0 truncate text-sm font-semibold text-slate-900">{inboxPersonLabel(comment.author)}</span>
+              <a href={`/p/${encodeURIComponent(comment.author.userId)}`} target="_blank" rel="noreferrer" className="min-w-0 truncate text-sm font-semibold text-slate-900 active:opacity-70">{inboxPersonLabel(comment.author)}</a>
               <span className="text-xs text-slate-500">{formatInboxRelativeTime(comment.createdAt, nowMs)}</span>
             </p>
             <p className="mt-0.5 whitespace-pre-wrap break-words text-[15px] leading-6 text-slate-800">
@@ -289,8 +304,10 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
       <div className="mx-auto w-full max-w-2xl flex-1 px-3 py-3">
         <article className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <p className="flex min-w-0 items-center gap-2">
-            <InboxAvatar person={post.author} size={36} />
-            <span className="min-w-0 truncate text-sm font-semibold">{inboxPersonLabel(post.author)}</span>
+            <ProfileLink userId={post.author.userId}>
+              <InboxAvatar person={post.author} size={36} />
+            </ProfileLink>
+            <a href={`/p/${encodeURIComponent(post.author.userId)}`} target="_blank" rel="noreferrer" className="min-w-0 truncate text-sm font-semibold active:opacity-70">{inboxPersonLabel(post.author)}</a>
             <span className="ml-auto shrink-0 text-xs text-slate-500">{formatInboxRelativeTime(post.publishedAt, nowMs)}</span>
           </p>
           {postText ? (
