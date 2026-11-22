@@ -127,3 +127,25 @@ describe('sun direction rule', () => {
     expect(buildPostImagePrompt('the sea at sunset from a pier')).toContain('a setting sun only ever appears in a view facing west')
   })
 })
+
+describe('time of day', () => {
+  const person = { look: 'a young woman', hasReference: true }
+
+  it('gives a photo with no stated time a time and weather, mostly bright daytime', () => {
+    expect(buildPostImagePrompt('[self] a selfie at a café table', null, () => 0, person)).toContain('When: a bright, clear day around noon')
+    expect(buildPostImagePrompt('a bowl of ramen on a counter', null, () => 0.99)).toContain('When: evening indoors')
+  })
+
+  it('keeps the time the description already gives', () => {
+    expect(buildPostImagePrompt('[self] a selfie on a rainy street', null, () => 0, person)).not.toContain('When:')
+    expect(buildPostImagePrompt('[self] a selfie in the street at night', null, () => 0, person)).not.toContain('When:')
+  })
+
+  it('never picks a sunset and only tells dim-light face rules for dim photos', () => {
+    for (const roll of [0, 0.2, 0.4, 0.6, 0.8, 0.99]) {
+      expect(buildPostImagePrompt('[self] a selfie at a café table', null, () => roll, person)).not.toMatch(/sunset|dusk|golden hour/i)
+    }
+    expect(buildPostImagePrompt('[self] a selfie at a café table', null, () => 0, person)).not.toContain('In dim evening or night light')
+    expect(buildPostImagePrompt('[self] a selfie in the street at night', null, () => 0, person)).toContain('In dim evening or night light')
+  })
+})

@@ -80,8 +80,42 @@ const SUN = 'The sun rises in the east and sets in the west: a setting sun only 
 const LOW_SUN = /sunset|sunrise|setting sun|dusk|golden hour|evening sun|late-afternoon sun|low sun/i
 
 const LIGHT = 'Light: only what the place itself gives, with its natural falloff (the sky, a window, ceiling lights or street lamps); soft natural shadows; mixed color temperatures where different lights meet; whites that are slightly grey or slightly warm, not pure.'
-const FACE_LIGHT = 'Any face is lit like its surroundings and no more brightly: no extra light falling on the face. Sunlit skin stays matte, a broad soft brightness with no shiny specular spots on the nose, forehead, cheekbones or lips; in dim evening light the face is as dim and slightly soft as the street around it, never cleanly and evenly lit.'
-const COLORS = 'Colors are muted and true to life, like an uncorrected phone photo, with moderate contrast: no boosted saturation, no HDR halo, no color grade, no glow, no rim light, no dramatic shadows.'
+const FACE_LIGHT = 'Any face is lit like its surroundings and no more brightly: no extra light falling on the face. Sunlit skin stays matte, a broad soft brightness with no shiny specular spots on the nose, forehead, cheekbones or lips.'
+/** Only for dim scenes: said to every photo, it pulled daytime photos toward dusk too (staff, 2026-11). */
+const FACE_DIM = 'In dim evening or night light the face is as dim and slightly soft as the street around it, never cleanly and evenly lit.'
+const DIM = /\b(night|evening|dusk|sunset|twilight|after dark|street ?lamps?|neon|candle ?lit|lamp-lit)\b/i
+const COLORS = 'Colors are true to life, like an uncorrected phone photo: clear and bright in sunshine, softer under clouds; no boosted saturation, no HDR halo, no color grade, no glow, no rim light, no dramatic shadows.'
+
+/**
+ * When the photo was taken. Left unsaid, the model drew nearly every post
+ * photo in the same grey-blue, not-quite-bright light or at dusk (staff,
+ * 2026-11), so a post photo whose description names no time or weather gets
+ * one, mostly bright daytime. The picks never name a sunset: naming one pulls
+ * photos toward it.
+ */
+export const PHOTO_TIMES: ReadonlyArray<{ key: string; weight: number; line: string }> = [
+  { key: 'clear_noon', weight: 28, line: 'a bright, clear day around noon: full sunshine, a deep blue sky with a few white clouds, crisp short shadows; indoors, strong daylight floods in through the windows and the room is bright' },
+  { key: 'morning_sun', weight: 14, line: 'a fresh, sunny morning: clean bright sunlight from low in the east, a pale clear blue sky, long soft shadows; indoors, morning sun falls in patches across the room' },
+  { key: 'afternoon_clouds', weight: 16, line: 'a bright afternoon with big white clouds in a blue sky: plenty of light, the sun now and then behind a cloud; indoors, bright and airy' },
+  { key: 'overcast', weight: 8, line: 'a cloudy day: an even white-grey sky, soft shadowless light, still well lit' },
+  { key: 'rain', weight: 5, line: 'a rainy day: wet shiny pavement, umbrellas, droplets, a grey sky; indoors, rain on the window and cosy lights on' },
+  { key: 'night_city', weight: 16, line: 'night after dark: a black sky, the scene lit by street lamps, shop signs, neon and windows in warm and cool colors; indoors, ceiling lights and lamps on with the windows dark' },
+  { key: 'warm_indoor', weight: 6, line: 'evening indoors or under a roof: warm yellow lamps and pendant lights, the windows dark or deep blue' },
+]
+
+const STATED_TIME = /\b(night|evening|dusk|sunset|sunrise|dawn|twilight|after dark|morning|noon|midday|afternoon|daylight|daytime|sunny|sunshine|sunlit|sunlight|rain|rainy|raining|snow|snowy|overcast|cloudy|golden hour|neon|street ?lamps?)\b/i
+
+/** The time and weather line for a post photo, or null when the description already says when it was taken. */
+export function pickPhotoTime(random: Random, scene: string): string | null {
+  if (STATED_TIME.test(scene)) return null
+  const total = PHOTO_TIMES.reduce((sum, time) => sum + time.weight, 0)
+  let roll = random() * total
+  for (const time of PHOTO_TIMES) {
+    roll -= time.weight
+    if (roll < 0) return time.line
+  }
+  return PHOTO_TIMES[0].line
+}
 
 /**
  * Detail density. Image models crowd a scene with small decorative objects
@@ -188,20 +222,23 @@ function pickFlaws(random: Random, count: number): string[] {
  */
 export function phonePhotoRealism(
   random: Random = Math.random,
-  options: { people?: boolean; faces?: boolean; environment?: PhotoEnvironment; focusOnPerson?: boolean; lens?: PhoneLens; scene?: string } = {},
+  options: { people?: boolean; faces?: boolean; environment?: PhotoEnvironment; focusOnPerson?: boolean; lens?: PhoneLens; scene?: string; pickTime?: boolean } = {},
 ): string {
   const environment = options.environment ?? 'any'
   const people = options.people !== false
   // A back or body photo has a person but no visible face.
   const faces = options.faces ?? people
   const offColor = offColorObject(random, sceneKindOf(options.scene ?? '', environment))
+  const time = options.pickTime ? pickPhotoTime(random, options.scene ?? '') : null
   return [
     ...(people ? [options.focusOnPerson ? CAMERA_FOCUSED : CAMERA[0], CAMERA[1]] : [CAMERA_NO_PEOPLE, CAMERA[1]]),
     ...(options.lens ? [LENS[options.lens]] : []),
+    ...(time ? [`When: ${time}.`] : []),
     LIGHT,
     WORLD,
     ...(LOW_SUN.test(options.scene ?? '') ? [SUN] : []),
     ...(faces ? [FACE_LIGHT] : []),
+    ...(faces && DIM.test(`${options.scene ?? ''} ${time ?? ''}`) ? [FACE_DIM] : []),
     COLORS,
     TEXTURE,
     DETAIL,
