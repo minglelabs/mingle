@@ -65,6 +65,7 @@
     return seen.size;
   }
 
+  const log = (m) => { window.__salonListLog.push(m); if (window.__salonListLog.length > 50) window.__salonListLog.shift(); };
   window.__salonListStop = false;
   window.__salonListLog = [];
   window.__salonList = (async () => {
@@ -80,9 +81,9 @@
       if (!query) return 'all done';
       try {
         const n = await runQuery(query);
-        window.__salonListLog.push(`${new Date().toLocaleTimeString()} ${query} ${n}`);
+        log(`${new Date().toLocaleTimeString()} ${query} ${n}`);
       } catch (e) {
-        window.__salonListLog.push(`ERR ${query} ${e.message}`);
+        log(`ERR ${query} ${e.message}`);
         await W(5000);
       }
       await W(2000);

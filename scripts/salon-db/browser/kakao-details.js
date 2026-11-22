@@ -18,6 +18,8 @@
     talk_channel: d.talk_channel,
   });
 
+  // 로그는 최근 50개만 (탭 메모리 누적 방지)
+  const log = (m) => { window.__salonDetailErrors.push(m); if (window.__salonDetailErrors.length > 50) window.__salonDetailErrors.shift(); };
   window.__salonDetailStop = false;
   window.__salonDetailCount = 0;
   window.__salonDetailErrors = [];
@@ -45,7 +47,7 @@
             data = keep(await res.json());
             fails = 0;
           } else {
-            window.__salonDetailErrors.push(`${id} ${res.status}`);
+            log(`${id} ${res.status}`);
             if (++fails >= 5) {
               await W(10 * 60_000); // 연속 실패 → 10분 쉼
               fails = 0;
@@ -60,7 +62,7 @@
           });
           window.__salonDetailCount++;
         } catch (e) {
-          window.__salonDetailErrors.push(`${id} ${e.message}`);
+          log(`${id} ${e.message}`);
         }
         await W(1500);
       }

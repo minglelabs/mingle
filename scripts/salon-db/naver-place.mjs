@@ -10,8 +10,16 @@ const UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
 const jitter = (ms) => sleep(ms + Math.random() * ms);
 
-const browser = await chromium.launch({ channel: 'chrome', headless: process.env.HEADLESS !== '0' });
+// 메모리 절약: 디스크 캐시 끔, 이미지·폰트·영상은 받지 않음 (필요한 건 __APOLLO_STATE__ 뿐)
+const browser = await chromium.launch({
+  channel: 'chrome',
+  headless: process.env.HEADLESS !== '0',
+  args: ['--disk-cache-size=1', '--media-cache-size=1', '--disable-gpu', '--js-flags=--max-old-space-size=512'],
+});
 const page = await browser.newPage({ locale: 'ko-KR', userAgent: UA, viewport: { width: 420, height: 900 } });
+await page.route('**/*', (r) =>
+  ['image', 'font', 'media'].includes(r.request().resourceType()) ? r.abort() : r.continue(),
+);
 
 async function apollo(url) {
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -128,8 +136,17 @@ for (const [i, s] of rows.entries()) {
     if (it) {
       await jitter(1200);
       const st = await apollo(`https://m.place.naver.com/hairshop/${it.id}/home`);
-      await save(s, it.id, summarize(st, it.id));
-      hit++;
+      try {
+        await save(s, it.id, summarize(st, it.id));
+        hit++;
+      } catch (e) {
+        if (e.code !== '23505') throw e;
+        // 카카오 중복 매장이 같은 네이버 매장에 매칭됨 → 이미 붙은 쪽만 두고 이건 처리됨 표시
+        await pool.query(
+          `UPDATE salons SET enriched_at = enriched_at || jsonb_build_object('naver', now()), contact_notes = coalesce(contact_notes,'') || $2 WHERE id=$1`,
+          [s.id, ` [naver dup ${it.id}]`],
+        );
+      }
     } else {
       await pool.query(
         `UPDATE salons SET enriched_at = enriched_at || jsonb_build_object('naver', now()) WHERE id=$1`,

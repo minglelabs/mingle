@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pool, sleep } from './db.mjs';
 
-const MAX = Number(process.env.MAX || 200);
+const MAX = Number(process.env.MAX || 100); // 실행마다 새 브라우저로 → 메모리 누적 방지
 const GAP = Number(process.env.GAP || 30) * 1000;
 // 수집 전용 크롬 프로필. 처음 한 번 이 창에서 직접 로그인하면 이후 유지된다.
 const PROFILE_DIR = process.env.PROFILE_DIR || path.join(os.homedir(), 'salon-db', 'chrome-ig');
@@ -21,6 +21,7 @@ const ctx = await chromium.launchPersistentContext(PROFILE_DIR, {
   headless: false,
   locale: 'ko-KR',
   viewport: { width: 1100, height: 900 },
+  args: ['--disk-cache-size=1', '--media-cache-size=1'],
 });
 const page = ctx.pages()[0] || (await ctx.newPage());
 
