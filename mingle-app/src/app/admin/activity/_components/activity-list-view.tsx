@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CheckCheck, Heart, Loader2, MessageCircle, PenLine, RefreshCw, Reply, UserPlus, type LucideIcon } from 'lucide-react'
 import type { ActivityItem, ActivityListData, ActivityOperatorStat } from '@/server/operator-activity/activity'
+import { adminProfileHref } from '../../_lib/profile-href'
 import { InboxAvatar, KoreanViewSwitch } from '../../inbox/_components/inbox-ui'
 import { useAdminInboxRealtime } from '../../inbox/_components/use-admin-inbox-realtime'
 import { useStaffKoreanView } from '../../inbox/_components/use-staff-korean-view'
@@ -134,10 +135,10 @@ function ActivityCard({ item, nowMs, korean, active }: { item: ActivityItem; now
           {body}
         </Link>
       ) : isFollow ? (
-        // A follow has no thread: open the follower's public profile instead.
-        <a href={`/p/${encodeURIComponent(item.actor.userId)}`} target="_blank" rel="noreferrer" className={`${className} active:bg-slate-50`}>
+        // A follow has no thread: open the follower's profile (inside the admin) instead.
+        <Link href={adminProfileHref(item.actor.userId, LIST_PATH)} prefetch={false} className={`${className} active:bg-slate-50`}>
           {body}
-        </a>
+        </Link>
       ) : (
         <div className={className}>{body}</div>
       )}

@@ -59,6 +59,8 @@ export type ThreadComment = {
   hasImage: boolean
   isDeleted: boolean
   likeCount: number
+  /** Who liked it, newest first (staff only). */
+  likers?: InboxPerson[]
   createdAt: string
   replies: ThreadComment[]
 }
@@ -72,6 +74,8 @@ export type OperatorPostThread = {
     translations: StoredTranslation[]
     hasImage: boolean
     likeCount: number
+    /** Who liked it, newest first (staff only). */
+    likers?: InboxPerson[]
     commentCount: number
     publishedAt: string
   }
@@ -209,6 +213,7 @@ export async function loadOperatorPostThread(args: {
       commentCount: true,
       publishedAt: true,
       author: { select: USER_IDENTITY_SELECT },
+      likes: { orderBy: { createdAt: 'desc' }, select: { user: { select: USER_IDENTITY_SELECT } } },
       translations: {
         where: { status: 'ready' },
         select: { bodyVersion: true, language: true, text: true },
@@ -231,6 +236,7 @@ export async function loadOperatorPostThread(args: {
       likeCount: true,
       createdAt: true,
       author: { select: USER_IDENTITY_SELECT },
+      likes: { orderBy: { createdAt: 'desc' }, select: { user: { select: USER_IDENTITY_SELECT } } },
       replyToUser: { select: { id: true, name: true, handle: true } },
       translations: {
         where: { status: 'ready' },
@@ -261,6 +267,7 @@ export async function loadOperatorPostThread(args: {
       hasImage: !isDeleted && Boolean(row.imageObjectKey),
       isDeleted,
       likeCount: row.likeCount,
+      likers: row.likes.map((like) => toActivityPerson(like.user)),
       createdAt: row.createdAt.toISOString(),
       replies: [],
     }
@@ -315,6 +322,7 @@ export async function loadOperatorPostThread(args: {
         translations: postText ? currentTranslations(post.translations, post.bodyVersion, post.sourceLanguage) : [],
         hasImage: Boolean(post.imageObjectKey),
         likeCount: post.likeCount,
+        likers: post.likes.map((like) => toActivityPerson(like.user)),
         commentCount: post.commentCount,
         publishedAt: post.publishedAt.toISOString(),
       },

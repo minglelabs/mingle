@@ -587,7 +587,8 @@ async function runTranslateFinalize(
   // Spoken turns carry their STT duration; partials are spoken by definition.
   const isTypedMessage = isFinal && !(typeof body.sttDurationMs === 'number' && body.sttDurationMs > 0)
   // While typed-message translation is free (a zero rate), an empty wallet does not stop it.
-  const typedTranslationIsFree = isTypedMessage && await isCoinUsageFree({ kind: 'translation', units: { message: 1 } })
+  // Asked only when someone is billed: an unbilled request reads no rates.
+  const typedTranslationIsFree = Boolean(coinBillingUserId) && isTypedMessage && await isCoinUsageFree({ kind: 'translation', units: { message: 1 } })
   if (coinBillingUserId && !typedTranslationIsFree && !(await canSpendCoins(coinBillingUserId))) {
     const response = NextResponse.json({ error: COIN_INSUFFICIENT_ERROR, translations: {} }, { status: 402 })
     ensureTrackingContext(request, response, { sessionKeyHint })
