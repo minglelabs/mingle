@@ -231,8 +231,10 @@ async function translateStaffReply(args: {
   let usage = addUsage(null, first.usage)
   const collected = canonicalTranslations(first, text, staffLanguage, targets)
 
-  // Staff already wrote in the persona's language: that text is the persona text.
-  const personaText = collected[personaLanguage] || (staffSttLanguage === personaLanguage ? text : '')
+  // Staff already wrote in the persona's language: their own words go out
+  // exactly as typed, never the model's "translation" into the same language
+  // (staff, 2026-11-23: "AI 아닌데.." came out as "AI가 아닌데..").
+  const personaText = staffSttLanguage === personaLanguage ? text : collected[personaLanguage] || ''
   if (!personaText) throw new OperatorSendError('translation_failed')
 
   const otherLanguages = targets.filter((language) => language !== personaLanguage)
