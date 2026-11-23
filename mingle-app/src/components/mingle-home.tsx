@@ -53,6 +53,7 @@ import {
   AUTH_GATE_BACKGROUND_STYLE,
   AUTH_GATE_PANEL_CLASSNAME,
   AUTH_GATE_PANEL_STYLE,
+  resolveAuthGatePanelMinHeight,
   createProviderResetAuthPanelState,
   createProviderSelectionAuthPanelState,
   resolveAuthGateVisualState,
@@ -376,9 +377,15 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   const [socialSignInFailed, setSocialSignInFailed] = useState(false);
   // Read after mount so the first paint matches the server render.
   const [lastSignInMethod, setLastSignInMethod] = useState<SignInMethod | null>(null);
+  const [authPanelMinHeight, setAuthPanelMinHeight] = useState<string | number>(AUTH_GATE_PANEL_STYLE.minHeight);
   // Before paint, so the buttons never show one layout and then switch to another.
   useLayoutEffect(() => {
     setLastSignInMethod(readLastSignInMethod());
+    const bridge = (window as { ReactNativeWebView?: { postMessage?: unknown } }).ReactNativeWebView;
+    setAuthPanelMinHeight(resolveAuthGatePanelMinHeight({
+      isNativeApp: typeof bridge?.postMessage === "function",
+      screenHeight: window.screen?.height ?? 0,
+    }));
   }, []);
   const [signingInProvider, setSigningInProvider] =
     useState<NativeAuthProvider | null>(null);
@@ -1548,7 +1555,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
         <section
           aria-busy={isLoading || disabled}
           className={AUTH_GATE_PANEL_CLASSNAME}
-          style={AUTH_GATE_PANEL_STYLE}
+          style={{ ...AUTH_GATE_PANEL_STYLE, minHeight: authPanelMinHeight }}
         >
           {isLoading ? (
             /* Loading state: spinner and a random loading line */
