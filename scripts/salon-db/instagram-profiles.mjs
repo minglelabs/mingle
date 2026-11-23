@@ -1,5 +1,5 @@
 // 인스타 프로필 수집 (별도 크롬 창, 처음 한 번 직접 로그인)
-//   node instagram-profiles.mjs        MAX=200 (한 번 실행당 최대 프로필 수), GAP=30 (프로필 간 평균 초)
+//   node instagram-profiles.mjs        MIN=40 MAX=120 (실행당 프로필 수, 그 사이 랜덤), GAP=30 (프로필 간 평균 초)
 // 프로필 페이지를 열 때 앱이 받아오는 JSON 응답을 가로채서 저장한다:
 //   이름, 소개글, 카테고리, 링크, 팔로워/팔로잉/게시물 수, 비즈니스 여부, 연락 방식,
 //   최근 게시물 12개(사진, 좋아요·댓글 수, 캡션, 날짜) → 사진은 ~/salon-db/photos/ig/<salon_id>/ 에 파일로
@@ -10,7 +10,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { pool, sleep } from './db.mjs';
 
-const MAX = Number(process.env.MAX || 100); // 실행마다 새 브라우저로 → 메모리 누적 방지
+// 실행마다 새 브라우저로 → 메모리 누적 방지. 실행당 개수는 MIN~MAX 사이 랜덤 (일정한 패턴 회피)
+const MAX_CAP = Number(process.env.MAX || 100);
+const MIN = Number(process.env.MIN || MAX_CAP);
+const MAX = MIN + Math.floor(Math.random() * (MAX_CAP - MIN + 1));
 const GAP = Number(process.env.GAP || 30) * 1000;
 // 수집 전용 크롬 프로필. 처음 한 번 이 창에서 직접 로그인하면 이후 유지된다.
 const PROFILE_DIR = process.env.PROFILE_DIR || path.join(os.homedir(), 'salon-db', 'chrome-ig');
@@ -183,7 +186,8 @@ for (const [i, s] of rows.entries()) {
       break;
     }
   }
-  await sleep(GAP * (0.6 + Math.random() * 0.8));
+  // 간격도 들쭉날쭉하게: 평균 GAP 기준 0.4~2배, 가끔(10%) 1~4분 더 쉼
+  await sleep(GAP * (0.4 + Math.random() * 1.6) + (Math.random() < 0.1 ? 60_000 + Math.random() * 180_000 : 0));
 }
 await ctx.close();
 await pool.end();

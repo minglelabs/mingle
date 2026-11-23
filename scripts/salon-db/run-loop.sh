@@ -1,7 +1,7 @@
 #!/bin/bash
 # 수집기를 반복 실행하되, 메모리가 부족하면 쉬었다가 다시 돈다.
 #   ./run-loop.sh naver-place.mjs        (env: LIMIT/MAX 등 그대로 전달)
-#   MIN_FREE=25 (memory_pressure 여유 %), MIN_SWAP_MB=1000 (남은 스왑), REST=60 (실행 사이 초)
+#   MIN_FREE=25 (memory_pressure 여유 %), MIN_SWAP_MB=1000 (남은 스왑), REST=60 (실행 사이 초), REST_MAX 를 주면 REST~REST_MAX 사이 랜덤
 cd "$(dirname "$0")"
 MIN_FREE=${MIN_FREE:-25}; MIN_SWAP_MB=${MIN_SWAP_MB:-1000}; REST=${REST:-60}
 mem_ok() {
@@ -15,5 +15,6 @@ mem_ok() {
 while true; do
   until mem_ok; do echo "$(date +%T) 메모리 부족 → 5분 대기 ($(memory_pressure | tail -1))"; sleep 300; done
   node "$@"
-  sleep "$REST"
+  r=$REST; [ -n "$REST_MAX" ] && r=$((REST + RANDOM % (REST_MAX - REST + 1)))
+  echo "$(date +%T) 다음 실행까지 ${r}초 휴식"; sleep "$r"
 done
