@@ -36,6 +36,8 @@ export type CommentSheetProps = {
   /** The post's comment count as the API reports it after a create or delete. */
   onCommentCountChange?: (commentCount: number) => void;
   onRequireLogin: () => void;
+  /** Tap on a commenter's avatar or name: open their profile. */
+  onOpenAuthor?: (authorId: string) => void;
 };
 
 /**
@@ -64,7 +66,7 @@ function focusableWithin(root: HTMLElement): HTMLElement[] {
 }
 
 export default function CommentSheet(props: CommentSheetProps) {
-  const { open, postId, postAuthorId, locale, viewerId, initialCommentId, onClose, onCommentCountChange, onRequireLogin } = props;
+  const { open, postId, postAuthorId, locale, viewerId, initialCommentId, onClose, onCommentCountChange, onRequireLogin, onOpenAuthor } = props;
   const copy = commentsCopy(locale);
 
   const { data: session } = useSession();
@@ -272,6 +274,7 @@ export default function CommentSheet(props: CommentSheetProps) {
     onToggleTranslation: sheet.toggleTranslation,
     onRetryFailed: sheet.retryFailed,
     onDiscardFailed: sheet.discardFailed,
+    onOpenAuthor: (authorId: string) => onOpenAuthor?.(authorId),
   };
 
   const noticeText = useMemo(() => {

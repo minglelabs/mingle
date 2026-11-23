@@ -47,6 +47,7 @@ export type CommentItemHandlers = {
   onToggleTranslation: (id: string) => void;
   onRetryFailed: (id: string) => void;
   onDiscardFailed: (id: string) => void;
+  onOpenAuthor: (authorId: string) => void;
 };
 
 type Props = {
@@ -118,6 +119,11 @@ export default function CommentItem({
   }
 
   const name = displayName(comment.author);
+  // A deleted comment hides who wrote it; a pending one is the viewer's own row.
+  const canOpenAuthor = !comment.isDeleted && !comment.pending && Boolean(comment.author.id);
+  const openAuthor = () => {
+    if (canOpenAuthor) handlers.onOpenAuthor(comment.author.id);
+  };
 
   return (
     <div
@@ -125,7 +131,14 @@ export default function CommentItem({
       className={cn("flex gap-3 px-2 py-2", comment.pending && "opacity-60")}
     >
       {/* Avatar */}
-      <div className="mt-0.5 shrink-0">
+      <button
+        type="button"
+        onClick={openAuthor}
+        disabled={!canOpenAuthor}
+        aria-label={name}
+        tabIndex={canOpenAuthor ? 0 : -1}
+        className="mt-0.5 shrink-0 self-start rounded-full disabled:cursor-default"
+      >
         {comment.author.image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -144,12 +157,19 @@ export default function CommentItem({
             {name.slice(0, 1).toUpperCase()}
           </div>
         )}
-      </div>
+      </button>
 
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <span className="text-[13.5px] font-bold text-foreground">{name}</span>
+            <button
+              type="button"
+              onClick={openAuthor}
+              disabled={!canOpenAuthor}
+              className="text-left text-[13.5px] font-bold text-foreground disabled:cursor-default"
+            >
+              {name}
+            </button>
             <AccountBadge
               kind={resolveAccountBadge(comment.author)}
               locale={locale}
