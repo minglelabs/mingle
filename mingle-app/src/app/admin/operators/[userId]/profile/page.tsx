@@ -16,7 +16,7 @@ import { OperatorPostEditor } from '../../../feed/_components/operator-post-edit
 import { PostTakedownButton } from '../../../feed/_components/post-takedown-button'
 import { OperatorsMain } from '../../_components/operator-ui'
 import { ZoomableAvatar } from '../../_components/zoomable-avatar'
-import { ReviewBoard, ReviewPhotos } from '../../review/review-board'
+import { ReviewBoard, ReviewPhotos, StaffBio } from '../../review/review-board'
 import { reviewImageUrl } from '../../review/review-image-url'
 
 export const dynamic = 'force-dynamic'
@@ -174,7 +174,7 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
           {(operator && reviewState !== 'approved') || user.isDeleted ? (
             <p className="mt-2 inline-block rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">{user.isDeleted ? '삭제된 계정' : REVIEW_STATE[reviewState] ?? reviewState}</p>
           ) : null}
-          {user.bio ? <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-800">{user.bio}</p> : null}
+          {user.bio ? <StaffBio userId={user.id} bio={user.bio} sourceLanguage={primaryLanguages[0] ?? null} className="mt-2" /> : null}
           <ProfileLanguageLevels primaryLanguages={primaryLanguages} interestLanguages={interestLanguages} locale="ko" className="mt-3" />
         </section>
 

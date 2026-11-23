@@ -412,6 +412,19 @@ function StaffTranslationChips({ sourceLanguage, translation }: {
   )
 }
 
+/** An account's bio with the 원문 / 한국어 chips (the profile screen). */
+export function StaffBio({ userId, bio, sourceLanguage, className = '' }: { userId: string; bio: string; sourceLanguage: string | null; className?: string }) {
+  const [error, setError] = useState<string | null>(null)
+  const translation = useStaffTranslation({ kind: 'profile', id: userId }, bio, setError)
+  return (
+    <div className={className}>
+      <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-800">{translation.shownText}</p>
+      <StaffTranslationChips sourceLanguage={sourceLanguage} translation={translation} />
+      {error ? <p className="mt-1 text-xs text-rose-600">{error}</p> : null}
+    </div>
+  )
+}
+
 /** A post's photos, swiped sideways like the app's feed, with a "2 / 4" count. */
 export function ReviewPhotos({ photos }: { photos: Array<{ objectKey: string; width: number | null; height: number | null }> }) {
   const [index, setIndex] = useState(0)
