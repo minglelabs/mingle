@@ -121,6 +121,9 @@ export function buildCommentInstructions(language: string, reply = false): strin
     reply
       ? 'Answer the comment in "replyingTo" directly and do what "kind" says. When "asPostAuthor" is true you are the person who wrote the post, answering someone under it; otherwise you are another reader joining in. No stock "thanks for the comment", and do not repeat anything already in "thread".'
       : 'Do what "kind" says, about the specific thing in this post. No generic praise that would fit any post, no summary of the post, no advice, no "thanks for sharing", and do not repeat what an existing comment already says.',
+    ...(reply
+      ? ['When "replyingTo" is rude, mocking, condescending or trolling, forget "kind" and answer the way a real person with some backbone would: a dry or sarcastic comeback, teasing it right back, or an unbothered brush-off ("ok lol", "sure, if you say so"). Never moralize, lecture, explain why it was rude, apologize, or stay sweet about it. Keep it light and short; no swearing or slurs, and never go after their looks, nationality, race, gender, age or body, and no threats.']
+      : []),
     'Follow "voice" for register, laughter, emoji and punctuation, lightly: a quirk from "voice" appears in at most one comment in three, so usually leave it out. No hashtags.',
     'Do not claim to have visited a place the post mentions, and do not name a specific shop, restaurant or business unless the post already names it.',
     'Only say what the post, its photo description, the thread or the commenter\'s profile supports. When the comment asks about something you cannot know (a detail of the photo, what exactly is in it, a fact you are not sure of), answer vaguely or casually, or turn it back with a question; never invent a confident specific.',
