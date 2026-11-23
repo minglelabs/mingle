@@ -5,9 +5,9 @@ import { CAMERA_DISTANCES, EXPRESSIONS, FEMALE_HAIRSTYLES, HEAD_ANGLES, pickPers
 describe('variety in photos of the poster', () => {
   it('names a head angle, expression, hairstyle, outfit and light for a woman\'s selfie', () => {
     const prompt = buildPostImagePrompt('[self] the poster at a café window', 'Seoul, South Korea', () => 0.3, { look: 'x', hasReference: true, gender: 'female' })
-    expect(prompt).toContain('Head angle in this photo, unlike the attached photo:')
-    expect(prompt).toContain('Expression in this photo:')
-    expect(prompt).toContain('Hairstyle today, unlike the attached photo:')
+    expect(prompt).toContain('Head angle in this photo, unlike the attached photo, unless the description already says:')
+    expect(prompt).toContain('Expression in this photo, unless the description already says:')
+    expect(prompt).toContain('Hairstyle today, unlike the attached photo, unless the description already says:')
     expect(prompt).toContain('Outfit today')
     expect(prompt).toContain('Light on the face')
     expect(prompt).toContain('Camera distance')
