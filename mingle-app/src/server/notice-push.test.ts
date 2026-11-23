@@ -16,7 +16,7 @@ describe('buildImportantNoticePush', () => {
       collapseKey: 'notice:n1',
       noticeTitle: '점검 안내',
       messagePreview: '오늘 밤 10시부터 점검합니다.',
-      navigationUrl: '/ko/home?notices=1',
+      navigationUrl: '/ko/explore?notices=1',
     })
   })
 

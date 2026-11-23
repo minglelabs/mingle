@@ -5,12 +5,11 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { hasConfirmedLanguageOnboarding } from "@/components/LivePhoneDemo/language-onboarding.storage";
 import { conversationsHref } from "@/lib/posting-feed-guard";
-import { homeHref } from "@/lib/home-routes";
 import { isFirstSpeakPending, shouldOpenConversationsInsteadOfFeed, speakTrialNeedsSessionCheck } from "@/lib/first-run";
 import { readLastSignInMethod } from "@/lib/last-sign-in-method";
 import { isSpeakTrialDone } from "@/lib/speak-trial";
 
-export type FirstRunHomeStatus = "checking" | "feed" | "conversations" | "home";
+export type FirstRunHomeStatus = "checking" | "feed" | "conversations";
 
 function scheduleMicrotask(callback: () => void): void {
   if (typeof queueMicrotask === "function") queueMicrotask(callback);
@@ -23,21 +22,6 @@ let launchJudged = false;
 function isNativeAppRuntime(): boolean {
   const bridge = (window as { ReactNativeWebView?: { postMessage?: unknown } }).ReactNativeWebView;
   return typeof bridge?.postMessage === "function";
-}
-
-/**
- * Whether this page load itself started on the current path (the app shell
- * or a browser opened `/feed`), as opposed to arriving here by a tap inside
- * the app after starting somewhere else (home, then the explore tab's posts).
- */
-function isDocumentEntry(): boolean {
-  try {
-    const entry = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
-    if (!entry?.name) return true;
-    return new URL(entry.name).pathname === window.location.pathname;
-  } catch {
-    return true;
-  }
 }
 
 /**
@@ -85,14 +69,7 @@ export function useFirstRunHome(locale: string): FirstRunHomeStatus {
         speakTrialDue: mayOweSpeakTrial && sessionStatus === "unauthenticated",
       });
       if (!moveToConversations) {
-        // The app shell (and the site root) still opens `/feed` first. The
-        // first screen is the home tab now: a launch that names no post goes
-        // there. Later visits to the feed in this page load stay on the feed.
-        if (!base.hasPostTarget && isDocumentEntry()) {
-          setStatus("home");
-          router.replace(`${homeHref(locale)}${window.location.search}`);
-          return;
-        }
+        // The feed is the home tab again (2026-11-23): the launch stays here.
         setStatus("feed");
         return;
       }

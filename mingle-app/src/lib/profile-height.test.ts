@@ -51,8 +51,8 @@ describe('profile height', () => {
     expect(edit).not.toContain('setHeightText')
   })
 
-  it('home cards follow and message without opening the profile', () => {
-    const home = read('../components/home/home-page.tsx')
+  it('explore cards follow and message without opening the profile', () => {
+    const home = read('../components/explore/explore-people-page.tsx')
     expect(home).toContain('data-qa="home-card-follow"')
     expect(home).toContain('data-qa="home-card-message"')
     expect(home).toContain('pageCache.set(cacheKey, next)')

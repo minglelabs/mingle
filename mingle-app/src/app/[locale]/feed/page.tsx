@@ -1,6 +1,7 @@
 import { isSupportedLocale, getDictionary, type AppLocale } from "@/i18n";
 import FeedShell from "@/components/feed/feed-shell";
 import BottomTabBar from "@/components/bottom-tab-bar";
+import HomeFeedLayer from "@/components/home/home-feed-layer";
 import PostingFeedRouteGuard, { FirstRunHomeGuard } from "@/components/feed/posting-feed-route-guard";
 import { notFound } from "next/navigation";
 import { isAppleOAuthConfigured, isGoogleOAuthConfigured } from "@/lib/auth-options";
@@ -29,9 +30,10 @@ export default async function FeedPage({ params }: FeedPageProps) {
             dictionary={dictionary}
             appleOAuthEnabled={isAppleOAuthConfigured()}
             googleOAuthEnabled={isGoogleOAuthConfigured()}
-            tabBar={<BottomTabBar activeRoute="feed" dictionary={dictionary} locale={locale} variant="glass" />}
+            tabBar={<BottomTabBar activeRoute="home" dictionary={dictionary} locale={locale} variant="glass" />}
           />
         </div>
+        <HomeFeedLayer locale={locale} />
       </main>
       </FirstRunHomeGuard>
     </PostingFeedRouteGuard>

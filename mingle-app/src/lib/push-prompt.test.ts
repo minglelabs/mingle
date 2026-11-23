@@ -61,7 +61,7 @@ describe('notification prompt timing', () => {
     const list = read('../components/conversation-list.tsx')
     expect(list).toContain('router.replace(buildNativeAwareTabPath(homeHref(locale), params, { tabRoot: true }));')
     expect(list).toContain('if (params.get("firstSpeak") !== "1") return;')
-    const home = read('../components/home/home-page.tsx')
+    const home = read('../components/home/home-feed-layer.tsx')
     expect(home).toContain('data-qa="home-first-speak-card"')
     expect(home).toContain('firstSpeak=1`);')
     // Signing in can reload the page or bring it back to Chats: the move holds until Home is on screen.

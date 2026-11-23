@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { homeHref } from '@/lib/home-routes'
+import { exploreHref } from '@/lib/home-routes'
 import { resolveSupportedLocaleTag } from '@/i18n/config'
 import { pickNoticeText } from '@/server/notices'
 import { sendPushToUsers, type PushMessage, type PushRecipient } from '@/server/push-notifications'
@@ -10,7 +10,7 @@ import { sendPushToUsers, type PushMessage, type PushRecipient } from '@/server/
 
 /** Opens Home with the notice list (HomeNotices reads `notices=1`). */
 export function noticeListHref(locale: string): string {
-  return `${homeHref(locale)}?notices=1`
+  return `${exploreHref(locale)}?notices=1`
 }
 
 /** The push for one recipient, or null when the notice has no text they can read. */

@@ -15,7 +15,7 @@ import { runAfterStartup } from "@/lib/after-startup";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
 import { feedHref as buildFeedHref } from "@/lib/feed-routes";
-import { homeHref as buildHomeHref } from "@/lib/home-routes";
+import { exploreHref as buildExploreHref } from "@/lib/home-routes";
 import { resolveHomeCopy } from "@/i18n/home-copy";
 import {
   buildNativeAwareTabPath as buildNativeAwareTabPathInternal,
@@ -33,7 +33,7 @@ export const GLASS_TAB_BAR_INSET = `calc(${BOTTOM_TAB_BAR_HEIGHT_PX}px + env(saf
 export const UNREAD_BADGE_POLL_INTERVAL_MS = 60_000;
 
 type BottomTabBarProps = {
-  /** "feed" is kept for the post screens: they live under the explore tab now and light it up. */
+  /** Home is the post feed (2026-11-23); "feed" is kept for the post screens, which light Home up. */
   activeRoute: "home" | "feed" | "conversations" | "connect" | "mypage";
   dictionary: AppDictionary;
   locale: string;
@@ -139,8 +139,10 @@ export default function BottomTabBar({
   const conversationsPath = `/${locale}/conversations`;
   const connectPath = `/${locale}/connect`;
   const mypagePath = `/${locale}/mypage`;
-  const feedPath = buildFeedHref(locale);
-  const homePath = buildHomeHref(locale);
+  // Home is the post feed again; the explore tab opens the people cards and
+  // also lights up for the search screen behind them (2026-11-23).
+  const homePath = buildFeedHref(locale);
+  const explorePath = buildExploreHref(locale);
   const conversationsHref = buildNativeAwareTabPath(conversationsPath, searchParams, {
     // Returning from another top-level tab is an intentional request for the
     // list. A live STT room must not be restored as a side effect of mounting
@@ -148,24 +150,22 @@ export default function BottomTabBar({
     skipConversationRestore: activeRoute !== "conversations",
     tabRoot: true,
   });
-  const connectHref = buildNativeAwareTabPath(connectPath, searchParams, { tabRoot: true });
+  const connectHref = buildNativeAwareTabPath(explorePath, searchParams, { tabRoot: true });
   const mypageHref = buildNativeAwareTabPath(mypagePath, searchParams, { tabRoot: true });
   const homeTabHref = buildNativeAwareTabPath(homePath, searchParams, { tabRoot: true });
   // A screen can highlight a tab without living under its route (the post
   // viewer opened from My page): tapping that tab must still go to it.
   const isOnTabRoute = (path: string) => pathname === path || pathname.startsWith(`${path}/`);
   const isHomeActive = activeRoute === "home"
+    || activeRoute === "feed"
     || pathname === homePath
     || pathname.startsWith(`${homePath}/`);
-  // The post feed sits under the explore tab (home/explore plan): its screens light that tab up.
-  const isFeedActive = activeRoute === "feed"
-    || pathname === feedPath
-    || pathname.startsWith(`${feedPath}/`);
   const isConversationsActive = activeRoute === "conversations"
     || pathname === conversationsPath
     || pathname.startsWith(`${conversationsPath}/`);
-  const isConnectActive = isFeedActive
-    || activeRoute === "connect"
+  const isConnectActive = activeRoute === "connect"
+    || pathname === explorePath
+    || pathname.startsWith(`${explorePath}/`)
     || pathname === connectPath
     || pathname.startsWith(`${connectPath}/`);
   const isMypageActive = activeRoute === "mypage"
@@ -398,7 +398,7 @@ export default function BottomTabBar({
       <button
         type="button"
         onClick={() => {
-          if (isOnTabRoute(connectPath)) return;
+          if (isOnTabRoute(explorePath)) return;
           markTopLevelTabSwitch();
           router.replace(connectHref);
         }}

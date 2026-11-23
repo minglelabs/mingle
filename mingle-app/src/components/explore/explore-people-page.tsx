@@ -1,16 +1,15 @@
 "use client";
 
-import { Check, Loader2, MessageCircle, UserPlus, UserRound } from "lucide-react";
+import { Check, Loader2, MessageCircle, Search, UserPlus, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BottomTabBar from "@/components/bottom-tab-bar";
 import MingleWordmark from "@/components/mingle-wordmark";
 import FlagEmoji from "@/components/flag-emoji";
 import HomeNoticeStrip from "@/components/home/home-notices";
 import ProfileStartCard from "@/components/home/profile-start-card";
-import { useAppAccess } from "@/components/onboarding/invite-gate";
 import AccountBadge from "@/components/posts/account-badge";
 import { CompactLanguageLevels } from "@/components/profile-language-levels";
 import {
@@ -29,16 +28,8 @@ import { countryFlagEmoji, getCountryDisplayName } from "@/lib/nationality";
 import { normalizeProfileImageCrop } from "@/lib/profile-image-crop";
 import { requestProfileBasics } from "@/lib/profile-basics";
 import { useStartDirectConversation } from "@/lib/use-start-direct-conversation";
-import { resolveFirstRunCopy } from "@/i18n/first-run-copy";
-import { clearSignedOutHere, isFirstSpeakPending } from "@/lib/first-run";
-import { conversationsHref } from "@/lib/posting-feed-guard";
+import { searchCopy } from "@/i18n/search-copy";
 import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
-import { BOTTOM_TAB_BAR_HEIGHT_PX } from "@/components/bottom-tab-bar";
-import { Mic } from "lucide-react";
-
-const InviteGate = lazy(() => import("@/components/onboarding/invite-gate"));
-const PhoneGate = lazy(() => import("@/components/onboarding/phone-gate"));
-const BannedGate = lazy(() => import("@/components/onboarding/banned-gate"));
 
 /** Pages kept for the session so coming back to the tab neither refetches nor jumps. */
 const pageCache = new Map<string, DiscoveryPage>();
@@ -53,19 +44,19 @@ async function fetchDiscoveryPage(locale: string, cursor: string | null): Promis
   return parseDiscoveryPage(await response.json());
 }
 
-type HomePageProps = {
+type ExplorePeoplePageProps = {
   dictionary: AppDictionary;
   locale: AppLocale;
 };
 
 /**
- * The home tab (docs/home-explore-rooms-plan.md): cards of people to talk to,
- * the other side of the language exchange first and whoever is online on top.
- * A card opens the person's profile. Above the cards sits the notice strip.
- * The required phone number, the invite gate and a permanent ban stop this
- * tab as they stop the chat list.
+ * The explore tab (owner, 2026-11-23: home is the feed again, the people cards
+ * moved here): cards of people to talk to, two per row, the other side of the
+ * language exchange first and whoever is online on top. A card opens the
+ * person's profile. A search bar on top opens the search screen; the notice
+ * strip sits above the cards.
  */
-export default function HomePage({ dictionary, locale }: HomePageProps) {
+export default function ExplorePeoplePage({ dictionary, locale }: ExplorePeoplePageProps) {
   const router = useRouter();
   const { data: session, status: sessionStatus } = useSession();
   const viewerId = typeof session?.user?.id === "string" ? session.user.id.trim() : "";
@@ -77,7 +68,6 @@ export default function HomePage({ dictionary, locale }: HomePageProps) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
-  const { access: appAccess, setAccess: setAppAccess } = useAppAccess(sessionStatus === "authenticated", locale);
 
   useEffect(() => {
     if (sessionStatus !== "authenticated" || !viewerId) return;
@@ -171,32 +161,29 @@ export default function HomePage({ dictionary, locale }: HomePageProps) {
   }, [actionLabels.failed, copy.dailyLimit, startDirectConversation]);
 
   const heading = page?.viewerSide === "korean" ? peopleCopy.headingForKorean : peopleCopy.headingForForeigner;
-  const gated = sessionStatus === "authenticated" && appAccess && !appAccess.allowed;
-  // A new account's "say something" card (see @/lib/first-run): read after mount so the first paint matches the server.
-  const firstRunCopy = useMemo(() => resolveFirstRunCopy(locale), [locale]);
-  const [firstSpeakPending, setFirstSpeakPending] = useState(false);
-  useEffect(() => {
-    // Home is on screen: the "go Home after sign-in" move is finished.
-    clearSignedOutHere();
-    const timer = window.setTimeout(() => setFirstSpeakPending(isFirstSpeakPending()), 0);
-    return () => window.clearTimeout(timer);
-  }, []);
-  const showFirstSpeakCard = firstSpeakPending && sessionStatus === "authenticated" && !gated;
-  const handleFirstSpeak = useCallback(() => {
-    // buildNativeAwareTabPath keeps only the app shell's own params, so `firstSpeak` is added after it.
-    const path = buildNativeAwareTabPath(conversationsHref(locale), new URLSearchParams(window.location.search), { skipConversationRestore: true, tabRoot: true });
-    router.push(`${path}${path.includes("?") ? "&" : "?"}firstSpeak=1`);
+  const searchPlaceholder = searchCopy(locale).searchPlaceholder;
+  const openSearch = useCallback(() => {
+    router.push(buildNativeAwareTabPath(`/${locale}/connect`, new URLSearchParams(window.location.search), { tabRoot: true }));
   }, [locale, router]);
 
   return (
-    <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white" data-qa="home-tab">
+    <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white" data-qa="explore-tab">
       <header
         className="shrink-0 border-b border-gray-100 bg-white px-4 pb-2.5"
         style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)" }}
       >
         <h1 className="flex items-center" aria-label="HashChat"><MingleWordmark /></h1>
+        <button
+          type="button"
+          data-qa="explore-open-search"
+          onClick={openSearch}
+          className="mt-2.5 flex h-10 w-full items-center gap-2 rounded-xl bg-gray-100 px-3 text-left text-[15px] text-gray-400 active:bg-gray-200"
+        >
+          <Search size={17} strokeWidth={2.2} aria-hidden="true" />
+          <span className="truncate">{searchPlaceholder}</span>
+        </button>
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" style={showFirstSpeakCard ? { paddingBottom: 150 } : undefined}>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {sessionStatus === "authenticated" && viewerId ? <ProfileStartCard locale={locale} userId={viewerId} /> : null}
         <HomeNoticeStrip locale={locale} />
         {sessionStatus === "unauthenticated" ? (
@@ -251,39 +238,7 @@ export default function HomePage({ dictionary, locale }: HomePageProps) {
           </section>
         )}
       </div>
-      {showFirstSpeakCard ? (
-        // A new account's first try at speaking, offered among the people (it
-        // used to be only on the Chats tab, where a new account landed).
-        <div
-          data-qa="home-first-speak-card"
-          className="pointer-events-none absolute inset-x-0 z-20 px-4 pb-3"
-          style={{ bottom: `calc(${BOTTOM_TAB_BAR_HEIGHT_PX}px + env(safe-area-inset-bottom, 0px))` }}
-        >
-          <div className="pointer-events-auto rounded-[1.6rem] border border-amber-200 bg-amber-50 px-5 pb-4 pt-4 text-center shadow-[0_16px_36px_rgba(245,158,11,0.18)]">
-            <p className="text-[1.05rem] font-extrabold leading-snug tracking-[-0.02em] text-slate-950">{firstRunCopy.speakTitle}</p>
-            <button
-              type="button"
-              data-qa="home-first-speak"
-              onClick={handleFirstSpeak}
-              className="mt-3 flex h-12 w-full items-center justify-center gap-2.5 rounded-full text-[1rem] font-bold text-white shadow-[0_12px_26px_rgba(245,158,11,0.3)] active:scale-[0.99]"
-              style={{ backgroundImage: "linear-gradient(90deg, #f59e0b 0%, #f97316 100%)" }}
-            >
-              <Mic size={19} strokeWidth={2.4} aria-hidden />
-              <span>{firstRunCopy.speakButton}</span>
-            </button>
-          </div>
-        </div>
-      ) : null}
-      <BottomTabBar activeRoute="home" dictionary={dictionary} locale={locale} />
-      {gated ? (
-        <Suspense fallback={null}>
-          {appAccess.reason === "banned"
-            ? <BannedGate locale={locale} />
-            : appAccess.reason === "needs_phone"
-              ? <PhoneGate locale={locale} onAccess={setAppAccess} />
-              : <InviteGate locale={locale} onAccess={setAppAccess} />}
-        </Suspense>
-      ) : null}
+      <BottomTabBar activeRoute="connect" dictionary={dictionary} locale={locale} />
     </main>
   );
 }
