@@ -240,7 +240,7 @@ export async function planOperatorAvatar(
 export async function generateOperatorAvatar(
   ctx: AdminContext | null,
   userId: string,
-  options: { nonce?: string; now?: Date; fetchImpl?: typeof fetch; feedback?: string | null } = {},
+  options: { nonce?: string; now?: Date; fetchImpl?: typeof fetch; feedback?: string | null; reference?: AvatarReference } = {},
 ): Promise<AvatarGenerationResult> {
   try {
     const now = options.now ?? new Date()
@@ -249,8 +249,12 @@ export async function generateOperatorAvatar(
 
     const spec = pickAvatarSpec(persona, seededRandom(`${userId}:${options.nonce ?? now.getTime()}`))
     const feedback = options.feedback?.trim()
-    const prompt = feedback ? `${spec.prompt}\nStaff feedback on the previous photo of this person, to follow: ${feedback}` : spec.prompt
-    const image = await requestAvatarImage(prompt, { fetchImpl: options.fetchImpl })
+    const prompt = [
+      spec.prompt,
+      ...(feedback ? [`Staff feedback on the previous photo of this person, to follow: ${feedback}`] : []),
+      ...(options.reference ? ['The attached photo is a reference staff added to their feedback: use it the way the feedback says (pose, framing, outfit, place, light, mood or style). The face of anyone in it must not be copied: the person keeps the look described above.'] : []),
+    ].join('\n')
+    const image = await requestAvatarImage(prompt, { fetchImpl: options.fetchImpl, reference: options.reference })
     if (!image.ok) return image
 
     const stored = await setOperatorAvatarFromBytes(ctx, userId, image.bytes, {

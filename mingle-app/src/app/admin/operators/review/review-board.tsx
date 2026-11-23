@@ -1,9 +1,9 @@
 'use client'
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ImageIcon, Loader2, MessageSquarePlus, Pencil, Pin, PinOff, RefreshCw, Send, Sparkles, Trash2 } from 'lucide-react'
+import { ImageIcon, ImagePlus, Loader2, MessageSquarePlus, Pencil, Pin, PinOff, RefreshCw, Send, Sparkles, Trash2, X } from 'lucide-react'
 import type { ReviewItem, ReviewPost, ReviewProfile } from '@/server/operator-review/review'
 import { AdminButton, AdminCard, AdminChip, adminTextareaClassName } from '../../_components/ui'
 import LanguageFlag from '@/components/language-flag'
@@ -221,12 +221,18 @@ function useDrawPolling(active: boolean, check: () => Promise<boolean>) {
   }, [active])
 }
 
-async function sendReview(kind: 'profile' | 'post', id: string, action: Action, feedback: string) {
-  const response = await fetch('/admin/operators/api/review', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ kind, id, action, feedback }),
-  })
+async function sendReview(kind: 'profile' | 'post', id: string, action: Action, feedback: string, image?: File | null) {
+  let init: RequestInit = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind, id, action, feedback }) }
+  if (image) {
+    const form = new FormData()
+    form.set('kind', kind)
+    form.set('id', id)
+    form.set('action', action)
+    form.set('feedback', feedback)
+    form.set('image', image)
+    init = { method: 'POST', body: form }
+  }
+  const response = await fetch('/admin/operators/api/review', init)
   const payload = await response.json().catch(() => ({})) as Record<string, unknown>
   if (!response.ok) throw new Error(typeof payload.error === 'string' ? payload.error : 'request_failed')
   return payload
@@ -276,7 +282,14 @@ function PinButton({ kind, id, pinned }: { kind: 'profile' | 'post'; id: string;
   )
 }
 
-/** 게시 · 삭제 · 재제작, with a feedback note that opens on demand. */
+/** A preview URL for a picked file, revoked when it changes. */
+function useObjectUrl(file: File | null): string | null {
+  const url = useMemo(() => (file ? URL.createObjectURL(file) : null), [file])
+  useEffect(() => () => { if (url) URL.revokeObjectURL(url) }, [url])
+  return url
+}
+
+/** 게시 · 삭제 · 재제작, with a feedback note (and a reference photo) that opens on demand. */
 function ReviewActions({
   busy,
   onAction,
@@ -287,25 +300,52 @@ function ReviewActions({
   busy: Action | null
   /** A job for this card is running; the answers wait until it is done. */
   inProgress?: boolean
-  onAction: (action: Action, feedback: string) => void
+  onAction: (action: Action, feedback: string, image?: File | null) => void
   publishDisabledReason?: string
   /** A post whose photo is not drawn yet: offer to have only the photo drawn (null once it is queued). */
   drawAction?: { requested: boolean; drawing?: boolean }
 }) {
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [feedback, setFeedback] = useState('')
+  const [image, setImage] = useState<File | null>(null)
+  const preview = useObjectUrl(image)
+  const reset = () => { setFeedback(''); setImage(null); setFeedbackOpen(false) }
   return (
     <div className="mt-3 space-y-2">
       {feedbackOpen ? (
-        <textarea
-          value={feedback}
-          onChange={(event) => setFeedback(event.target.value)}
-          rows={3}
-          autoFocus
-          placeholder="피드백 — 게시·삭제·재제작 모두 함께 저장돼요"
-          className={`${adminTextareaClassName} min-h-0`}
-          disabled={busy !== null}
-        />
+        <div className="space-y-2">
+          <textarea
+            value={feedback}
+            onChange={(event) => setFeedback(event.target.value)}
+            rows={3}
+            autoFocus
+            placeholder="피드백 — 게시·삭제·재제작 모두 함께 저장돼요"
+            className={`${adminTextareaClassName} min-h-0`}
+            disabled={busy !== null}
+          />
+          {image && preview ? (
+            <div className="flex items-center gap-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={preview} alt="첨부한 참고 사진" className="h-16 w-16 rounded-lg border border-slate-200 object-cover" />
+              <span className="min-w-0 flex-1 text-xs text-slate-500">재제작·사진 그리기 때 참고 사진으로 같이 보내요.</span>
+              <button type="button" onClick={() => setImage(null)} className="rounded-full p-1 text-slate-500 hover:bg-slate-100" aria-label="첨부 사진 빼기">
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+          ) : (
+            <label className="inline-flex cursor-pointer items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-800">
+              <ImagePlus className="h-4 w-4" aria-hidden="true" />
+              참고 사진 첨부
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="sr-only"
+                disabled={busy !== null}
+                onChange={(event) => { setImage(event.target.files?.[0] ?? null); event.target.value = '' }}
+              />
+            </label>
+          )}
+        </div>
       ) : (
         <button
           type="button"
@@ -332,14 +372,14 @@ function ReviewActions({
         </AdminButton>
         <AdminButton
           disabled={busy !== null || inProgress}
-          onClick={() => { onAction('regenerate', feedback); setFeedback(''); setFeedbackOpen(false) }}
+          onClick={() => { onAction('regenerate', feedback, image); reset() }}
         >
           {busy === 'regenerate' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
           재제작
         </AdminButton>
       </div>
       {drawAction ? (
-        <AdminButton block disabled={busy !== null || drawAction.requested || drawAction.drawing} onClick={() => { onAction('draw', feedback); setFeedback(''); setFeedbackOpen(false) }}>
+        <AdminButton block disabled={busy !== null || drawAction.requested || drawAction.drawing} onClick={() => { onAction('draw', feedback, image); reset() }}>
           {busy === 'draw' || drawAction.drawing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <ImageIcon className="h-4 w-4" aria-hidden="true" />}
           {drawAction.drawing ? '사진 그리는 중…' : drawAction.requested ? 'ChatGPT로 그리기 요청됨' : '글은 그대로, 사진만 그리기'}
         </AdminButton>
@@ -533,12 +573,12 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
     return true
   })
 
-  async function handle(action: Action, feedback: string) {
+  async function handle(action: Action, feedback: string, image?: File | null) {
     if (action === 'delete' && !window.confirm('이 글을 삭제할까요?')) return
     setBusy(action)
     setError(null)
     try {
-      const result = await sendReview('post', post.id, action, feedback)
+      const result = await sendReview('post', post.id, action, feedback, image)
       if ((action === 'regenerate' || action === 'draw') && result.post) setPost(result.post as ReviewPost)
       else onDone()
     } catch (caught) {
@@ -681,12 +721,12 @@ function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDelete
     return true
   })
 
-  async function handle(action: Action, feedback: string) {
+  async function handle(action: Action, feedback: string, image?: File | null) {
     if (action === 'delete' && !window.confirm(`${profile.name ?? profile.handle} 계정과 검토 중인 글을 모두 삭제할까요?`)) return
     setBusy(action)
     setError(null)
     try {
-      const result = await sendReview('profile', profile.userId, action, feedback)
+      const result = await sendReview('profile', profile.userId, action, feedback, image)
       if (action === 'delete') onDeleted()
       else if (action === 'publish') onApproved()
       else if (result.state === 'drawing') setDrawing(true)

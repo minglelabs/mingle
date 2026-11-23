@@ -6,6 +6,7 @@ import { describeAccountLook, pickAnimeStyle, seededRandom, type AvatarSpec } fr
 import { newPostImageKey } from '@/server/posts/post-image-keys'
 import { getPostImage, putPostImage } from '@/server/posts/post-image-storage'
 import { decodePostPhoto, type PostPhotoKind } from './post-photo'
+import { pairImages } from './pair-images'
 
 /** The poster as photos of them show them: their look, and whether a photo of them goes along. */
 export type PostPhotoPerson = { look: string; hasReference: boolean }
@@ -210,10 +211,36 @@ export async function reservePostImageRequest(operatorUserId: string, descriptio
   return { prompt: buildPostImagePrompt(description, place, random, withPerson?.person ?? null, style), reference: withPerson?.reference ?? null }
 }
 
+/**
+ * Adds a photo staff attached to their feedback. With a photo of the poster
+ * already attached, both go in one image (staff's on the left, the poster on
+ * the right), since the image route takes one attachment.
+ */
+export async function withStaffReference(
+  request: { prompt: string; reference: AvatarReference | null },
+  staffReference: AvatarReference,
+): Promise<{ prompt: string; reference: AvatarReference }> {
+  const use = 'Use it the way the staff feedback says (pose, framing, outfit, place, light or mood); the face of anyone in it must not appear in the new photo.'
+  if (!request.reference) {
+    return {
+      prompt: [request.prompt, `The attached photo is a reference staff added to their feedback. ${use}`].join('\n'),
+      reference: staffReference,
+    }
+  }
+  return {
+    prompt: [
+      request.prompt,
+      `About the attachment: it is two photos side by side. RIGHT: the photo of the poster, the "attached photo" above, for who they are. LEFT: a reference staff added to their feedback. ${use} Draw one single photo, never two side by side.`,
+    ].join('\n'),
+    reference: { bytes: await pairImages(staffReference.bytes, request.reference.bytes), mimeType: 'image/jpeg' },
+  }
+}
+
 /** Draws and stores the photo. Null when it cannot be drawn or stored; never throws. */
-export async function drawReservePostImage(operatorUserId: string, description: string): Promise<ReservePostImage | null> {
+export async function drawReservePostImage(operatorUserId: string, description: string, staffReference?: AvatarReference): Promise<ReservePostImage | null> {
   try {
-    const request = await reservePostImageRequest(operatorUserId, description)
+    const base = await reservePostImageRequest(operatorUserId, description)
+    const request = staffReference ? await withStaffReference(base, staffReference) : base
     const drawn = await requestAvatarImage(request.prompt, { reference: request.reference ?? undefined })
     if (!drawn.ok) {
       console.warn('[operator-post-reserve] image_failed', { operatorUserId, error: drawn.error, detail: drawn.detail })
