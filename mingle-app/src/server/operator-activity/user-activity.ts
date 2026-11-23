@@ -43,6 +43,7 @@ const POST_SELECT = {
   id: true,
   authorId: true,
   sourceText: true,
+  imageObjectKey: true,
   isDeleted: true,
   moderationHiddenAt: true,
   archivedAt: true,
@@ -111,6 +112,7 @@ function postFields(post: PostRow | null) {
   return {
     postId: post?.id ?? null,
     postExcerpt: post && !unavailable ? clipActivityText(post.sourceText) : null,
+    postHasImage: Boolean(post && !unavailable && post.imageObjectKey),
     postUnavailable: Boolean(post) && unavailable,
   }
 }
