@@ -482,6 +482,21 @@ const FLAWS = [
 const AVOID_FACE = 'Keep any face proportions exactly as described; do not average them toward a typical face. Avoid an averaged beauty face with big round eyes, a tiny pointed nose and a V-line chin, a face lit more brightly than its surroundings, a retouched or beauty-filtered face, perfectly arranged hair, glossy or airbrushed skin.'
 const AVOID = 'Avoid everything that marks an AI, stock or retouched image: an overall plastic sheen, gritty or noisy micro-texture, excessive fine detail, over-rendered backgrounds, messy individually drawn hair strands, excessive bloom, oversaturated colors, shallow depth of field, a magazine or advertising look.'
 
+/**
+ * A look many real posts have (staff reference 2026-11-23): the whole snap a
+ * little soft and hazy, lights glowing, nothing crisp, posted for the mood.
+ * Post photos only, about one in five; it overrides the sharp-subject lines.
+ */
+export const SOFT_LOOK_CHANCE = 0.2
+export const SOFT_LOOK = 'Overall look: the soft, slightly hazy feel of a quick phone snap posted for the mood. The whole frame is a touch out of focus or softened, the person included (the face a little soft rather than crisp), edges are gentle and nothing is razor sharp; street lamps, signs and windows glow with a soft halo that bleeds slightly into the dark around them, and in low light there is a faint dreamy haze. This softness overrides any sharpness asked for above. Tones stay smooth: no grain, no noise speckle.'
+
+function avoidLine(focusOnPerson: boolean, softLook: boolean): string {
+  let line = focusOnPerson ? AVOID.replace('shallow depth of field, ', '') : AVOID
+  // The soft look wants glowing lights; only an overdone glow is still wrong.
+  if (softLook) line = line.replace('excessive bloom, ', '')
+  return line
+}
+
 /** `count` different flaws for one photo. */
 function pickFlaws(random: Random, count: number): string[] {
   const pool = [...FLAWS]
@@ -506,6 +521,9 @@ export function phonePhotoRealism(
   const offColor = offColorObject(random, sceneKindOf(options.scene ?? '', environment))
   const time = options.pickTime ? pickPhotoTime(random, options.scene ?? '') : null
   const variation = options.pickTime ? pickPhotoVariation(random, options.scene ?? '', people) : null
+  const flaws = pickFlaws(random, people ? 2 : 3)
+  // Rolled last so the picks above stay what they were for a given seed.
+  const softLook = Boolean(options.pickTime) && random() < SOFT_LOOK_CHANCE
   return [
     ...(people ? [options.focusOnPerson ? CAMERA_FOCUSED : CAMERA[0], CAMERA[1]] : [CAMERA_NO_PEOPLE, CAMERA[1]]),
     ...(options.lens ? [LENS[options.lens]] : []),
@@ -522,8 +540,9 @@ export function phonePhotoRealism(
     ...(offColor ? [`Somewhere in the background, small and incidental: ${offColor}. Nothing else is added just for color.`] : ['Add no stray objects just for color; the place keeps only what it really has.']),
     ...(people ? [options.focusOnPerson ? SKIN_CLEAN : SKIN, HAIR[environment], PEOPLE] : []),
     // People taking their own photo frame it with some care, so fewer flaws there.
-    `Imperfections in this photo: ${pickFlaws(random, people ? 2 : 3).join('; ')}.`,
+    `Imperfections in this photo: ${flaws.join('; ')}.`,
+    ...(softLook ? [SOFT_LOOK] : []),
     ...(faces ? [AVOID_FACE] : []),
-    options.focusOnPerson ? AVOID.replace('shallow depth of field, ', '') : AVOID,
+    avoidLine(Boolean(options.focusOnPerson), softLook),
   ].join('\n')
 }
