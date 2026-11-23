@@ -25,9 +25,10 @@ const ERROR_STATUS: Record<OperatorCommentErrorCode, number> = {
 }
 
 /**
- * POST `{ operatorUserId, text, parentId?, replyToUserId? }`: comments on the
+ * POST `{ operatorUserId, text, parentId?, replyToUserId?, translate? }`: comments on the
  * post (or replies to `parentId`) as the operator account. The text is
- * converted to the operator's persona language before it is posted.
+ * converted to the operator's persona language before it is posted, unless
+ * `translate: false` (자동 번역 off) posts it as typed.
  */
 export async function POST(request: Request, context: Ctx) {
   const auth = await requireAdminApi()
@@ -45,7 +46,7 @@ export async function POST(request: Request, context: Ctx) {
   const replyToUserId = body.replyToUserId == null ? null : normalizeActivityId(body.replyToUserId)
 
   try {
-    const result = await commentAsOperator(auth.ctx, { operatorUserId, postId, text: body.text, parentId, replyToUserId })
+    const result = await commentAsOperator(auth.ctx, { operatorUserId, postId, text: body.text, parentId, replyToUserId, translate: body.translate !== false })
     return inboxJson(result, 201)
   } catch (error) {
     if (error instanceof OperatorCommentError) return inboxError(error.code, ERROR_STATUS[error.code])

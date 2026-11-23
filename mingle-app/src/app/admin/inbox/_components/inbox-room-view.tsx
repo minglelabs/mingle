@@ -189,9 +189,11 @@ const RoomMessageList = memo(function RoomMessageList({
 function ReplyComposer({ hint, keyboardOpen, onSend }: {
   hint: string
   keyboardOpen: boolean
-  onSend: (text: string) => void
+  onSend: (text: string, translate: boolean) => void
 }) {
   const [draft, setDraft] = useState('')
+  // 자동 번역: on by default; off sends the text exactly as typed. Stays as set between messages.
+  const [translate, setTranslate] = useState(true)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const trimmedLength = draft.trim().length
   const tooLong = trimmedLength > REPLY_MAX_LENGTH
@@ -199,11 +201,11 @@ function ReplyComposer({ hint, keyboardOpen, onSend }: {
   const submit = useCallback(() => {
     const text = draft.trim()
     if (!text || text.length > REPLY_MAX_LENGTH) return
-    onSend(text)
+    onSend(text, translate)
     setDraft('')
     const textarea = textareaRef.current
     if (textarea) textarea.style.height = ''
-  }, [draft, onSend])
+  }, [draft, onSend, translate])
 
   const onChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
     setDraft(event.target.value)
@@ -223,7 +225,19 @@ function ReplyComposer({ hint, keyboardOpen, onSend }: {
       className="shrink-0 border-t border-slate-200 bg-white px-3 pt-2"
       style={{ paddingBottom: keyboardOpen ? 8 : 'max(env(safe-area-inset-bottom), 8px)' }}
     >
-      <p className="mb-1.5 break-words text-xs text-slate-500">{hint}</p>
+      <div className="mb-1.5 flex items-start justify-between gap-2">
+        <p className="min-w-0 break-words text-xs text-slate-500">{hint}</p>
+        <label className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-slate-600">
+          <input
+            type="checkbox"
+            data-testid="admin-inbox-translate"
+            checked={translate}
+            onChange={(event) => setTranslate(event.target.checked)}
+            className="h-4 w-4 accent-sky-500"
+          />
+          자동 번역
+        </label>
+      </div>
       <div className="flex items-end gap-2">
         <label htmlFor="admin-inbox-reply" className="sr-only">답장 입력</label>
         <textarea
@@ -239,7 +253,7 @@ function ReplyComposer({ hint, keyboardOpen, onSend }: {
             }
           }}
           rows={1}
-          placeholder="어떤 언어로 써도 번역해서 보냅니다"
+          placeholder={translate ? '어떤 언어로 써도 번역해서 보냅니다' : '쓴 그대로 보냅니다 (번역 안 함)'}
           className="max-h-36 min-h-11 flex-1 resize-none rounded-2xl border border-slate-300 bg-white px-3 py-2.5 text-base leading-6 text-slate-900 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200"
         />
         <button
@@ -504,7 +518,7 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ text: reply.text, as: operatorId, clientRequestId: reply.requestId }),
+        body: JSON.stringify({ text: reply.text, as: operatorId, clientRequestId: reply.requestId, translate: reply.translate !== false }),
       })
       const payload = await response.json().catch(() => null) as { message?: SendOperatorMessageResult; error?: string } | null
       if (!response.ok || !payload?.message) {
@@ -520,9 +534,9 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
     }
   }, [conversationId, operatorId])
 
-  const onSend = useCallback((text: string) => {
+  const onSend = useCallback((text: string, translate: boolean) => {
     scrollToBottomRef.current = true
-    void sendReply({ requestId: createReplyRequestId(), text, createdAtMs: Date.now(), status: 'sending', error: null })
+    void sendReply({ requestId: createReplyRequestId(), text, createdAtMs: Date.now(), status: 'sending', error: null, translate })
   }, [sendReply])
 
   const discardReply = useCallback((requestId: string) => {

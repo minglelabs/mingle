@@ -381,6 +381,8 @@ export async function commentAsOperator(ctx: AdminContext, input: {
   text: string
   parentId?: string | null
   replyToUserId?: string | null
+  /** False: staff turned 자동 번역 off; the text is posted exactly as typed. Default true. */
+  translate?: boolean
 }): Promise<OperatorCommentResult> {
   const draft = typeof input.text === 'string' ? input.text.trim() : ''
   if (!draft) throw new OperatorCommentError('text_required')
@@ -397,22 +399,28 @@ export async function commentAsOperator(ctx: AdminContext, input: {
   if (!post) throw new OperatorCommentError('not_found')
 
   let conversion: Awaited<ReturnType<typeof convertStaffCommentDraft>>
-  try {
-    // Casual comment language, with the post, thread and people as context.
-    conversion = await convertStaffCommentDraft({
-      operatorUserId, postId: post.id, text: draft, parentId: input.parentId ?? null, replyToUserId: input.replyToUserId ?? null,
-    })
-  } catch (error) {
-    if (error instanceof PersonaLanguageMissingError) throw new OperatorCommentError('persona_language_missing')
-    if (error instanceof PersonaConversionFailedError) throw new OperatorCommentError('conversion_failed')
-    throw error
+  if (input.translate === false) {
+    // 자동 번역 off: the staff's own words, in whatever language they typed.
+    conversion = { text: draft, language: '', converted: false, sourceLanguage: null }
+  } else {
+    try {
+      // Casual comment language, with the post, thread and people as context.
+      conversion = await convertStaffCommentDraft({
+        operatorUserId, postId: post.id, text: draft, parentId: input.parentId ?? null, replyToUserId: input.replyToUserId ?? null,
+      })
+    } catch (error) {
+      if (error instanceof PersonaLanguageMissingError) throw new OperatorCommentError('persona_language_missing')
+      if (error instanceof PersonaConversionFailedError) throw new OperatorCommentError('conversion_failed')
+      throw error
+    }
   }
   const text = conversion.text.trim()
   if (!text) throw new OperatorCommentError('conversion_failed')
   if (text.length > OPERATOR_COMMENT_MAX_LENGTH) throw new OperatorCommentError('text_too_long')
 
-  const verdict = await detectSourceLanguageVerdict({ text, clientHint: conversion.language, provider: operatorTextProvider() })
+  const verdict = await detectSourceLanguageVerdict({ text, clientHint: conversion.language || null, provider: operatorTextProvider() })
   const detected = verdict.language
+  const postedLanguage = conversion.language || detected || ''
   const mixed = Boolean(detected) && verdict.mixed
   const translationRows = detected && detected.trim()
     ? (
@@ -453,7 +461,7 @@ export async function commentAsOperator(ctx: AdminContext, input: {
     operatorUserId,
     targetType: 'comment',
     targetId: comment.id,
-    metadata: { postId: post.id, parentId: comment.parentId, converted: conversion.converted, language: conversion.language },
+    metadata: { postId: post.id, parentId: comment.parentId, converted: conversion.converted, language: postedLanguage, translate: input.translate !== false },
   })
 
   // Answering is reading: this operator's activity on the post is no longer new.
@@ -465,5 +473,5 @@ export async function commentAsOperator(ctx: AdminContext, input: {
     })
   }
 
-  return { commentId: comment.id, parentId: comment.parentId, text, language: conversion.language, converted: conversion.converted }
+  return { commentId: comment.id, parentId: comment.parentId, text, language: postedLanguage, converted: conversion.converted }
 }

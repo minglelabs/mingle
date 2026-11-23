@@ -11,7 +11,8 @@ export const dynamic = 'force-dynamic'
 type RouteContext = { params: Promise<{ conversationId: string }> }
 
 /**
- * Reply AS an operator account (or as Hamzzi). Body: `{ text, as?, clientRequestId? }`.
+ * Reply AS an operator account (or as Hamzzi). Body: `{ text, as?, clientRequestId?, translate? }`;
+ * `translate: false` (자동 번역 off) sends the text as typed instead of converting it.
  * `as` is required when the room has several operators. A retry with the
  * same `clientRequestId` returns the stored reply (200) instead of sending
  * twice (201 for a new reply). A failed persona-language translation is 503
@@ -49,6 +50,7 @@ export async function POST(request: Request, context: RouteContext) {
       conversationId: access.room.conversationId,
       text: body.text,
       clientRequestId,
+      translate: body.translate !== false,
     }
     // Hamzzi: an official account, sent in the language the room is talking in.
     const result = isStaffAnsweredOfficialId(input.operatorUserId)
