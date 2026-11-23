@@ -1,7 +1,7 @@
 import { SchemaType, type ResponseSchema } from '@google/generative-ai'
 import { getSttLanguageDisplayName } from '@/lib/stt-languages'
 import { prisma } from '@/lib/prisma'
-import { generateJson, operatorTextModel } from '@/server/llm/generate-json'
+import { generateJson, OPERATOR_TEXT_MODEL } from '@/server/llm/generate-json'
 import { ageOn } from '@/server/operator-auto-reply/generate'
 import { personaLanguageOf } from '@/server/operator-posts/operator-check'
 import {
@@ -21,8 +21,9 @@ import { isUndetectableText } from '@/server/translation/detect-source-language'
  * actually type it: spoken, casual comment language, never written or
  * literary style (staff, 2026-11-23: "世の中には変態がどれだけ多いことか…"
  * read like a book). The model sees who writes, who it answers, the post and
- * the thread, so the tone fits the conversation. Same model as operator
- * comments: Claude Opus 5.5 through 2026-12-12 KST, Haiku 5.5 after.
+ * the thread, so the tone fits the conversation. Claude Haiku 5.5: staff
+ * already write casually, so this is translation with a tone rule, not
+ * writing (staff, 2026-11-23; Opus stays for text operators write themselves).
  */
 const CALL_TIMEOUT_MS = 60_000
 /** Root comments shown as context for a new root comment. */
@@ -103,7 +104,7 @@ export async function convertCommentDraft(input: CommentConversionInput, options
       input: { ...input, targetLanguage: undefined },
       responseSchema: RESPONSE_SCHEMA,
       validate: validateAnswer,
-      model: operatorTextModel(options.now ?? new Date()),
+      model: OPERATOR_TEXT_MODEL,
       provider: 'direct',
       maxOutputTokens: 1024,
       timeoutMs: CALL_TIMEOUT_MS,

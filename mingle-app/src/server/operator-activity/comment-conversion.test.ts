@@ -34,20 +34,14 @@ describe('staff comment conversion', () => {
     expect(instructions).toMatch(/Do not add facts/)
   })
 
-  it('sends the writer, the addressee, the post and the thread, on the operator text model', async () => {
+  it('sends the writer, the addressee, the post and the thread, on Haiku', async () => {
     const generate = vi.fn(async () => ({ sourceLanguage: 'ko', text: '世の中ほんと変なやつ多いからね…' }))
     const result = await convertCommentDraft(input, { now: new Date('2026-11-23T12:00:00Z'), generate: generate as never })
     expect(result).toEqual({ text: '世の中ほんと変なやつ多いからね…', language: 'ja', converted: true, sourceLanguage: 'ko' })
     const request = (generate.mock.calls[0] as unknown as [{ input: Record<string, unknown>; model: string }])[0]
-    expect(request.model).toBe('claude-opus-5-5')
+    expect(request.model).toBe('claude-haiku-5-5')
     expect(request.input).toMatchObject({ draft: input.draft, writer: input.writer, addressee: input.addressee, post: input.post, thread: input.thread })
     expect(request.input.targetLanguage).toBeUndefined()
-  })
-
-  it('moves to Haiku after 2026-12-12 KST', async () => {
-    const generate = vi.fn(async () => ({ sourceLanguage: 'ko', text: 'うん' }))
-    await convertCommentDraft(input, { now: new Date('2026-12-13T00:00:00+09:00'), generate: generate as never })
-    expect((generate.mock.calls[0] as unknown as [{ model: string }])[0].model).toBe('claude-haiku-5-5')
   })
 
   it('keeps a draft already in the persona language, and emoji-only drafts, untouched', async () => {
