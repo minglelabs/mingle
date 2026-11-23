@@ -1,16 +1,16 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { Heart, MessageCircle } from 'lucide-react'
+import { Heart } from 'lucide-react'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/server/admin/guard'
 import { FEED_PAGE_SELECT, getFeed, type FeedResult } from '@/server/feed/feed-service'
 import { loadStarterFeed, type StarterSegment } from '@/server/feed/starter-feed'
 import { loadOperatorPostStats } from '@/server/operator-post-stats/load'
-import { visibleCommentsWhere } from '@/server/posts/comment-visibility'
 import { visiblePostWhere } from '@/server/posts/post-visibility'
 import { OperatorPostStatsRow } from '../_components/operator-post-stats-row'
-import { OperatorsMain } from '../operators/_components/operator-ui'
-import { ZoomableAvatar } from '../operators/_components/zoomable-avatar'
+import { adminProfileHref } from '../_lib/profile-href'
+import { InlinePostComments } from '../activity/_components/inline-post-comments'
+import { OperatorAvatar, OperatorsMain } from '../operators/_components/operator-ui'
 import { OperatorPostEditor } from './_components/operator-post-editor'
 import { PostBody } from './_components/post-body'
 import { ZoomableImage } from './_components/zoomable-image'
@@ -28,7 +28,6 @@ const STARTER_VIEWS: ReadonlyArray<{ key: string; segment: StarterSegment; label
   { key: 'new-ko', segment: 'ko', label: '신규 한국인' },
   { key: 'new-foreign', segment: 'foreign', label: '신규 외국인' },
 ]
-const COMMENTS_PER_POST = 5
 /** `as=latest`: every visible post, newest first (not the recommended order). */
 const LATEST_VIEW = 'latest'
 
@@ -101,15 +100,6 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
     post.id,
     post.translations.filter((translation) => translation.bodyVersion === post.bodyVersion).map((translation) => ({ language: translation.language, text: translation.text! })),
   ]))
-  const comments = postIds.length
-    ? await prisma.postComment.findMany({
-        where: { postId: { in: postIds }, moderationHiddenAt: null, author: visibleCommentsWhere(postIds[0], viewer?.id ?? null).author },
-        orderBy: { createdAt: 'asc' },
-        select: { id: true, postId: true, sourceText: true, parentId: true, author: { select: { name: true, image: true } } },
-      })
-    : []
-  const commentsByPost = new Map<string, typeof comments>()
-  for (const comment of comments) commentsByPost.set(comment.postId, [...(commentsByPost.get(comment.postId) ?? []), comment])
   const statsByPost = await loadOperatorPostStats({ postIds: feed.posts.filter((post) => post.author.isOperator).map((post) => post.id) })
 
   const now = new Date()
@@ -119,6 +109,8 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
     const text = search.toString()
     return text ? `/admin/feed?${text}` : '/admin/feed'
   }
+  // The profile returns to this page of this feed.
+  const here = query({ as: as?.trim() || null, cursor: cursor?.trim() || null })
 
   return (
     <OperatorsMain>
@@ -163,16 +155,18 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
       ) : (
         <ul className="mt-3 space-y-3">
           {feed.posts.map((post) => {
-            const postComments = commentsByPost.get(post.id) ?? []
+            const profile = adminProfileHref(post.author.id, here)
             return (
               <li key={post.id} className="rounded-2xl border border-slate-200 bg-white p-4">
                 {starterOrder.has(post.id) ? (
                   <p className="mb-2 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">첫 피드 {starterOrder.get(post.id)}번</p>
                 ) : null}
                 <div className="flex items-center gap-3">
-                  <ZoomableAvatar image={post.author.image} name={post.author.name} size={40} languages={authorLanguages.get(post.author.id)} />
+                  <Link href={profile} aria-label={`${post.author.name || post.author.handle} 프로필`} className="shrink-0 rounded-full">
+                    <OperatorAvatar image={post.author.image} name={post.author.name} size={40} languages={authorLanguages.get(post.author.id)} />
+                  </Link>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-slate-900">{post.author.name || '이름 없음'}</p>
+                    <Link href={profile} className="block truncate text-sm font-semibold text-slate-900">{post.author.name || '이름 없음'}</Link>
                     <p className="truncate text-xs text-slate-500">
                       @{post.author.handle} · {relativeTime(post.publishedAt, now)}
                       {post.sourceLanguage ? ` · ${post.sourceLanguage}` : ''}
@@ -218,27 +212,10 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
 
                 <div className="mt-3 flex items-center gap-4 text-sm text-slate-600">
                   <span className="inline-flex items-center gap-1"><Heart className="h-4 w-4" aria-hidden="true" />{post.likeCount}</span>
-                  <Link href={`/admin/activity/posts/${post.id}`} className="inline-flex items-center gap-1">
-                    <MessageCircle className="h-4 w-4" aria-hidden="true" />{post.commentCount}
-                  </Link>
                 </div>
                 <OperatorPostStatsRow stats={statsByPost.get(post.id)} className="mt-2" />
-
-                {postComments.length ? (
-                  <ul className="mt-3 space-y-2 border-t border-slate-100 pt-3">
-                    {postComments.slice(0, COMMENTS_PER_POST).map((comment) => (
-                      <li key={comment.id} className={`flex items-start gap-2 ${comment.parentId ? 'pl-8' : ''}`}>
-                        <ZoomableAvatar image={comment.author.image} name={comment.author.name} size={24} />
-                        <p className="min-w-0 flex-1 break-words text-sm text-slate-800">
-                          <span className="font-semibold">{comment.author.name || '이름 없음'}</span> {comment.sourceText}
-                        </p>
-                      </li>
-                    ))}
-                    {postComments.length > COMMENTS_PER_POST ? (
-                      <li><Link href={`/admin/activity/posts/${post.id}`} className="text-xs font-medium text-sky-700">댓글 {postComments.length}개 모두 보기</Link></li>
-                    ) : null}
-                  </ul>
-                ) : null}
+                {/* Replies go out as the post's own operator, else as the account whose feed this is (or the thread picks one). */}
+                <InlinePostComments postId={post.id} operatorUserId={post.author.isOperator ? post.author.id : viewer?.id ?? null} commentCount={post.commentCount} />
               </li>
             )
           })}
