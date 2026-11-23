@@ -47,6 +47,8 @@ export type ActivityItem = {
   postId: string | null
   /** Start of the post's text; null when it has none or the post is gone. */
   postExcerpt: string | null
+  /** The post has a photo (shown as a small thumbnail). */
+  postHasImage?: boolean
   /** The post was deleted, hidden or archived: there is no thread to open. */
   postUnavailable: boolean
   /** comment / comment_reply: the actor's new comment. comment_like: the operator's liked comment. */
@@ -131,6 +133,7 @@ const ACTIVITY_ROW_SELECT = {
   post: {
     select: {
       sourceText: true,
+      imageObjectKey: true,
       isDeleted: true,
       moderationHiddenAt: true,
       archivedAt: true,
@@ -189,6 +192,7 @@ function toActivityItem(row: ActivityRow): ActivityItem {
     actor: toActivityPerson(row.actor!),
     postId: row.postId,
     postExcerpt: post && !postUnavailable ? clipActivityText(post.sourceText) : null,
+    postHasImage: Boolean(post && !postUnavailable && post.imageObjectKey),
     postUnavailable,
     commentId: row.commentId,
     commentText: commentVisible ? commentVisible.sourceText.trim() || null : null,

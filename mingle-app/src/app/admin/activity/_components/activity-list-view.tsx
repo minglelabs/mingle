@@ -117,7 +117,13 @@ function ActivityCard({ item, nowMs, korean, active }: { item: ActivityItem; now
         ) : item.commentUnavailable ? (
           <span className="mt-1.5 text-xs text-slate-400">삭제되었거나 숨겨진 댓글입니다.</span>
         ) : null}
-        {item.postExcerpt ? (
+        {item.postHasImage && item.postId ? (
+          <span className="mt-1.5 flex min-w-0 items-center gap-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={`/admin/api/posts/${encodeURIComponent(item.postId)}/image`} alt="글 사진" loading="lazy" className="h-11 w-11 shrink-0 rounded-lg border border-slate-200 bg-slate-100 object-cover" />
+            <span className="line-clamp-2 min-w-0 break-words text-xs text-slate-500">글 · {item.postExcerpt ?? '📷 사진'}</span>
+          </span>
+        ) : item.postExcerpt ? (
           <span className="mt-1 line-clamp-1 break-words text-xs text-slate-500">글 · {item.postExcerpt}</span>
         ) : item.postUnavailable ? (
           <span className="mt-1 text-xs text-slate-400">삭제되었거나 숨겨진 글입니다.</span>
