@@ -33,8 +33,21 @@ describe('post engagement plan', () => {
     for (const plan of plans.slice(0, 50)) {
       expect([...plan.likes].sort((a, b) => a - b)).toEqual(plan.likes)
       expect(Math.min(...plan.likes)).toBeGreaterThanOrEqual(3 * 60_000)
-      expect(Math.max(...plan.likes)).toBeLessThanOrEqual(36 * 3_600_000)
+      expect(Math.max(...plan.likes)).toBeLessThanOrEqual(90 * 3_600_000)
     }
+  })
+
+  it('keeps reactions coming for days instead of all in the first hour', () => {
+    const plans = Array.from({ length: 2000 }, (_, index) => planPostEngagement(`spread-${index}`))
+    const likes = plans.flatMap((plan) => plan.likes)
+    const share = (from: number, to: number) => likes.filter((at) => at >= from && at < to).length / likes.length
+    expect(share(0, 3_600_000)).toBeCloseTo(0.22, 1)
+    expect(share(24 * 3_600_000, 91 * 3_600_000)).toBeCloseTo(0.22, 1)
+    expect(share(48 * 3_600_000, 91 * 3_600_000)).toBeGreaterThan(0.05)
+    const comments = plans.flatMap((plan) => plan.comments)
+    expect(comments.filter((at) => at >= 24 * 3_600_000).length / comments.length).toBeCloseTo(0.25, 1)
+    expect(Math.max(...comments)).toBeLessThanOrEqual(90 * 3_600_000)
+    expect(Math.min(...comments)).toBeGreaterThanOrEqual(8 * 60_000)
   })
 })
 
