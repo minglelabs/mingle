@@ -15,6 +15,9 @@ import { OperatorPostStatsRow } from '../../../_components/operator-post-stats-r
 import { OperatorPostEditor } from '../../../feed/_components/operator-post-editor'
 import { PostTakedownButton } from '../../../feed/_components/post-takedown-button'
 import { PublishedPostText } from './published-post-text'
+import { ProfileShareButton } from './profile-share-button'
+import { ensureReferralCode } from '@/server/referral'
+import { resolveDefaultInviteMessageLocale } from '@/i18n/invite-ticket-copy'
 import { InlinePostComments } from '../../../activity/_components/inline-post-comments'
 import { OperatorsMain } from '../../_components/operator-ui'
 import { ZoomableAvatar } from '../../_components/zoomable-avatar'
@@ -91,12 +94,14 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
     where: { id: userId },
     select: {
       id: true, name: true, handle: true, image: true, bio: true, birthDate: true, locationCity: true, locationCountry: true, gender: true, isOperator: true,
-      primaryLanguages: true, interestLanguages: true, interestLanguageLevels: true, isDeleted: true,
+      primaryLanguages: true, interestLanguages: true, interestLanguageLevels: true, isDeleted: true, referralCode: true,
       operatorAccount: { select: { personaGender: true, reviewState: true } },
       _count: { select: { followerRelations: true, followingRelations: true } },
     },
   })
   if (!user) notFound()
+  // Like a real person's share screen, the shared link carries the account's own invite code (made on first share).
+  const shareInviteCode = user.isOperator ? await ensureReferralCode(user.id).catch(() => user.referralCode) : user.referralCode
   const operator = user.isOperator
   const tab: Tab = operator && query.tab === 'review' ? 'review' : 'published'
 
@@ -150,7 +155,17 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
         <div className="mb-3 flex items-center justify-between text-sm">
           <AdminBackLink href={back ?? '/admin/operators/review'} className="font-semibold text-sky-700">{!back || back.startsWith('/admin/operators/review') ? '‹ 검토' : '‹ 뒤로'}</AdminBackLink>
           {operator ? (
-            <Link href={withBack(`/admin/operators/${encodeURIComponent(user.id)}?from=review`, href({}))} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-700">프로필 편집</Link>
+            <div className="flex items-center gap-2">
+              <ProfileShareButton
+                userId={user.id}
+                name={user.name ?? user.handle}
+                handle={user.handle}
+                origin={(process.env.NEXT_PUBLIC_SITE_URL ?? '').trim().replace(/\/+$/, '')}
+                inviteCode={shareInviteCode}
+                messageLocale={resolveDefaultInviteMessageLocale(user.primaryLanguages[0] ?? 'en')}
+              />
+              <Link href={withBack(`/admin/operators/${encodeURIComponent(user.id)}?from=review`, href({}))} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-700">프로필 편집</Link>
+            </div>
           ) : (
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">실제 유저</span>
           )}
