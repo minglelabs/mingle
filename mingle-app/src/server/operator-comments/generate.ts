@@ -1,6 +1,6 @@
 import { SchemaType, type ResponseSchema } from '@google/generative-ai'
 import { getSttLanguageDisplayName } from '@/lib/stt-languages'
-import { generateJson, type GenerateJsonRequest, OPERATOR_POST_TEXT_MODEL, OPERATOR_TEXT_MODEL } from '@/server/llm/generate-json'
+import { generateJson, type GenerateJsonRequest, OPERATOR_TEXT_OPUS_UNTIL, operatorTextModel } from '@/server/llm/generate-json'
 import { IMMERSION_RULE, reserveLearnerPlan, reservePosterProfile, type LearningLanguage } from '@/server/operator-post-reserve/generate'
 import { hasContactDetails } from '@/server/operators/persona-rules'
 
@@ -15,14 +15,12 @@ export const OPERATOR_COMMENT_GENERATED_MAX_CHARS = 200
 const CALL_TIMEOUT_MS = 60_000
 /**
  * Every operator comment and reply goes to the Anthropic API, never the ChatGPT
- * pool. Claude Opus 5.5 through 2026-12-12 (KST), Claude Haiku 5.5 after
- * (staff decided 2026-11-23: a reply that reads machine-made broke a real
- * user's immersion).
+ * pool: Opus 5.5 through 2026-12-12 (KST), Haiku 5.5 after (operatorTextModel).
  */
-export const OPERATOR_COMMENT_OPUS_UNTIL = new Date('2026-12-13T00:00:00+09:00')
+export const OPERATOR_COMMENT_OPUS_UNTIL = OPERATOR_TEXT_OPUS_UNTIL
 
 export function operatorCommentDefaultModel(now: Date = new Date()): string {
-  return now.getTime() < OPERATOR_COMMENT_OPUS_UNTIL.getTime() ? OPERATOR_POST_TEXT_MODEL : OPERATOR_TEXT_MODEL
+  return operatorTextModel(now)
 }
 
 /** Comments between operator accounts (OPERATOR_COMMENT_MODEL overrides). */

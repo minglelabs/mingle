@@ -29,6 +29,18 @@ export const DEFAULT_JSON_MODEL = OPENAI_TEXT_MODEL
 export const OPERATOR_POST_TEXT_MODEL = 'claude-opus-5-5'
 export const OPERATOR_TEXT_MODEL = 'claude-haiku-5-5'
 
+/**
+ * Comments, replies to real people, chat auto-replies and persona drafts run
+ * on Claude Opus 5.5 through 2026-12-12 (KST), Claude Haiku 5.5 after (staff
+ * decided 2026-11-23: text that reads machine-made breaks a real user's
+ * immersion).
+ */
+export const OPERATOR_TEXT_OPUS_UNTIL = new Date('2026-12-13T00:00:00+09:00')
+
+export function operatorTextModel(now: Date = new Date()): string {
+  return now.getTime() < OPERATOR_TEXT_OPUS_UNTIL.getTime() ? OPERATOR_POST_TEXT_MODEL : OPERATOR_TEXT_MODEL
+}
+
 /** Haiku has no server-side refusal fallback; the bigger models take `fallbacks: 'default'`. */
 export function claudeSupportsServerFallback(model: string): boolean {
   return !model.startsWith('claude-haiku-')
