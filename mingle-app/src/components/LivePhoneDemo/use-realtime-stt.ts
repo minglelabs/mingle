@@ -5402,6 +5402,8 @@ export default function useRealtimeSTT({
       text, sourceLanguage: lang, targetLanguages, isFinal: true,
       sessionKey, clientContext, clientMessageId: utteranceId,
       sttDurationMs: options?.sttDurationMs,
+      // Typed messages are billed per message; spoken turns are covered by the voice minute.
+      ...(options?.reason === 'manual_text_input' ? { typedMessage: true } : {}),
       currentTurnPreviousState,
       ...(options?.sttLanguages?.length ? { sttLanguages: options.sttLanguages } : {}),
       ...(bubbleTail?.translatedSource ? { bubbleTail } : {}),

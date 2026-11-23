@@ -2302,6 +2302,8 @@ export default function useRealtimeSTT({
       excludeUtteranceId?: string
       sttDurationMs?: number
       totalDurationMs?: number
+      /** A typed message (billed per message); spoken turns are covered by the voice minute. */
+      typedMessage?: boolean
     },
   ): Promise<TranslateApiResult> => {
     const apiPath = buildClientApiPath('/translate/finalize')
@@ -2332,6 +2334,7 @@ export default function useRealtimeSTT({
       if (typeof options?.sttDurationMs === 'number' && Number.isFinite(options.sttDurationMs) && options.sttDurationMs >= 0) {
         body.sttDurationMs = Math.floor(options.sttDurationMs)
       }
+      if (options?.typedMessage) body.typedMessage = true
       if (typeof options?.totalDurationMs === 'number' && Number.isFinite(options.totalDurationMs) && options.totalDurationMs >= 0) {
         body.totalDurationMs = Math.floor(options.totalDurationMs)
       }
@@ -2744,6 +2747,7 @@ export default function useRealtimeSTT({
       currentTurnPreviousState,
       excludeUtteranceId: utteranceId,
       sttDurationMs: options?.sttDurationMs,
+      typedMessage: options?.reason === 'manual_text_input',
     }).then(result => {
       if (isStaleConversationFinalize()) {
         if (enableTtsRef.current && ttsTargetLang) {

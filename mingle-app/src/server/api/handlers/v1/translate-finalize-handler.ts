@@ -422,6 +422,11 @@ async function synthesizeTtsInline(args: {
 
 // ─── Main handler ────────────────────────────────────────────────────────────
 
+/** True when the client says this final is a typed message (not a spoken turn). */
+export function isTypedFinalizeRequest(body: { typedMessage?: unknown; sttDurationMs?: unknown }): boolean {
+  return body.typedMessage === true && !(typeof body.sttDurationMs === 'number' && body.sttDurationMs > 0)
+}
+
 export async function handleTranslateFinalizeV1(request: NextRequest) {
   if (request.headers.has(EXPECTED_ACCOUNT_HEADER)
     && !matchesExpectedAccount(request, await getServerSession(getAuthOptions()))) {
@@ -584,8 +589,11 @@ async function runTranslateFinalize(
   // Coins (docs/coin-iap-spec.md 3.5, 4.3): the sender pays for translation, and
   // a sender with no coins gets no translation (the message still goes out untranslated).
   const coinBillingUserId = await resolveCoinBillingUserId()
-  // Spoken turns carry their STT duration; partials are spoken by definition.
-  const isTypedMessage = isFinal && !(typeof body.sttDurationMs === 'number' && body.sttDurationMs > 0)
+  // Only a message the client marks as typed is billed per message. A spoken
+  // final often arrives without an STT duration (the turn-start mark is one
+  // shared ref, cleared by the previous final), so "no duration" must not mean
+  // "typed": that billed spoken turns 0.3 Hash each on top of the voice minute.
+  const isTypedMessage = isFinal && isTypedFinalizeRequest(body)
   // While typed-message translation is free (a zero rate), an empty wallet does not stop it.
   const typedTranslationIsFree = Boolean(coinBillingUserId) && isTypedMessage
     && await isCoinUsageFree({ kind: 'translation', units: { message: 1 } })
