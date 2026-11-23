@@ -54,9 +54,9 @@ describe('ReviewBoard at phone width', () => {
     expect(html).toMatch(/class="flex shrink-0 items-center"/)
   })
 
-  it('offers 게시, 삭제, 재제작 and a reorder button on every card', () => {
+  it('offers 게시, 삭제, 전체 재제작 and a reorder button on every card', () => {
     const html = render([profileItem, postItem])
-    for (const label of ['게시', '삭제', '재제작']) {
+    for (const label of ['게시', '삭제', '전체 재제작']) {
       expect(html.split(`>${label}<`).length - 1).toBe(2)
     }
     expect(html).toContain('맨 앞으로')

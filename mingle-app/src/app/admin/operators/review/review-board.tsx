@@ -17,7 +17,7 @@ import { PhotoRedrawPanel } from '../../feed/_components/photo-redraw-panel'
 import { koreanLanguageName } from '../_lib/options'
 import { reviewImageUrl } from './review-image-url'
 
-type Action = 'publish' | 'delete' | 'regenerate' | 'draw'
+type Action = 'publish' | 'delete' | 'regenerate' | 'draw' | 'redraw_photo'
 
 const STAFF_LANGUAGE = 'ko'
 
@@ -395,7 +395,7 @@ function ReviewActions({
           onClick={() => { onAction('regenerate', feedback, image); reset() }}
         >
           {busy === 'regenerate' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
-          재제작
+          전체 재제작
         </AdminButton>
       </div>
       {drawAction ? (
@@ -482,6 +482,96 @@ export function StaffBio({ userId, bio, sourceLanguage, className = '' }: { user
       <StaffTranslationChips sourceLanguage={sourceLanguage} translation={translation} />
       {error ? <p className="mt-1 text-xs text-rose-600">{error}</p> : null}
     </div>
+  )
+}
+
+/**
+ * On a post's photo: 사진 재제작 redraws only the photo right away (the text,
+ * the persona and this photo go along); the speech-bubble button opens a
+ * feedback box (text, and a pasted or picked photo) sent with the redo.
+ */
+function PhotoRedoOverlay({ drawing, disabled, onRedo }: { drawing: boolean; disabled: boolean; onRedo: (feedback: string, image: File | null) => void }) {
+  const [open, setOpen] = useState(false)
+  const [feedback, setFeedback] = useState('')
+  const [image, setImage] = useState<File | null>(null)
+  const preview = useObjectUrl(image)
+  const send = (withFeedback: boolean) => {
+    onRedo(withFeedback ? feedback.trim() : '', withFeedback ? image : null)
+    setOpen(false)
+    setFeedback('')
+    setImage(null)
+  }
+  if (drawing) {
+    return (
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl bg-black/35">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-xs font-semibold text-slate-800">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />사진 다시 그리는 중 (1~3분)
+        </span>
+      </div>
+    )
+  }
+  return (
+    <>
+      <div className="absolute right-2 top-2 flex gap-1.5">
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => send(false)}
+          className="inline-flex h-9 items-center gap-1 rounded-full bg-black/60 px-3 text-xs font-semibold text-white backdrop-blur active:bg-black/75 disabled:opacity-50"
+        >
+          <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />사진 재제작
+        </button>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+          aria-label="피드백 쓰고 사진 재제작"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur active:bg-black/75 disabled:opacity-50"
+        >
+          <MessageSquarePlus className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </div>
+      {open ? (
+        <div className="absolute inset-x-2 top-12 z-10 space-y-2 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+          <textarea
+            value={feedback}
+            onChange={(event) => setFeedback(event.target.value)}
+            onPaste={(event) => {
+              const pasted = pastedImage(event.clipboardData)
+              if (!pasted) return
+              event.preventDefault()
+              setImage(pasted)
+            }}
+            rows={3}
+            autoFocus
+            placeholder="사진 피드백 (사진은 붙여넣기도 돼요)"
+            className={`${adminTextareaClassName} min-h-0`}
+          />
+          {image && preview ? (
+            <div className="flex items-center gap-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={preview} alt="첨부한 참고 사진" className="h-14 w-14 rounded-lg border border-slate-200 object-cover" />
+              <span className="min-w-0 flex-1 text-xs text-slate-500">참고 사진으로 같이 보내요.</span>
+              <button type="button" onClick={() => setImage(null)} className="rounded-full p-1 text-slate-500 hover:bg-slate-100" aria-label="첨부 사진 빼기">
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+          ) : (
+            <label className="inline-flex cursor-pointer items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-800">
+              <ImagePlus className="h-4 w-4" aria-hidden="true" />참고 사진 첨부 (또는 붙여넣기)
+              <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => { setImage(event.target.files?.[0] ?? null); event.target.value = '' }} />
+            </label>
+          )}
+          <div className="flex justify-end gap-2">
+            <AdminButton onClick={() => setOpen(false)}>취소</AdminButton>
+            <AdminButton variant="primary" disabled={disabled || (!feedback.trim() && !image)} onClick={() => send(true)}>
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />사진만 재제작
+            </AdminButton>
+          </div>
+        </div>
+      ) : null}
+    </>
   )
 }
 
@@ -595,7 +685,7 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
       return false
     }
     setPost(latest)
-    if (latest.photoDrawFailed) setError(ERROR_COPY.draw_failed)
+    if (latest.photoDrawFailed || latest.error === 'photo_draw_failed') setError(ERROR_COPY.draw_failed)
     return true
   })
 
@@ -605,7 +695,7 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
     setError(null)
     try {
       const result = await sendReview('post', post.id, action, feedback, image)
-      if ((action === 'regenerate' || action === 'draw') && result.post) setPost(result.post as ReviewPost)
+      if ((action === 'regenerate' || action === 'draw' || action === 'redraw_photo') && result.post) setPost(result.post as ReviewPost)
       else onDone()
     } catch (caught) {
       setError(ERROR_COPY[(caught as Error).message] ?? '요청하지 못했어요.')
@@ -694,7 +784,14 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
           onCancel={() => setEditingPhotos(false)}
         />
       ) : post.imageObjectKey ? (
-        <ReviewPhotos photos={photos} />
+        <div className="relative">
+          <ReviewPhotos photos={photos} />
+          <PhotoRedoOverlay
+            drawing={post.photoDrawing}
+            disabled={busy !== null || working}
+            onRedo={(feedback, image) => void handle('redraw_photo', feedback, image)}
+          />
+        </div>
       ) : post.photoDescription ? (
         // Where the photo will go: its description on white, so it is not read as the post text.
         <div className="mt-2 flex aspect-square w-full flex-col items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-6 text-center">

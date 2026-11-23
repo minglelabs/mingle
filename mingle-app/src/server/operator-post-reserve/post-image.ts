@@ -6,7 +6,7 @@ import { describeAccountLook, pickAnimeStyle, seededRandom, type AvatarSpec } fr
 import { newPostImageKey } from '@/server/posts/post-image-keys'
 import { getPostImage, putPostImage } from '@/server/posts/post-image-storage'
 import { decodePostPhoto, type PostPhotoKind } from './post-photo'
-import { pairImages } from './pair-images'
+import { pairImages, stripImages } from './pair-images'
 import { pickPersonVariety } from './post-person-variety'
 
 /** The poster as photos of them show them: their look, and whether a photo of them goes along. */
@@ -267,11 +267,43 @@ export async function withStaffReference(
   }
 }
 
+/** What a photo-only redo carries besides the brief: the post's text and the photo it replaces. */
+export type RedrawContext = { postText?: string | null; previousPhoto?: AvatarReference | null }
+
+const PANEL_NAMES = ['LEFT', 'MIDDLE', 'RIGHT']
+
+/**
+ * A photo-only redo: the post's text, and up to three pictures in one
+ * attachment (the poster for the face, the photo being replaced, a staff
+ * reference), each named by its place, left to right.
+ */
+export async function withRedrawContext(
+  request: { prompt: string; reference: AvatarReference | null },
+  context: RedrawContext & { staffReference?: AvatarReference | null },
+): Promise<{ prompt: string; reference: AvatarReference | null }> {
+  const panels: Array<{ bytes: Buffer; role: string }> = []
+  if (request.reference) panels.push({ bytes: request.reference.bytes, role: 'the photo of the poster, the "attached photo" above: only for who they are (the face)' })
+  if (context.previousPhoto) panels.push({ bytes: context.previousPhoto.bytes, role: 'the previous photo drawn for this post, which staff sent back. Draw a new photo for the same post: change what the staff feedback asks for, and where there is no feedback make it clearly different (another moment, angle and framing); never return it as it is' })
+  if (context.staffReference) panels.push({ bytes: context.staffReference.bytes, role: 'a reference staff added to their feedback: use it the way the feedback says (pose, framing, outfit, place, light or mood); the face of anyone in it must not appear' })
+  const lines = [request.prompt]
+  if (context.postText?.trim()) lines.push(`The post this photo goes with says: ${JSON.stringify(context.postText.trim())}. The photo fits what it says.`)
+  if (panels.length === 0) return { prompt: lines.join('\n'), reference: null }
+  if (panels.length === 1) {
+    lines.push(`About the attachment: it is ${panels[0].role}.`)
+    return { prompt: lines.join('\n'), reference: { bytes: panels[0].bytes, mimeType: 'image/jpeg' } }
+  }
+  const names = panels.length === 2 ? ['LEFT', 'RIGHT'] : PANEL_NAMES
+  lines.push(`About the attachment: it is ${panels.length} photos side by side, left to right. ${panels.map((panel, index) => `${names[index]}: ${panel.role}.`).join(' ')} Draw one single photo, never photos side by side.`)
+  return { prompt: lines.join('\n'), reference: { bytes: await stripImages(panels.map((panel) => panel.bytes)), mimeType: 'image/jpeg' } }
+}
+
 /** Draws and stores the photo. Null when it cannot be drawn or stored; never throws. */
-export async function drawReservePostImage(operatorUserId: string, description: string, staffReference?: AvatarReference): Promise<ReservePostImage | null> {
+export async function drawReservePostImage(operatorUserId: string, description: string, staffReference?: AvatarReference, context?: RedrawContext): Promise<ReservePostImage | null> {
   try {
     const base = await reservePostImageRequest(operatorUserId, description)
-    const request = staffReference ? await withStaffReference(base, staffReference) : base
+    const request = context
+      ? await withRedrawContext(base, { ...context, staffReference })
+      : staffReference ? await withStaffReference(base, staffReference) : base
     const drawn = await requestAvatarImage(request.prompt, { reference: request.reference ?? undefined })
     if (!drawn.ok) {
       console.warn('[operator-post-reserve] image_failed', { operatorUserId, error: drawn.error, detail: drawn.detail })

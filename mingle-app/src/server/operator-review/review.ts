@@ -6,7 +6,8 @@ import type { AdminContext } from '@/server/admin/guard'
 import { ageOn } from '@/server/operator-auto-reply/generate'
 import { canDrawImagesHere, generateOperatorAvatar, planOperatorAvatar, type AvatarReference } from '@/server/operator-avatars/generate'
 import { generateReservePosts, isKoreaCountry, pickReserveTopics, reservePosterProfile, rewriteReservePostText } from '@/server/operator-post-reserve/generate'
-import { drawReservePostImage } from '@/server/operator-post-reserve/post-image'
+import { drawReservePostImage, type RedrawContext } from '@/server/operator-post-reserve/post-image'
+import { getPostImage } from '@/server/posts/post-image-storage'
 import { MAX_RESERVE_EXTRA_IMAGES, reserveExtraImages, type ReserveExtraImage } from '@/server/operator-post-reserve/extra-images'
 import { decodePostPhoto } from '@/server/operator-post-reserve/post-photo'
 import { loadExistingReserveTexts, loadReservePersona, PHOTO_REQUESTED, publishReservePostNow } from '@/server/operator-post-reserve/worker'
@@ -65,9 +66,9 @@ async function releaseProfileIfCutOff(userId: string): Promise<boolean> {
  * puts the row back in review with the photo, or marked failed so the draw
  * button stays. Never throws.
  */
-async function drawPostPhotoInBackground(reserveId: string, operatorUserId: string, description: string, onDrawn: () => Promise<unknown>, onFailed: () => Promise<unknown>, staffReference?: AvatarReference): Promise<void> {
+async function drawPostPhotoInBackground(reserveId: string, operatorUserId: string, description: string, onDrawn: () => Promise<unknown>, onFailed: () => Promise<unknown>, staffReference?: AvatarReference, context?: RedrawContext): Promise<void> {
   try {
-    const image = await drawReservePostImage(operatorUserId, description, staffReference)
+    const image = await drawReservePostImage(operatorUserId, description, staffReference, context)
     await prisma.operatorPostReserve.updateMany({
       where: { id: reserveId, state: 'regenerating' },
       data: image
@@ -133,10 +134,11 @@ export async function getReviewProfileState(userId: string): Promise<{ profileSt
 const MAX_FEEDBACK_LENGTH = 1000
 
 /** `draw`: have the post's photo drawn by hand (in ChatGPT) without changing the text. */
-export type ReviewAction = 'publish' | 'delete' | 'regenerate' | 'draw'
+/** `redraw_photo`: draw the photo again (text untouched), with the text, persona and the photo it replaces. */
+export type ReviewAction = 'publish' | 'delete' | 'regenerate' | 'draw' | 'redraw_photo'
 
 export function parseReviewAction(value: unknown): ReviewAction | null {
-  return value === 'publish' || value === 'delete' || value === 'regenerate' || value === 'draw' ? value : null
+  return value === 'publish' || value === 'delete' || value === 'regenerate' || value === 'draw' || value === 'redraw_photo' ? value : null
 }
 
 export function normalizeReviewFeedback(value: unknown): string | null {
@@ -513,6 +515,39 @@ export async function reviewOperatorPost(
     if (cancelled.count === 0) return { ok: false, error: 'busy' }
     await audit('delete')
     return { ok: true, state: 'deleted' }
+  }
+
+  if (action === 'redraw_photo') {
+    // Only where this server draws (the pool): the old photo stays until the new one is in.
+    if (!canDrawImagesHere()) return { ok: false, error: 'draw_failed' }
+    if (!row.imagePrompt && !row.imageObjectKey) return { ok: false, error: 'not_found' }
+    const brief = row.imagePrompt ?? '[self] A casual everyday photo of the poster that fits the post.'
+    const description = feedback ? `${brief}\nStaff feedback on the previous photo, to follow: ${feedback}` : brief
+    const previousPhoto = row.imageObjectKey
+      ? await getPostImage(row.imageObjectKey).then((bytes) => ({ bytes: Buffer.from(bytes), mimeType: 'image/jpeg' }), () => null)
+      : null
+    runningHere.add(postJob(reserveId))
+    let claimed: { count: number }
+    try {
+      claimed = await prisma.operatorPostReserve.updateMany({
+        where: { id: reserveId, state: 'review' },
+        data: { state: 'regenerating', error: PHOTO_DRAWING, ...(feedback ? { reviewFeedback: feedback } : {}) },
+      })
+    } catch (error) {
+      runningHere.delete(postJob(reserveId))
+      throw error
+    }
+    if (claimed.count === 0) {
+      runningHere.delete(postJob(reserveId))
+      return { ok: false, error: 'busy' }
+    }
+    void drawPostPhotoInBackground(
+      reserveId, row.operatorUserId, description,
+      () => audit('redraw_photo', { photo: true }), () => audit('redraw_photo', { photo: false }),
+      options.reference, { postText: row.text, previousPhoto },
+    )
+    const drawing = await prisma.operatorPostReserve.findUnique({ where: { id: reserveId }, select: POST_SELECT })
+    return { ok: true, state: 'review', post: toReviewPost(drawing ?? { ...row, state: 'regenerating', error: PHOTO_DRAWING }) }
   }
 
   if (action === 'draw') {

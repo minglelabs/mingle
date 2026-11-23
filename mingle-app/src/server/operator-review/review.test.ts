@@ -32,6 +32,7 @@ vi.mock('@/lib/prisma', () => ({
 vi.mock('@/server/admin/audit', () => ({ writeAdminAudit: mocks.audit }))
 vi.mock('@/server/operator-avatars/generate', () => ({ planOperatorAvatar: mocks.generateAvatar, canDrawImagesHere: mocks.canDraw, generateOperatorAvatar: mocks.drawAvatar }))
 vi.mock('@/server/operator-post-reserve/post-image', () => ({ drawReservePostImage: mocks.drawImage }))
+vi.mock('@/server/posts/post-image-storage', () => ({ getPostImage: vi.fn(async () => Buffer.from('old-photo')) }))
 vi.mock('@/server/operator-post-reserve/generate', () => ({
   generateReservePosts: mocks.generatePosts,
   pickReserveTopics: () => ['daily'],
@@ -185,11 +186,31 @@ describe('where this server can draw (the ChatGPT pool)', () => {
     expect(result).toMatchObject({ ok: true, state: 'review', post: { photoDrawing: true } })
     expect(mocks.reserveUpdateMany.mock.calls[0][0]).toMatchObject({ where: { id: 'r1', state: 'review' }, data: { state: 'regenerating', error: 'photo_drawing' } })
     await vi.waitFor(() => expect(mocks.reserveUpdateMany).toHaveBeenCalledTimes(2))
-    expect(mocks.drawImage).toHaveBeenCalledWith('op1', '[self] a selfie\nStaff feedback on this photo, to follow: 웃는 얼굴로', undefined)
+    expect(mocks.drawImage).toHaveBeenCalledWith('op1', '[self] a selfie\nStaff feedback on this photo, to follow: 웃는 얼굴로', undefined, undefined)
     expect(mocks.generatePosts).not.toHaveBeenCalled()
     const done = mocks.reserveUpdateMany.mock.calls[1][0]
     expect(done.data).toMatchObject({ state: 'review', imageObjectKey: 'posts/op1/a.jpg', error: null })
     expect(done.data.text).toBeUndefined()
+  })
+
+  it('redraws only the photo with the text and the photo it replaces', async () => {
+    mocks.canDraw.mockReturnValue(true)
+    const withPhoto = { ...REVIEW_POST, imagePrompt: '[self] a selfie', imageObjectKey: 'posts/op1/old.jpg' }
+    mocks.reserveFindUnique
+      .mockResolvedValueOnce(withPhoto)
+      .mockResolvedValueOnce({ ...withPhoto, state: 'regenerating', error: 'photo_drawing' })
+    mocks.drawImage.mockResolvedValue({ objectKey: 'posts/op1/new.jpg', width: 1280, height: 960 })
+    const result = await reviewOperatorPost(null, 'r1', 'redraw_photo', '배경 밝게')
+    expect(result).toMatchObject({ ok: true, post: { photoDrawing: true } })
+    await vi.waitFor(() => expect(mocks.reserveUpdateMany).toHaveBeenCalledTimes(2))
+    const [userId, description, staff, context] = mocks.drawImage.mock.calls[0]
+    expect(userId).toBe('op1')
+    expect(description).toBe('[self] a selfie\nStaff feedback on the previous photo, to follow: 배경 밝게')
+    expect(staff).toBeUndefined()
+    expect(context.postText).toBe('old text')
+    expect(context.previousPhoto.bytes.toString()).toBe('old-photo')
+    expect(mocks.generatePosts).not.toHaveBeenCalled()
+    expect(mocks.reserveUpdateMany.mock.calls[1][0].data).toMatchObject({ imageObjectKey: 'posts/op1/new.jpg' })
   })
 
   it('marks a failed background drawing so the draw button comes back', async () => {
