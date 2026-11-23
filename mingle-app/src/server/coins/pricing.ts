@@ -105,6 +105,11 @@ export function quoteCoinUsage(
   }
 }
 
+/** True when every unit asked for has a rate and the total is zero: a free period, not a missing price. */
+export function isFreeCoinQuote(quote: CoinPriceQuote): boolean {
+  return quote.chargedMicro === 0n && quote.components.length > 0 && quote.unpricedUnits.length === 0
+}
+
 const RATE_CACHE_TTL_MS = 60_000
 let rateCache: { loadedAt: number; rates: CoinPricingRateRow[] } | null = null
 
@@ -133,4 +138,16 @@ export async function loadCoinPricingRates(
   })
   rateCache = { loadedAt: now.getTime(), rates }
   return rates
+}
+
+/**
+ * Whether this usage costs nothing at today's rates (e.g. typed-message
+ * translation during a free period). A free feature is not stopped by an
+ * empty wallet.
+ */
+export async function isCoinUsageFree(
+  input: { kind: CoinUsageKind; model?: string | null; units: CoinUsageUnits },
+  now = new Date(),
+): Promise<boolean> {
+  return isFreeCoinQuote(quoteCoinUsage(await loadCoinPricingRates(prisma, now), { ...input, at: now }))
 }
