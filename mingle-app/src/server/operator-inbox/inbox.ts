@@ -49,6 +49,8 @@ const CURSOR_PATTERN = /^(\d{1,15})\.([\w-]{1,128})$/
 
 export type InboxPerson = IdentityBadgeFlags & {
   userId: string
+  /** primaryLanguages[0]: the person's own language (the avatar flag in the room view). */
+  primaryLanguage?: string | null
   handle: string | null
   name: string | null
   image: string | null
@@ -397,6 +399,7 @@ function toInboxPerson(user: InboxMemberUser): InboxPerson {
     imageCropScale: user.imageCropScale ?? null,
     imageCropX: user.imageCropX ?? null,
     imageCropY: user.imageCropY ?? null,
+    primaryLanguage: resolvePersonaLanguage(user),
     ...identityBadgeFlags(user),
   }
 }
