@@ -93,6 +93,18 @@ describe('admin activity screens', () => {
     expect(html).toContain('Good morning')
   })
 
+  it('embeds as just the comments and the reply box (no page header, no post card)', () => {
+    const html = renderToString(createElement(PostThreadView, { initialThread: thread, focusCommentId: null, embedded: true }))
+    expect(html).toContain('Que legal!')
+    expect(html).toContain('Obrigada!')
+    expect(html).toContain('댓글 <!-- -->2<!-- -->개')
+    expect(html).toContain('계정으로 게시됩니다')
+    expect(html).toContain('id="admin-activity-comment-p1"')
+    expect(html).not.toContain('<header')
+    expect(html).not.toContain('글 사진')
+    expect(html).not.toContain('Bom dia')
+  })
+
   it('shows no composer for a retired operator', () => {
     const html = renderToString(createElement(PostThreadView, {
       initialThread: { ...thread, operator: { ...thread.operator, isActive: false }, replyUnavailableReason: 'operator_inactive' },

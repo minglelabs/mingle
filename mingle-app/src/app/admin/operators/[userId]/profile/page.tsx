@@ -14,6 +14,7 @@ import { safeBackPath, withBack } from '../../../_lib/back-path'
 import { OperatorPostStatsRow } from '../../../_components/operator-post-stats-row'
 import { OperatorPostEditor } from '../../../feed/_components/operator-post-editor'
 import { PostTakedownButton } from '../../../feed/_components/post-takedown-button'
+import { InlinePostComments } from '../../../activity/_components/inline-post-comments'
 import { OperatorsMain } from '../../_components/operator-ui'
 import { ZoomableAvatar } from '../../_components/zoomable-avatar'
 import { ReviewBoard, ReviewPhotos, StaffBio } from '../../review/review-board'
@@ -111,12 +112,6 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
           imageObjectKey: true, imageWidth: true, imageHeight: true, moderationHiddenAt: true,
           extraImages: { orderBy: { position: 'asc' }, select: { imageObjectKey: true, imageWidth: true, imageHeight: true } },
           likes: { orderBy: { createdAt: 'desc' }, select: { user: { select: { id: true, name: true, handle: true, isOperator: true } } } },
-          comments: {
-            where: { moderationHiddenAt: null },
-            orderBy: { createdAt: 'asc' },
-            take: 5,
-            select: { id: true, sourceText: true, author: { select: { name: true, isOperator: true } } },
-          },
         },
       })
       : Promise.resolve([]),
@@ -235,24 +230,7 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
                       </ul>
                     </details>
                   ) : null}
-                  {post.commentCount > 0 ? (
-                    <Link
-                      href={withBack(`/admin/activity/posts/${encodeURIComponent(post.id)}${operator ? `?as=${encodeURIComponent(user.id)}` : ''}`, href({}, `post-${post.id}`))}
-                      className="mt-2 flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-sky-700"
-                    >
-                      <span>댓글 {post.commentCount}개 전체 보기{operator ? ' · 답글 달기' : ''}</span>
-                      <span aria-hidden="true">›</span>
-                    </Link>
-                  ) : null}
-                  {post.comments.length ? (
-                    <ul className="mt-2 space-y-1 rounded-lg bg-slate-50 p-2 text-sm">
-                      {post.comments.map((comment) => (
-                        <li key={comment.id} className="break-words text-slate-700">
-                          <span className="font-semibold text-slate-900">{comment.author.name ?? '?'}{comment.author.isOperator ? ' (운영)' : ''}</span> {comment.sourceText}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
+                  <InlinePostComments postId={post.id} operatorUserId={operator ? user.id : null} commentCount={post.commentCount} />
                   {post.moderationHiddenAt ? (
                     <div className="mt-3"><PostTakedownButton postId={post.id} hidden /></div>
                   ) : operator ? (
