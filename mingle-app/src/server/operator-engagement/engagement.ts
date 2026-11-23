@@ -7,6 +7,7 @@ import { markPostViewed } from '@/server/feed/post-view'
 import { commentOnPostAsOperator, replyToCommentAsOperator } from '@/server/operator-comments/comment'
 import { seededRandom } from '@/server/operator-avatars/taxonomy'
 import { visiblePostWhere } from '@/server/posts/post-visibility'
+import { ensureOperatorTeamFollows } from '@/server/operators/team-follows'
 import { isHostileComment } from './hostile-comment'
 
 /**
@@ -377,39 +378,6 @@ export async function runOperatorEngagement(now: Date = new Date(), options: { m
     }
   }
   return result
-}
-
-/**
- * Every approved operator account follows, and is followed by, both team
- * accounts (@royce and the mascot), the way every real person is at sign-up
- * (`signup-welcome-onboarding.ts`; staff, 2026-11-23: most operators had only
- * one of the two). Rows only, no notifications or welcome messages. Returns
- * how many rows were added.
- */
-export async function ensureOperatorTeamFollows(operatorIds: readonly string[]): Promise<number> {
-  if (operatorIds.length === 0) return 0
-  const team = (await prisma.user.findMany({
-    where: { id: { in: TEAM_USER_IDS }, isDeleted: { not: true } },
-    select: { id: true },
-  })).map((user) => user.id)
-  if (team.length === 0) return 0
-  const existing = await prisma.userFollow.findMany({
-    where: {
-      OR: [
-        { followerId: { in: [...operatorIds] }, followingId: { in: team } },
-        { followerId: { in: team }, followingId: { in: [...operatorIds] } },
-      ],
-    },
-    select: { followerId: true, followingId: true },
-  })
-  const have = new Set(existing.map((row) => `${row.followerId}>${row.followingId}`))
-  const missing = operatorIds.flatMap((operatorId) => team.flatMap((teamId) => [
-    { followerId: operatorId, followingId: teamId },
-    { followerId: teamId, followingId: operatorId },
-  ])).filter((row) => row.followerId !== row.followingId && !have.has(`${row.followerId}>${row.followingId}`))
-  if (missing.length === 0) return 0
-  const created = await prisma.userFollow.createMany({ data: missing, skipDuplicates: true })
-  return created.count
 }
 
 /**

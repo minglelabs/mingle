@@ -11,12 +11,14 @@ const mocks = vi.hoisted(() => ({
   ensureSignupWelcomeOnboarding: vi.fn(),
   txUserUpdate: vi.fn(),
   txOperatorAccountUpsert: vi.fn(),
+  ensureOperatorTeamFollows: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({ prisma: { user: { create: mocks.userCreate, update: mocks.userUpdate } } }))
 vi.mock('@/server/admin/audit', () => ({ writeAdminAudit: mocks.writeAdminAudit }))
 vi.mock('@/server/profile-bio', () => ({ updateProfileWithBio: mocks.updateProfileWithBio, runBioVersion: mocks.runBioVersion }))
 vi.mock('@/lib/signup-welcome-onboarding', () => ({ ensureSignupWelcomeOnboarding: mocks.ensureSignupWelcomeOnboarding }))
+vi.mock('./team-follows', () => ({ ensureOperatorTeamFollows: mocks.ensureOperatorTeamFollows }))
 vi.mock('@/server/operators/operator-guard', async importOriginal => ({
   ...(await importOriginal<typeof import('@/server/operators/operator-guard')>()),
   requireOperatorAccount: mocks.requireOperatorAccount,
@@ -101,6 +103,8 @@ describe('createOperatorAccount', () => {
       metadata: expect.objectContaining({ handle: 'yuki.tnk', personaCountry: 'JP', hasBio: true }),
     }))
     expect(mocks.ensureSignupWelcomeOnboarding).not.toHaveBeenCalled()
+    // The sign-up mutual follows with @royce and the mascot, without the welcome DM.
+    expect(mocks.ensureOperatorTeamFollows).toHaveBeenCalledWith(['op_1'])
 
     // The bio survives a restart; background versioning and translation follow.
     await whenOperatorBioQueueIdle()

@@ -9,6 +9,7 @@ import { operatorInterestLanguageFields } from '@/server/operator-post-reserve/p
 import { enqueueOperatorBioRun, enqueueOperatorBioWrite } from './bio-queue'
 import { unzipInterestLanguages } from '@/lib/interest-languages'
 import { requireOperatorAccount } from './operator-guard'
+import { ensureOperatorTeamFollows } from './team-follows'
 import { createWithOperatorHandle, isHandleConflictError } from './operator-handles'
 import {
   PERSONA_MIN_AGE,
@@ -23,8 +24,9 @@ import {
 /**
  * Operator accounts are created with a direct `prisma.user.create` (contract
  * §5): no email, password, external id, OAuth link or push token, so nothing
- * can sign in as them, and no signup side effects (no welcome DM or mutual
- * follow from `ensureSignupWelcomeOnboarding`, no analytics). `isOperator` is
+ * can sign in as them, and no signup side effects (no welcome DM from
+ * `ensureSignupWelcomeOnboarding`, no analytics). They do get the sign-up
+ * mutual follows with both team accounts (`team-follows.ts`), without notifications. `isOperator` is
  * always true and `isOfficial` always false. Every write is audited.
  */
 
@@ -161,6 +163,8 @@ export async function createOperatorAccount(
     where: { id: user.id },
     data: operatorInterestLanguageFields(user.id, draft.primaryLanguage),
   })
+  // Like every real person at sign-up: mutual follows with @royce and the mascot (rows only).
+  await ensureOperatorTeamFollows([user.id])
 
   await writeAdminAudit(ctx, {
     action: 'operator.create',

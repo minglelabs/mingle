@@ -2,14 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 
 const { findManyUsers, findManyFollows, createMany } = vi.hoisted(() => ({ findManyUsers: vi.fn(), findManyFollows: vi.fn(), createMany: vi.fn() }))
 vi.mock('@/lib/prisma', () => ({ prisma: { user: { findMany: findManyUsers }, userFollow: { findMany: findManyFollows, createMany } } }))
-vi.mock('@/server/notifications/create-post-notification', () => ({ createPostNotification: vi.fn() }))
-vi.mock('@/server/feed/post-view', () => ({ markPostViewed: vi.fn() }))
-vi.mock('@/server/operator-comments/comment', () => ({ commentOnPostAsOperator: vi.fn(), replyToCommentAsOperator: vi.fn() }))
-vi.mock('./hostile-comment', () => ({ isHostileComment: vi.fn() }))
 
 import { HAMZZI_USER_ID } from '@/lib/hamzzi'
 import { ROYCE_USER_ID } from '@/lib/signup-welcome-onboarding'
-import { ensureOperatorTeamFollows } from './engagement'
+import { ensureOperatorTeamFollows } from '@/server/operators/team-follows'
 
 describe('ensureOperatorTeamFollows', () => {
   it('adds only the missing follows both ways between operators and both team accounts', async () => {
