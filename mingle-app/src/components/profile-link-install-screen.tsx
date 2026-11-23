@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import ProfileGenderAgeBadge from "@/components/profile-gender-age-badge";
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { createPortal } from "react-dom";
 import { renderStyledQrDataUrl } from "@/components/profile-qr-card";
 import { buildProfileLinkPath } from "@/lib/profile-link";
 import {
@@ -232,13 +233,15 @@ function ProfileLinkQr({ userId, label }: { userId: string; label: string }) {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={dataUrl} alt="" className="h-full w-full" />
       </button>
-      {enlarged ? (
+      {/* On document.body: the card's backdrop-blur would otherwise confine a fixed overlay to the card. */}
+      {enlarged ? createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6" onClick={() => setEnlarged(false)} role="dialog" aria-modal="true" aria-label={`${label} QR`}>
           <div className="w-full max-w-xs rounded-3xl bg-white p-4 shadow-2xl">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={dataUrl} alt={`${label} QR`} className="h-auto w-full" />
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </>
   );
