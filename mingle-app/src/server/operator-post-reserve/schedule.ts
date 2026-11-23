@@ -52,3 +52,25 @@ export function nextReleaseAt(args: {
   const earliest = args.now.getTime() + 5 * 60_000 * random()
   return avoidLocalNight(new Date(Math.max(candidate, earliest)), utcOffsetHoursOf(args.personaCountry), random)
 }
+
+/**
+ * When a post staff publish from review shows as posted (staff 2026-11-23):
+ * a random moment between the post's creation and now, so a batch published
+ * at once does not all land on the same minute, and a post written days ago
+ * is neither dated today nor dated at its creation. Never in the future;
+ * a moment in the persona's local night is drawn again (a few tries).
+ */
+export function pickBackdatedPublishAt(args: { createdAt: Date; now: Date; personaCountry: string | null | undefined; random?: () => number }): Date {
+  const random = args.random ?? Math.random
+  const latest = args.now.getTime() - 60_000
+  const earliest = Math.min(args.createdAt.getTime(), latest)
+  if (latest <= earliest) return args.now
+  const offsetMs = utcOffsetHoursOf(args.personaCountry) * HOUR_MS
+  let pick = earliest
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    pick = earliest + random() * (latest - earliest)
+    const msIntoLocalDay = (((pick + offsetMs) % DAY_MS) + DAY_MS) % DAY_MS
+    if (msIntoLocalDay >= WAKE_HOUR * HOUR_MS) break
+  }
+  return new Date(Math.round(pick))
+}

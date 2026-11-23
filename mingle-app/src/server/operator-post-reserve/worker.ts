@@ -11,7 +11,7 @@ import { reviewTranslationsFor } from './review-translations'
 import { drawReservePostImage } from './post-image'
 import { reserveExtraImages } from './extra-images'
 import { generateReservePosts, isKoreaCountry, pickReserveTopics, reservePosterProfile, RESERVE_CHUNK_SIZE, type ReservePersona } from './generate'
-import { nextReleaseAt } from './schedule'
+import { nextReleaseAt, pickBackdatedPublishAt } from './schedule'
 import { getPostReserveSettings, postsPerDay, type PostReserveSettings } from './settings'
 import { operatorTextProvider } from '@/server/translation/translate-texts'
 
@@ -48,6 +48,8 @@ export type ReserveRunSummary = {
 type ClaimedReservePost = {
   id: string
   operatorUserId: string
+  /** When the reserve row was written (a review publish is dated between this and now). */
+  createdAt?: Date
   text: string
   attempts: number
   language: string | null
@@ -95,6 +97,17 @@ async function claimDueReservePosts(now: Date, limit: number): Promise<ClaimedRe
  * taken from staff review goes back to review when publishing fails, never
  * into the automatic queue.
  */
+async function backdateReviewPost(postId: string, row: ClaimedReservePost, now: Date): Promise<void> {
+  try {
+    const account = await prisma.operatorAccount.findUnique({ where: { userId: row.operatorUserId }, select: { personaCountry: true } })
+    const at = pickBackdatedPublishAt({ createdAt: new Date(row.createdAt as Date), now, personaCountry: account?.personaCountry })
+    await prisma.post.updateMany({ where: { id: postId }, data: { publishedAt: at, createdAt: at } })
+  } catch (error) {
+    // The post is out either way; it just keeps the publish minute.
+    console.warn('[operator-post-reserve] backdate_failed', { postId, error: error instanceof Error ? error.name : 'unknown' })
+  }
+}
+
 async function releaseOne(row: ClaimedReservePost, now: Date, origin: 'queued' | 'review' = 'queued'): Promise<boolean> {
   const settle = (data: Prisma.OperatorPostReserveUpdateManyMutationInput) =>
     prisma.operatorPostReserve.updateMany({ where: { id: row.id, state: 'publishing', attempts: row.attempts }, data })
@@ -136,6 +149,8 @@ async function releaseOne(row: ClaimedReservePost, now: Date, origin: 'queued' |
       await settle({ state: 'failed', error: 'client_post_id_conflict', releaseAt: null })
       return false
     }
+    // Published from review: dated between when it was written and now, not all at this minute.
+    if (origin === 'review' && result.kind === 'created' && row.createdAt) await backdateReviewPost(result.post.id, row, now)
     await settle({ state: 'published', postId: result.post.id, error: null })
     await writeAdminAudit(null, {
       action: 'operator_post.reserve_published',
@@ -394,7 +409,7 @@ export async function publishReservePostNow(
     WHERE id = ${reserveId} AND state = ${fromState}
     RETURNING id, operator_user_id AS "operatorUserId", text, attempts, language, translations, image_prompt AS "imagePrompt",
       image_object_key AS "imageObjectKey", image_width AS "imageWidth", image_height AS "imageHeight",
-      extra_images AS "extraImages"
+      extra_images AS "extraImages", created_at AS "createdAt"
   `
   if (!claimed[0]) return { ok: false, error: 'reserve_empty' }
   if (options.background) {
