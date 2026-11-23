@@ -584,10 +584,16 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
     ? [{ objectKey: post.imageObjectKey, width: post.imageWidth, height: post.imageHeight }, ...post.extraImages]
     : []
 
-  // The pool draws in the background; ask every 10s until the photo is in.
-  useDrawPolling(post.photoDrawing, async () => {
+  // 재제작 rewrites the text, then the pool draws in the background; ask every 10s
+  // until both are done. The state lives on the row, so a reload picks it up again.
+  const working = post.photoDrawing || Boolean(post.rewriting)
+  useDrawPolling(working, async () => {
     const latest = (await readReview('post', post.id))?.post as ReviewPost | undefined
-    if (!latest || latest.photoDrawing) return false
+    if (!latest) return false
+    if (latest.photoDrawing || latest.rewriting) {
+      if (latest.text !== post.text || latest.photoDrawing !== post.photoDrawing) setPost(latest)
+      return false
+    }
     setPost(latest)
     if (latest.photoDrawFailed) setError(ERROR_COPY.draw_failed)
     return true
@@ -704,11 +710,17 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
           {post.imageObjectKey ? '사진 편집 (바꾸기·추가·순서)' : '사진 직접 올리기'}
         </button>
       )}
+      {post.rewriting && busy !== 'regenerate' ? (
+        <p className="mt-2 inline-flex items-center gap-1 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+          재제작 중: 글을 다시 쓰고 있어요. 끝나면 사진을 그려요.
+        </p>
+      ) : null}
       {post.reviewFeedback ? <p className="mt-2 text-xs text-slate-500">지난 피드백: {post.reviewFeedback}</p> : null}
       {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}
       <ReviewActions
         busy={busy}
-        inProgress={post.photoDrawing}
+        inProgress={working}
         onAction={handle}
         publishDisabledReason={!profileApproved ? '계정을 먼저 게시해야 글을 올릴 수 있어요.' : post.photoDescription && !post.imageObjectKey ? '사진을 그린 뒤에 게시할 수 있어요.' : undefined}
         drawAction={post.photoDescription && !post.imageObjectKey ? { requested: post.photoRequested, drawing: post.photoDrawing } : undefined}
