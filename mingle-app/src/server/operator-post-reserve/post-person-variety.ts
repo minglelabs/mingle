@@ -89,12 +89,12 @@ export function pickPersonVariety(random: Random, options: { faces: boolean; fem
   const lines: string[] = []
   const versus = options.hasReference ? ', unlike the attached photo' : ''
   if (options.faces) {
-    lines.push(`Head angle in this photo${versus}: ${pick(random, HEAD_ANGLES)}. Not a straight-on, eye-level head-and-shoulders shot.`)
-    lines.push(`Expression in this photo: ${pick(random, EXPRESSIONS)}.`)
+    lines.push(`Head angle in this photo${versus}, unless the description already says: ${pick(random, HEAD_ANGLES)}. Not a straight-on, eye-level head-and-shoulders shot.`)
+    lines.push(`Expression in this photo, unless the description already says: ${pick(random, EXPRESSIONS)}.`)
   }
-  if (options.female) lines.push(`Hairstyle today${versus}: ${pick(random, FEMALE_HAIRSTYLES)} (same hair color and length).`)
+  if (options.female) lines.push(`Hairstyle today${versus}, unless the description already says: ${pick(random, FEMALE_HAIRSTYLES)} (same hair color and length).`)
   lines.push(`Outfit today, unless the description already names one: ${pick(random, OUTFITS)}, mostly ${pick(random, OUTFIT_COLORS)}; no garment or main color${options.hasReference ? ' from the attached photo' : ' repeated from another photo'}.`)
-  if (options.faces) lines.push(`Light on the face, within what the place gives: ${pick(random, FACE_LIGHTS)}.`)
+  if (options.faces) lines.push(`Light on the face, within what the place and the description give: ${pick(random, FACE_LIGHTS)}.`)
   const distances = options.faces ? CAMERA_DISTANCES : CAMERA_DISTANCES.slice(1)
   lines.push(`Camera distance, unless the description already fixes it (a mirror selfie, a selfie at arm's length): ${pick(random, distances)}.`)
   return lines
