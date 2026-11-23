@@ -10,6 +10,8 @@ export type PendingReply = {
   createdAtMs: number
   status: 'sending' | 'failed'
   error: string | null
+  /** False: 자동 번역 was off; sent exactly as typed. Absent means on. */
+  translate?: boolean
 }
 
 export function pendingReplyClientMessageId(requestId: string): string {

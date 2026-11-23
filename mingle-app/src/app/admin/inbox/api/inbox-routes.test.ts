@@ -138,11 +138,16 @@ describe('admin inbox API routes', () => {
     expect(created.status).toBe(201)
     expect(m.resolveAccess).toHaveBeenCalledWith({ conversationId: 'conv_1', operatorUserId: 'op_2', requireExplicitOperator: true })
     expect(m.sendOperatorMessage).toHaveBeenCalledWith(ctx, {
-      operatorUserId: 'op_2', conversationId: 'conv_1', text: 'Olá', clientRequestId: 'req-00000001',
+      operatorUserId: 'op_2', conversationId: 'conv_1', text: 'Olá', clientRequestId: 'req-00000001', translate: true,
     })
 
     m.sendOperatorMessage.mockResolvedValue({ duplicate: true, messageId: 'msg_1', utterance: {} })
     expect((await postMessage(post('/x', { text: 'Olá' }), params())).status).toBe(200)
+
+    // 자동 번역 off is passed through as translate: false.
+    m.sendOperatorMessage.mockClear()
+    await postMessage(post('/x', { text: 'Olá', translate: false }), params())
+    expect(m.sendOperatorMessage).toHaveBeenCalledWith(ctx, expect.objectContaining({ translate: false }))
   })
 
   it('reply maps refusals: ambiguous operator 400, non-operator 403, retryable translation failure 503', async () => {

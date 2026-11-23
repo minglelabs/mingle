@@ -190,6 +190,8 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
   const [korean, setKorean] = useStaffKoreanView()
   const [nowMs, setNowMs] = useState(() => Date.parse(initialThread.post.publishedAt))
   const [draft, setDraft] = useState('')
+  // 자동 번역: on by default; off posts the text exactly as typed. Stays as set between comments.
+  const [translate, setTranslate] = useState(true)
   const [target, setTarget] = useState<ReplyTarget | null>(null)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -266,6 +268,7 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
           text,
           parentId: target?.parentId ?? null,
           replyToUserId: target?.replyToUserId ?? null,
+          translate,
         }),
       })
       if (response.status === 401) {
@@ -288,7 +291,7 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
     } finally {
       setSending(false)
     }
-  }, [draft, operatorId, postId, reload, sending, target])
+  }, [draft, operatorId, postId, reload, sending, target, translate])
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault()
@@ -433,9 +436,21 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
                 </button>
               </p>
             ) : null}
-            <p className="mb-1.5 break-words text-xs text-slate-500">
-              {inboxPersonLabel(operator)} 계정으로 게시됩니다. 어떤 언어로 써도 {languageName}(으)로 변환됩니다.
-            </p>
+            <div className="mb-1.5 flex items-start justify-between gap-2">
+              <p className="min-w-0 break-words text-xs text-slate-500">
+                {inboxPersonLabel(operator)} 계정으로 게시됩니다. {translate ? `어떤 언어로 써도 ${languageName}(으)로 변환됩니다.` : '쓴 그대로 게시됩니다 (번역 안 함).'}
+              </p>
+              <label className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-slate-600">
+                <input
+                  type="checkbox"
+                  data-testid="admin-activity-translate"
+                  checked={translate}
+                  onChange={(event) => setTranslate(event.target.checked)}
+                  className="h-4 w-4 accent-sky-500"
+                />
+                자동 번역
+              </label>
+            </div>
             <div className="flex items-end gap-2">
               <label htmlFor={`admin-activity-comment-${postId}`} className="sr-only">댓글 입력</label>
               <textarea
