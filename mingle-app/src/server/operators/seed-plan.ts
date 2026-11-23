@@ -1,15 +1,17 @@
 import { PERSONA_COUNTRIES } from './persona-countries'
 
 /**
- * Default mix for seeding 100 operator accounts: Korea and Japan carry the
+ * Default mix for seeding 107 operator accounts: Korea and Japan carry the
  * weight (22 each), the rest are spread over the large-population and
  * major-language countries of the persona table. Staff edit the numbers
  * before a manual run; automatic creation keeps the account pool close to
  * these proportions. A country missing here defaults to 0.
  */
 export const DEFAULT_SEED_PLAN: Readonly<Record<string, number>> = {
-  KR: 22, JP: 22, US: 7, CN: 5, TW: 5, VN: 4, ID: 4, IN: 4, TH: 3, PH: 3, BR: 3,
-  MY: 2, GB: 2, FR: 2, DE: 2, ES: 2, IT: 2, TR: 2, SG: 1, MX: 1, CA: 1, AU: 1,
+  KR: 22, JP: 22, US: 7, CN: 5, TW: 5, VN: 4, ID: 4, IN: 4, BR: 4, TH: 3, PH: 3, TR: 3,
+  MY: 2, GB: 2, FR: 2, DE: 2, ES: 2, IT: 2, RU: 2, SG: 1, MX: 1, CA: 1, AU: 1,
+  // Staff (2026-11-23): a few from Russia, the Middle East and Central Asia, never none.
+  SA: 1, AE: 1, KZ: 1,
 }
 
 export const SEED_MAX_PER_COUNTRY = 200
