@@ -3,10 +3,11 @@ import Link from 'next/link'
 import { Heart, MessageCircle } from 'lucide-react'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/server/admin/guard'
-import { getFeed } from '@/server/feed/feed-service'
+import { FEED_PAGE_SELECT, getFeed, type FeedResult } from '@/server/feed/feed-service'
 import { loadStarterFeed, type StarterSegment } from '@/server/feed/starter-feed'
 import { loadOperatorPostStats } from '@/server/operator-post-stats/load'
 import { visibleCommentsWhere } from '@/server/posts/comment-visibility'
+import { visiblePostWhere } from '@/server/posts/post-visibility'
 import { OperatorPostStatsRow } from '../_components/operator-post-stats-row'
 import { OperatorsMain } from '../operators/_components/operator-ui'
 import { ZoomableAvatar } from '../operators/_components/zoomable-avatar'
@@ -28,6 +29,29 @@ const STARTER_VIEWS: ReadonlyArray<{ key: string; segment: StarterSegment; label
   { key: 'new-foreign', segment: 'foreign', label: '신규 외국인' },
 ]
 const COMMENTS_PER_POST = 5
+/** `as=latest`: every visible post, newest first (not the recommended order). */
+const LATEST_VIEW = 'latest'
+
+/** Visible posts by published time, newest first; cursor `<iso>|<id>`. */
+async function loadLatestPosts(rawCursor: string | null): Promise<FeedResult> {
+  const [iso, id] = (rawCursor ?? '').split('|')
+  const at = iso ? new Date(iso) : null
+  const after = at && !Number.isNaN(at.getTime()) && id
+    ? { AND: [{ OR: [{ publishedAt: { lt: at } }, { publishedAt: at, id: { lt: id } }] }] }
+    : {}
+  const rows = await prisma.post.findMany({
+    where: { ...visiblePostWhere(null), ...after },
+    orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
+    take: PAGE_SIZE + 1,
+    select: FEED_PAGE_SELECT,
+  })
+  const page = rows.slice(0, PAGE_SIZE)
+  const last = page.at(-1)
+  return {
+    posts: page.map((post) => ({ ...post, viewed: false })),
+    nextCursor: rows.length > PAGE_SIZE && last ? `${last.publishedAt.toISOString()}|${last.id}` : null,
+  }
+}
 
 type FeedPreviewPageProps = { searchParams: Promise<{ as?: string; cursor?: string }> }
 
@@ -56,7 +80,10 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
   const viewer = operators.find((operator) => operator.id === as) ?? null
   // A new reader of either segment: no account, no views, so the starter list leads exactly as it will.
   const starterView = (STARTER_VIEWS.find((view) => view.key === as) ?? null)
-  const feed = await getFeed(viewer?.id ?? null, cursor?.trim() || null, PAGE_SIZE, starterView ? { starterSegment: starterView.segment } : {})
+  const latest = as === LATEST_VIEW
+  const feed = latest
+    ? await loadLatestPosts(cursor?.trim() || null)
+    : await getFeed(viewer?.id ?? null, cursor?.trim() || null, PAGE_SIZE, starterView ? { starterSegment: starterView.segment } : {})
   const starter = await loadStarterFeed()
   const starterOrder = new Map((starterView && starter ? starter[starterView.segment] : []).map((id, index) => [id, index + 1]))
 
@@ -96,14 +123,20 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
   return (
     <OperatorsMain>
       <h1 className="text-xl font-bold text-slate-900">피드 미리보기</h1>
-      <p className="mt-1 text-sm text-slate-500">앱 홈 피드와 같은 추천 순서입니다. 보기만 하며 조회 기록은 남지 않습니다. 신규 한국인·외국인은 막 가입한 유저가 보는 순서이고, 번호는 정해 둔 첫 피드 순서입니다. 운영 계정 글의 반응 숫자는 실사용자만 센 것이고, %는 조회 대비입니다.</p>
+      <p className="mt-1 text-sm text-slate-500">최신 글은 추천과 상관없이 올라간 시각 순서(최신 먼저)입니다. 나머지는 앱 홈 피드와 같은 추천 순서입니다. 보기만 하며 조회 기록은 남지 않습니다. 신규 한국인·외국인은 막 가입한 유저가 보는 순서이고, 번호는 정해 둔 첫 피드 순서입니다. 운영 계정 글의 반응 숫자는 실사용자만 센 것이고, %는 조회 대비입니다.</p>
 
       <nav className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto overflow-y-hidden overscroll-x-contain px-4 pb-1" aria-label="누구의 피드로 볼지">
         <Link
           href={query({})}
-          className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium ${viewer || starterView ? 'border-slate-200 bg-white text-slate-600' : 'border-sky-600 bg-sky-600 text-white'}`}
+          className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium ${viewer || starterView || latest ? 'border-slate-200 bg-white text-slate-600' : 'border-sky-600 bg-sky-600 text-white'}`}
         >
           비로그인
+        </Link>
+        <Link
+          href={query({ as: LATEST_VIEW })}
+          className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium ${latest ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}
+        >
+          최신 글
         </Link>
         {STARTER_VIEWS.map((view) => (
           <Link
@@ -214,7 +247,7 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
 
       {feed.nextCursor ? (
         <Link
-          href={query({ as: viewer?.id ?? starterView?.key ?? null, cursor: feed.nextCursor })}
+          href={query({ as: viewer?.id ?? starterView?.key ?? (latest ? LATEST_VIEW : null), cursor: feed.nextCursor })}
           className="mt-3 flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 active:bg-slate-100"
         >
           다음 글 보기
