@@ -497,6 +497,33 @@ function avoidLine(focusOnPerson: boolean, softLook: boolean): string {
   return line
 }
 
+/**
+ * How one post photo's colors and exposure come out (staff 2026-11-23: post
+ * photos all came out milky, low in contrast and faintly sky-blue). Each post
+ * photo names one grade, mostly neutral or warm; the cool one is rare, and
+ * every one keeps real blacks and no blue veil.
+ */
+export const COLOR_GRADES: ReadonlyArray<readonly [string, number]> = [
+  ['neutral white balance, true-to-life colors, normal contrast with properly dark shadows', 3],
+  ['a slightly warm, yellowish cast from the light there, warm skin tones', 3],
+  ['bright and vivid like a recent iPhone in good light: rich colors, solid contrast, clean whites', 2],
+  ['a little underexposed and moody: deeper shadows and richer colors, no haze', 1.5],
+  ['crisp and clear with punchy contrast: deep blacks, bright clean highlights', 1.5],
+  ['a faint warm-pink tint and lifted saturation, like a Samsung phone\'s processing', 1],
+  ['slightly cool and soft, like a grey day', 0.7],
+]
+export const NOT_WASHED_OUT = 'Not washed out: the darkest parts are truly dark, there is no milky grey veil over the picture, and no blue or cyan tint over the whole image; skin keeps its natural warmth.'
+
+function pickColorGrade(random: Random): string {
+  const total = COLOR_GRADES.reduce((sum, [, weight]) => sum + weight, 0)
+  let roll = random() * total
+  for (const [grade, weight] of COLOR_GRADES) {
+    roll -= weight
+    if (roll < 0) return grade
+  }
+  return COLOR_GRADES[0][0]
+}
+
 /** `count` different flaws for one photo. */
 function pickFlaws(random: Random, count: number): string[] {
   const pool = [...FLAWS]
@@ -524,8 +551,12 @@ export function phonePhotoRealism(
   const flaws = pickFlaws(random, people ? 2 : 3)
   // Rolled last so the picks above stay what they were for a given seed.
   const softLook = Boolean(options.pickTime) && random() < SOFT_LOOK_CHANCE
+  // Post photos name their own color grade; the generic white-balance words fed the milky blue look.
+  const grade = options.pickTime ? pickColorGrade(random) : null
+  const rendering = grade ? CAMERA[1].replace('; auto white balance a bit off (slightly too warm or too cool).', '.') : CAMERA[1]
   return [
-    ...(people ? [options.focusOnPerson ? CAMERA_FOCUSED : CAMERA[0], CAMERA[1]] : [CAMERA_NO_PEOPLE, CAMERA[1]]),
+    ...(people ? [options.focusOnPerson ? CAMERA_FOCUSED : CAMERA[0], rendering] : [CAMERA_NO_PEOPLE, rendering]),
+    ...(grade ? [`Color and exposure in this photo: ${grade}. ${NOT_WASHED_OUT}`] : []),
     ...(options.lens ? [LENS[options.lens]] : []),
     ...(time ? [`Time and light, like this: ${time}. Take only the time, weather and light from it; the place stays the one described above.`] : []),
     ...(variation ? [variation] : []),
