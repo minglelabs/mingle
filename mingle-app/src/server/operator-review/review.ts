@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { zipInterestLanguages, type InterestLanguage } from '@/lib/interest-languages'
+import { canonicalizeSttLanguageCode } from '@/lib/stt-languages'
 import { writeAdminAudit } from '@/server/admin/audit'
 import type { AdminContext } from '@/server/admin/guard'
 import { ageOn } from '@/server/operator-auto-reply/generate'
@@ -738,6 +739,62 @@ export async function setReviewPostPublishAt(
     targetType: 'reserve',
     targetId: id,
     metadata: { decision: 'set_publish_at', publishAt: at?.toISOString() ?? null },
+  })
+  return saved ? { ok: true, post: toReviewPost(saved) } : { ok: false, error: 'not_found' }
+}
+
+/** Longest topic label staff may set. */
+const MAX_TOPIC_LENGTH = 60
+
+export type ReviewPostEdit = { text?: unknown; language?: unknown; topic?: unknown; publishAt?: unknown }
+
+/**
+ * Staff edit everything of a post in review but its photos, in one save:
+ * text, the language it is written in, its topic and the time it is dated at
+ * (see setReviewPostPublishAt). Fields left out stay as they are.
+ */
+export async function editReviewPost(
+  ctx: AdminContext,
+  id: string,
+  edit: ReviewPostEdit,
+  now: Date = new Date(),
+): Promise<{ ok: true; post: ReviewPost } | { ok: false; error: 'not_found' | 'invalid_text' | 'invalid_language' | 'invalid_time' | 'busy' }> {
+  const data: Prisma.OperatorPostReserveUpdateManyMutationInput = {}
+  if (edit.text !== undefined) {
+    const text = typeof edit.text === 'string' ? edit.text.trim() : ''
+    if (!text || text.length > MAX_REVIEW_TEXT_LENGTH) return { ok: false, error: 'invalid_text' }
+    data.text = text
+  }
+  if (edit.language !== undefined) {
+    const language = edit.language === null || edit.language === '' ? null : canonicalizeSttLanguageCode(String(edit.language))
+    if (edit.language && !language) return { ok: false, error: 'invalid_language' }
+    data.language = language
+  }
+  if (edit.topic !== undefined) {
+    const topic = typeof edit.topic === 'string' ? edit.topic.trim().slice(0, MAX_TOPIC_LENGTH) : ''
+    data.topic = topic || null
+  }
+  if (edit.publishAt !== undefined) {
+    if (edit.publishAt === null || edit.publishAt === '') data.releaseAt = null
+    else {
+      const at = typeof edit.publishAt === 'string' ? new Date(edit.publishAt) : null
+      const ms = at?.getTime() ?? Number.NaN
+      if (!at || Number.isNaN(ms) || ms < EARLIEST_PUBLISH_AT || ms > now.getTime() + 60_000) return { ok: false, error: 'invalid_time' }
+      data.releaseAt = ms > now.getTime() ? now : at
+    }
+  }
+  const row = await prisma.operatorPostReserve.findUnique({ where: { id }, select: { state: true, operatorUserId: true } })
+  if (!row || !REVIEW_POST_STATES.includes(row.state)) return { ok: false, error: 'not_found' }
+  // The text only while no rewrite runs; the rest also during a photo redraw.
+  const updated = await prisma.operatorPostReserve.updateMany({ where: { id, state: data.text !== undefined ? 'review' : { in: REVIEW_POST_STATES } }, data })
+  if (updated.count === 0) return { ok: false, error: 'busy' }
+  const saved = await prisma.operatorPostReserve.findUnique({ where: { id }, select: POST_SELECT })
+  await writeAdminAudit(ctx, {
+    action: 'operator_post.review',
+    operatorUserId: row.operatorUserId,
+    targetType: 'reserve',
+    targetId: id,
+    metadata: { decision: 'edit', fields: Object.keys(data).join(','), length: typeof data.text === 'string' ? data.text.length : null },
   })
   return saved ? { ok: true, post: toReviewPost(saved) } : { ok: false, error: 'not_found' }
 }

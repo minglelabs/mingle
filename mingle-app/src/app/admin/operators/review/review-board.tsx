@@ -14,7 +14,7 @@ import { withBack } from '../../_lib/back-path'
 import { adminProfileHref } from '../../_lib/profile-href'
 import { OperatorAvatar } from '../_components/operator-ui'
 import { PhotoRedrawPanel } from '../../feed/_components/photo-redraw-panel'
-import { koreanLanguageName } from '../_lib/options'
+import { buildLanguageOptions, koreanLanguageName } from '../_lib/options'
 import { reviewImageUrl } from './review-image-url'
 import { pastedImage } from '../_lib/pasted-image'
 
@@ -39,6 +39,7 @@ const ERROR_COPY: Record<string, string> = {
   invalid_photos: '사진 목록이 올바르지 않아요. 새로고침 후 다시 해 주세요.',
   invalid_text: '글은 1~1000자로 써 주세요.',
   invalid_time: '지금보다 늦은 시각으로는 정할 수 없어요.',
+  invalid_language: '언어를 다시 골라 주세요.',
 }
 
 type ReviewPhoto = { objectKey: string; width: number | null; height: number | null }
@@ -692,7 +693,20 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
   const [editingPhotos, setEditingPhotos] = useState(false)
   const [editingText, setEditingText] = useState(false)
   const [draft, setDraft] = useState(post.text)
+  const [draftLanguage, setDraftLanguage] = useState(post.language ?? '')
+  const [draftTopic, setDraftTopic] = useState(post.topic ?? '')
+  const [draftTime, setDraftTime] = useState(post.publishAt ? toLocalInput(new Date(post.publishAt)) : '')
   const [savingText, setSavingText] = useState(false)
+  const languageOptions = useMemo(() => buildLanguageOptions(), [])
+  const startEditing = () => {
+    setDraft(post.text)
+    setDraftLanguage(post.language ?? '')
+    setDraftTopic(post.topic ?? '')
+    setDraftTime(post.publishAt ? toLocalInput(new Date(post.publishAt)) : '')
+    setEditingText(true)
+  }
+  const savedTime = post.publishAt ? toLocalInput(new Date(post.publishAt)) : ''
+  const editChanged = draft.trim() !== post.text.trim() || draftLanguage !== (post.language ?? '') || draftTopic.trim() !== (post.topic ?? '') || draftTime !== savedTime
   const [aiNote, setAiNote] = useState('')
   const [drafting, setDrafting] = useState(false)
 
@@ -723,14 +737,20 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
       const response = await fetch('/admin/operators/api/review/text', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: post.id, text: draft }),
+        body: JSON.stringify({
+          id: post.id,
+          text: draft,
+          language: draftLanguage || null,
+          topic: draftTopic,
+          publishAt: draftTime ? new Date(draftTime).toISOString() : null,
+        }),
       })
       const payload = await response.json().catch(() => ({})) as { post?: ReviewPost; error?: string }
       if (!response.ok || !payload.post) throw new Error(payload.error ?? 'request_failed')
       setPost(payload.post)
       setEditingText(false)
     } catch (caught) {
-      setError(ERROR_COPY[(caught as Error).message] ?? '글을 저장하지 못했어요.')
+      setError(ERROR_COPY[(caught as Error).message] ?? '저장하지 못했어요.')
     } finally {
       setSavingText(false)
     }
@@ -784,12 +804,12 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
         {/* Edits this post's text; the account itself is edited from its profile page (tap the name). */}
         <button
           type="button"
-          onClick={() => { setDraft(post.text); setEditingText(true) }}
+          onClick={startEditing}
           disabled={editingText || busy !== null}
           className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100 disabled:opacity-40"
         >
           <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-          글 편집
+          편집
         </button>
         <PinButton kind="post" id={post.id} pinned={pinned} />
       </div>
@@ -824,11 +844,51 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
               {drafting ? 'AI가 쓰는 중…' : 'AI로 글만 다시 쓰기'}
             </AdminButton>
           </div>
+          {/* Everything but the photos. */}
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block text-xs font-medium text-slate-500">
+              쓴 언어
+              <select
+                value={draftLanguage}
+                onChange={(event) => setDraftLanguage(event.target.value)}
+                disabled={savingText}
+                className="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm text-slate-900"
+              >
+                <option value="">계정 기본 언어</option>
+                {languageOptions.map((option) => <option key={option.code} value={option.code}>{option.label}</option>)}
+              </select>
+            </label>
+            <label className="block text-xs font-medium text-slate-500">
+              주제
+              <input
+                value={draftTopic}
+                onChange={(event) => setDraftTopic(event.target.value)}
+                maxLength={60}
+                placeholder="없음"
+                disabled={savingText}
+                className="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+              />
+            </label>
+          </div>
+          <label className="block text-xs font-medium text-slate-500">
+            게시 시각 <span className="font-normal text-slate-400">(비우면 쓴 때~게시한 때 사이 무작위, 미래는 안 됨)</span>
+            <div className="mt-1 flex gap-2">
+              <input
+                type="datetime-local"
+                value={draftTime}
+                max={toLocalInput(new Date())}
+                onChange={(event) => setDraftTime(event.target.value)}
+                disabled={savingText}
+                className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+              />
+              {draftTime ? <AdminButton disabled={savingText} onClick={() => setDraftTime('')}>자동</AdminButton> : null}
+            </div>
+          </label>
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs text-slate-400">{draft.trim().length}/1000</span>
             <div className="flex gap-2">
               <AdminButton disabled={savingText} onClick={() => setEditingText(false)}>취소</AdminButton>
-              <AdminButton variant="primary" disabled={savingText || !draft.trim() || draft.trim() === post.text.trim()} onClick={() => void saveText()}>
+              <AdminButton variant="primary" disabled={savingText || !draft.trim() || !editChanged} onClick={() => void saveText()}>
                 {savingText ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
                 저장
               </AdminButton>
