@@ -416,7 +416,6 @@ const VOLUME_THRESHOLD = 0.05
 // How long a "loaded" older-history page may go without changing the list before its loading state is released.
 const OLDER_LOAD_RELEASE_FALLBACK_MS = 1_500
 const HEADER_LANGUAGE_FLAG_LIMIT = 3
-const VOICE_MODE_PLUS_BUTTON_SIZE_PX = 36
 const ACTION_PANEL_KEYBOARD_RETURN_HOLD_MS = 900
 const ACCOUNT_PREFERENCES_API_PATH = buildClientApiPath('/account/preferences')
 const FEEDBACK_API_PATH = buildClientApiPath('/feedback')
@@ -458,6 +457,8 @@ const VOICE_MODE_STT_BUTTON_HEIGHT_PX = 45
 const VOICE_MODE_STT_ICON_SIZE_PX = 20
 const VOICE_MODE_STT_STOP_SIZE_PX = 14
 const VOICE_MODE_SIDE_BUTTON_SIZE_PX = 44
+// One icon size for every side control (+, photo, speaker/earphone, keyboard) so they line up.
+const VOICE_MODE_SIDE_ICON_SIZE_PX = 20
 const COMPOSER_MODE_CONTROL_SIZE_PX = 36
 const VOICE_MODE_STT_BUTTON_RADIUS_PX = 20
 // Intentionally not localized: review requested fixed English CTA labels for the voice-mode STT button.
@@ -11529,7 +11530,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     <ChatActionPlusButton
                       open={actionPanelOpen}
                       label={conversationImageCopy.attach}
-                      sizePx={VOICE_MODE_PLUS_BUTTON_SIZE_PX}
+                      sizePx={VOICE_MODE_SIDE_BUTTON_SIZE_PX}
+                      iconSizePx={VOICE_MODE_SIDE_ICON_SIZE_PX}
+                      variant="plain"
                       onToggle={handleActionPanelToggle}
                     />
                     {conversationId && viewerUserId ? (
@@ -11544,7 +11547,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           height: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
                         }}
                       >
-                        <ImageIcon size={20} strokeWidth={2} />
+                        <ImageIcon size={VOICE_MODE_SIDE_ICON_SIZE_PX} strokeWidth={2} />
                       </button>
                     ) : null}
                   </motion.div>
@@ -11640,7 +11643,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           height: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
                         }}
                       >
-                        {speakerModeOnSpeaker ? <Volume2 size={18} strokeWidth={2.15} /> : <Headphones size={18} strokeWidth={2.15} />}
+                        {speakerModeOnSpeaker ? <Volume2 size={VOICE_MODE_SIDE_ICON_SIZE_PX} strokeWidth={2} /> : <Headphones size={VOICE_MODE_SIDE_ICON_SIZE_PX} strokeWidth={2} />}
                         {isEarphoneModeOn && earphoneModeReadLanguage && (
                           // The language it reads aloud, so a wrong pick is visible at a glance.
                           <span
@@ -11671,7 +11674,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         height: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
                       }}
                     >
-                      <Keyboard size={20} strokeWidth={2} />
+                      <Keyboard size={VOICE_MODE_SIDE_ICON_SIZE_PX} strokeWidth={2} />
                     </button>
                   </div>
                 </motion.div>

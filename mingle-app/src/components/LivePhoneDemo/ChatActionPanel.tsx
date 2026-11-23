@@ -21,18 +21,30 @@ export function resolveChatActionPanelHeightPx(lastKeyboardHeightPx: number): nu
   return Math.round(Math.min(CHAT_ACTION_PANEL_MAX_HEIGHT_PX, Math.max(CHAT_ACTION_PANEL_MIN_HEIGHT_PX, lastKeyboardHeightPx)))
 }
 
-/** The round "+" in the bottom bar; turns into × while its panel is open. */
+/**
+ * The "+" in the bottom bar; turns into × while its panel is open.
+ * `round` is the filled circle beside the text field; `plain` is a bare icon
+ * that lines up with the voice bar's photo and speaker icons.
+ */
 export function ChatActionPlusButton({
   open,
   label,
   sizePx,
   onToggle,
+  variant = 'round',
+  iconSizePx,
 }: {
   open: boolean
   label: string
   sizePx: number
   onToggle: () => void
+  variant?: 'round' | 'plain'
+  iconSizePx?: number
 }) {
+  const plain = variant === 'plain'
+  const tone = plain
+    ? (open ? 'text-gray-800' : 'text-gray-500 hover:text-gray-700')
+    : `rounded-full ${open ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`
   return (
     <button
       type="button"
@@ -42,14 +54,12 @@ export function ChatActionPlusButton({
       // Keep the textarea's focus decision to onToggle (it closes the keyboard itself).
       onPointerDown={(event) => event.preventDefault()}
       onClick={onToggle}
-      className={`inline-flex shrink-0 items-center justify-center self-end rounded-full transition-all duration-200 active:scale-95 ${
-        open ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-      }`}
+      className={`inline-flex shrink-0 items-center justify-center self-end transition-all duration-200 active:scale-95 ${tone}`}
       style={{ width: sizePx, height: sizePx }}
     >
       <Plus
-        size={Math.round(sizePx * 0.55)}
-        strokeWidth={2.2}
+        size={iconSizePx ?? Math.round(sizePx * 0.55)}
+        strokeWidth={plain ? 2 : 2.2}
         className="transition-transform duration-200"
         style={{ transform: open ? 'rotate(45deg)' : undefined }}
         aria-hidden="true"
