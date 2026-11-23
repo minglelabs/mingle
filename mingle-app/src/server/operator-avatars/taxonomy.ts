@@ -73,7 +73,7 @@ export const AVATAR_CATEGORIES: ReadonlyArray<{ key: AvatarCategory; ko: string;
 
 /** East Asian profiles hide the face more; Western and Latin American ones show it more. */
 const FACE_SHY_COUNTRIES = new Set(['KR', 'JP', 'TW', 'CN'])
-const FACE_FORWARD_COUNTRIES = new Set(['US', 'CA', 'GB', 'AU', 'FR', 'DE', 'ES', 'IT', 'BR', 'MX', 'AR', 'TR'])
+const FACE_FORWARD_COUNTRIES = new Set(['US', 'CA', 'GB', 'AU', 'FR', 'DE', 'ES', 'IT', 'BR', 'MX', 'AR', 'TR', 'RU'])
 
 const CATEGORY_COUNTRY_FACTORS: Record<'shy' | 'forward', Partial<Record<AvatarCategory, number>>> = {
   shy: { face: 0.9, partial: 1.4, back: 1.3, object: 1.2, scenery: 1.2 },
@@ -260,6 +260,10 @@ const COUNTRY_PEOPLE: Record<string, ReadonlyArray<readonly [string, AncestryKey
   MX: [['Mexican mestizo', 'latino', 9], ['light-skinned Mexican', 'white', 1]],
   AR: [['Argentine of European descent', 'white', 8], ['Argentine mestizo', 'latino', 2]],
   TR: [['Turkish', 'middle_eastern', 1]],
+  RU: [['Russian', 'white', 9], ['Tatar Russian', 'mixed', 1]],
+  SA: [['Saudi', 'middle_eastern', 1]],
+  AE: [['Emirati', 'middle_eastern', 4], ['Arab expat in the UAE', 'middle_eastern', 3], ['South Asian expat in the UAE', 'south_asian', 3]],
+  KZ: [['Kazakh', 'east_asian', 7], ['Russian Kazakhstani', 'white', 3]],
 }
 
 /**

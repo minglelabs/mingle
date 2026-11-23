@@ -191,7 +191,8 @@ describe('seed plan', () => {
   it('starts with Korea and keeps the pool near the plan', () => {
     expect(mostUnderrepresentedCountry(new Map())).toBe('KR')
     const counts = new Map<string, number>()
-    for (let index = 0; index < 100; index += 1) {
+    const total = Object.values(DEFAULT_SEED_PLAN).reduce((sum, count) => sum + count, 0)
+    for (let index = 0; index < total; index += 1) {
       const country = mostUnderrepresentedCountry(counts)
       counts.set(country, (counts.get(country) ?? 0) + 1)
     }
