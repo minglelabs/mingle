@@ -15,7 +15,7 @@ describe('face reference without its filter', () => {
     expect(b - r).toBeLessThan(225 - 170)
   })
 
-  it('says the attached photo\\'s colors are not this photo\\'s', () => {
+  it('says the attached photo colors are not the new photo colors', () => {
     const prompt = buildPostImagePrompt('[self] at a bakery', 'Tokyo, Japan', () => 0.4, { look: 'x', hasReference: true, gender: 'female' })
     expect(prompt).toContain('colors are not this photo')
   })
