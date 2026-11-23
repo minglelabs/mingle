@@ -4182,7 +4182,12 @@ function toOpenRoomPerson(member: ChannelMemberProfile): OpenRoomPerson {
  */
 export async function listOpenRooms(
   viewerUserId: string | null,
-  options: { query?: string; now?: Date } = {},
+  options: {
+    query?: string;
+    now?: Date;
+    /** Only these rooms (the voice lounge card). */
+    ids?: string[];
+  } = {},
 ): Promise<OpenRoomCard[]> {
   const query = (options.query ?? "").replace(/^#+/, "").trim();
   const [activity, records] = await Promise.all([
@@ -4191,6 +4196,7 @@ export async function listOpenRooms(
       where: {
         isPublic: true,
         ...buildVisibleConversationWhere(),
+        ...(options.ids ? { id: { in: options.ids } } : {}),
         ...(query
           ? {
             AND: [{

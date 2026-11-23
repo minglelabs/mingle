@@ -45,8 +45,20 @@ export default function OpenRooms({
   query = "",
   onOpenRoom,
   onCountChange,
+  liveOnly = false,
+  excludeIds,
+  liveHeading,
 }: {
   locale: string;
+  /**
+   * The voice tab: only rooms with a live voice talk or game, without the
+   * "make a room" button, and nothing at all while there are none.
+   */
+  liveOnly?: boolean;
+  /** Rooms shown elsewhere on the screen (the voice tab's lounge). */
+  excludeIds?: string[];
+  /** Heading over the live rooms (voice tab). */
+  liveHeading?: string;
   /** Narrow by title or topic (search results). Empty: the Explore list, with the "make a room" button. */
   query?: string;
   /** Open a room the viewer is (now) a member of. */
@@ -70,12 +82,15 @@ export default function OpenRooms({
       const params = query.trim() ? `?q=${encodeURIComponent(query.trim())}` : "";
       const response = await fetch(`${buildClientApiPath("/conversations/open-rooms")}${params}`, { cache: "no-store" });
       if (!response.ok) return;
-      const next = parseOpenRooms(await response.json());
+      const parsed = parseOpenRooms(await response.json());
+      const next = liveOnly
+        ? parsed.filter((room) => openRoomStatus(room) !== "chat")
+        : parsed;
       if (aliveRef.current && seq === requestSeqRef.current) setRooms(next);
     } catch {
       // Keep the last list; the next refresh tries again.
     }
-  }, [query]);
+  }, [liveOnly, query]);
 
   useEffect(() => {
     aliveRef.current = true;
@@ -141,9 +156,6 @@ export default function OpenRooms({
   const joined = (rooms ?? []).filter((room) => room.isMember);
   const others = (rooms ?? []).filter((room) => !room.isMember);
 
-  // Search results: nothing to show until a room matches.
-  if (searching && (rooms === null || rooms.length === 0)) return null;
-
   const renderRows = (list: OpenRoomCard[]) => (
     <ul className="space-y-2.5 px-4">
       {list.map((room) => (
@@ -153,6 +165,31 @@ export default function OpenRooms({
       ))}
     </ul>
   );
+
+  // Search results: nothing to show until a room matches.
+  if (searching && (rooms === null || rooms.length === 0)) return null;
+  const shownRooms = liveOnly ? (rooms ?? []).filter((room) => !(excludeIds ?? []).includes(room.id)) : rooms ?? [];
+  // The voice tab lists live rooms only while there are some.
+  if (liveOnly) {
+    if (shownRooms.length === 0) return null;
+    return (
+      <section className="pb-6 pt-1" aria-label={liveHeading ?? copy.allHeading} data-qa="voice-live-rooms">
+        {liveHeading ? (
+          <h2 className="px-4 pb-2 text-[13px] font-semibold uppercase tracking-wide text-gray-500">{liveHeading}</h2>
+        ) : null}
+        {renderRows(shownRooms)}
+        {error ? <p className="px-4 pt-2 text-[13px] text-red-500" role="alert">{error}</p> : null}
+        {passwordRoom ? (
+          <OpenRoomPasswordPrompt
+            room={passwordRoom}
+            copy={copy}
+            onClose={() => setPasswordRoom(null)}
+            onSubmit={(password) => join(passwordRoom, password)}
+          />
+        ) : null}
+      </section>
+    );
+  }
 
   return (
     <section className={searching ? "border-b border-gray-100 pb-3 pt-3" : "pb-6 pt-1"} aria-label={copy.allHeading} data-qa="explore-open-rooms">

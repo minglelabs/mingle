@@ -23,6 +23,7 @@ import { parseRoomCode } from "@/lib/room-code";
 import { normalizeOpenRoomTitle, normalizeOpenRoomTopic, readOpenRoomPassword } from "@/lib/open-room";
 import { prisma } from "@/lib/prisma";
 import { createReport, normalizeReportMessage, normalizeReportReason } from "@/server/reports/report-service";
+import { getVoiceLounge } from "@/server/voice-lounge";
 
 export const runtime = "nodejs";
 
@@ -76,6 +77,16 @@ export async function getOpenRoomsResponse(request: NextRequest) {
   const query = (request.nextUrl.searchParams.get("q") ?? "").slice(0, 80);
   const rooms = await listOpenRooms(userId || null, { query });
   return NextResponse.json({ rooms }, { headers: { "cache-control": "no-store" } });
+}
+
+/** GET — the voice tab's always-open lounge, as an open-room card (null when it cannot be made). */
+export async function getVoiceLoungeResponse(request: NextRequest) {
+  const userId = await resolveUserId(request).catch(() => "");
+  const lounge = await getVoiceLounge(userId || null).catch((error) => {
+    console.error("[voice-rooms] lounge_failed", error instanceof Error ? error.message : "unknown");
+    return null;
+  });
+  return NextResponse.json({ lounge }, { headers: { "cache-control": "no-store" } });
 }
 
 /** POST { title, topic?, password?, locale? } — make an open room from Explore. */

@@ -1,7 +1,7 @@
 "use client";
 
 import type { AppDictionary } from "@/i18n/types";
-import { Compass, Home, MessageCircle, UserCircle } from "lucide-react";
+import { Compass, Home, MessageCircle, Mic, UserCircle } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -17,6 +17,7 @@ import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-gu
 import { feedHref as buildFeedHref } from "@/lib/feed-routes";
 import { exploreHref as buildExploreHref } from "@/lib/home-routes";
 import { resolveHomeCopy } from "@/i18n/home-copy";
+import { voiceRoomsCopy } from "@/i18n/voice-rooms-copy";
 import {
   buildNativeAwareTabPath as buildNativeAwareTabPathInternal,
   isNativeTabRootHref,
@@ -34,7 +35,7 @@ export const UNREAD_BADGE_POLL_INTERVAL_MS = 60_000;
 
 type BottomTabBarProps = {
   /** Home is the post feed (2026-11-23); "feed" is kept for the post screens, which light Home up. */
-  activeRoute: "home" | "feed" | "conversations" | "connect" | "mypage";
+  activeRoute: "home" | "feed" | "conversations" | "connect" | "voice" | "mypage";
   dictionary: AppDictionary;
   locale: string;
   unreadConversationMessageCount?: number;
@@ -139,6 +140,7 @@ export default function BottomTabBar({
   const conversationsPath = `/${locale}/conversations`;
   const connectPath = `/${locale}/connect`;
   const mypagePath = `/${locale}/mypage`;
+  const voicePath = `/${locale}/voice`;
   // Home is the post feed again; the explore tab opens the people cards and
   // also lights up for the search screen behind them (2026-11-23).
   const homePath = buildFeedHref(locale);
@@ -152,6 +154,7 @@ export default function BottomTabBar({
   });
   const connectHref = buildNativeAwareTabPath(explorePath, searchParams, { tabRoot: true });
   const mypageHref = buildNativeAwareTabPath(mypagePath, searchParams, { tabRoot: true });
+  const voiceHref = buildNativeAwareTabPath(voicePath, searchParams, { tabRoot: true });
   const homeTabHref = buildNativeAwareTabPath(homePath, searchParams, { tabRoot: true });
   // A screen can highlight a tab without living under its route (the post
   // viewer opened from My page): tapping that tab must still go to it.
@@ -168,6 +171,9 @@ export default function BottomTabBar({
     || pathname.startsWith(`${explorePath}/`)
     || pathname === connectPath
     || pathname.startsWith(`${connectPath}/`);
+  const isVoiceActive = activeRoute === "voice"
+    || pathname === voicePath
+    || pathname.startsWith(`${voicePath}/`);
   const isMypageActive = activeRoute === "mypage"
     || pathname === mypagePath
     || pathname.startsWith(`${mypagePath}/`);
@@ -260,6 +266,7 @@ export default function BottomTabBar({
       postingFeedSupported !== true || isHomeActive ? null : homeTabHref,
       isConversationsActive ? null : conversationsHref,
       isConnectActive ? null : connectHref,
+      isVoiceActive ? null : voiceHref,
       isMypageActive ? null : mypageHref,
     ].filter((href): href is string => href !== null);
 
@@ -308,7 +315,9 @@ export default function BottomTabBar({
     isConversationsActive,
     isHomeActive,
     isMypageActive,
+    isVoiceActive,
     mypageHref,
+    voiceHref,
     postingFeedSupported,
     router,
   ]);
@@ -419,6 +428,26 @@ export default function BottomTabBar({
         ) : (
           <Compass size={26} stroke={inactiveColor} strokeWidth={1.9} aria-hidden="true" />
         )}
+      </button>
+      <button
+        type="button"
+        data-qa="tab-voice"
+        onClick={() => {
+          if (isOnTabRoute(voicePath)) return;
+          markTopLevelTabSwitch();
+          router.replace(voiceHref);
+        }}
+        className="flex flex-1 items-center justify-center transition active:opacity-60"
+        aria-label={voiceRoomsCopy(locale).tabLabel}
+        aria-current={isVoiceActive ? "page" : undefined}
+      >
+        <Mic
+          size={26}
+          fill={isVoiceActive ? activeColor : "none"}
+          stroke={isVoiceActive ? activeColor : inactiveColor}
+          strokeWidth={isVoiceActive ? activeStroke - 0.4 : 1.9}
+          aria-hidden="true"
+        />
       </button>
       <button
         type="button"
