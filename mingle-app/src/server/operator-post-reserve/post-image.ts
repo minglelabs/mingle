@@ -65,6 +65,7 @@ export function buildPostImagePrompt(
           'The poster is the person in the attached photo. Use it only to know who they are (face, hair, build); the attached picture itself must not show up in the new one.',
           'The face itself stays exactly the same as in the attached photo: the same eye shape and eyelids, nose, mouth, jawline, skin tone and apparent ethnicity, so anyone would say it is the same person. Only what a person changes between days may differ: how the hair is styled (parted, pushed back, tied, under a cap), glasses on or off, makeup, and the camera and light.',
           'This is a completely different photo taken on another day: a different place, outfit, camera distance, camera angle, head angle, expression, gesture and light. Nothing of the attached photo\'s framing, background, clothes, pose, hand position or expression may carry over; if it would look like the same shot moved somewhere else, it is wrong.',
+          'The attached photo\'s colors are not this photo\'s colors: its filter, haze, softness, brightness, contrast and white balance belong to that one picture. The new photo gets its own color and light from this description.',
           'The expression comes only from this description, never from the attached photo: a frown, knitted or raised brows, a squint or a tense mouth in the attached photo is a passing look, not part of the face. Unless the description says otherwise, the brows and forehead are relaxed and smooth, also while laughing.',
         ]
       : [`The poster: ${person.look}.`]),
@@ -147,6 +148,30 @@ function specSubject(spec: unknown): string | null {
   return /^Subject: (.+?)\.?$/m.exec(value.prompt)?.[1] ?? null
 }
 
+/**
+ * The face reference with its photo's own look taken out (staff 2026-11-23:
+ * every post copied the profile photo's milky, tinted filter). Gray-world white
+ * balance plus a contrast stretch, so the image model sees the face, not the
+ * filter. Gains stay mild so skin tone survives. Falls back to the original.
+ */
+export async function neutralizeReferenceLook(reference: AvatarReference): Promise<AvatarReference> {
+  try {
+    const image = sharp(reference.bytes, { limitInputPixels: 80_000_000 }).rotate().removeAlpha()
+    const { channels } = await image.clone().stats()
+    const means = channels.slice(0, 3).map((channel) => Math.max(1, channel.mean))
+    const gray = (means[0] + means[1] + means[2]) / 3
+    const gains = means.map((mean) => Math.min(1.2, Math.max(0.85, gray / mean)))
+    const bytes = await image
+      .linear(gains, [0, 0, 0])
+      .normalise({ lower: 1, upper: 99 })
+      .jpeg({ quality: 92 })
+      .toBuffer()
+    return { bytes, mimeType: 'image/jpeg' }
+  } catch {
+    return reference
+  }
+}
+
 async function fetchReference(url: string): Promise<AvatarReference | null> {
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(20_000) })
@@ -188,6 +213,7 @@ export async function reservePostPerson(operatorUserId: string, style: PostImage
     const post = selfie?.postId ? await prisma.post.findUnique({ where: { id: selfie.postId }, select: { imageObjectKey: true } }) : null
     if (post?.imageObjectKey) reference = { bytes: Buffer.from(await getPostImage(post.imageObjectKey)), mimeType: 'image/jpeg' }
   }
+  if (reference) reference = await neutralizeReferenceLook(reference)
   const look = subject ?? describeAccountLook(persona, seededRandom(`${operatorUserId}:look`))
   return { person: { look, hasReference: Boolean(reference), gender: persona.gender }, reference }
 }
