@@ -201,6 +201,9 @@ export interface Utterance {
   // what makes a shared room read as "a conversation with a person" rather
   // than a solo interpreter session.
   speakerImage?: string | null
+  // The sender's own language (staff inbox): the avatar's flag shows it
+  // instead of the language this message was written in.
+  speakerFlagLanguage?: string | null
   // The sender's account badge ('operator' = run by HashChat staff, 'official'
   // = the HashChat team's account), shown next to speakerName. Comes from
   // hydration, committed live utterances and live previews (the latter from
@@ -953,6 +956,7 @@ function ChatBubble({
   const originalDisplayLanguage = displayLanguageResolver.originalLanguage
   const originalDisplayText = resolveOriginalDisplayText(utterance)
   const flag = getSttLanguageFlag(originalDisplayLanguage)
+  const avatarFlagLanguage = utterance.speakerFlagLanguage || originalDisplayLanguage
   const originalLanguageBadgeLabel = getOriginalLanguageBadgeLabel(originalDisplayLanguage)
   const avatar = getSpeakerAvatar(
     utterance.speaker,
@@ -1378,15 +1382,16 @@ function ChatBubble({
         ) : (
           avatarImage
         )}
-        {originalDisplayLanguage && flag !== '🌐' && !announcementCard ? (
-          // The language this message was spoken in, small at the avatar's bottom-left.
+        {avatarFlagLanguage && getSttLanguageFlag(avatarFlagLanguage) !== '🌐' && !announcementCard ? (
+          // The language this message was spoken in (or, in the staff inbox, the
+          // sender's own language), small at the avatar's bottom-left.
           // A language without a flag of its own shows none.
           <span
             aria-hidden="true"
-            data-speaker-avatar-flag={originalDisplayLanguage}
+            data-speaker-avatar-flag={avatarFlagLanguage}
             className="pointer-events-none absolute -bottom-[3px] -left-[3px] flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-white px-[1px] ring-1 ring-gray-200"
           >
-            <LanguageFlag language={originalDisplayLanguage} className="text-[9px] leading-none" />
+            <LanguageFlag language={avatarFlagLanguage} className="text-[9px] leading-none" />
           </span>
         ) : null}
       </div>

@@ -136,6 +136,8 @@ type MessageListProps = {
   displayLanguage: string | undefined
   languageOrder: readonly string[]
   viewerUserId: string
+  /** userId -> the member's own language, for the avatar flag. */
+  ownLanguages: Readonly<Record<string, string>>
 }
 
 /** The bubbles, through the app's own ChatBubble with the operator as viewer. Memoized: typing never re-renders it. */
@@ -146,6 +148,7 @@ const RoomMessageList = memo(function RoomMessageList({
   displayLanguage,
   languageOrder,
   viewerUserId,
+  ownLanguages,
 }: MessageListProps) {
   return (
     <ConversationImageSrcProvider resolve={resolveInboxImageSrc}>
@@ -153,7 +156,8 @@ const RoomMessageList = memo(function RoomMessageList({
         if (item.kind === 'notice') {
           return <p key={item.key} className="px-6 py-2 text-center text-xs text-slate-500 break-words">{item.text}</p>
         }
-        const bubble = toBubbleUtterance(item.utterance)
+        const speakerId = item.utterance.speakerUserId
+        const bubble = toBubbleUtterance(item.utterance, speakerId ? ownLanguages[speakerId] : null)
         const koId = korean ? staffKoreanCandidateId(item.utterance) : null
         return (
           <div key={item.key} className="px-3 py-1">
@@ -530,6 +534,14 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
   }, [sendReply])
 
   const counterpartTitle = inboxCounterpartTitle(room.counterparts)
+  const ownLanguages = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const person of [...room.operators, ...room.counterparts]) {
+      const language = person.primaryLanguage ?? (person as { personaLanguage?: string | null }).personaLanguage
+      if (language) map[person.userId] = language
+    }
+    return map
+  }, [room.operators, room.counterparts])
   const operatorName = inboxPersonLabel(operator)
   const personaLanguageName = inboxLanguageName(operator.personaLanguage)
   const unavailable = roomGone
@@ -633,6 +645,7 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
             displayLanguage={displayLanguage}
             languageOrder={languageOrder}
             viewerUserId={operatorId}
+            ownLanguages={ownLanguages}
           />
           </MessageReadReceiptsStaticProvider>
           {pending.map((reply) => (
