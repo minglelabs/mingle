@@ -23,9 +23,10 @@ import { visiblePostWhere } from '@/server/posts/post-visibility'
  * third of them and, now and then, answers it (Claude Sonnet 5.5, `operator-comments/generate.ts`).
  * Comments and replies are AI-written, so each run writes at most a few.
  *
- * A real person's own post gets a light plan too (`planRealPostEngagement`):
- * a few operator likes and at most two comments, hours apart, from operators
- * who already talked with that person first, else ones writing its language.
+ * A real person's own post gets a plan too (`planRealPostEngagement`): a
+ * first like within minutes, more over the day (a photo more than text), and
+ * up to two comments (three on a photo), hours apart, from operators who
+ * already talked with that person first, else ones writing its language.
  */
 
 const HOUR_MS = 60 * 60_000
@@ -154,16 +155,31 @@ export type RealPostEngagementPlan = {
   likes: number[]
 }
 
-/** How a real person's own post is liked and commented on: lightly, so it never looks staged. */
-export function planRealPostEngagement(postId: string): RealPostEngagementPlan {
+/** Real posts: likes `likesMin` plus up to `likesSpread` more (higher `skew`: big counts rarer); comments: weights for 0, 1, 2… */
+const REAL_POST_REACTIONS: Record<'text' | 'photo', { likesMin: number; likesSpread: number; skew: number; comments: readonly number[] }> = {
+  text: { likesMin: 1, likesSpread: 4, skew: 1.6, comments: [30, 55, 15] },
+  photo: { likesMin: 2, likesSpread: 9, skew: 1.4, comments: [10, 45, 33, 12] },
+}
+
+/**
+ * How a real person's own post is liked and commented on: never the same twice
+ * (seeded per post), a photo drawing more than text. The first like comes fast
+ * (1-20 minutes), the rest spread over the day; comments come hours apart.
+ */
+export function planRealPostEngagement(postId: string, options: { photo?: boolean } = {}): RealPostEngagementPlan {
   const random = seededRandom(`engage-real-post:${postId}`)
-  const commentCount = weightedCount(random, [15, 60, 25])
-  const first = delay(random, 25 * MINUTE_MS, 6 * HOUR_MS)
-  const second = first + delay(random, 2 * HOUR_MS, 14 * HOUR_MS)
-  const comments = [first, second].slice(0, commentCount)
-  const likeCount = 1 + weightedCount(random, [30, 30, 20, 12, 8])
-  const likes = Array.from({ length: likeCount }, () => delay(random, 3 * MINUTE_MS, 18 * HOUR_MS)).sort((a, b) => a - b)
-  return { comments, likes }
+  const shape = REAL_POST_REACTIONS[options.photo ? 'photo' : 'text']
+  const commentCount = weightedCount(random, shape.comments)
+  const comments: number[] = []
+  let at = delay(random, 25 * MINUTE_MS, 5 * HOUR_MS)
+  for (let index = 0; index < commentCount; index += 1) {
+    comments.push(at)
+    at += delay(random, 90 * MINUTE_MS, 12 * HOUR_MS)
+  }
+  const likeCount = shape.likesMin + Math.floor((shape.likesSpread + 1) * random() ** shape.skew)
+  const first = delay(random, MINUTE_MS, 20 * MINUTE_MS)
+  const rest = Array.from({ length: likeCount - 1 }, () => first + delay(random, 4 * MINUTE_MS, 18 * HOUR_MS))
+  return { comments, likes: [first, ...rest].sort((a, b) => a - b) }
 }
 
 /** `ids` in an order fixed by `seed`, so the same accounts are picked again on the next run. */
@@ -387,13 +403,13 @@ async function engageRealPosts(
     },
     orderBy: { publishedAt: 'asc' },
     select: {
-      id: true, authorId: true, sourceLanguage: true, publishedAt: true,
+      id: true, authorId: true, sourceLanguage: true, publishedAt: true, imageObjectKey: true,
       likes: { select: { userId: true } },
       comments: { where: { parentId: null, OR: [{ isDeleted: null }, { isDeleted: false }] }, select: { authorId: true } },
     },
   })
   for (const post of posts) {
-    const plan = planRealPostEngagement(post.id)
+    const plan = planRealPostEngagement(post.id, { photo: Boolean(post.imageObjectKey) })
     const start = post.publishedAt.getTime()
 
     // Likes from operators, in a fixed order per post.

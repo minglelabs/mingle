@@ -65,29 +65,43 @@ describe('real comment engagement plan', () => {
   })
 })
 
+describe('real post engagement plan', () => {
+  const plans = (photo: boolean) => Array.from({ length: 2000 }, (_, index) => planRealPostEngagement(`real-${index}`, { photo }))
+  const median = (values: number[]) => [...values].sort((a, b) => a - b)[1000]
+
+  it('is fixed per post and gives a photo more likes and comments than text', () => {
+    expect(planRealPostEngagement('p1', { photo: true })).toEqual(planRealPostEngagement('p1', { photo: true }))
+    const text = plans(false)
+    const photo = plans(true)
+    expect(median(text.map((plan) => plan.likes.length))).toBeLessThan(median(photo.map((plan) => plan.likes.length)))
+    expect(Math.max(...text.map((plan) => plan.likes.length))).toBeLessThanOrEqual(5)
+    expect(Math.max(...photo.map((plan) => plan.likes.length))).toBeLessThanOrEqual(11)
+    expect(Math.max(...text.map((plan) => plan.comments.length))).toBeLessThanOrEqual(2)
+    expect(Math.max(...photo.map((plan) => plan.comments.length))).toBeLessThanOrEqual(3)
+    const avg = (list: typeof text) => list.reduce((sum, plan) => sum + plan.comments.length, 0) / list.length
+    expect(avg(photo)).toBeGreaterThan(avg(text))
+  })
+
+  it('likes every post within 20 minutes, then spreads the rest and the comments out', () => {
+    for (const plan of [...plans(false), ...plans(true)]) {
+      expect(plan.likes.length).toBeGreaterThanOrEqual(1)
+      expect(plan.likes[0]).toBeGreaterThanOrEqual(60_000)
+      expect(plan.likes[0]).toBeLessThanOrEqual(20 * 60_000)
+      expect([...plan.likes].sort((a, b) => a - b)).toEqual(plan.likes)
+      for (let index = 1; index < plan.comments.length; index += 1) {
+        expect(plan.comments[index] - plan.comments[index - 1]).toBeGreaterThanOrEqual(90 * 60_000)
+      }
+    }
+    const firstLikes = plans(true).map((plan) => plan.likes[0])
+    expect(new Set(firstLikes).size).toBeGreaterThan(1000)
+  })
+})
+
 describe('seededOrder', () => {
   it('picks the same accounts on every run, in a different order per seed', () => {
     const ids = ['a', 'b', 'c', 'd', 'e', 'f']
     expect(seededOrder(ids, 's1')).toEqual(seededOrder([...ids].reverse(), 's1'))
     expect([...seededOrder(ids, 's1')].sort()).toEqual(ids)
     expect(seededOrder(ids, 's1')).not.toEqual(seededOrder(ids, 's2'))
-  })
-})
-
-describe('real post engagement plan', () => {
-  it('is fixed per post, with at most two comments hours apart and a few likes', () => {
-    expect(planRealPostEngagement('p1')).toEqual(planRealPostEngagement('p1'))
-    const plans = Array.from({ length: 2000 }, (_, index) => planRealPostEngagement(`real-${index}`))
-    const share = (count: number) => plans.filter((plan) => plan.comments.length === count).length / plans.length
-    expect(share(0)).toBeCloseTo(0.15, 1)
-    expect(share(1)).toBeCloseTo(0.6, 1)
-    expect(share(2)).toBeCloseTo(0.25, 1)
-    for (const plan of plans) {
-      expect(plan.comments.length).toBeLessThanOrEqual(2)
-      if (plan.comments[0] !== undefined) expect(plan.comments[0]).toBeGreaterThanOrEqual(25 * 60_000)
-      if (plan.comments.length === 2) expect(plan.comments[1] - plan.comments[0]).toBeGreaterThanOrEqual(2 * 3_600_000)
-      expect(plan.likes.length).toBeGreaterThanOrEqual(1)
-      expect(plan.likes.length).toBeLessThanOrEqual(5)
-    }
   })
 })
