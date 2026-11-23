@@ -19,7 +19,7 @@ import { InlinePostComments } from '../../../activity/_components/inline-post-co
 import { OperatorsMain } from '../../_components/operator-ui'
 import { ZoomableAvatar } from '../../_components/zoomable-avatar'
 import { ReviewBoard, ReviewPhotos, StaffBio } from '../../review/review-board'
-import { reviewImageUrl } from '../../review/review-image-url'
+import { adminPostImageUrl, reviewImageUrl } from '../../review/review-image-url'
 
 export const dynamic = 'force-dynamic'
 
@@ -193,7 +193,7 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
                 <Tile
                   key={post.id}
                   href={href({ view: 'list' }, `post-${post.id}`)}
-                  image={post.imageObjectKey ? `/admin/api/posts/${post.id}/image` : null}
+                  image={post.imageObjectKey ? adminPostImageUrl(post.id) : null}
                   text={post.sourceText ?? ''}
                   badge={post.moderationHiddenAt ? '내림' : post.extraImages.length ? `${post.extraImages.length + 1}장` : null}
                   dimmed={post.moderationHiddenAt !== null}

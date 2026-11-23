@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { adminPostImageUrl } from '../../operators/review/review-image-url'
 
 const ERRORS: Record<string, string> = {
   invalid_image: 'JPG·PNG·WEBP 사진만 넣을 수 있어요.',
@@ -193,7 +194,7 @@ export function PhotoRedrawPanel({ postId, language, onClose, onApplied, review 
         <div className="mt-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={`/admin/api/posts/${postId}/image?candidate=${encodeURIComponent(candidate.objectKey)}`}
+            src={adminPostImageUrl(postId, `?candidate=${encodeURIComponent(candidate.objectKey)}`)}
             alt="새로 만든 사진"
             width={candidate.width || undefined}
             height={candidate.height || undefined}
