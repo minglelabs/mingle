@@ -111,6 +111,16 @@ import {
   type TtsClipAudio,
 } from './tts-stream-clip'
 import { TtsAgentTextScheduler } from './tts-agent-text'
+import {
+  ON_DEVICE_TTS_OPTION_LABEL,
+  createDeviceSpeechClip,
+  estimateDeviceSpeechDurationMs,
+  isDeviceSpeechClip,
+  parseNativeTtsSpeakCapability,
+  readDeviceSpeechClip,
+  readOnDeviceTtsPreference,
+  writeOnDeviceTtsPreference,
+} from './device-speech-clip'
 import { applyCoinBalanceFromHeaders, isCoinBillingActive, notifyCoinsExhausted, openCoinStore, useCoinWallet } from '@/lib/coin-wallet-client'
 import { showCoinRateToast } from '@/lib/coin-rate-toast'
 import { fillCoinCopy, getCoinCopy } from '@/i18n/coin-copy'
@@ -2420,6 +2430,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     initialCachedAccountPreferences?.translationModel ?? DEFAULT_SELECTABLE_TRANSLATION_MODEL,
   )
   // null = never picked; the settings row shows the effective default instead.
+  // On-device TTS (iOS system voice) chosen on this device; server TTS is
+  // skipped while it is on. Kept apart from the account's server model.
+  const [onDeviceTtsSelected, setOnDeviceTtsSelected] = useState(false)
+  const onDeviceTtsSelectedRef = useRef(false)
+  useEffect(() => {
+    const stored = readOnDeviceTtsPreference()
+    onDeviceTtsSelectedRef.current = stored
+    setOnDeviceTtsSelected(stored)
+  }, [])
   const [ttsModel, setTtsModel] = useState<UserSelectableTtsModel | null>(
     initialCachedAccountPreferences?.ttsModel ?? null,
   )
@@ -2876,10 +2895,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   )
   // What the server will actually use: the explicit choice, else the default.
   const effectiveTtsModel: UserSelectableTtsModel = ttsModel ?? DEFAULT_SELECTABLE_TTS_MODEL
-  const selectedTtsModelOption = useMemo(
+  const selectedServerTtsModelOption = useMemo(
     () => TTS_MODEL_OPTIONS.find((option) => option.value === effectiveTtsModel) || TTS_MODEL_OPTIONS[0],
     [effectiveTtsModel],
   )
+  // Read at render: the menu opens long after the shell's capabilities arrived.
+  const isOnDeviceTtsSupported = isNativeAppRuntime && parseNativeTtsSpeakCapability(readCachedNativeShellCapabilities())
+  const isOnDeviceTtsActive = isOnDeviceTtsSupported && onDeviceTtsSelected
+  const selectedTtsModelOption = isOnDeviceTtsActive
+    ? { label: ON_DEVICE_TTS_OPTION_LABEL }
+    : selectedServerTtsModelOption
   const requestTranslationModel = useMemo<UserSelectableTranslationModel | undefined>(() => {
     return shouldSendTranslationModelPreference({
       allowSync: enableAccountPreferencesSync,
@@ -4181,8 +4206,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // Mirrors handleTranslationModelSelect. Called by the TTS model row in the settings menu.
   // Any tap is an explicit choice, including the option shown as the default:
   // null -> value counts as a change, so it is cached with pendingSync and PATCHed.
+  const handleOnDeviceTtsSelect = useCallback(() => {
+    setTtsModelMenuOpen(false)
+    onDeviceTtsSelectedRef.current = true
+    setOnDeviceTtsSelected(true)
+    writeOnDeviceTtsPreference(true)
+  }, [])
+
   const handleTtsModelSelect = useCallback((nextTtsModel: UserSelectableTtsModel) => {
     setTtsModelMenuOpen(false)
+    onDeviceTtsSelectedRef.current = false
+    setOnDeviceTtsSelected(false)
+    writeOnDeviceTtsPreference(false)
     setTtsModelUserSelectedSinceHydrationStart(true)
     ttsModelUserSelectedSinceHydrationStartRef.current = true
     const wasAlreadySelected = latestAccountPreferencesRef.current.ttsModel === nextTtsModel
@@ -5008,8 +5043,44 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       }
     }
 
+    const speakViaNativeBridge = async (clip: Blob) => {
+      const speech = await readDeviceSpeechClip(clip)
+      if (!isCurrentClip()) return
+      if (!speech) {
+        onPlaybackDone()
+        return
+      }
+      const playbackId = allocateNativeTtsPlaybackId(next.playbackKey)
+      const estimatedDurationMs = estimateDeviceSpeechDurationMs(speech.text)
+      if (agentTextClip) {
+        agentTextClip.durationMs = estimatedDurationMs
+        ttsAgentTextClipRef.current = agentTextClip
+      }
+      window.ReactNativeWebView!.postMessage(JSON.stringify({
+        type: 'native_tts_speak',
+        payload: {
+          playbackId,
+          utteranceId: next.playbackKey,
+          text: speech.text,
+          language: speech.language || next.language,
+          ...(next.mode === 'auto' && !isSpeakerModeClient() ? { stopOnEarphoneDisconnect: true } : {}),
+        },
+      }))
+      armNativeTtsEventTimeout(playbackId, next.playbackKey, resolveNativeTtsWatchdogTimeoutMs({
+        durationMs: estimatedDurationMs,
+        byteLength: 0,
+      }))
+      if (shouldTreatNativeTtsPostAsStart(isNativeAudioRouteSupported(getNativeAudioRouteSnapshot()))) {
+        markPlaybackStarted()
+      }
+    }
+
     const playViaNativeBridge = async () => {
       try {
+        if (isDeviceSpeechClip(clipAudio)) {
+          await speakViaNativeBridge(clipAudio)
+          return
+        }
         if (isStreamingTtsClip(clipAudio) && parseNativeTtsStreamCapability(readCachedNativeShellCapabilities())) {
           playStreamViaNativeBridge(clipAudio)
           return
@@ -5056,6 +5127,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
 
     const playViaHtmlAudio = async () => {
+      // On-device clips exist only on shells that speak them natively.
+      if (isDeviceSpeechClip(clipAudio)) {
+        onPlaybackDone()
+        return
+      }
       clearNativeTtsEventTimer()
       activeNativeTtsPlaybackIdRef.current = null
       activeNativeTtsUtteranceIdRef.current = null
@@ -5259,6 +5335,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const text = input.text.trim()
     const language = input.language.trim()
     if (!text || !language) return null
+
+    // On-device TTS: the shell speaks the sentence itself, no server request.
+    if (
+      onDeviceTtsSelectedRef.current
+      && isNativeApp()
+      && parseNativeTtsSpeakCapability(readCachedNativeShellCapabilities())
+    ) {
+      return createDeviceSpeechClip(text, language)
+    }
 
     const sessionKey = resolveConversationSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
@@ -9705,8 +9790,38 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                             aria-label={ttsModelLabel}
                                             className="space-y-1.5 p-2.5"
                                           >
+                                            {isOnDeviceTtsSupported && (
+                                              <button
+                                                key="on-device"
+                                                type="button"
+                                                role="option"
+                                                data-qa="live-demo-tts-model-on-device"
+                                                aria-selected={isOnDeviceTtsActive}
+                                                onClick={handleOnDeviceTtsSelect}
+                                                className={`group flex w-full items-center gap-3 rounded-[1rem] px-3 py-3 text-left transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${
+                                                  isOnDeviceTtsActive
+                                                    ? 'bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-gray-950 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.35)]'
+                                                    : 'bg-white text-gray-800 hover:bg-gray-50'
+                                                }`}
+                                              >
+                                                <div className="min-w-0 flex flex-1 items-center justify-center gap-2.5 text-center">
+                                                  <span className="truncate text-[0.94rem] font-semibold">
+                                                    {ON_DEVICE_TTS_OPTION_LABEL}
+                                                  </span>
+                                                </div>
+                                                <span
+                                                  className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
+                                                    isOnDeviceTtsActive
+                                                      ? 'scale-100 bg-amber-500 text-white shadow-[0_6px_14px_rgba(245,158,11,0.28)]'
+                                                      : 'scale-95 bg-gray-100 text-transparent group-hover:bg-amber-100 group-hover:text-amber-500'
+                                                  }`}
+                                                >
+                                                  <Check size={14} strokeWidth={2.6} />
+                                                </span>
+                                              </button>
+                                            )}
                                             {TTS_MODEL_OPTIONS.map((option) => {
-                                              const isSelected = option.value === effectiveTtsModel
+                                              const isSelected = !isOnDeviceTtsActive && option.value === effectiveTtsModel
 
                                               return (
                                                 <button

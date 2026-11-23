@@ -26,8 +26,18 @@ type NativeTtsStreamOptions = {
   stopOnEarphoneDisconnect?: boolean;
 };
 
+type NativeTtsSpeakOptions = {
+  text: string;
+  language: string;
+  playbackId: string;
+  utteranceId?: string;
+  stopOnEarphoneDisconnect?: boolean;
+};
+
 type NativeTtsModuleType = {
   play(options: NativeTtsPlayOptions): Promise<unknown>;
+  // On-device speech with the system voice (iOS shells that have it).
+  speak?(options: NativeTtsSpeakOptions): Promise<unknown>;
   stop(): Promise<{ ok: boolean }>;
   // Streamed playback (headerless 16-bit mono PCM handed over in pieces).
   // Only shells that implement it have these methods.
@@ -113,6 +123,52 @@ export function appendNativeTtsStream(playbackId: string, audioBase64: string): 
 
 export function endNativeTtsStream(playbackId: string): void {
   nativeModule?.endStream?.(playbackId);
+}
+
+/**
+ * True when this shell speaks text with the on-device system voice
+ * (`native_tts_speak`), reported to the page as `ttsSpeak`. iOS only for now.
+ */
+export function isNativeTtsSpeakAvailable(): boolean {
+  return Platform.OS === 'ios' && isNativeTtsAvailable() && typeof nativeModule?.speak === 'function';
+}
+
+/** Resolves once the rendered sentence really started playing (or was refused). */
+export async function speakNativeTts(options: NativeTtsSpeakOptions): Promise<NativeTtsPlayResult> {
+  if (!nativeModule?.speak) {
+    throw new Error('NativeTTSModule speech is unavailable on this runtime.');
+  }
+  return normalizeNativeTtsPlayResult(await nativeModule.speak(options));
+}
+
+export type NativeTtsSpeakCommandPayload = {
+  utteranceId: string;
+  playbackId?: string;
+  text?: string;
+  language?: string;
+  stopOnEarphoneDisconnect?: boolean;
+};
+
+export type NativeTtsSpeakRequest = {
+  utteranceId: string;
+  playbackId: string;
+  text: string;
+  language: string;
+  stopOnEarphoneDisconnect: boolean;
+};
+
+/** The web's `native_tts_speak` payload, as handed to NativeTTSModule.speak. */
+export function resolveNativeTtsSpeakRequest(payload: NativeTtsSpeakCommandPayload): NativeTtsSpeakRequest {
+  const playbackId = typeof payload.playbackId === 'string' && payload.playbackId.trim()
+    ? payload.playbackId.trim()
+    : payload.utteranceId;
+  return {
+    utteranceId: payload.utteranceId,
+    playbackId,
+    text: typeof payload.text === 'string' ? payload.text.trim() : '',
+    language: typeof payload.language === 'string' ? payload.language.trim() : '',
+    stopOnEarphoneDisconnect: payload.stopOnEarphoneDisconnect === true,
+  };
 }
 
 export async function stopNativeTts(): Promise<void> {

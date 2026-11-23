@@ -8,6 +8,12 @@ import {
   parseStreamedPcmSampleRate,
   readStreamingTtsResponse,
 } from './tts-stream-clip'
+import {
+  createDeviceSpeechClip,
+  isDeviceSpeechClip,
+  parseNativeTtsSpeakCapability,
+  readDeviceSpeechClip,
+} from './device-speech-clip'
 
 // Exercise the real bubble-tap TTS callback without mounting the room, so the
 // manual playback path cannot drift from the auto TTS path's model choice.
@@ -32,7 +38,7 @@ function bubbleTtsCallback(context: Record<string, unknown>): (input: BubbleTtsI
 
 function buildContext(
   requestTtsModel: string | undefined,
-  shell: { capabilities?: unknown, streamedResponse?: boolean } = {},
+  shell: { capabilities?: unknown, streamedResponse?: boolean, onDeviceTts?: boolean } = {},
 ) {
   const requests: Array<{ url: string, body: Record<string, unknown> }> = []
   const fetch = async (url: string, init: RequestInit) => {
@@ -56,6 +62,9 @@ function buildContext(
       isNativeApp: () => shell.capabilities !== undefined,
       readCachedNativeShellCapabilities: () => shell.capabilities ?? null,
       parseNativeTtsStreamCapability,
+      parseNativeTtsSpeakCapability,
+      createDeviceSpeechClip,
+      onDeviceTtsSelectedRef: { current: shell.onDeviceTts === true },
       parseStreamedPcmSampleRate,
       readStreamingTtsResponse,
       // Read by the auto-read prefetch limit; the request only records the answer kind.
@@ -76,6 +85,27 @@ function buildContext(
 const input: BubbleTtsInput = { playbackKey: 'utt-1:ko', text: '안녕하세요', language: 'ko' }
 
 describe('bubble-tap TTS request wiring', () => {
+  it('speaks on-device without a server request when the shell can and the user chose it', async () => {
+    const { requests, context } = buildContext('soniox-tts-rt-v2', {
+      capabilities: { type: 'capabilities', ttsSpeak: true },
+      onDeviceTts: true,
+    })
+    const clip = await bubbleTtsCallback(context)(input)
+    expect(requests).toHaveLength(0)
+    expect(isDeviceSpeechClip(clip)).toBe(true)
+    await expect(readDeviceSpeechClip(clip as Blob)).resolves.toEqual({ text: '안녕하세요', language: 'ko' })
+  })
+
+  it('keeps server TTS when the shell cannot speak on-device, even if chosen', async () => {
+    const { requests, context } = buildContext(undefined, {
+      capabilities: { type: 'capabilities', ttsSpeak: false },
+      onDeviceTts: true,
+    })
+    const clip = await bubbleTtsCallback(context)(input)
+    expect(requests).toHaveLength(1)
+    expect(isDeviceSpeechClip(clip)).toBe(false)
+  })
+
   it('sends the TTS model the user picked, like the auto TTS path', async () => {
     const { requests, context } = buildContext('inworld-tts-1.5-mini')
     const blob = await bubbleTtsCallback(context)(input)

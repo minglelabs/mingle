@@ -113,6 +113,7 @@ describe('capabilities message (contract A.1)', () => {
       deviceAudioCapture: false,
       nativeTts: false,
       ttsStream: false,
+      ttsSpeak: false,
       contacts: false,
       earphoneMicrophoneChoice: false,
     });
@@ -123,6 +124,7 @@ describe('capabilities message (contract A.1)', () => {
       deviceAudioCapture: false,
       nativeTts: false,
       ttsStream: false,
+      ttsSpeak: false,
       contacts: false,
       earphoneMicrophoneChoice: false,
     });
@@ -136,6 +138,7 @@ describe('capabilities message (contract A.1)', () => {
       deviceAudioCapture: true,
       nativeTts: false,
       ttsStream: false,
+      ttsSpeak: false,
       contacts: false,
       earphoneMicrophoneChoice: false,
     });
@@ -149,6 +152,7 @@ describe('capabilities message (contract A.1)', () => {
       deviceAudioCapture: false,
       nativeTts: true,
       ttsStream: false,
+      ttsSpeak: false,
       contacts: false,
       earphoneMicrophoneChoice: false,
     });

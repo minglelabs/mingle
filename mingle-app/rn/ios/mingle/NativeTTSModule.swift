@@ -22,6 +22,11 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
     /// Device-audio sessions need the whole clip for the echo canceller, so a
     /// stream is collected here and played as one clip once it ends.
     private var collectedStream: (playbackId: String, sampleRate: Int, pcm: Data)?
+    /// On-device speech (`speak`): the synthesizer rendering the latest
+    /// request, and that request's playbackId. A newer `speak`, `play`,
+    /// `playStream` or `stop` supersedes it. Main queue only.
+    private var speechSynthesizer: AVSpeechSynthesizer?
+    private var pendingSpeechPlaybackId: String?
 
     override init() {
         super.init()
@@ -142,6 +147,7 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
 
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            self.cancelPendingSpeech()
 
             if self.audioPlayer?.isPlaying == true {
                 self.noteClipStopped()
@@ -272,6 +278,7 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
                 || self.streamPlayer != nil
                 || self.collectedStream != nil
             let stoppedPayload = self.playbackPayload()
+            self.cancelPendingSpeech()
             if let player = self.audioPlayer, player.isPlaying {
                 player.stop()
                 self.noteClipStopped()
@@ -464,6 +471,7 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
 
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            self.cancelPendingSpeech()
             if self.audioPlayer?.isPlaying == true {
                 self.noteClipStopped()
             }
@@ -626,6 +634,136 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
         currentStopsOnEarphoneDisconnect = false
         releaseTtsSessionTokenIfNeeded()
         emit("ttsPlaybackStopped", payload: stoppedPayload)
+    }
+
+    // MARK: - On-device speech (AVSpeechSynthesizer)
+
+    /// Speaks `text` with the system voice for `language`, without a server.
+    /// The sentence is rendered to PCM first (much faster than real time) and
+    /// then played through `play`, so it gets the same gain, earphone guard,
+    /// echo-canceller reference and events as a server clip.
+    @objc(speak:resolver:rejecter:)
+    func speak(
+        _ options: NSDictionary,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        let text = ((options["text"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let language = ((options["language"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            reject("invalid_text", "Nothing to speak", nil)
+            return
+        }
+        let rawPlaybackId = (options["playbackId"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let rawUtteranceId = (options["utteranceId"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let playbackId = rawPlaybackId.isEmpty
+            ? (rawUtteranceId.isEmpty ? UUID().uuidString : rawUtteranceId)
+            : rawPlaybackId
+        let stopsOnEarphoneDisconnect = (options["stopOnEarphoneDisconnect"] as? Bool) ?? false
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.cancelPendingSpeech()
+            let utterance = AVSpeechUtterance(string: text)
+            let voice = Self.bestSpeechVoice(for: language)
+            utterance.voice = voice
+            NSLog(
+                "[NativeTTSModule] speak playbackId=%@ language=%@ voice=%@ quality=%d chars=%d",
+                playbackId,
+                language,
+                voice?.identifier ?? "default",
+                voice?.quality.rawValue ?? 0,
+                text.count
+            )
+            let synthesizer = AVSpeechSynthesizer()
+            self.speechSynthesizer = synthesizer
+            self.pendingSpeechPlaybackId = playbackId
+            let startedAt = CACurrentMediaTime()
+            let collector = SpeechPcmCollector()
+            collector.onDone = { [weak self] pcm, sampleRate in
+                DispatchQueue.main.async {
+                    guard let self, self.pendingSpeechPlaybackId == playbackId else {
+                        resolve(["ok": false, "reason": "superseded"])
+                        return
+                    }
+                    self.pendingSpeechPlaybackId = nil
+                    self.speechSynthesizer = nil
+                    guard !pcm.isEmpty, sampleRate > 0 else {
+                        NSLog("[NativeTTSModule] speak produced no audio playbackId=%@", playbackId)
+                        reject("speech_empty", "The system voice produced no audio", nil)
+                        return
+                    }
+                    NSLog(
+                        "[NativeTTSModule] speak rendered playbackId=%@ ms=%.0f audioMs=%.0f",
+                        playbackId,
+                        (CACurrentMediaTime() - startedAt) * 1000,
+                        Double(pcm.count / 2) / Double(sampleRate) * 1000
+                    )
+                    let wav = Self.wavData(pcm: pcm, sampleRate: sampleRate, channels: 1)
+                    let playOptions: NSDictionary = [
+                        "audioBase64": wav.base64EncodedString(),
+                        "playbackId": playbackId,
+                        "utteranceId": rawUtteranceId,
+                        "stopOnEarphoneDisconnect": stopsOnEarphoneDisconnect,
+                    ]
+                    self.play(playOptions, resolver: resolve, rejecter: reject)
+                }
+            }
+            synthesizer.write(utterance) { buffer in
+                collector.append(buffer)
+            }
+            collector.armIdleTimeout()
+        }
+    }
+
+    private func cancelPendingSpeech() {
+        pendingSpeechPlaybackId = nil
+        speechSynthesizer?.stopSpeaking(at: .immediate)
+        speechSynthesizer = nil
+    }
+
+    /// The app's language code (`ko`, `zh-Hant`, `pt-BR`) as a BCP-47 tag the
+    /// system voices use.
+    static func speechLanguageTag(for language: String) -> String {
+        let normalized = language.replacingOccurrences(of: "_", with: "-").lowercased()
+        switch normalized {
+        case "zh-hant", "zh-tw": return "zh-TW"
+        case "zh-hk", "yue": return "zh-HK"
+        case "zh", "zh-hans", "zh-cn": return "zh-CN"
+        default: break
+        }
+        if normalized.contains("-") {
+            let parts = normalized.split(separator: "-")
+            return "\(parts[0])-\(parts[1].uppercased())"
+        }
+        let defaults: [String: String] = [
+            "ko": "ko-KR", "en": "en-US", "ja": "ja-JP", "es": "es-ES", "fr": "fr-FR",
+            "de": "de-DE", "vi": "vi-VN", "th": "th-TH", "id": "id-ID", "ru": "ru-RU",
+            "pt": "pt-BR", "ar": "ar-SA", "hi": "hi-IN", "it": "it-IT", "tr": "tr-TR",
+        ]
+        return defaults[normalized] ?? normalized
+    }
+
+    /// The best installed voice for `language`: premium, then enhanced, then
+    /// the default one; the exact region first, then any region of the
+    /// language. Novelty voices (Bells, Bubbles...) are never picked.
+    static func bestSpeechVoice(for language: String) -> AVSpeechSynthesisVoice? {
+        let tag = speechLanguageTag(for: language)
+        let base = tag.split(separator: "-").first.map(String.init)?.lowercased() ?? tag.lowercased()
+        let voices = AVSpeechSynthesisVoice.speechVoices().filter { voice in
+            if #available(iOS 17.0, *), voice.voiceTraits.contains(.isNoveltyVoice) { return false }
+            return true
+        }
+        let exact = voices.filter { $0.language.caseInsensitiveCompare(tag) == .orderedSame }
+        let sameLanguage = voices.filter {
+            let code = $0.language.lowercased()
+            return code == base || code.hasPrefix(base + "-")
+        }
+        let pool = exact.isEmpty ? sameLanguage : exact
+        let best = pool.max { $0.quality.rawValue < $1.quality.rawValue }
+        return best ?? AVSpeechSynthesisVoice(language: tag)
     }
 
     // MARK: - AVAudioPlayerDelegate
@@ -799,5 +937,79 @@ final class NativeTtsPcmStreamPlayer {
         guard ended, unplayed.isEmpty, !stopped, !finished else { return }
         finished = true
         onFinished(self)
+    }
+}
+
+/// Gathers what `AVSpeechSynthesizer.write` renders as 16-bit mono PCM. The
+/// render ends with an empty buffer; some iOS versions never send it, so a
+/// short pause with no new audio also ends it. `onDone` fires once.
+final class SpeechPcmCollector {
+    private let queue = DispatchQueue(label: "mingle.tts.speech-collector")
+    private var pcm = Data()
+    private var sampleRate = 0
+    private var done = false
+    private var idleWork: DispatchWorkItem?
+    var onDone: ((Data, Int) -> Void)?
+
+    /// No audio at all for this long ends the render too (voice missing).
+    private static let firstAudioTimeout: TimeInterval = 4.0
+    /// Silence after the last buffer that counts as the end.
+    private static let trailingIdleTimeout: TimeInterval = 0.6
+
+    func armIdleTimeout() {
+        queue.async { self.scheduleIdle(after: Self.firstAudioTimeout) }
+    }
+
+    func append(_ buffer: AVAudioBuffer) {
+        guard let buffer = buffer as? AVAudioPCMBuffer else { return }
+        let frames = Int(buffer.frameLength)
+        let format = buffer.format
+        var chunk = Data(capacity: frames * 2)
+        if frames > 0 {
+            let channels = Int(format.channelCount)
+            if let int16 = buffer.int16ChannelData {
+                for frame in 0 ..< frames {
+                    var sum: Int32 = 0
+                    for channel in 0 ..< channels { sum += Int32(int16[channel][frame]) }
+                    var value = Int16(clamping: sum / Int32(max(channels, 1))).littleEndian
+                    withUnsafeBytes(of: &value) { chunk.append(contentsOf: $0) }
+                }
+            } else if let float = buffer.floatChannelData {
+                for frame in 0 ..< frames {
+                    var sum: Float = 0
+                    for channel in 0 ..< channels { sum += float[channel][frame] }
+                    let sample = max(-1, min(1, sum / Float(max(channels, 1))))
+                    var value = Int16(sample * 32767).littleEndian
+                    withUnsafeBytes(of: &value) { chunk.append(contentsOf: $0) }
+                }
+            }
+        }
+        let rate = Int(format.sampleRate)
+        queue.async {
+            guard !self.done else { return }
+            if frames == 0 {
+                self.finish()
+                return
+            }
+            if self.sampleRate == 0 { self.sampleRate = rate }
+            self.pcm.append(chunk)
+            self.scheduleIdle(after: Self.trailingIdleTimeout)
+        }
+    }
+
+    private func scheduleIdle(after delay: TimeInterval) {
+        idleWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.finish() }
+        idleWork = work
+        queue.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+
+    private func finish() {
+        guard !done else { return }
+        done = true
+        idleWork?.cancel()
+        idleWork = nil
+        onDone?(pcm, sampleRate)
+        onDone = nil
     }
 }

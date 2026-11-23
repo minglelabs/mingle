@@ -16,6 +16,10 @@ RCT_EXTERN_METHOD(appendStream:(NSString *)playbackId
 
 RCT_EXTERN_METHOD(endStream:(NSString *)playbackId)
 
+RCT_EXTERN_METHOD(speak:(NSDictionary *)options
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 RCT_EXTERN_METHOD(stop:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 

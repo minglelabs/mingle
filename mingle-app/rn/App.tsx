@@ -54,6 +54,9 @@ import {
   isNativeTtsStreamAvailable,
   playNativeTts,
   resolveNativeTtsPlayRequest,
+  isNativeTtsSpeakAvailable,
+  resolveNativeTtsSpeakRequest,
+  speakNativeTts,
   resolveNativeTtsStartedEvent,
   resolveNativeTtsStreamStartRequest,
   startNativeTtsStream,
@@ -834,6 +837,17 @@ type NativeTtsCommand =
         audioBase64: string;
         contentType?: string;
         // Earphone mode (contract A.5): iOS stops this clip when earphones go away.
+        stopOnEarphoneDisconnect?: boolean;
+      };
+    }
+  | {
+      // On-device speech: the shell renders `text` with the system voice.
+      type: 'native_tts_speak';
+      payload: {
+        utteranceId: string;
+        playbackId?: string;
+        text?: string;
+        language?: string;
         stopOnEarphoneDisconnect?: boolean;
       };
     }
@@ -4938,6 +4952,33 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (parsed.type === 'native_tts_speak') {
+      const request = resolveNativeTtsSpeakRequest(parsed.payload);
+      const { utteranceId, playbackId } = request;
+      currentTtsPlaybackRef.current = { utteranceId, playbackId };
+      if (__DEV__) {
+        console.log(`[Web→NativeTTS] speak utteranceId=${utteranceId} playbackId=${playbackId} language=${request.language} chars=${request.text.length}`);
+      }
+      void speakNativeTts(request).then((result) => {
+        const startedEvent = resolveNativeTtsStartedEvent(result, request, currentTtsPlaybackRef.current);
+        if (startedEvent) {
+          emitTtsToWeb(startedEvent);
+        } else if (__DEV__) {
+          console.log(`[NativeTTS] no tts_started (speak) playbackId=${playbackId} ok=${result.ok} reason=${result.reason ?? ''}`);
+        }
+      }, (error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        if (__DEV__) {
+          console.log(`[NativeTTS] speak error playbackId=${playbackId}: ${message}`);
+        }
+        if (currentTtsPlaybackRef.current?.playbackId === playbackId) {
+          currentTtsPlaybackRef.current = null;
+        }
+        emitTtsToWeb({ type: 'tts_error', utteranceId, playbackId, message });
+      });
+      return;
+    }
+
     if (parsed.type === 'native_tts_stream_start') {
       const request = resolveNativeTtsStreamStartRequest(parsed.payload);
       const { utteranceId, playbackId } = request;
@@ -5501,6 +5542,7 @@ function AppInner(): React.JSX.Element {
       deviceAudioCapture: nativeDeviceAudioCaptureAvailable,
       nativeTts: isNativeTtsAvailable(),
       ttsStream: isNativeTtsStreamAvailable(),
+      ttsSpeak: isNativeTtsSpeakAvailable(),
       contacts: isNativeContactsAvailable(),
       earphoneMicrophoneChoice: nativeEarphoneMicrophoneChoiceAvailable,
     }));
