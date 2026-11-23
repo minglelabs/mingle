@@ -24,7 +24,10 @@ export const AUTH_GATE_PANEL_STYLE = {
   minHeight: "45vh",
 } as const;
 
-export const AUTH_GATE_PANEL_SCREEN_SHARE = 0.45;
+// 0.45 measured ~42% of the screen on the owner's iPhone 11 Pro (the WebView
+// draws CSS pixels a little smaller than the screen's points), so the app asks
+// for 0.48 to land at ~45% (owner, 2026-11-23: "a bit more").
+export const AUTH_GATE_PANEL_SCREEN_SHARE = 0.48;
 
 /**
  * The panel's minimum height. Inside the app, `vh` is the WebView's own height,

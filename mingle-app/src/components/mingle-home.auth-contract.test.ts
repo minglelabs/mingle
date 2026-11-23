@@ -20,7 +20,7 @@ describe("mingle-home auth contracts", () => {
     expect(AUTH_GATE_PANEL_CLASSNAME).toContain("bg-[#1C1C1E]");
     expect(AUTH_GATE_PANEL_STYLE.minHeight).toBe("45vh");
     // Inside the app: 45% of the whole screen (the WebView's vh is shorter than the screen).
-    expect(resolveAuthGatePanelMinHeight({ isNativeApp: true, screenHeight: 812 })).toBe(365);
+    expect(resolveAuthGatePanelMinHeight({ isNativeApp: true, screenHeight: 812 })).toBe(390);
     expect(resolveAuthGatePanelMinHeight({ isNativeApp: false, screenHeight: 812 })).toBe("45vh");
     expect(resolveAuthGatePanelMinHeight({ isNativeApp: true, screenHeight: 0 })).toBe("45vh");
   });
