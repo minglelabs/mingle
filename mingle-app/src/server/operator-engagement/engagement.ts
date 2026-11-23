@@ -68,13 +68,25 @@ export type PostEngagementPlan = {
   comments: number[]
 }
 
+/** What a post draws: photos more than text, a striking face (미남미녀) a lot more (staff, 2026-11-23). */
+export type PostAppeal = { photo: boolean; attractive: boolean }
+
+/** Likes: `likesMin` plus up to `likesSpread` more (higher `skew`: big counts rarer). Comments: weights for 0, 1, 2… */
+const APPEAL_REACTIONS: Record<'text' | 'photo' | 'attractiveText' | 'attractivePhoto', { likesMin: number; likesSpread: number; skew: number; comments: readonly number[] }> = {
+  text: { likesMin: 1, likesSpread: 11, skew: 1.8, comments: [40, 35, 17, 6, 2] },
+  photo: { likesMin: 1, likesSpread: 24, skew: 1.7, comments: [22, 36, 25, 12, 5] },
+  attractiveText: { likesMin: 3, likesSpread: 24, skew: 1.5, comments: [18, 32, 27, 14, 6, 3] },
+  attractivePhoto: { likesMin: 8, likesSpread: 40, skew: 1.3, comments: [4, 12, 20, 20, 16, 12, 8, 5, 3] },
+}
+
 /** How a post's reactions build up. */
-export function planPostEngagement(postId: string): PostEngagementPlan {
+export function planPostEngagement(postId: string, appeal: PostAppeal = { photo: true, attractive: false }): PostEngagementPlan {
   const random = seededRandom(`engage-post:${postId}`)
-  // 1-24 likes, most posts around 6-10.
-  const likeCount = 1 + Math.floor(24 * random() ** 1.7)
+  const shape = APPEAL_REACTIONS[appeal.attractive ? (appeal.photo ? 'attractivePhoto' : 'attractiveText') : appeal.photo ? 'photo' : 'text']
+  // A photo post by an ordinary account: 1-24 likes, most around 6-10.
+  const likeCount = shape.likesMin + Math.floor(shape.likesSpread * random() ** shape.skew)
   const likes = Array.from({ length: likeCount }, () => delay(random, 3 * MINUTE_MS, 36 * HOUR_MS)).sort((a, b) => a - b)
-  const commentCount = weightedCount(random, [22, 36, 25, 12, 5])
+  const commentCount = weightedCount(random, shape.comments)
   const comments = Array.from({ length: commentCount }, () => delay(random, 8 * MINUTE_MS, 30 * HOUR_MS)).sort((a, b) => a - b)
   return { likes, comments }
 }
@@ -201,9 +213,17 @@ export async function runOperatorEngagement(now: Date = new Date(), options: { m
   const posts = await prisma.post.findMany({
     where: { ...visiblePostWhere(null), author: { isOperator: true }, publishedAt: { gte: since, lte: now } },
     orderBy: { publishedAt: 'asc' },
-    select: { id: true, authorId: true, publishedAt: true, likes: { select: { userId: true } } },
+    select: { id: true, authorId: true, publishedAt: true, imageObjectKey: true, likes: { select: { userId: true } } },
   })
   if (posts.length === 0) return result
+  // 미남미녀: accounts whose profile photo was drawn with a striking face.
+  const striking = new Set((await prisma.operatorAccount.findMany({
+    where: { userId: { in: [...new Set(posts.map((post) => post.authorId))] } },
+    select: { userId: true, avatarSpec: true },
+  })).filter((account) => {
+    const spec = account.avatarSpec as { attributes?: { attractiveness?: unknown } } | null
+    return spec?.attributes?.attractiveness === 'striking'
+  }).map((account) => account.userId))
 
   const comments: CommentRow[] = await prisma.postComment.findMany({
     where: { postId: { in: posts.map((post) => post.id) }, moderationHiddenAt: null, OR: [{ isDeleted: null }, { isDeleted: false }] },
@@ -214,7 +234,7 @@ export async function runOperatorEngagement(now: Date = new Date(), options: { m
   for (const comment of comments) commentsByPost.set(comment.postId, [...(commentsByPost.get(comment.postId) ?? []), comment])
 
   for (const post of posts) {
-    const plan = planPostEngagement(post.id)
+    const plan = planPostEngagement(post.id, { photo: Boolean(post.imageObjectKey), attractive: striking.has(post.authorId) })
     const start = post.publishedAt.getTime()
     const others = operators.filter((id) => id !== post.authorId)
 

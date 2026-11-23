@@ -143,6 +143,11 @@ export const PERSONA_COUNTRIES: readonly PersonaCountry[] = [
     code: 'KZ', nameKo: '카자흐스탄', nameEn: 'Kazakhstan', languages: ['ru', 'kk'],
     cities: [city('Almaty', 43.24, 76.89, 4), city('Astana', 51.17, 71.45, 3), city('Shymkent', 42.34, 69.59)],
   },
+  {
+    // Uzbek is not an app language; young city people there write Russian too.
+    code: 'UZ', nameKo: '우즈베키스탄', nameEn: 'Uzbekistan', languages: ['ru'],
+    cities: [city('Tashkent', 41.3, 69.24, 4), city('Samarkand', 39.65, 66.96), city('Bukhara', 39.77, 64.42)],
+  },
 ]
 
 export type PersonaCountryPreset = { id: string; label: string; codes: string[] }
@@ -154,7 +159,7 @@ export const PERSONA_COUNTRY_PRESETS: readonly PersonaCountryPreset[] = [
   { id: 'english', label: '영어권', codes: ['US', 'CA', 'GB', 'AU'] },
   { id: 'europe', label: '유럽', codes: ['FR', 'DE', 'ES', 'IT'] },
   { id: 'latin-america', label: '중남미', codes: ['BR', 'MX', 'AR'] },
-  { id: 'middle-east-central-asia', label: '중동·러시아·중앙아시아', codes: ['TR', 'RU', 'SA', 'AE', 'KZ'] },
+  { id: 'middle-east-central-asia', label: '중동·러시아·중앙아시아', codes: ['TR', 'RU', 'SA', 'AE', 'KZ', 'UZ'] },
 ]
 
 const COUNTRY_BY_CODE = new Map(PERSONA_COUNTRIES.map(country => [country.code, country]))

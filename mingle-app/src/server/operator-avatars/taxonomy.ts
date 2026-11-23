@@ -266,6 +266,7 @@ const COUNTRY_PEOPLE: Record<string, ReadonlyArray<readonly [string, AncestryKey
   SA: [['Saudi', 'middle_eastern', 1]],
   AE: [['Emirati', 'middle_eastern', 4], ['Arab expat in the UAE', 'middle_eastern', 3], ['South Asian expat in the UAE', 'south_asian', 3]],
   KZ: [['Kazakh', 'east_asian', 7], ['Russian Kazakhstani', 'white', 3]],
+  UZ: [['Uzbek', 'mixed', 9], ['Russian Uzbekistani', 'white', 1]],
 }
 
 /**
@@ -600,10 +601,18 @@ const SHOOTERS: readonly Option[] = [
   ['group_crop', 1, 'cropped out of a group photo, part of someone else\'s shoulder at the edge'],
 ]
 
+// Spread wide on purpose: nearly every picture came out at the same chest-up distance (staff, 2026-11-23).
 const DISTANCES: readonly Option[] = [
-  ['closeup', 3, 'a close-up of the face'], ['shoulders', 4, 'framed from the shoulders up'], ['chest', 3, 'framed from the chest up'],
-  ['waist', 2.5, 'framed from the waist up'], ['full', 1.5, 'a full-body shot, the face small in the frame'],
+  ['extreme_closeup', 1.5, 'very close: the face fills most of the frame, the top of the head or the chin cut off by the edge'],
+  ['closeup', 2.5, 'a close-up of the face'], ['shoulders', 3, 'framed from the shoulders up'], ['chest', 2.5, 'framed from the chest up'],
+  ['waist', 2, 'framed from the waist up'], ['knees', 1.2, 'framed from the knees up, taken from a few meters away'],
+  ['full', 1.5, 'a full-body shot, the face small in the frame'],
+  ['far', 1, 'taken from far away: the person small in a wide view of the place, from across the street or the room, zoomed in a little so the background looks compressed'],
 ]
+/** Distances an arm's length cannot reach. */
+const BEYOND_ARM = new Set(['knees', 'full', 'far'])
+/** Distances that show the body below the waist. */
+const BODY_DISTANCES = new Set(['waist', 'knees', 'full', 'far'])
 
 const COMPOSITIONS: readonly Option[] = [
   ['centered', 4, 'subject centered'], ['off_center', 3, 'subject off to one side'], ['tilted', 1.5, 'the frame slightly tilted'], ['cut_off', 1.5, 'the top of the head cut off by the frame'],
@@ -1096,14 +1105,16 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
     const shooter = mirror ? 'a mirror selfie' : take('shooter', shooters)
     const selfie = attributes.shooter === 'selfie'
     // An arm's length does not reach a full-body shot.
-    const distance = take('distance', selfie ? DISTANCES.filter((option) => option[0] !== 'full') : DISTANCES)
+    // A covered or cropped face needs the face big enough to see what covers it.
+    const distances = DISTANCES.filter((option) => !(selfie && BEYOND_ARM.has(option[0])) && !(category === 'partial' && option[0] === 'far'))
+    const distance = take('distance', distances)
     lines.push(`Subject: ${describePerson(persona, { face: true, body: false, hair: true }, take, random, attributes)}.`)
     lines.push(`Framing: ${subtype.text}; ${selfie ? (SELFIE_SUBTYPES.has(subtype.key) ? 'a front-camera selfie with the arm stretched out' : 'a front-camera selfie, the phone held up in front at about eye level with the arm stretched out') : shooter}; ${distance}; ${take('composition', COMPOSITIONS)}.`)
     // Covering the face with a hand, an object or a pet already uses the free hand.
     const handsBusy = HANDS_BUSY_SUBTYPES.has(subtype.key)
     const handPoses = handsBusy ? HAND_POSES.filter((option) => option[0] === 'none') : selfie ? HAND_POSES.filter((option) => !TWO_HAND_POSES.has(option[0])) : HAND_POSES
     // A body pose only shows when the frame reaches below the waist.
-    const bodyPose = ['waist', 'full'].includes(attributes.distance) ? take('bodyPose', FRAMED_BODY_POSES) : ''
+    const bodyPose = BODY_DISTANCES.has(attributes.distance) ? take('bodyPose', FRAMED_BODY_POSES) : ''
     // Some angles already fix the head, and "caught laughing" fixes the expression.
     const headPose = HEAD_FIXED_SUBTYPES.has(subtype.key) ? '' : take('headPose', HEAD_POSES)
     const expression = subtype.key === 'laughing' ? '' : take('expression', EXPRESSIONS)

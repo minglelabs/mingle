@@ -194,9 +194,26 @@ const LEARNER_LEVELS: readonly LearnerLevel[] = [
 /** How well people on the app speak the language they learn: mostly just started (60%, 25%, 10%, 4%, 1%). */
 const LEARNER_LEVEL_WEIGHTS = [60, 25, 10, 4, 1] as const
 
-function pickLearnerLevel(roll: number): LearnerLevel {
-  let left = roll * LEARNER_LEVEL_WEIGHTS.reduce((sum, weight) => sum + weight, 0)
-  for (const [index, weight] of LEARNER_LEVEL_WEIGHTS.entries()) {
+/**
+ * Korean learners by where they are from (their own language), staff
+ * 2026-11-23: Westerners almost all just started; Japanese and Chinese mostly
+ * too; the rest a little further along.
+ */
+const KOREAN_LEARNER_WEIGHTS: ReadonlyArray<readonly [languages: readonly string[], weights: readonly number[]]> = [
+  [['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'tr', 'ar', 'kk'], [84, 12, 3, 0.8, 0.2]],
+  [['ja', 'zh'], [74, 18, 6, 1.6, 0.4]],
+]
+const OTHER_KOREAN_LEARNER_WEIGHTS = [64, 24, 9, 2.5, 0.5] as const
+
+function learnerWeights(nativeLanguage: string | null | undefined, learning: string): readonly number[] {
+  if (learning !== 'ko') return LEARNER_LEVEL_WEIGHTS
+  const native = (nativeLanguage ?? '').toLowerCase().split('-')[0]
+  return KOREAN_LEARNER_WEIGHTS.find(([languages]) => languages.includes(native))?.[1] ?? OTHER_KOREAN_LEARNER_WEIGHTS
+}
+
+function pickLearnerLevel(roll: number, weights: readonly number[] = LEARNER_LEVEL_WEIGHTS): LearnerLevel {
+  let left = roll * weights.reduce((sum, weight) => sum + weight, 0)
+  for (const [index, weight] of weights.entries()) {
     left -= weight
     if (left < 0) return LEARNER_LEVELS[index]
   }
@@ -204,8 +221,8 @@ function pickLearnerLevel(roll: number): LearnerLevel {
 }
 
 /** A fresh 1-5 level from the same mix, for staff asking the AI for a new profile. */
-export function randomLearnerDots(random: () => number = Math.random): number {
-  return pickLearnerLevel(random()).dots
+export function randomLearnerDots(random: () => number = Math.random, nativeLanguage: string | null = null, learning = 'ko'): number {
+  return pickLearnerLevel(random(), learnerWeights(nativeLanguage, learning)).dots
 }
 
 /** The level for a stored 1-5 dot count, or null when it is not one. */
@@ -228,7 +245,7 @@ export function learnerPlan(seed: string, nativeLanguage: string): LearnerPlan {
   }
   // Staff review: a foreign account mostly writing Korean reads as fake ("일본인이잖아").
   // Their own language comes first; Korean is the occasional learner post.
-  return { language: 'ko', share: pickOne([0.1, 0.15, 0.2, 0.3]), level: pickLearnerLevel(random()) }
+  return { language: 'ko', share: pickOne([0.1, 0.15, 0.2, 0.3]), level: pickLearnerLevel(random(), learnerWeights(native, 'ko')) }
 }
 
 /**

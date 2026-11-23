@@ -2,6 +2,23 @@ import { describe, expect, it } from 'vitest'
 import { planCommentEngagement, planPostEngagement, planRealCommentEngagement, planRealPostEngagement, seededOrder } from './engagement'
 
 describe('post engagement plan', () => {
+  it('gives text posts fewer reactions, photo posts more and striking accounts (미남미녀) far more', () => {
+    const median = (appeal: { photo: boolean; attractive: boolean }, pick: 'likes' | 'comments') => {
+      const counts = Array.from({ length: 2000 }, (_, index) => planPostEngagement(`post-${index}`, appeal)[pick].length).sort((a, b) => a - b)
+      return counts[1000]
+    }
+    const text = median({ photo: false, attractive: false }, 'likes')
+    const photo = median({ photo: true, attractive: false }, 'likes')
+    const striking = median({ photo: true, attractive: true }, 'likes')
+    expect(text).toBeLessThan(photo)
+    expect(photo).toBeLessThan(striking)
+    expect(striking).toBeGreaterThanOrEqual(18)
+    expect(median({ photo: false, attractive: true }, 'likes')).toBeGreaterThan(text)
+    expect(median({ photo: true, attractive: true }, 'comments')).toBeGreaterThan(median({ photo: false, attractive: false }, 'comments'))
+    const strikingMax = Math.max(...Array.from({ length: 2000 }, (_, index) => planPostEngagement(`post-${index}`, { photo: true, attractive: true }).likes.length))
+    expect(strikingMax).toBeLessThanOrEqual(48)
+  })
+
   it('is fixed per post, with likes and comments that come in over time', () => {
     expect(planPostEngagement('p1')).toEqual(planPostEngagement('p1'))
     const plans = Array.from({ length: 2000 }, (_, index) => planPostEngagement(`post-${index}`))

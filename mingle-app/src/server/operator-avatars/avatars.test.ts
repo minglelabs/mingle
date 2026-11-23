@@ -155,7 +155,7 @@ describe('avatar taxonomy', () => {
       expressions.add(spec.attributes.expression)
       if (!['profile', 'high_angle', 'low_angle', 'head_down', 'look_back', 'lying_down'].includes(spec.subtype)) expect(spec.attributes.headPose).toBeTruthy()
       if (spec.attributes.shooter === 'selfie') expect(['arms_crossed', 'pocket', 'cheeks_cupped', 'frame_face', 'hood_strings']).not.toContain(spec.attributes.handPose)
-      if (spec.attributes.bodyPose) expect(['waist', 'full']).toContain(spec.attributes.distance)
+      if (spec.attributes.bodyPose) expect(['waist', 'knees', 'full', 'far']).toContain(spec.attributes.distance)
     }
     expect(expressions.size).toBeGreaterThan(25)
   })
@@ -193,7 +193,7 @@ describe('avatar taxonomy', () => {
       expect(spec.prompt).not.toMatch(/flash|beauty filter|fingertip|photo-booth/i)
       if (['face', 'partial'].includes(spec.category)) expect(spec.prompt).not.toMatch(/film camera/i)
       if (spec.attributes.shooter !== 'selfie') continue
-      expect(spec.attributes.distance).not.toBe('full')
+      expect(['knees', 'full', 'far']).not.toContain(spec.attributes.distance)
       if (spec.subtype === 'front') expect(spec.prompt).toContain('looking at their own face on the phone screen')
     }
   })
