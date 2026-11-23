@@ -7,6 +7,7 @@ import {
   NATIVE_PUSH_TAP_EVENT,
   NATIVE_PUSH_TAP_WINDOW_KEY,
 } from "@/lib/native-push-tap";
+import { markTopLevelTabSwitch } from "@/lib/tab-navigation";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
@@ -33,6 +34,10 @@ export default function NativePushTapReceiver() {
         delete nativeWindow[NATIVE_PUSH_TAP_WINDOW_KEY];
       },
       pushRoute: (href) => router.push(href),
+      replaceRoute: (href) => {
+        markTopLevelTabSwitch();
+        router.replace(href);
+      },
       openConversation: (conversationListHref, conversationId) => {
         replaceWithConversationListThenPush(router, conversationListHref, conversationId);
       },
