@@ -187,8 +187,8 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
                 {post.imageObjectKey ? (
                   <div className={`mt-3 flex gap-2 ${post.extraImages.length ? 'no-scrollbar snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain' : ''}`}>
                     {[
-                      { src: `/api/posts/${post.id}/image?k=${encodeURIComponent(post.imageObjectKey.slice(-16))}`, width: post.imageWidth, height: post.imageHeight },
-                      ...post.extraImages.map((image) => ({ src: `/api/posts/${post.id}/image?index=${image.position}`, width: image.imageWidth, height: image.imageHeight })),
+                      { src: `/api/posts/${post.id}/image/hashchat-${post.id.slice(-8)}.jpg?k=${encodeURIComponent(post.imageObjectKey.slice(-16))}`, width: post.imageWidth, height: post.imageHeight },
+                      ...post.extraImages.map((image) => ({ src: `/api/posts/${post.id}/image/hashchat-${post.id.slice(-8)}-${image.position}.jpg?index=${image.position}`, width: image.imageWidth, height: image.imageHeight })),
                     ].map((photo, index, all) => (
                       <div key={photo.src} className={all.length > 1 ? 'w-[85%] shrink-0 snap-center' : 'w-full'}>
                         <ZoomableImage

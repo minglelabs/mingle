@@ -13,6 +13,7 @@ import { InboxAvatar, KoreanViewSwitch } from '../../inbox/_components/inbox-ui'
 import { useAdminInboxRealtime } from '../../inbox/_components/use-admin-inbox-realtime'
 import { useStaffKoreanView } from '../../inbox/_components/use-staff-korean-view'
 import { formatInboxRelativeTime, inboxLanguageName, inboxPersonLabel } from '../../inbox/_lib/inbox-format'
+import { adminPostImageUrl } from '../../operators/review/review-image-url'
 
 const COMMENT_MAX_LENGTH = 500
 const ADMIN_INBOX_UPDATED_EVENT = 'mingle:admin-inbox-updated'
@@ -368,7 +369,7 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
           <StoredTranslations translations={post.translations ?? []} />
           {post.hasImage ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={`/admin/api/posts/${postId}/image`} alt="글 사진" loading="lazy" className="mt-2 max-h-[28rem] w-auto max-w-full rounded-xl border border-slate-200" />
+            <img src={adminPostImageUrl(postId)} alt="글 사진" loading="lazy" className="mt-2 max-h-[28rem] w-auto max-w-full rounded-xl border border-slate-200" />
           ) : null}
           <div className="mt-2 flex items-start gap-3 text-xs text-slate-500">
             <Likes count={post.likeCount} likers={post.likers} size={13} />

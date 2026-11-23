@@ -10,6 +10,7 @@ import { InboxAvatar, KoreanViewSwitch } from '../../inbox/_components/inbox-ui'
 import { useAdminInboxRealtime } from '../../inbox/_components/use-admin-inbox-realtime'
 import { useStaffKoreanView } from '../../inbox/_components/use-staff-korean-view'
 import { formatInboxRelativeTime, formatInboxUnreadCount, inboxPersonLabel } from '../../inbox/_lib/inbox-format'
+import { adminPostImageUrl } from '../../operators/review/review-image-url'
 
 const LIST_ENDPOINT = '/admin/activity/api/items'
 const READ_ENDPOINT = '/admin/activity/api/read'
@@ -120,7 +121,7 @@ function ActivityCard({ item, nowMs, korean, active }: { item: ActivityItem; now
         {item.postHasImage && item.postId ? (
           <span className="mt-1.5 flex min-w-0 items-center gap-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`/admin/api/posts/${encodeURIComponent(item.postId)}/image`} alt="글 사진" loading="lazy" className="h-11 w-11 shrink-0 rounded-lg border border-slate-200 bg-slate-100 object-cover" />
+            <img src={adminPostImageUrl(item.postId)} alt="글 사진" loading="lazy" className="h-11 w-11 shrink-0 rounded-lg border border-slate-200 bg-slate-100 object-cover" />
             <span className="line-clamp-2 min-w-0 break-words text-xs text-slate-500">글 · {item.postExcerpt ?? '📷 사진'}</span>
           </span>
         ) : item.postExcerpt ? (
