@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/server/llm/generate-json', () => ({ OPERATOR_TEXT_OPUS_UNTIL: new Date('2026-12-13T00:00:00+09:00'), operatorTextModel: (now: Date = new Date()) => (now.getTime() < new Date('2026-12-13T00:00:00+09:00').getTime() ? 'claude-opus-5-5' : 'claude-haiku-5-5'), OPERATOR_POST_TEXT_MODEL: 'claude-opus-5-5', OPERATOR_TEXT_MODEL: 'claude-haiku-5-5', resolveJsonProvider: () => 'gemini', extractJsonText: (t: string) => t, generateJson: vi.fn() }))
 
+import { threadBlocksAutoReply } from './comment'
 import { buildCommentInstructions, cleanGeneratedComment, commentLanguageFor, generateOperatorComment, operatorCommentDefaultModel, pickCommentKind, resolveRealUserReplyModel, COMMENT_KINDS } from './generate'
 
 const commenter = { id: 'op_1', name: '민지', bio: null, age: 30, city: 'Gwangju', country: 'South Korea', language: 'ko' }
@@ -71,5 +72,22 @@ describe('generated comments', () => {
   it('is null when the model answer is unusable', async () => {
     const generate = vi.fn(async () => '')
     expect(await generateOperatorComment({ commenter, post: { text: 'x', language: 'ko' }, existingComments: [], generate: generate as never })).toBeNull()
+  })
+})
+
+describe('threadBlocksAutoReply', () => {
+  const staff = { authorId: 'op_other', author: { isOperator: true } }
+  const person = { authorId: 'user_2', author: { isOperator: false } }
+
+  it('stops an automatic reply under a real comment once any operator answered it', () => {
+    expect(threadBlocksAutoReply([staff], 'op_1', true)).toBe(true)
+    expect(threadBlocksAutoReply([{ authorId: 'op_1', author: { isOperator: true } }], 'op_1', true)).toBe(true)
+    expect(threadBlocksAutoReply([person], 'op_1', true)).toBe(false)
+    expect(threadBlocksAutoReply([], 'op_1', true)).toBe(false)
+  })
+
+  it('lets another operator join an operator comment thread, but never twice', () => {
+    expect(threadBlocksAutoReply([staff], 'op_1', false)).toBe(false)
+    expect(threadBlocksAutoReply([{ authorId: 'op_1' }], 'op_1', false)).toBe(true)
   })
 })
