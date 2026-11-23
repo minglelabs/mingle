@@ -19,8 +19,8 @@ import { visiblePostWhere } from '@/server/posts/post-visibility'
  * at what delay), so a run only adds what is due by now and is missing:
  * running it again, or after a restart, never doubles anything. Only operator
  * accounts act. A real person's comment on an operator post gets its own plan
- * (`planRealCommentEngagement`): the operator it was left for likes it and,
- * now and then, answers it (Claude Sonnet 5.5, `operator-comments/generate.ts`).
+ * (`planRealCommentEngagement`): the operator it was left for likes about a
+ * third of them and, now and then, answers it (Claude Sonnet 5.5, `operator-comments/generate.ts`).
  * Comments and replies are AI-written, so each run writes at most a few.
  *
  * A real person's own post gets a light plan too (`planRealPostEngagement`):
@@ -115,11 +115,14 @@ export function planCommentEngagement(commentId: string, isRoot: boolean): Comme
 }
 
 export type RealCommentEngagementPlan = {
-  /** The operator the comment was left for likes it after this delay. */
-  like: number
+  /** The operator the comment was left for likes it after this delay (null: no like, ~65%). */
+  like: number | null
   /** That operator answers it after this delay (null: no answer). Root comments only. */
   reply: number | null
 }
+
+/** Share of real comments the operator likes (liking every one read as staged). */
+export const REAL_COMMENT_LIKE_CHANCE = 0.35
 
 /** How a real person's comment on an operator post is liked and answered. */
 export function planRealCommentEngagement(commentId: string, isRoot: boolean): RealCommentEngagementPlan {
@@ -127,7 +130,9 @@ export function planRealCommentEngagement(commentId: string, isRoot: boolean): R
   const like = delay(random, 3 * MINUTE_MS, 3 * HOUR_MS)
   const replies = random() < 0.6
   const replyAt = delay(random, 10 * MINUTE_MS, 6 * HOUR_MS)
-  return { like, reply: isRoot && replies ? replyAt : null }
+  // Drawn last so the reply rolls stay what they were for existing comments.
+  const likes = random() < REAL_COMMENT_LIKE_CHANCE
+  return { like: likes ? like : null, reply: isRoot && replies ? replyAt : null }
 }
 
 export type RealPostEngagementPlan = {
@@ -322,7 +327,7 @@ async function engageRealComments(now: Date, isOperator: Set<string>, result: En
     const operatorId = comment.replyToUserId && isOperator.has(comment.replyToUserId) ? comment.replyToUserId : comment.post.authorId
     if (!isOperator.has(operatorId)) continue
 
-    if (start + plan.like <= nowMs && !comment.likes.some((like) => like.userId === operatorId)) {
+    if (plan.like !== null && start + plan.like <= nowMs && !comment.likes.some((like) => like.userId === operatorId)) {
       const createdAt = new Date(Math.min(nowMs, start + plan.like))
       const created = await prisma.postCommentLike.createMany({ data: [{ commentId: comment.id, userId: operatorId, createdAt }], skipDuplicates: true })
       if (created.count) {

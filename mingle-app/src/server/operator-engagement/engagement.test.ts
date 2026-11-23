@@ -36,10 +36,11 @@ describe('comment engagement plan', () => {
 })
 
 describe('real comment engagement plan', () => {
-  it('likes every real comment within hours and answers about 60% of root comments', () => {
+  it('likes about 35% of real comments within hours and answers about 60% of root comments', () => {
     expect(planRealCommentEngagement('c1', true)).toEqual(planRealCommentEngagement('c1', true))
     const roots = Array.from({ length: 2000 }, (_, index) => planRealCommentEngagement(`rc-${index}`, true))
-    expect(roots.every((plan) => plan.like >= 3 * 60_000 && plan.like <= 3 * 3_600_000)).toBe(true)
+    expect(roots.every((plan) => plan.like === null || (plan.like >= 3 * 60_000 && plan.like <= 3 * 3_600_000))).toBe(true)
+    expect(roots.filter((plan) => plan.like !== null).length / roots.length).toBeCloseTo(0.35, 1)
     expect(roots.filter((plan) => plan.reply !== null).length / roots.length).toBeCloseTo(0.6, 1)
     expect(roots.every((plan) => plan.reply === null || (plan.reply >= 10 * 60_000 && plan.reply <= 6 * 3_600_000))).toBe(true)
     const replies = Array.from({ length: 200 }, (_, index) => planRealCommentEngagement(`rr-${index}`, false))
