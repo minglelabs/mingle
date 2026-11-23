@@ -185,7 +185,7 @@ describe('where this server can draw (the ChatGPT pool)', () => {
     expect(result).toMatchObject({ ok: true, state: 'review', post: { photoDrawing: true } })
     expect(mocks.reserveUpdateMany.mock.calls[0][0]).toMatchObject({ where: { id: 'r1', state: 'review' }, data: { state: 'regenerating', error: 'photo_drawing' } })
     await vi.waitFor(() => expect(mocks.reserveUpdateMany).toHaveBeenCalledTimes(2))
-    expect(mocks.drawImage).toHaveBeenCalledWith('op1', '[self] a selfie\nStaff feedback on this photo, to follow: 웃는 얼굴로')
+    expect(mocks.drawImage).toHaveBeenCalledWith('op1', '[self] a selfie\nStaff feedback on this photo, to follow: 웃는 얼굴로', undefined)
     expect(mocks.generatePosts).not.toHaveBeenCalled()
     const done = mocks.reserveUpdateMany.mock.calls[1][0]
     expect(done.data).toMatchObject({ state: 'review', imageObjectKey: 'posts/op1/a.jpg', error: null })

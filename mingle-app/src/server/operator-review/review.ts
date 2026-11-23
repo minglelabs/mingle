@@ -4,7 +4,7 @@ import { zipInterestLanguages, type InterestLanguage } from '@/lib/interest-lang
 import { writeAdminAudit } from '@/server/admin/audit'
 import type { AdminContext } from '@/server/admin/guard'
 import { ageOn } from '@/server/operator-auto-reply/generate'
-import { canDrawImagesHere, generateOperatorAvatar, planOperatorAvatar } from '@/server/operator-avatars/generate'
+import { canDrawImagesHere, generateOperatorAvatar, planOperatorAvatar, type AvatarReference } from '@/server/operator-avatars/generate'
 import { generateReservePosts, isKoreaCountry, pickReserveTopics, reservePosterProfile, rewriteReservePostText } from '@/server/operator-post-reserve/generate'
 import { drawReservePostImage } from '@/server/operator-post-reserve/post-image'
 import { MAX_RESERVE_EXTRA_IMAGES, reserveExtraImages, type ReserveExtraImage } from '@/server/operator-post-reserve/extra-images'
@@ -61,9 +61,9 @@ async function releaseProfileIfCutOff(userId: string): Promise<boolean> {
  * puts the row back in review with the photo, or marked failed so the draw
  * button stays. Never throws.
  */
-async function drawPostPhotoInBackground(reserveId: string, operatorUserId: string, description: string, onDrawn: () => Promise<unknown>, onFailed: () => Promise<unknown>): Promise<void> {
+async function drawPostPhotoInBackground(reserveId: string, operatorUserId: string, description: string, onDrawn: () => Promise<unknown>, onFailed: () => Promise<unknown>, staffReference?: AvatarReference): Promise<void> {
   try {
-    const image = await drawReservePostImage(operatorUserId, description)
+    const image = await drawReservePostImage(operatorUserId, description, staffReference)
     await prisma.operatorPostReserve.updateMany({
       where: { id: reserveId, state: 'regenerating' },
       data: image
@@ -393,6 +393,7 @@ export async function reviewOperatorProfile(
   userId: string,
   action: ReviewAction,
   feedback: string | null,
+  options: { reference?: AvatarReference } = {},
 ): Promise<ProfileReviewResult> {
   const account = await prisma.operatorAccount.findUnique({
     where: { userId },
@@ -432,7 +433,7 @@ export async function reviewOperatorProfile(
     }
     void (async () => {
       try {
-        const drawn = await generateOperatorAvatar(ctx, userId, { feedback })
+        const drawn = await generateOperatorAvatar(ctx, userId, { feedback, reference: options.reference })
         if (drawn.ok) {
           await prisma.operatorAccount.updateMany({ where: { userId, reviewState: 'drawing' }, data: { reviewState: 'pending' } })
           await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'regenerate', feedback, drawing: false } })
@@ -470,6 +471,7 @@ export async function reviewOperatorPost(
   action: ReviewAction,
   feedback: string | null,
   now: Date = new Date(),
+  options: { reference?: AvatarReference } = {},
 ): Promise<PostReviewResult> {
   const row = await prisma.operatorPostReserve.findUnique({
     where: { id: reserveId },
@@ -525,7 +527,7 @@ export async function reviewOperatorPost(
         return { ok: false, error: 'busy' }
       }
       const description = feedback ? `${row.imagePrompt}\nStaff feedback on this photo, to follow: ${feedback}` : row.imagePrompt
-      void drawPostPhotoInBackground(reserveId, row.operatorUserId, description, () => audit('draw', { photo: true }), () => audit('draw', { photo: false }))
+      void drawPostPhotoInBackground(reserveId, row.operatorUserId, description, () => audit('draw', { photo: true }), () => audit('draw', { photo: false }), options.reference)
       const drawing = await prisma.operatorPostReserve.findUnique({ where: { id: reserveId }, select: POST_SELECT })
       return { ok: true, state: 'review', post: toReviewPost(drawing ?? { ...row, state: 'regenerating', error: PHOTO_DRAWING }) }
     }
@@ -577,7 +579,7 @@ export async function reviewOperatorPost(
     })
     if (drawHere) {
       handedToDraw = true
-      void drawPostPhotoInBackground(reserveId, row.operatorUserId, generated.imagePrompt!, () => audit('regenerate', { photo: true }), () => audit('regenerate', { photo: false }))
+      void drawPostPhotoInBackground(reserveId, row.operatorUserId, generated.imagePrompt!, () => audit('regenerate', { photo: true }), () => audit('regenerate', { photo: false }), options.reference)
     } else {
       await audit('regenerate', { photo: generated.imagePrompt ? false : null })
     }

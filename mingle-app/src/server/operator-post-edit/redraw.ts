@@ -7,11 +7,10 @@ import { reservePostImageRequest, reservePostPerson, storeReservePostImage, type
 import { isOwnedPostImageKey } from '@/server/posts/post-image-keys'
 import { getPostImage } from '@/server/posts/post-image-storage'
 import { OPERATOR_POST_PHOTO_MAX_BYTES } from './edit'
+import { pairImages } from '@/server/operator-post-reserve/pair-images'
 
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
 const MAX_NOTE_LENGTH = 500
-const PANEL_HEIGHT = 1024
-const PANEL_GAP = 24
 
 /** Whose face the redrawn reference photo shows. */
 export type RedrawFace = 'poster' | 'new'
@@ -83,19 +82,6 @@ export function buildReferenceRedrawPrompt(input: {
     'It must look like a real, unedited snapshot from an ordinary person\'s phone, not a photoshoot. Everyone in the image is an adult.',
     `${vertical ? 'Vertical 3:4' : 'Horizontal 4:3'} image, one single photo (never two side by side). No watermarks, logos, brand names, borders or frames.`,
   ].join('\n')
-}
-
-/** The reference and the poster's photo side by side in one image: the image route takes one attachment. */
-async function pairImages(left: Buffer, right: Buffer): Promise<Buffer> {
-  const [a, b] = await Promise.all([left, right].map((bytes) => sharp(bytes, { limitInputPixels: 80_000_000 })
-    .rotate()
-    .resize({ height: PANEL_HEIGHT })
-    .jpeg({ quality: 90 })
-    .toBuffer({ resolveWithObject: true })))
-  return sharp({ create: { width: a.info.width + PANEL_GAP + b.info.width, height: PANEL_HEIGHT, channels: 3, background: '#ffffff' } })
-    .composite([{ input: a.data, left: 0, top: 0 }, { input: b.data, left: a.info.width + PANEL_GAP, top: 0 }])
-    .jpeg({ quality: 90 })
-    .toBuffer()
 }
 
 async function readReference(file: FormDataEntryValue | null): Promise<Buffer | null | 'invalid'> {
