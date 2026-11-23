@@ -50,6 +50,8 @@ type ClaimedReservePost = {
   operatorUserId: string
   /** When the reserve row was written (a review publish is dated between this and now). */
   createdAt?: Date
+  /** The time staff set in review for the post to be dated at (review publishes only). */
+  chosenAt?: Date | null
   text: string
   attempts: number
   language: string | null
@@ -99,8 +101,15 @@ async function claimDueReservePosts(now: Date, limit: number): Promise<ClaimedRe
  */
 async function backdateReviewPost(postId: string, row: ClaimedReservePost, now: Date): Promise<void> {
   try {
-    const account = await prisma.operatorAccount.findUnique({ where: { userId: row.operatorUserId }, select: { personaCountry: true } })
-    const at = pickBackdatedPublishAt({ createdAt: new Date(row.createdAt as Date), now, personaCountry: account?.personaCountry })
+    const chosen = row.chosenAt ? new Date(row.chosenAt) : null
+    const at = chosen && !Number.isNaN(chosen.getTime())
+      // Staff set the time in review; never later than now.
+      ? new Date(Math.min(chosen.getTime(), now.getTime()))
+      : pickBackdatedPublishAt({
+          createdAt: new Date(row.createdAt as Date),
+          now,
+          personaCountry: (await prisma.operatorAccount.findUnique({ where: { userId: row.operatorUserId }, select: { personaCountry: true } }))?.personaCountry,
+        })
     await prisma.post.updateMany({ where: { id: postId }, data: { publishedAt: at, createdAt: at } })
   } catch (error) {
     // The post is out either way; it just keeps the publish minute.
@@ -125,7 +134,7 @@ async function releaseOne(row: ClaimedReservePost, now: Date, origin: 'queued' |
       ? { objectKey: row.imageObjectKey, width: row.imageWidth ?? 0, height: row.imageHeight ?? 0 }
       : row.imagePrompt ? await drawReservePostImage(row.operatorUserId, row.imagePrompt) : null
     if (row.imagePrompt && !image) {
-      await settle({ state: 'review', error: PHOTO_PENDING, releaseAt: null })
+      await settle({ state: 'review', error: PHOTO_PENDING, releaseAt: row.chosenAt ?? null })
       return false
     }
     const result = await publishPost({
@@ -163,7 +172,7 @@ async function releaseOne(row: ClaimedReservePost, now: Date, origin: 'queued' |
   } catch (error) {
     try {
       await settle(origin === 'review'
-        ? { state: 'review', error: describeError(error), releaseAt: null }
+        ? { state: 'review', error: describeError(error), releaseAt: row.chosenAt ?? null }
         : row.attempts >= RESERVE_MAX_ATTEMPTS
         ? { state: 'failed', error: describeError(error), releaseAt: null }
         // Back in line; retried a few minutes later.
@@ -403,13 +412,23 @@ export async function publishReservePostNow(
   options: { background?: boolean } = {},
 ): Promise<PublishNowResult> {
   // Same atomic claim as the worker, so a tick racing this click cannot publish it twice.
+  // From review, release_at holds the time staff set (if any): it is handed to
+  // the publish and cleared, since a publish taken from review carries none.
   const claimed = await prisma.$queryRaw<ClaimedReservePost[]>`
-    UPDATE app.app_operator_post_reserve
-    SET state = 'publishing', attempts = attempts + 1, updated_at = ${sqlUtcTimestamp(now)}
-    WHERE id = ${reserveId} AND state = ${fromState}
-    RETURNING id, operator_user_id AS "operatorUserId", text, attempts, language, translations, image_prompt AS "imagePrompt",
-      image_object_key AS "imageObjectKey", image_width AS "imageWidth", image_height AS "imageHeight",
-      extra_images AS "extraImages", created_at AS "createdAt"
+    WITH target AS (
+      SELECT id, release_at FROM app.app_operator_post_reserve
+      WHERE id = ${reserveId} AND state = ${fromState}
+      FOR UPDATE
+    )
+    UPDATE app.app_operator_post_reserve AS reserve
+    SET state = 'publishing', attempts = reserve.attempts + 1, updated_at = ${sqlUtcTimestamp(now)},
+      release_at = CASE WHEN ${fromState}::text = 'review' THEN NULL ELSE reserve.release_at END
+    FROM target
+    WHERE reserve.id = target.id AND reserve.state = ${fromState}
+    RETURNING reserve.id, reserve.operator_user_id AS "operatorUserId", reserve.text, reserve.attempts, reserve.language, reserve.translations,
+      reserve.image_prompt AS "imagePrompt", reserve.image_object_key AS "imageObjectKey", reserve.image_width AS "imageWidth",
+      reserve.image_height AS "imageHeight", reserve.extra_images AS "extraImages", reserve.created_at AS "createdAt",
+      CASE WHEN ${fromState}::text = 'review' THEN target.release_at ELSE NULL END AS "chosenAt"
   `
   if (!claimed[0]) return { ok: false, error: 'reserve_empty' }
   if (options.background) {

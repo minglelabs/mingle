@@ -3,7 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ImageIcon, ImagePlus, Loader2, MessageSquarePlus, Pencil, Pin, PinOff, RefreshCw, Send, Sparkles, Trash2, X } from 'lucide-react'
+import { Clock, ImageIcon, ImagePlus, Loader2, MessageSquarePlus, Pencil, Pin, PinOff, RefreshCw, Send, Sparkles, Trash2, X } from 'lucide-react'
 import type { ReviewItem, ReviewPost, ReviewProfile } from '@/server/operator-review/review'
 import { AdminButton, AdminCard, AdminChip, adminTextareaClassName } from '../../_components/ui'
 import LanguageFlag from '@/components/language-flag'
@@ -37,6 +37,7 @@ const ERROR_COPY: Record<string, string> = {
   file_too_large: '사진이 너무 커요(15MB까지).',
   invalid_photos: '사진 목록이 올바르지 않아요. 새로고침 후 다시 해 주세요.',
   invalid_text: '글은 1~1000자로 써 주세요.',
+  invalid_time: '지금보다 늦은 시각으로는 정할 수 없어요.',
 }
 
 type ReviewPhoto = { objectKey: string; width: number | null; height: number | null }
@@ -190,6 +191,81 @@ const AT_FORMAT = new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'num
 
 function formatAt(iso: string): string {
   return AT_FORMAT.format(new Date(iso))
+}
+
+/** `<input type="datetime-local">` value for a time, in the reader's own clock. */
+function toLocalInput(date: Date): string {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+  return local.toISOString().slice(0, 16)
+}
+
+/**
+ * The time the post is dated at once published: staff pick one (not later
+ * than now), or leave it to a random time between writing and 게시.
+ */
+function PublishAtEditor({ post, writtenAt, onSaved, disabled }: { post: ReviewPost; writtenAt: string; onSaved: (post: ReviewPost) => void; disabled: boolean }) {
+  const [open, setOpen] = useState(false)
+  const [value, setValue] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function save(publishAt: string | null) {
+    setSaving(true)
+    setError(null)
+    try {
+      const response = await fetch('/admin/operators/api/review/time', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: post.id, publishAt }),
+      })
+      const payload = await response.json().catch(() => ({})) as { post?: ReviewPost; error?: string }
+      if (!response.ok || !payload.post) throw new Error(payload.error ?? 'request_failed')
+      onSaved(payload.post)
+      setOpen(false)
+    } catch (caught) {
+      setError(ERROR_COPY[(caught as Error).message] ?? '시각을 저장하지 못했어요.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => { setValue(toLocalInput(post.publishAt ? new Date(post.publishAt) : new Date())); setError(null); setOpen(true) }}
+        className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+      >
+        <Clock className="h-3 w-3" aria-hidden="true" />
+        {post.publishAt ? `게시 시각 ${formatAt(post.publishAt)}` : '게시 시각 자동'}
+      </button>
+    )
+  }
+  const parsed = value ? new Date(value) : null
+  const valid = Boolean(parsed && !Number.isNaN(parsed.getTime()))
+  return (
+    <div className="mb-2 w-full space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+      <p className="text-xs text-slate-500">게시하면 이 시각에 올린 글로 보여요. 자동이면 글 쓴 때({formatAt(writtenAt)})와 게시한 때 사이에서 무작위로 정해요.</p>
+      <input
+        type="datetime-local"
+        value={value}
+        max={toLocalInput(new Date())}
+        onChange={(event) => setValue(event.target.value)}
+        disabled={saving}
+        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+      />
+      {error ? <p className="text-xs text-rose-700">{error}</p> : null}
+      <div className="flex flex-wrap justify-end gap-2">
+        <AdminButton disabled={saving} onClick={() => setOpen(false)}>취소</AdminButton>
+        {post.publishAt ? <AdminButton disabled={saving} onClick={() => void save(null)}>자동으로</AdminButton> : null}
+        <AdminButton variant="primary" disabled={saving || !valid} onClick={() => parsed && void save(parsed.toISOString())}>
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+          저장
+        </AdminButton>
+      </div>
+    </div>
+  )
 }
 
 /** How often and how long a card asks whether the pool has drawn its photo yet. */
@@ -732,6 +808,7 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
         {post.language ? <AdminChip tone="accent">{koreanLanguageName(post.language)}로 씀</AdminChip> : null}
         {post.topic ? <AdminChip>{post.topic}</AdminChip> : null}
         {post.photoKind ? <AdminChip tone="warning">사진: {PHOTO_KIND[post.photoKind] ?? post.photoKind}</AdminChip> : null}
+        <PublishAtEditor post={post} writtenAt={at} onSaved={setPost} disabled={busy !== null} />
       </div>
       {editingText ? (
         <div className="space-y-2">
