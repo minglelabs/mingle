@@ -91,3 +91,14 @@ describe('threadBlocksAutoReply', () => {
     expect(threadBlocksAutoReply([{ authorId: 'op_1' }], 'op_1', false)).toBe(true)
   })
 })
+
+describe('replies to rude comments', () => {
+  it('answer rudeness with sarcasm or a brush-off, never a lecture and never personal attacks', () => {
+    const reply = buildCommentInstructions('ja', true)
+    expect(reply).toMatch(/rude, mocking/)
+    expect(reply).toMatch(/sarcastic comeback/)
+    expect(reply).toMatch(/Never moralize, lecture/)
+    expect(reply).toMatch(/no swearing or slurs, and never go after their looks, nationality, race, gender/)
+    expect(buildCommentInstructions('ja', false)).not.toMatch(/sarcastic comeback/)
+  })
+})
