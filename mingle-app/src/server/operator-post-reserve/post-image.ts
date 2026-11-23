@@ -8,6 +8,10 @@ import { getPostImage, putPostImage } from '@/server/posts/post-image-storage'
 import { decodePostPhoto, type PostPhotoKind } from './post-photo'
 import { pairImages, stripImages } from './pair-images'
 import { pickPersonVariety } from './post-person-variety'
+import { faceStickerLine } from './face-stickers'
+
+/** Most group photos hide the friends' faces under stickers; some friends are fine being seen. */
+const FRIEND_STICKER_SHARE = 0.85
 
 /** The poster as photos of them show them: their look, and whether a photo of them goes along. */
 export type PostPhotoPerson = { look: string; hasReference: boolean; gender?: string | null }
@@ -55,6 +59,8 @@ export function buildPostImagePrompt(
   const realism = phonePhotoRealism(random, { people: true, faces, focusOnPerson: true, lens: lensForShot(description), pickTime: true, scene: `${description} ${place ?? ''}` })
   // Picked after the realism block so its picks stay what they were for a given seed.
   const variety = pickPersonVariety(random, { faces: kind === 'self' || (kind === 'friends' && person.hasReference), female: person.gender === 'female', hasReference: person.hasReference })
+  // Picked last so the picks above stay what they were for a given seed.
+  const stickers = kind === 'friends' && random() < FRIEND_STICKER_SHARE ? faceStickerLine(random) : null
   return [
     'A casual photo of the person who posts it, from their phone gallery, posted on their social media.',
     `It shows: ${description}`,
@@ -71,6 +77,7 @@ export function buildPostImagePrompt(
       : [`The poster: ${person.look}.`]),
     PERSON_LINES[kind],
     ...variety,
+    ...(stickers ? [stickers] : []),
     ...placeLine,
     'It must look like a real, unedited snapshot, not a photoshoot: an ordinary moment, the outfit the person would really wear there.',
     realism,
