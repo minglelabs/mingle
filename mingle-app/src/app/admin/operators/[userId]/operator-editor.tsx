@@ -180,6 +180,65 @@ export function OperatorEditor({
     return () => document.removeEventListener('paste', onPaste)
   }, [])
 
+  // A photo dropped anywhere on the page does the same: a file from Finder, or a
+  // photo dragged from another tab (Chrome then hands over only its address, so it is fetched).
+  const [dropping, setDropping] = useState(false)
+  useEffect(() => {
+    let depth = 0
+    const carriesPhoto = (event: DragEvent) => {
+      const types = Array.from(event.dataTransfer?.types ?? [])
+      return types.includes('Files') || types.includes('text/uri-list')
+    }
+    const onEnter = (event: DragEvent) => {
+      if (!carriesPhoto(event)) return
+      depth += 1
+      setDropping(true)
+    }
+    const onOver = (event: DragEvent) => {
+      if (!carriesPhoto(event)) return
+      event.preventDefault()
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+    }
+    const onLeave = () => {
+      depth = Math.max(0, depth - 1)
+      if (depth === 0) setDropping(false)
+    }
+    const onDrop = async (event: DragEvent) => {
+      if (!carriesPhoto(event)) return
+      event.preventDefault()
+      depth = 0
+      setDropping(false)
+      const data = event.dataTransfer
+      let file = Array.from(data?.files ?? []).find(item => /^image\/(jpeg|png|webp)$/.test(item.type)) ?? null
+      const address = data?.getData('text/uri-list').split('\n').find(line => line && !line.startsWith('#'))?.trim()
+      if (!file && address) {
+        try {
+          const response = await fetch(address, { credentials: 'same-origin' })
+          const blob = await response.blob()
+          if (response.ok && /^image\/(jpeg|png|webp)$/.test(blob.type)) file = new File([blob], 'dropped-photo', { type: blob.type })
+        } catch {
+          file = null
+        }
+      }
+      if (!file) {
+        setPhoto({ status: 'failed', error: '이 사진은 바로 가져올 수 없어요. 저장한 뒤 파일을 끌어다 놓아 주세요.' })
+        return
+      }
+      if (window.confirm('끌어다 놓은 사진으로 프로필 사진을 바꿀까요?')) void uploadPhotoRef.current(file)
+    }
+    const onDropEvent = (event: DragEvent) => { void onDrop(event) }
+    document.addEventListener('dragenter', onEnter)
+    document.addEventListener('dragover', onOver)
+    document.addEventListener('dragleave', onLeave)
+    document.addEventListener('drop', onDropEvent)
+    return () => {
+      document.removeEventListener('dragenter', onEnter)
+      document.removeEventListener('dragover', onOver)
+      document.removeEventListener('dragleave', onLeave)
+      document.removeEventListener('drop', onDropEvent)
+    }
+  }, [])
+
   async function uploadPhoto(file: File) {
     if (photo.status === 'uploading') return
     setPhoto({ status: 'uploading' })
@@ -289,6 +348,11 @@ export function OperatorEditor({
 
   return (
     <div>
+      {dropping ? (
+        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-sky-600/20 p-6">
+          <p className="rounded-2xl border-2 border-dashed border-sky-600 bg-white/95 px-6 py-4 text-base font-semibold text-sky-800 shadow-lg">여기에 놓으면 프로필 사진으로 바꿔요</p>
+        </div>
+      ) : null}
       <div className="flex items-center gap-2">
         <AdminBackLink href={backHref} className="-ml-2 inline-flex h-11 w-11 items-center justify-center rounded-xl text-slate-600 active:bg-slate-200" aria-label="이전 화면으로">
           <ArrowLeft className="h-5 w-5" aria-hidden="true" />
@@ -332,7 +396,7 @@ export function OperatorEditor({
         </div>
         {photo.status === 'failed' && photo.error ? <div className="mt-3"><Notice tone="error">{photo.error}</Notice></div> : null}
         <p className="mt-3 break-words text-xs leading-5 text-slate-500">
-          이 계정은 로그인할 수 없고, 앱에서 이름 옆에 항상 &lsquo;운영 계정&rsquo; 표시가 붙습니다. 사진은 정사각형으로 잘리고 위치 정보는 지워집니다. 복사한 사진을 이 화면에 붙여넣어도(⌘V) 프로필 사진이 바뀝니다.
+          이 계정은 로그인할 수 없고, 앱에서 이름 옆에 항상 &lsquo;운영 계정&rsquo; 표시가 붙습니다. 사진은 정사각형으로 잘리고 위치 정보는 지워집니다. 복사한 사진을 이 화면에 붙여넣거나(⌘V) 끌어다 놓아도 프로필 사진이 바뀝니다.
         </p>
       </section>
 
