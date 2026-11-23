@@ -186,6 +186,12 @@ export type GeneratedReservePost = {
   imagePrompt: string | null
 }
 
+/**
+ * Readers must never sense that a post or comment was machine-written: once
+ * they do, the immersion is gone (shared by the post and comment prompts).
+ */
+export const IMMERSION_RULE = 'Absolutely never let it read as AI-written: readers who sense a machine lose their immersion at once and stop trusting everyone here. No polished, balanced, over-helpful or explaining tone, no textbook phrasing, no lists, no stock filler; write it the way this one person would actually thumb it out on their phone, imperfect and casual.'
+
 export function buildReserveInstructions(persona: Pick<ReservePersona, 'language'>): string {
   const languageName = getSttLanguageDisplayName(persona.language, 'en') || persona.language
   return [
@@ -210,6 +216,7 @@ export function buildReserveInstructions(persona: Pick<ReservePersona, 'language
     'The posts are published on unknown future days. Words like "today", "just now", "earlier" and "tonight" are fine. Never mention a date, weekday, month, season, weather, temperature, holiday, exam period or current event.',
     'Use only facts consistent with the persona. Do not invent a specific employer, school or real person. No politics, religion debate, sexual content, or anything about money or selling.',
     'Never include contact details, links, other apps, @mentions or phone numbers, and never mention HashChat or being an AI.',
+    IMMERSION_RULE,
     'Answer with JSON: {"posts": [{"slot": <number>, "text": "<the post>", "photo": "<photo description or empty>"}]} with exactly one entry per slot.',
   ].join('\n')
 }
