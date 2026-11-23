@@ -170,6 +170,8 @@ export type ReviewPost = {
   rewriting: boolean
   /** The pool's last try at the photo failed; drawing it again is allowed. */
   photoDrawFailed: boolean
+  /** The time staff set for the post to be dated at when published (ISO); null: a random time between writing and 게시. */
+  publishAt: string | null
 }
 
 export type ReviewProfile = {
@@ -208,13 +210,13 @@ export type ReviewQueue = {
 
 const POST_SELECT = {
   id: true, text: true, language: true, topic: true, state: true, imagePrompt: true,
-  imageObjectKey: true, imageWidth: true, imageHeight: true, extraImages: true, reviewFeedback: true, error: true,
+  imageObjectKey: true, imageWidth: true, imageHeight: true, extraImages: true, reviewFeedback: true, error: true, releaseAt: true,
 } as const
 
 function toReviewPost(row: {
   id: string; text: string; language: string | null; topic: string | null; state: string; imagePrompt: string | null
   imageObjectKey: string | null; imageWidth: number | null; imageHeight: number | null; extraImages: unknown
-  reviewFeedback: string | null; error: string | null
+  reviewFeedback: string | null; error: string | null; releaseAt?: Date | null
 }): ReviewPost {
   const photo = row.imagePrompt ? decodePostPhoto(row.imagePrompt) : null
   return {
@@ -235,6 +237,8 @@ function toReviewPost(row: {
     photoDrawing: row.state === 'regenerating' && row.error === PHOTO_DRAWING,
     rewriting: row.state === 'regenerating' && row.error !== PHOTO_DRAWING,
     photoDrawFailed: !row.imageObjectKey && row.error === PHOTO_DRAW_FAILED,
+    // In review, release_at is never a schedule: it only holds the time staff set.
+    publishAt: row.releaseAt ? row.releaseAt.toISOString() : null,
   }
 }
 
@@ -698,6 +702,44 @@ export async function setReviewPostPhotos(
     metadata: { count: kept.length },
   })
   return { ok: true, post: toReviewPost(updated) }
+}
+
+/** Earliest time staff may date a post at. */
+const EARLIEST_PUBLISH_AT = Date.parse('2024-01-01T00:00:00Z')
+
+/**
+ * Staff set the time a post in review is dated at when it is published
+ * (`value` an ISO time, not in the future), or clear it (null: a random time
+ * between writing and 게시). Kept in release_at, which a row in review
+ * otherwise never holds.
+ */
+export async function setReviewPostPublishAt(
+  ctx: AdminContext,
+  id: string,
+  value: unknown,
+  now: Date = new Date(),
+): Promise<{ ok: true; post: ReviewPost } | { ok: false; error: 'not_found' | 'invalid_time' }> {
+  let at: Date | null = null
+  if (value !== null) {
+    if (typeof value !== 'string') return { ok: false, error: 'invalid_time' }
+    at = new Date(value)
+    const ms = at.getTime()
+    if (Number.isNaN(ms) || ms < EARLIEST_PUBLISH_AT || ms > now.getTime() + 60_000) return { ok: false, error: 'invalid_time' }
+    if (ms > now.getTime()) at = now
+  }
+  const row = await prisma.operatorPostReserve.findUnique({ where: { id }, select: { operatorUserId: true } })
+  if (!row) return { ok: false, error: 'not_found' }
+  const updated = await prisma.operatorPostReserve.updateMany({ where: { id, state: { in: REVIEW_POST_STATES } }, data: { releaseAt: at } })
+  if (updated.count === 0) return { ok: false, error: 'not_found' }
+  const saved = await prisma.operatorPostReserve.findUnique({ where: { id }, select: POST_SELECT })
+  await writeAdminAudit(ctx, {
+    action: 'operator_post.review',
+    operatorUserId: row.operatorUserId,
+    targetType: 'reserve',
+    targetId: id,
+    metadata: { decision: 'set_publish_at', publishAt: at?.toISOString() ?? null },
+  })
+  return saved ? { ok: true, post: toReviewPost(saved) } : { ok: false, error: 'not_found' }
 }
 
 /** Longest post text staff may write in review (same cap as a published post). */

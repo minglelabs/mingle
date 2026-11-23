@@ -31,7 +31,7 @@ const postItem: ReviewItem = {
   post: {
     id: 'p1', text: '오늘 한강 산책', language: 'ko', topic: null, state: 'review', photoKind: null, photoDescription: null,
     imageObjectKey: null, imageWidth: null, imageHeight: null, extraImages: [], reviewFeedback: null, error: null,
-    photoRequested: false, photoDrawing: false, rewriting: false, photoDrawFailed: false,
+    photoRequested: false, photoDrawing: false, rewriting: false, photoDrawFailed: false, publishAt: null,
   },
 }
 
@@ -61,5 +61,11 @@ describe('ReviewBoard at phone width', () => {
     }
     expect(html).toContain('맨 앞으로')
     expect(html).toContain('고정 해제')
+  })
+
+  it('shows when a post will be dated: automatic unless staff set a time', () => {
+    expect(render([postItem])).toContain('게시 시각 자동')
+    const timed = { ...postItem, post: { ...postItem.post, publishAt: '2026-11-22T06:30:00.000Z' } }
+    expect(render([timed])).toContain('게시 시각 11. 22. 오후 03:30')
   })
 })
