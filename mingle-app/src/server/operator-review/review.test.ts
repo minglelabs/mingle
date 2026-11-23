@@ -156,7 +156,7 @@ describe('reviewOperatorPost', () => {
     mocks.publishNow.mockResolvedValue({ ok: true, postId: 'p1' })
     mocks.reserveFindUnique.mockResolvedValue({ ...REVIEW_POST, state: 'regenerating' })
     await expect(reviewOperatorPost(null, 'r1', 'publish', null)).resolves.toEqual({ ok: true, state: 'published', postId: 'p1' })
-    expect(mocks.reserveUpdateMany).toHaveBeenCalledWith({ where: { id: 'r1', state: 'regenerating' }, data: { state: 'review' } })
+    expect(mocks.reserveUpdateMany).toHaveBeenCalledWith({ where: { id: 'r1', state: 'regenerating' }, data: { state: 'review', error: null } })
 
     // A 재제작 that is running here: its claim has not answered yet.
     mocks.reserveUpdateMany.mockClear()
@@ -221,6 +221,16 @@ describe('where this server can draw (the ChatGPT pool)', () => {
   })
 })
 
+describe('rewriting state survives a reload', () => {
+  it('shows a row mid-재제작 as rewriting and one mid-drawing as drawing', async () => {
+    const { toReviewPostForTest } = await import('./review')
+    const base = { id: 'r', text: 't', language: null, topic: null, imagePrompt: null, imageObjectKey: null, imageWidth: null, imageHeight: null, extraImages: [], reviewFeedback: null }
+    expect(toReviewPostForTest({ ...base, state: 'regenerating', error: 'text_rewriting' })).toMatchObject({ rewriting: true, photoDrawing: false })
+    expect(toReviewPostForTest({ ...base, state: 'regenerating', error: 'photo_drawing' })).toMatchObject({ rewriting: false, photoDrawing: true })
+    expect(toReviewPostForTest({ ...base, state: 'review', error: null })).toMatchObject({ rewriting: false, photoDrawing: false })
+  })
+})
+
 describe('releaseOrphanedDrawings', () => {
   it('puts drawings and rewrites a previous process left behind back in review', async () => {
     mocks.reserveUpdateMany.mockResolvedValueOnce({ count: 3 }).mockResolvedValueOnce({ count: 2 }).mockResolvedValueOnce({ count: 1 })
@@ -229,7 +239,7 @@ describe('releaseOrphanedDrawings', () => {
       where: { state: 'regenerating', error: 'photo_drawing' },
       data: { state: 'review', error: 'photo_draw_failed' },
     })
-    expect(mocks.reserveUpdateMany).toHaveBeenNthCalledWith(2, { where: { state: 'regenerating' }, data: { state: 'review' } })
+    expect(mocks.reserveUpdateMany).toHaveBeenNthCalledWith(2, { where: { state: 'regenerating' }, data: { state: 'review', error: null } })
     expect(mocks.reserveUpdateMany).toHaveBeenNthCalledWith(3, {
       where: { state: 'publishing', releaseAt: null },
       data: { state: 'review', error: 'publish_interrupted' },

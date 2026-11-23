@@ -24,6 +24,8 @@ export const REVIEW_ITEMS_PER_PAGE = 20
 const PHOTO_DRAW_FAILED = 'photo_draw_failed'
 /** The pool is drawing the photo in the background (the row is `regenerating`). */
 const PHOTO_DRAWING = 'photo_drawing'
+/** 재제작 is rewriting the text (the row is `regenerating`); the photo is drawn after. */
+const TEXT_REWRITING = 'text_rewriting'
 
 /**
  * The 재제작 / drawing jobs this process is running right now. A row marked
@@ -31,7 +33,9 @@ const PHOTO_DRAWING = 'photo_drawing'
  * and nothing will ever finish it, so it is put back instead of answering
  * "busy": busy means a job is really running.
  */
-const runningHere = new Set<string>()
+// On globalThis: every route and page module of this process sees the same jobs,
+// so a page or poll served by another bundle never mistakes a running job for a cut-off one.
+const runningHere: Set<string> = ((globalThis as { __operatorReviewJobs?: Set<string> }).__operatorReviewJobs ??= new Set<string>())
 const postJob = (reserveId: string) => `post:${reserveId}`
 const profileJob = (userId: string) => `profile:${userId}`
 
@@ -44,7 +48,7 @@ async function releaseIfCutOff(reserveId: string): Promise<boolean> {
   })
   const rewriting = await prisma.operatorPostReserve.updateMany({
     where: { id: reserveId, state: 'regenerating' },
-    data: { state: 'review' },
+    data: { state: 'review', error: null },
   })
   return drawing.count + rewriting.count > 0
 }
@@ -92,7 +96,7 @@ export async function releaseOrphanedDrawings(): Promise<number> {
       data: { state: 'review', error: PHOTO_DRAW_FAILED },
     })
     // A rewrite cut off mid-way keeps its old text; it only goes back to review.
-    const rewrites = await prisma.operatorPostReserve.updateMany({ where: { state: 'regenerating' }, data: { state: 'review' } })
+    const rewrites = await prisma.operatorPostReserve.updateMany({ where: { state: 'regenerating' }, data: { state: 'review', error: null } })
     // 게시 runs in the background too (publishReservePostNow); one cut off by a
     // restart goes back to review. Queued posts always carry a releaseAt, so
     // only posts taken from review match. A post that did go out is matched by
@@ -160,6 +164,8 @@ export type ReviewPost = {
   photoRequested: boolean
   /** The pool is drawing the photo right now (the card polls). */
   photoDrawing: boolean
+  /** 재제작 is rewriting the text right now (the card polls; the photo follows). */
+  rewriting: boolean
   /** The pool's last try at the photo failed; drawing it again is allowed. */
   photoDrawFailed: boolean
 }
@@ -225,9 +231,13 @@ function toReviewPost(row: {
     error: row.error,
     photoRequested: !row.imageObjectKey && row.error === PHOTO_REQUESTED,
     photoDrawing: row.state === 'regenerating' && row.error === PHOTO_DRAWING,
+    rewriting: row.state === 'regenerating' && row.error !== PHOTO_DRAWING,
     photoDrawFailed: !row.imageObjectKey && row.error === PHOTO_DRAW_FAILED,
   }
 }
+
+/** For tests: how a row shows on its card. */
+export const toReviewPostForTest = toReviewPost
 
 const REVIEW_POST_STATES = ['review', 'regenerating']
 
@@ -545,7 +555,7 @@ export async function reviewOperatorPost(
   try {
     const claimed = await prisma.operatorPostReserve.updateMany({
       where: { id: reserveId, state: 'review' },
-      data: { state: 'regenerating', reviewFeedback: feedback },
+      data: { state: 'regenerating', error: TEXT_REWRITING, reviewFeedback: feedback },
     })
     if (claimed.count === 0) return { ok: false, error: 'busy' }
     const persona = await loadReservePersona(row.operatorUserId, now, { includeInactive: true })
