@@ -70,6 +70,18 @@ export const FACE_LIGHTS = [
 ] as const
 
 /**
+ * Plain, unremarkable light: what made the most real-looking post photo so far
+ * (하은's car selfie, staff 2026-11-23). How it falls depends on the place, so
+ * it names the place's own main light rather than a direction.
+ */
+export const PLAIN_LIGHT = 'plain, unremarkable everyday light: just the place\'s own main light (a window, the ceiling lights, open shade or an overcast sky) falling softly and evenly on the face; low contrast, no noticeable shadows, glow, colored tint or highlights, a little flat like an ordinary phone photo'
+export const PLAIN_LIGHT_SHARE = 0.4
+
+/** An unstyled, everyday face (staff 2026-11-23: the photo that looked most real had one). */
+export const BARE_FACE = 'Today the face is bare and unstyled: little or no makeup (at most a tinted lip balm), natural brows, bangs or front hair a little out of place with a few loose hairs; an ordinary everyday look, nothing done for the camera.'
+export const BARE_FACE_SHARE = 0.4
+
+/**
  * How far the camera is, spread wide on purpose: left alone the model takes
  * nearly every photo from the same chest-up distance (staff, 2026-11-23).
  * The first one only for photos that show the face.
@@ -94,7 +106,11 @@ export function pickPersonVariety(random: Random, options: { faces: boolean; fem
   }
   if (options.female) lines.push(`Hairstyle today${versus}, unless the description already says: ${pick(random, FEMALE_HAIRSTYLES)} (same hair color and length).`)
   lines.push(`Outfit today, unless the description already names one: ${pick(random, OUTFITS)}, mostly ${pick(random, OUTFIT_COLORS)}; no garment or main color${options.hasReference ? ' from the attached photo' : ' repeated from another photo'}.`)
-  if (options.faces) lines.push(`Light on the face, within what the place and the description give: ${pick(random, FACE_LIGHTS)}.`)
+  if (options.faces) {
+    const light = random() < PLAIN_LIGHT_SHARE ? PLAIN_LIGHT : pick(random, FACE_LIGHTS)
+    lines.push(`Light on the face, within what the place and the description give: ${light}.`)
+    if (random() < BARE_FACE_SHARE) lines.push(BARE_FACE)
+  }
   const distances = options.faces ? CAMERA_DISTANCES : CAMERA_DISTANCES.slice(1)
   lines.push(`Camera distance, unless the description already fixes it (a mirror selfie, a selfie at arm's length): ${pick(random, distances)}.`)
   return lines
