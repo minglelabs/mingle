@@ -27,6 +27,7 @@ import { getCoinCopy } from "@/i18n/coin-copy";
 import { isCoinBillingActive, useCoinWallet } from "@/lib/coin-wallet-client";
 import ProfileLocation from "@/components/profile-location";
 import ProfilePostGrid from "@/components/search/profile-post-grid";
+import StaffUserStats from "@/components/staff-user-stats";
 import AccountBadge from "@/components/posts/account-badge";
 import { resolveAccountBadge, withAccountBadgeLabel } from "@/lib/account-badge";
 import { isDuplicateReportBody } from "@/components/reports/report-response";
@@ -760,6 +761,7 @@ export default function PublicUserProfileScreen({
                   </button>
                 </div>
               ) : null}
+              <StaffUserStats userId={profile.id} />
               {actionError ? (
                 <p className="mt-2 text-center text-[13px] text-red-500" role="alert">{copy.blockError}</p>
               ) : null}
