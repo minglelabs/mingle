@@ -14,6 +14,7 @@ import { safeBackPath, withBack } from '../../../_lib/back-path'
 import { OperatorPostStatsRow } from '../../../_components/operator-post-stats-row'
 import { OperatorPostEditor } from '../../../feed/_components/operator-post-editor'
 import { PostTakedownButton } from '../../../feed/_components/post-takedown-button'
+import { PublishedPostText } from './published-post-text'
 import { InlinePostComments } from '../../../activity/_components/inline-post-comments'
 import { OperatorsMain } from '../../_components/operator-ui'
 import { ZoomableAvatar } from '../../_components/zoomable-avatar'
@@ -112,6 +113,7 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
           imageObjectKey: true, imageWidth: true, imageHeight: true, moderationHiddenAt: true,
           extraImages: { orderBy: { position: 'asc' }, select: { imageObjectKey: true, imageWidth: true, imageHeight: true } },
           likes: { orderBy: { createdAt: 'desc' }, select: { user: { select: { id: true, name: true, handle: true, isOperator: true } } } },
+          translations: { where: { status: 'ready' }, select: { language: true, text: true, bodyVersion: true } },
         },
       })
       : Promise.resolve([]),
@@ -203,7 +205,11 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
               {published.map((post) => (
                 <article key={post.id} id={`post-${post.id}`} className="scroll-mt-4 rounded-xl border border-slate-200 bg-white p-3">
                   {post.moderationHiddenAt ? <p className="mb-2 text-xs font-semibold text-rose-700">앱에서 내린 글</p> : null}
-                  <p className="whitespace-pre-wrap break-words text-[15px] leading-6 text-slate-900">{post.sourceText || '(내용 없음)'}</p>
+                  <PublishedPostText
+                    text={post.sourceText ?? ''}
+                    sourceLanguage={post.sourceLanguage}
+                    translations={post.translations.filter((row) => row.bodyVersion === post.bodyVersion && row.text?.trim()).map((row) => ({ language: row.language, text: row.text as string }))}
+                  />
                   {post.imageObjectKey ? (
                     <ReviewPhotos
                       photos={[
