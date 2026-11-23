@@ -7,7 +7,8 @@ import { useSession, signIn } from 'next-auth/react'
 import { ChevronLeft, FileText, ImageIcon, Plus, Trash2 } from 'lucide-react'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { isAccountRestrictedResponse } from '@/lib/account-restriction'
-import { composeHref, feedHref } from '@/lib/feed-routes'
+import { composeHref } from '@/lib/feed-routes'
+import { homeFeedRootHref } from '@/lib/home-feed-href'
 import { randomBackgroundKey, resolveBackgroundPreset } from '@/lib/post-backgrounds'
 import { composeCopy } from '@/i18n/compose-copy'
 import { moderationCopy } from '@/i18n/moderation-copy'
@@ -540,7 +541,8 @@ export default function ComposeScreen({
       saver().close()
       // Return to the feed; the PublishStatusBanner shows progress there.
       if (onPublished) onPublished()
-      else router.push(feedHref(locale))
+      // Replace: back from the feed must not reopen the composer.
+      else router.replace(homeFeedRootHref(locale))
     } finally {
       publishing.current = false
     }
@@ -551,7 +553,7 @@ export default function ComposeScreen({
     void saver().flush()
     if (onClose) onClose()
     else if (typeof window !== 'undefined' && window.history.length > 1) router.back()
-    else router.replace(feedHref(locale))
+    else router.replace(homeFeedRootHref(locale))
   }
 
   function openDrafts() {

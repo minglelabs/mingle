@@ -36,7 +36,7 @@ import { FeedGlyphToneContext } from "@/components/feed/feed-glyph-tone";
 import { feedCopy } from "@/i18n/feed-copy";
 import type { FeedSource } from "@/lib/feed-routes";
 import { feedHref, userProfileHref } from "@/lib/feed-routes";
-import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
+import { buildNativeAwareTabHref, buildNativeAwareTabPath } from "@/lib/tab-navigation";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { postForegroundTone } from "@/lib/post-backgrounds";
 import { useUnreadNotifications } from "@/components/notifications/use-unread-notifications";
@@ -149,6 +149,14 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
   // Deep link (home feed only): ?postId=&commentId=
   const deepLinkPostId = !isViewer ? searchParams.get("postId") : null;
   const deepLinkCommentId = !isViewer ? searchParams.get("commentId") : null;
+  // The home feed is a tab root: every in-place URL change keeps the native
+  // shell keys AND the tab-root marker, or iOS starts offering an edge-swipe
+  // "back" into an older copy of the same feed.
+  const homeFeedUrl = useCallback(
+    (target?: { postId?: string | null; commentId?: string | null }) =>
+      buildNativeAwareTabHref(feedHref(locale, target), searchParams, { tabRoot: true }),
+    [locale, searchParams],
+  );
 
   // ── Restore state: read synchronously before any card mounts ──
   // Cards read `restoreExpanded` only at mount, so the saved state must exist
@@ -312,8 +320,8 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
     setCommentPostId(hit.postId);
     setInitialCommentId(hit.commentId);
     // Drop `commentId` from the URL so a later re-render / return cannot reopen it.
-    router.replace(feedHref(locale, { postId: hit.postId }), { scroll: false });
-  }, [commentLatch, posts, router, locale]);
+    router.replace(homeFeedUrl({ postId: hit.postId }), { scroll: false });
+  }, [commentLatch, posts, router, homeFeedUrl]);
 
   // Notify the linked-post-gone / remembered-post-gone case.
   useEffect(() => {
@@ -433,9 +441,11 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
       if (!id) return;
       setNotificationsOpen(false);
       // feedHref pins this post first; with a commentId its comment sheet opens on it.
-      router.push(feedHref(locale, { postId: id, commentId: commentId?.trim() || null }), { scroll: false });
+      // Replace, not push: the comment sheet is a sheet over the home tab, not
+      // a new screen, so it must not leave a feed entry to swipe "back" into.
+      router.replace(homeFeedUrl({ postId: id, commentId: commentId?.trim() || null }), { scroll: false });
     },
-    [router, locale],
+    [router, homeFeedUrl],
   );
 
   // ── Pull to refresh: drag down on the first card of the home feed ──
@@ -1136,7 +1146,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
             dropPost(postId);
             setActionPostId(null);
             // A link to the removed post must not bring it back on return.
-            if (postId === deepLinkPostId) router.replace(feedHref(locale), { scroll: false });
+            if (postId === deepLinkPostId) router.replace(homeFeedUrl(), { scroll: false });
           }}
           onAuthorBlocked={(authorId) => {
             dropAuthor(authorId);
