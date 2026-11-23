@@ -175,9 +175,11 @@ function CommentRow({ postId, comment, korean, nowMs, focused, isReply, canReply
  * that comments or replies as that operator. The draft is converted to the
  * operator's language on the server, like posts and inbox replies.
  */
-export function PostThreadView({ initialThread, focusCommentId, postStats = null, backHref = null }: {
+export function PostThreadView({ initialThread, focusCommentId, postStats = null, backHref = null, embedded = false }: {
   initialThread: OperatorPostThread
   focusCommentId: string | null
+  /** Inside another page (a profile's post card): just the comments and the reply box, no page chrome. */
+  embedded?: boolean
   /** Where the back arrow returns (e.g. the profile the thread was opened from); the activity list by default. */
   backHref?: string | null
   /** The post's stats row (operator posts only), as of the page load. */
@@ -306,7 +308,13 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
   const languageName = inboxLanguageName(operator.personaLanguage)
 
   return (
-    <div className="flex min-h-full flex-col bg-slate-50 text-slate-900">
+    <div className={embedded ? 'text-slate-900' : 'flex min-h-full flex-col bg-slate-50 text-slate-900'}>
+      {embedded ? (
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <p className="min-w-0 truncate text-xs text-slate-500">댓글 {post.commentCount}개</p>
+          <KoreanViewSwitch enabled={korean} onChange={setKorean} />
+        </div>
+      ) : (
       <header className="sticky top-0 z-10 flex items-center gap-1 border-b border-slate-200 bg-white px-1 py-1 lg:px-4">
         <Link
           href={backHref ?? '/admin/activity'}
@@ -322,8 +330,9 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
         </div>
         <KoreanViewSwitch enabled={korean} onChange={setKorean} />
       </header>
+      )}
 
-      {thread.operators.length > 1 ? (
+      {!embedded && thread.operators.length > 1 ? (
         <nav aria-label="댓글을 달 운영 계정" className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-slate-200 bg-white px-3 py-1">
           <span className="shrink-0 text-xs text-slate-500">댓글 계정</span>
           {thread.operators.map((candidate) => (
@@ -343,7 +352,8 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
         </nav>
       ) : null}
 
-      <div className="mx-auto w-full max-w-2xl flex-1 px-3 py-3">
+      <div className={embedded ? 'w-full' : 'mx-auto w-full max-w-2xl flex-1 px-3 py-3'}>
+        {embedded ? null : (
         <article className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <p className="flex min-w-0 items-center gap-2">
             <ProfileLink userId={post.author.userId}>
@@ -366,9 +376,10 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
           </div>
           <OperatorPostStatsRow stats={postStats} className="mt-2" />
         </article>
+        )}
 
         {thread.comments.length === 0 ? (
-          <p className="px-4 py-10 text-center text-sm text-slate-500">아직 댓글이 없습니다.</p>
+          <p className={`px-4 text-center text-sm text-slate-500 ${embedded ? 'py-4' : 'py-10'}`}>아직 댓글이 없습니다.</p>
         ) : (
           <ul className="mt-2 flex flex-col" aria-label="댓글">
             {thread.comments.map((comment) => (
@@ -405,7 +416,7 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
       {canReply ? (
         <form
           onSubmit={onSubmit}
-          className="sticky bottom-0 shrink-0 border-t border-slate-200 bg-white px-3 pb-2 pt-2"
+          className={embedded ? 'mt-2 border-t border-slate-200 pt-2' : 'sticky bottom-0 shrink-0 border-t border-slate-200 bg-white px-3 pb-2 pt-2'}
         >
           <div className="mx-auto w-full max-w-2xl">
             {target ? (
@@ -425,9 +436,9 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
               {inboxPersonLabel(operator)} 계정으로 게시됩니다. 어떤 언어로 써도 {languageName}(으)로 변환됩니다.
             </p>
             <div className="flex items-end gap-2">
-              <label htmlFor="admin-activity-comment" className="sr-only">댓글 입력</label>
+              <label htmlFor={`admin-activity-comment-${postId}`} className="sr-only">댓글 입력</label>
               <textarea
-                id="admin-activity-comment"
+                id={`admin-activity-comment-${postId}`}
                 ref={textareaRef}
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
@@ -453,7 +464,7 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
           </div>
         </form>
       ) : (
-        <p className="sticky bottom-0 border-t border-slate-200 bg-white px-4 py-3 text-center text-sm text-slate-600">
+        <p className={embedded ? 'mt-2 border-t border-slate-200 pt-2 text-center text-sm text-slate-600' : 'sticky bottom-0 border-t border-slate-200 bg-white px-4 py-3 text-center text-sm text-slate-600'}>
           비활성화된 운영 계정이라 댓글을 달 수 없습니다.
         </p>
       )}
