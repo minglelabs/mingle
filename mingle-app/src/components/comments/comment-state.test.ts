@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { CommentThreadDto } from './comment-types'
+import type { CommentNode, CommentThreadDto } from './comment-types'
 import {
   applyCreateFailure,
   applyDelete,
@@ -16,6 +16,8 @@ import {
   makeOptimisticNode,
   markFailed,
   nextTranslationToggle,
+  pickLanguage,
+  showOriginal,
   removeNode,
   resolveCommentBodyView,
   rootIdOf,
@@ -360,5 +362,33 @@ describe('applyCreateFailure', () => {
     const nodes = applyCreateFailure(withTemp(), 'tmp-9', true)
     expect(findNode(nodes, 'tmp-9')).toBeNull()
     expect(nodes[0].replyCount).toBe(0)
+  })
+})
+
+describe('other-language picks (⋯ menu flags)', () => {
+  const base = {
+    id: 'c1', postId: 'p', authorId: 'u', parentId: null, replyToUserId: null, bodyVersion: 1,
+    sourceText: 'Hello', sourceLanguage: 'en', displayText: '안녕', displayLanguage: 'ko',
+    translationState: 'ready', likeCount: 0, isDeleted: false, edited: false,
+    createdAt: '', updatedAt: '', author: { id: 'u', handle: 'u', name: null, image: null },
+    replyToUser: null, replyCount: 0, liked: false, replies: [],
+    otherTranslations: [{ language: 'ja', text: 'こんにちは' }],
+  } as unknown as CommentNode
+
+  it('shows the picked language, and See original returns to the source', () => {
+    const picked = pickLanguage([base], 'c1', 'ja')
+    expect(resolveCommentBodyView(picked[0])).toEqual({ text: 'こんにちは', showingTranslation: true, label: 'seeOriginal' })
+    expect(nextTranslationToggle(picked[0])).toEqual({ kind: 'original' })
+
+    const original = showOriginal(picked, 'c1')
+    expect(resolveCommentBodyView(original[0])).toEqual({ text: 'Hello', showingTranslation: false, label: 'seeTranslation' })
+    // The server translation stays one tap away.
+    expect(nextTranslationToggle(original[0])).toMatchObject({ kind: 'flip', translation: { text: '안녕', showing: true } })
+  })
+
+  it('an edit drops the other-language texts and the pick', () => {
+    const edited = applyEdit(pickLanguage([base], 'c1', 'ja'), 'c1', 'Bye', null)
+    expect(edited[0].otherTranslations).toBeUndefined()
+    expect(resolveCommentBodyView(edited[0]).text).toBe('Bye')
   })
 })

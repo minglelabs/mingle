@@ -164,6 +164,10 @@ export async function GET(request: NextRequest, context: Ctx) {
     //   are surfaced by the on-demand translate response, not the list read)
     let displayText: string | null = null
     let displayLang: string | null = null
+    // Every OTHER language this body is already translated into (not the
+    // display language, not its own unless it mixes languages): the ⋯ menu
+    // offers them as flags.
+    const otherTranslations: Array<{ language: string; text: string }> = []
     let translationState: 'same_language' | 'ready' | 'none' = 'none'
 
     if (!isDeleted) {
@@ -189,6 +193,18 @@ export async function GET(request: NextRequest, context: Ctx) {
           displayLang = c.sourceLanguage
         }
       }
+      if (c.sourceText.trim()) {
+        const seen = new Set<string>()
+        for (const t of c.translations) {
+          const lang = canonicalizeTranslationLanguageCode(t.language)
+          if (!lang || !t.text || t.bodyVersion !== c.bodyVersion) continue
+          if (lang === canonicalDisplay || seen.has(lang)) continue
+          if (!c.sourceLanguagesMixed && lang === canonicalSource) continue
+          if (isUntranslatedCopy(c.sourceText, lang, t.text)) continue
+          seen.add(lang)
+          otherTranslations.push({ language: lang, text: t.text })
+        }
+      }
     }
 
     return {
@@ -207,6 +223,7 @@ export async function GET(request: NextRequest, context: Ctx) {
       displayText,
       displayLanguage: displayLang,
       translationState,
+      ...(otherTranslations.length > 0 ? { otherTranslations } : {}),
       likeCount: c.likeCount,
       isDeleted,
       // Whether this comment's body was edited after creation (bodyVersion > 1).

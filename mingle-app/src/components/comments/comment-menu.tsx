@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { MoreHorizontal } from "lucide-react";
+import { Check, MoreHorizontal } from "lucide-react";
+import LanguageFlag from "@/components/language-flag";
+import { getSttLanguageDisplayName } from "@/lib/stt-languages";
 import { cn } from "@/lib/utils";
 import { commentsCopy } from "@/i18n/comments-copy";
 import type { CommentNode } from "./comment-types";
@@ -16,12 +18,16 @@ type Props = {
   onEdit: () => void;
   onDelete: () => void;
   onReport: () => void;
+  /** Pick one of the comment's other ready translations; the same one again = original. */
+  onPickLanguage: (language: string | null) => void;
 };
 
 /**
  * The comment ⋯ menu.
  * - own comment: Edit, Delete
  * - other's comment: Report, plus Delete when the viewer owns the post
+ * - any comment already translated into other languages: one flag row per
+ *   language ("view in another language"), like the post's flag chips
  */
 export default function CommentMenu({
   comment,
@@ -31,6 +37,7 @@ export default function CommentMenu({
   onEdit,
   onDelete,
   onReport,
+  onPickLanguage,
 }: Props) {
   const copy = commentsCopy(locale);
   const [open, setOpen] = useState(false);
@@ -40,6 +47,7 @@ export default function CommentMenu({
   const editable = canEdit(comment, viewerId);
   const deletable = canDelete(comment, viewerId, postAuthorId);
   const reportable = canReport(comment, viewerId);
+  const languages = comment.isDeleted ? [] : (comment.otherTranslations ?? []).map((t) => t.language);
 
   useEffect(() => {
     if (!open) return;
@@ -53,7 +61,7 @@ export default function CommentMenu({
   }, [open]);
 
   // Nothing to offer (e.g. signed-out, or own deleted comment).
-  if (!editable && !deletable && !reportable) return null;
+  if (!editable && !deletable && !reportable && languages.length === 0) return null;
 
   return (
     <div ref={ref} className="relative">
@@ -73,6 +81,32 @@ export default function CommentMenu({
           role="menu"
           className="absolute right-0 z-10 mt-1 min-w-32 overflow-hidden rounded-lg border border-gray-100 bg-white py-1 shadow-lg"
         >
+          {languages.length > 0 && (
+            <>
+              <p className="px-3 pb-1 pt-1.5 text-[12px] font-medium text-muted-foreground">{copy.viewInLanguage}</p>
+              {languages.map((language) => {
+                const selected = comment.pickedLanguage === language;
+                return (
+                  <button
+                    key={language}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={selected}
+                    onClick={() => {
+                      setOpen(false);
+                      onPickLanguage(selected ? null : language);
+                    }}
+                    className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-[14px] text-foreground hover:bg-gray-100"
+                  >
+                    <LanguageFlag language={language} className="text-[16px] leading-none" />
+                    <span className="flex-1">{getSttLanguageDisplayName(language, locale) || language}</span>
+                    {selected && <Check className="size-4 text-primary" aria-hidden />}
+                  </button>
+                );
+              })}
+              {(editable || reportable || deletable) && <div className="my-1 border-t border-gray-100" />}
+            </>
+          )}
           {editable && (
             <MenuItem
               label={copy.edit}

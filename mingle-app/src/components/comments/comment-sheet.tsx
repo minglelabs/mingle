@@ -272,6 +272,7 @@ export default function CommentSheet(props: CommentSheetProps) {
       setReportTarget({ type: "comment", commentId: comment.id, authorId: comment.authorId });
     },
     onToggleTranslation: sheet.toggleTranslation,
+    onPickTranslation: sheet.pickTranslation,
     onRetryFailed: sheet.retryFailed,
     onDiscardFailed: sheet.discardFailed,
     onOpenAuthor: (authorId: string) => onOpenAuthor?.(authorId),

@@ -9,6 +9,8 @@ import type { CommentImageUpload, CommentNode } from "./comment-types";
 import {
   applyDelete,
   applyEdit,
+  pickLanguage as pickLanguageInTree,
+  showOriginal,
   applyCreateFailure,
   applyLikeToggle,
   confirmNode,
@@ -424,6 +426,10 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
       // A known translation (server-provided or fetched) only flips; no network.
       const step = nextTranslationToggle(node);
       if (step.kind === "noop") return;
+      if (step.kind === "original") {
+        setNodes((n) => showOriginal(n, id));
+        return;
+      }
       if (step.kind === "flip") {
         setNodes((n) => setTranslation(n, id, step.translation));
         return;
@@ -441,6 +447,10 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
     },
     [nodes, serverDisplayLanguage, viewerLanguage],
   );
+
+  const pickTranslation = useCallback((id: string, language: string | null) => {
+    setNodes((n) => pickLanguageInTree(n, id, language));
+  }, []);
 
   const startReply = useCallback((target: NonNullable<ReplyTarget>) => {
     if (viewerId === null) {
@@ -471,6 +481,7 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
     edit,
     remove,
     toggleTranslation,
+    pickTranslation,
     startReply,
     cancelReply,
     dismissNotice,
