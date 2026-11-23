@@ -71,6 +71,27 @@ export type UseCommentSheetArgs = {
   onRequireLogin: () => void;
 };
 
+/**
+ * Identity for the viewer's optimistic rows: the server's latest copy, else a
+ * confirmed row of theirs already in the list, else the session copy.
+ */
+export function freshViewer(
+  serverViewer: Author | null,
+  sessionViewer: Author,
+  viewerId: string,
+  nodes: CommentNode[],
+): Author {
+  if (serverViewer && serverViewer.id === viewerId) return serverViewer;
+  for (const n of nodes) {
+    for (const c of [n, ...(n.replies ?? [])]) {
+      if (c.authorId === viewerId && !c.pending && !c.failed && !c.isDeleted && c.author.id === viewerId) {
+        return c.author;
+      }
+    }
+  }
+  return sessionViewer;
+}
+
 let tempCounter = 0;
 function nextTempId(): string {
   tempCounter += 1;
@@ -94,6 +115,10 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
     onRequireLogin,
   } = args;
 
+  // The viewer's identity as the server last reported it (a create response,
+  // or the viewer's own rows in the list). Wins over the session copy, which
+  // can predate a profile-photo change.
+  const [serverViewer, setServerViewer] = useState<Author | null>(null);
   const [phase, setPhase] = useState<LoadPhase>("idle");
   const [nodes, setNodes] = useState<CommentNode[]>([]);
   const [commentCount, setCommentCount] = useState<number>(0);
@@ -256,7 +281,7 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
         tempId,
         postId,
         authorId: viewerId,
-        author: viewer,
+        author: freshViewer(serverViewer, viewer, viewerId, nodes),
         sourceText: text,
         // The composed text is written in the viewer's OWN language, which is
         // not the display language. Leave it null: the server detects the body
@@ -300,14 +325,16 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
           replyToUserId: res.replyToUserId,
           bodyVersion: res.bodyVersion,
           createdAt: res.createdAt,
+          ...(res.author ? { author: res.author } : {}),
         }),
       );
+      if (res.author) setServerViewer(res.author);
       if (fromComposer) setReplyTarget(null);
       reportCount(commentCountRef.current + 1);
       trackFeedEvent(feedEvents.commentCreated(postId, parentId !== null));
       return "sent";
     },
-    [sending, viewerId, viewer, postId, reportCount, onRequireLogin, reportFailure],
+    [sending, viewerId, viewer, serverViewer, nodes, postId, reportCount, onRequireLogin, reportFailure],
   );
 
   /** Composer submit: goes to the composer's current reply target. */

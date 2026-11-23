@@ -339,7 +339,12 @@ export async function POST(request: NextRequest, context: Ctx) {
   }
 
   // Commenting on a post means the viewer saw it: mark it seen now (73).
-  await markPostViewedQuietly(userId, postId)
+  // The author's CURRENT identity rides back so the new row shows today's
+  // avatar/name (the client's session copy can be stale or missing).
+  const [, authorRow] = await Promise.all([
+    markPostViewedQuietly(userId, postId),
+    prisma.user.findUnique({ where: { id: userId }, select: USER_IDENTITY_SELECT }),
+  ])
 
   // Notify the right recipient. A reply notifies the person being replied to,
   // which createComment derives from server state (never the client's
@@ -376,6 +381,7 @@ export async function POST(request: NextRequest, context: Ctx) {
       bodyVersion: comment.bodyVersion,
       createdAt: comment.createdAt,
       image: serializeCommentImage(comment),
+      ...(authorRow ? { author: serializeListUserIdentity(authorRow) } : {}),
     },
     { status: 201 },
   )
