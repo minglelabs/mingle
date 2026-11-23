@@ -69,7 +69,7 @@ export function normalizePersonaLanguage(raw: string | null | undefined): string
 }
 
 /** Chinese is decided by the typed script first (zh-CN / zh-TW), like post detection. */
-function resolveDetectedLanguage(raw: string | undefined, text: string): string | null {
+export function resolveDetectedLanguage(raw: string | undefined, text: string): string | null {
   const value = (raw ?? '').trim()
   if (!value) return null
   if (isChineseLanguage(value)) {
@@ -78,7 +78,7 @@ function resolveDetectedLanguage(raw: string | undefined, text: string): string 
   return canonicalizeTranslationLanguageCode(value) || null
 }
 
-function pickConvertedText(
+export function pickConvertedText(
   translations: Record<string, string>,
   language: string,
   sourceLanguage: string | null,

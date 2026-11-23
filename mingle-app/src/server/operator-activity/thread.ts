@@ -7,8 +7,8 @@ import { USER_IDENTITY_SELECT } from '@/server/identity/user-identity-select'
 import { createPostNotification } from '@/server/notifications/create-post-notification'
 import type { InboxPerson } from '@/server/operator-inbox/inbox'
 import { STAFF_TRANSLATION_LANGUAGE, translateForStaff } from '@/server/operator-inbox/staff-translate'
+import { convertStaffCommentDraft } from '@/server/operator-activity/comment-conversion'
 import {
-  convertToPersonaLanguage,
   PersonaConversionFailedError,
   PersonaLanguageMissingError,
 } from '@/server/operator-posts/convert'
@@ -396,9 +396,12 @@ export async function commentAsOperator(ctx: AdminContext, input: {
   })
   if (!post) throw new OperatorCommentError('not_found')
 
-  let conversion: Awaited<ReturnType<typeof convertToPersonaLanguage>>
+  let conversion: Awaited<ReturnType<typeof convertStaffCommentDraft>>
   try {
-    conversion = await convertToPersonaLanguage({ operatorUserId, text: draft })
+    // Casual comment language, with the post, thread and people as context.
+    conversion = await convertStaffCommentDraft({
+      operatorUserId, postId: post.id, text: draft, parentId: input.parentId ?? null, replyToUserId: input.replyToUserId ?? null,
+    })
   } catch (error) {
     if (error instanceof PersonaLanguageMissingError) throw new OperatorCommentError('persona_language_missing')
     if (error instanceof PersonaConversionFailedError) throw new OperatorCommentError('conversion_failed')
