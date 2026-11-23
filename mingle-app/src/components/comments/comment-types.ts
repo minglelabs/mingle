@@ -60,6 +60,8 @@ export type CommentDto = {
   displayText: string | null
   displayLanguage: string | null
   translationState: CommentTranslationState
+  /** Ready translations into other languages (not the display one); absent when none. */
+  otherTranslations?: Array<{ language: string; text: string }>
   likeCount: number
   isDeleted: boolean
   edited: boolean
@@ -94,6 +96,8 @@ export type CommentNode = CommentDto & {
   failed?: boolean
   /** UI-only: the photo an optimistic row was sent with (kept for retry). */
   upload?: CommentImageUpload | null
+  /** UI-only: one of `otherTranslations` the viewer picked from the ⋯ menu. */
+  pickedLanguage?: string | null
   /** UI-only translation overlay for on-demand toggles. */
   translation?: {
     state: CommentTranslationState

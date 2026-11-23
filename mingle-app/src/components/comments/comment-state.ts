@@ -213,6 +213,9 @@ export function applyEdit(nodes: CommentNode[], id: string, text: string, source
     // Re-translation is async; drop any stale overlay and show the new source.
     translationState: 'none',
     translation: undefined,
+    // The other-language texts belong to the old body.
+    otherTranslations: undefined,
+    pickedLanguage: null,
     edited: true,
     bodyVersion: n.bodyVersion + 1,
   }))
@@ -246,6 +249,8 @@ export type CommentBodyView = {
 
 export function resolveCommentBodyView(comment: CommentNode): CommentBodyView {
   const source = comment.sourceText ?? comment.displayText ?? ''
+  const picked = pickedTranslationText(comment)
+  if (picked) return { text: picked, showingTranslation: true, label: 'seeOriginal' }
   const overlay = comment.translation
   if (overlay?.state === 'pending') return { text: source, showingTranslation: false, label: 'translating' }
   if (overlay?.state === 'failed') return { text: source, showingTranslation: false, label: 'translationFailed' }
@@ -271,9 +276,12 @@ export type TranslationToggleStep =
   | { kind: 'flip'; translation: NonNullable<CommentNode['translation']> }
   | { kind: 'fetch' }
   | { kind: 'noop' }
+  | { kind: 'original' }
 
 export function nextTranslationToggle(comment: CommentNode): TranslationToggleStep {
   if (comment.isDeleted) return { kind: 'noop' }
+  // A language picked from the ⋯ menu: "See original" goes back to the source.
+  if (pickedTranslationText(comment)) return { kind: 'original' }
   const overlay = comment.translation
   if (overlay?.state === 'pending') return { kind: 'noop' }
   if (overlay?.state === 'ready' && overlay.text) {
@@ -348,4 +356,38 @@ export function canDelete(comment: CommentDto, viewerId: string | null, postAuth
 
 export function canReport(comment: CommentDto, viewerId: string | null): boolean {
   return !comment.isDeleted && viewerId !== null && comment.authorId !== viewerId
+}
+
+// ─── Other languages (⋯ menu flags) ──────────────────────────────────────────
+
+/** The text of the language picked from the ⋯ menu, or null. */
+export function pickedTranslationText(comment: CommentNode): string | null {
+  if (!comment.pickedLanguage || comment.isDeleted) return null
+  return comment.otherTranslations?.find((t) => t.language === comment.pickedLanguage)?.text ?? null
+}
+
+/** Show one of the comment's other ready translations (null = back to original). */
+export function pickLanguage(nodes: CommentNode[], id: string, language: string | null): CommentNode[] {
+  if (language !== null) return mapNode(nodes, id, (n) => ({ ...n, pickedLanguage: language }))
+  return showOriginal(nodes, id)
+}
+
+/**
+ * Back to the source text from any translation: drop the pick and keep a
+ * known translation (overlay or server-shown) one tap away as "See translation".
+ */
+export function showOriginal(nodes: CommentNode[], id: string): CommentNode[] {
+  return mapNode(nodes, id, (n) => {
+    const known =
+      n.translation?.state === 'ready' && n.translation.text
+        ? n.translation.text
+        : n.translationState === 'ready'
+          ? n.displayText
+          : null
+    return {
+      ...n,
+      pickedLanguage: null,
+      translation: known ? { state: 'ready', text: known, showing: false } : n.translation,
+    }
+  })
 }

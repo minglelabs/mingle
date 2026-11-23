@@ -294,6 +294,34 @@ describe('GET /api/posts/{postId}/comments', () => {
     expect(body.comments[0].replies.map((r: { id: string }) => r.id)).toEqual(['c2'])
   })
 
+  it('lists other ready translations (not the display or source language, current body only)', async () => {
+    mockGetServerSession.mockResolvedValue({ user: { id: 'viewer' } })
+    mockPostFindFirst.mockResolvedValue({ id: 'post-1', commentCount: 1 })
+    mockCommentLikeFindMany.mockResolvedValue([])
+    mockUserFindUnique.mockResolvedValue({ defaultDisplayLanguage: 'ko' })
+    mockCommentFindMany.mockResolvedValue([
+      {
+        id: 'c1', postId: 'post-1', authorId: 'u1', parentId: null,
+        replyToUserId: null, bodyVersion: 2, sourceText: 'Hello there', sourceLanguage: 'en',
+        likeCount: 0, isDeleted: null, createdAt: new Date(), updatedAt: new Date(),
+        author: { id: 'u1', handle: 'h1', name: 'd1', image: null },
+        replyToUser: null, _count: { replies: 0 },
+        translations: [
+          { language: 'ko', bodyVersion: 2, text: '안녕하세요' },
+          { language: 'ja', bodyVersion: 2, text: 'こんにちは' },
+          { language: 'zh-CN', bodyVersion: 1, text: '旧的' },
+          { language: 'en', bodyVersion: 2, text: 'Hello there' },
+        ],
+      },
+    ])
+
+    const res = await GET(makeRequest(), makeCtx('post-1'))
+    const body = await res.json()
+
+    expect(body.comments[0].displayText).toBe('안녕하세요')
+    expect(body.comments[0].otherTranslations).toEqual([{ language: 'ja', text: 'こんにちは' }])
+  })
+
   it('resolves translation display fields against the viewer display language', async () => {
     mockGetServerSession.mockResolvedValue({ user: { id: 'viewer' } })
     mockPostFindFirst.mockResolvedValue({ id: 'post-1', commentCount: 3 })

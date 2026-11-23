@@ -45,6 +45,8 @@ export type CommentItemHandlers = {
   onDelete: (id: string) => void;
   onReport: (comment: CommentNode) => void;
   onToggleTranslation: (id: string) => void;
+  /** A language from the ⋯ menu's flags (null = back to the original). */
+  onPickTranslation: (id: string, language: string | null) => void;
   onRetryFailed: (id: string) => void;
   onDiscardFailed: (id: string) => void;
   onOpenAuthor: (authorId: string) => void;
@@ -78,9 +80,10 @@ export default function CommentItem({
   const [draft, setDraft] = useState(comment.sourceText ?? "");
 
   const canTranslate =
-    !!viewerLanguage &&
     !comment.isDeleted &&
-    comment.translationState !== "same_language";
+    ((!!viewerLanguage && comment.translationState !== "same_language") ||
+      // A language picked from the ⋯ menu always needs its way back.
+      Boolean(comment.pickedLanguage));
 
   // Failed optimistic row: keep the text, offer retry / discard.
   if (comment.failed) {
@@ -192,6 +195,7 @@ export default function CommentItem({
               }}
               onDelete={() => handlers.onDelete(comment.id)}
               onReport={() => handlers.onReport(comment)}
+              onPickLanguage={(language) => handlers.onPickTranslation(comment.id, language)}
             />
           )}
         </div>
