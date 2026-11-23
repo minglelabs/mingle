@@ -25,6 +25,7 @@ vi.mock("@/lib/app-conversations", () => ({
 }));
 vi.mock("@/server/conversation-realtime", () => ({ notifyConversationMessage: h.notify }));
 vi.mock("@/server/coins/request-billing", () => ({ resolveCoinBillingUserId: h.billingUser }));
+vi.mock("@/server/coins/pricing", () => ({ isCoinUsageFree: async () => false }));
 vi.mock("@/server/coins/wallet", () => ({ canSpendCoins: h.canSpend, chargeCoinUsageSafely: h.charge }));
 vi.mock("@/server/translation/translate-texts", () => ({
   translateTexts: h.translate,

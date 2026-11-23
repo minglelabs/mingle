@@ -74,7 +74,8 @@ export async function retranslateConversationMessage(request: NextRequest, conve
 
   const coinBillingUserId = await resolveCoinBillingUserId()
   // While typed-message translation is free (a zero rate), an empty wallet does not stop it.
-  const translationIsFree = await isCoinUsageFree({ kind: 'translation', units: { message: 1 } })
+  // Asked only when someone is billed: an unbilled request reads no rates.
+  const translationIsFree = Boolean(coinBillingUserId) && await isCoinUsageFree({ kind: 'translation', units: { message: 1 } })
   if (coinBillingUserId && !translationIsFree && !(await canSpendCoins(coinBillingUserId))) {
     return NextResponse.json({ error: COIN_INSUFFICIENT_ERROR }, { status: 402 })
   }
