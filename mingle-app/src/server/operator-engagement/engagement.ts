@@ -372,7 +372,8 @@ async function engageRealComments(now: Date, isOperator: Set<string>, result: En
       }
     }
 
-    if (replyBudget > 0 && plan.reply !== null && start + plan.reply <= nowMs && !comment.replies.some((reply) => reply.authorId === operatorId)) {
+    // Any operator answer in the thread (staff writing by hand included) ends it: no automatic second one.
+    if (replyBudget > 0 && plan.reply !== null && start + plan.reply <= nowMs && !comment.replies.some((reply) => reply.authorId === operatorId || isOperator.has(reply.authorId))) {
       replyBudget -= 1
       const written = await replyToCommentAsOperator(WORKER_CONTEXT, { operatorUserId: operatorId, commentId: comment.id, now })
       if (written.ok) result.realReplies += 1
