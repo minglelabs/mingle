@@ -16,8 +16,8 @@ const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf
 describe('Korean sign-up: asked, phone first, then the contact sync', () => {
   it('asks "Are you Korean?" right after the language, in every first run', () => {
     // "korea-visit" shows only after "no" (the modal filters it).
-    expect(FIRST_RUN_ONBOARDING_STEPS).toEqual(['language', 'korean', 'korea-visit'])
-    expect(INVITE_ONBOARDING_STEPS.slice(0, 3)).toEqual(['language', 'korean', 'korea-visit'])
+    expect(FIRST_RUN_ONBOARDING_STEPS).toEqual(['language', 'korean', 'korea-visit', 'interest-language'])
+    expect(INVITE_ONBOARDING_STEPS.slice(0, 4)).toEqual(['language', 'korean', 'korea-visit', 'interest-language'])
     for (const locale of PRIMARY_UI_LOCALES) {
       const copy = resolveKoreanCheckCopy(locale)
       for (const text of [copy.label, copy.title, copy.yes, copy.no]) expect(text.trim(), locale).not.toBe('')

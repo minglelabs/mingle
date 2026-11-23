@@ -109,8 +109,10 @@ export type OnboardingStep = "language" | "korean" | "korea-visit" | "interest-l
 
 // "korean": asked on its own, since many Koreans pick English (owner, 2026-11-21; see @/lib/korean-signup).
 // "korea-visit": only after "no, not Korean" (owner, 2026-11-23; see @/lib/korea-visit).
-export const FIRST_RUN_ONBOARDING_STEPS: readonly OnboardingStep[] = ["language", "korean", "korea-visit"];
-export const INVITE_ONBOARDING_STEPS: readonly OnboardingStep[] = ["language", "korean", "korea-visit", "birth-date"];
+// "interest-language": asked up front (owner, 2026-11-23), not later on the feed;
+// someone who is not Korean starts with Korean checked.
+export const FIRST_RUN_ONBOARDING_STEPS: readonly OnboardingStep[] = ["language", "korean", "korea-visit", "interest-language"];
+export const INVITE_ONBOARDING_STEPS: readonly OnboardingStep[] = ["language", "korean", "korea-visit", "interest-language", "birth-date"];
 
 // Long enough to see the tapped gender light up before the next screen slides in.
 const GENDER_AUTO_ADVANCE_MS = 220;
@@ -376,7 +378,7 @@ export default function LanguageOnboardingModal({
       void handleFinalConfirm(true);
       return;
     }
-    setStep(steps[stepIndex + 1]);
+    goToStep(steps[stepIndex + 1]);
   };
 
   // The footer button: on to the next screen, or finish on the last one.
@@ -393,7 +395,17 @@ export default function LanguageOnboardingModal({
       void handleFinalConfirm();
       return;
     }
-    setStep(steps[stepIndex + 1]);
+    goToStep(steps[stepIndex + 1]);
+  };
+
+  // Entering the 관심 언어 step: someone who is not Korean starts with Korean
+  // checked (the app is for meeting Koreans), so one tap moves on.
+  const goToStep = (next: OnboardingStep) => {
+    if (next === "interest-language" && !interestCode && koreanAnswer === "no" && ownLanguageCode !== "ko") {
+      const korean = languageItems.find((item) => canonicalizeSttLanguageCode(item.code) === "ko");
+      if (korean) setInterestCode(korean.code);
+    }
+    setStep(next);
   };
 
   // One tap picks the gender and moves on; the footer button stays for
@@ -1004,7 +1016,7 @@ export default function LanguageOnboardingModal({
             className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none"
           >
             {isConfirming ? <Loader2 size={16} className="animate-spin" aria-hidden /> : null}
-            {isLastStep && (step === "language" || step === "korean" || step === "korea-visit") ? copy.confirmButtonLabel : signupCopy.continueAction}
+            {isLastStep && (step === "language" || step === "korean" || step === "korea-visit" || step === "interest-language") ? copy.confirmButtonLabel : signupCopy.continueAction}
           </button>
         </footer>
       </div>

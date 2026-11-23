@@ -8,12 +8,15 @@ import type { InterestLanguage } from "@/lib/interest-languages";
 import { canonicalizeSttLanguageCode } from "@/lib/stt-languages";
 import { isFirstSpeakPending } from "@/lib/first-run";
 import {
+  clearPendingInterestLanguages,
+  readPendingInterestLanguages,
+} from "@/components/LivePhoneDemo/live-phone-demo.preferences";
+import {
   INTEREST_PROMPT_DELAY_MS,
   interestPromptStorageKey,
   parseInterestPromptRecord,
   recordInterestPromptShown,
   shouldShowInterestPrompt,
-  withFirstSeen,
   type InterestPromptRecord,
 } from "./interest-language-prompt.logic";
 
@@ -29,7 +32,7 @@ function writeRecord(userId: string, record: InterestPromptRecord) {
   try {
     window.localStorage.setItem(interestPromptStorageKey(userId), JSON.stringify(record));
   } catch {
-    // Not persisted: at worst this user is asked once more, or a day later.
+    // Not persisted: at worst this user is asked once more.
   }
 }
 
@@ -43,10 +46,31 @@ export default function InterestLanguagePrompt({ viewerId, locale }: { viewerId:
 
   useEffect(() => {
     if (!viewerId) return;
-    const seen = withFirstSeen(readRecord(viewerId), Date.now());
-    writeRecord(viewerId, seen);
-    if (!shouldShowInterestPrompt(seen, Date.now(), { firstSpeakPending: isFirstSpeakPending() })) return;
     const controller = new AbortController();
+    // Picked in the first-run onboarding before there was an account: saved
+    // here (the feed is where a new account lands), never asked again.
+    const pending = readPendingInterestLanguages();
+    if (pending.length > 0) {
+      void (async () => {
+        try {
+          const response = await fetch(buildClientApiPath("/profile"), { cache: "no-store", signal: controller.signal });
+          if (!response.ok) return;
+          const profile = await response.json() as { interestLanguages?: unknown };
+          const saved = Array.isArray(profile.interestLanguages) && profile.interestLanguages.length > 0;
+          const patched = saved || (await fetch(buildClientApiPath("/profile"), {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ interestLanguages: pending }),
+            signal: controller.signal,
+          })).ok;
+          if (patched) clearPendingInterestLanguages();
+        } catch {
+          // Offline or aborted: saved on the next visit (or by the chat list).
+        }
+      })();
+      return () => controller.abort();
+    }
+    if (!shouldShowInterestPrompt(readRecord(viewerId), Date.now(), { firstSpeakPending: isFirstSpeakPending() })) return;
     const timer = window.setTimeout(async () => {
       try {
         const response = await fetch(buildClientApiPath("/profile"), { cache: "no-store", signal: controller.signal });

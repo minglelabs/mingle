@@ -28,7 +28,7 @@ export type InterestLanguageCopy = {
 const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
   ko: {
     onboardingStep: '관심 언어',
-    onboardingTitle: '어떤 언어를 쓰는 친구를 만나고 싶어요?',
+    onboardingTitle: '어떤 언어를 쓰는 친구를 주로 만나고 싶어요?',
     onboardingDescription: '주로 대화하고 싶은 상대의 언어를 골라 주세요. 나중에 프로필에서 바꿀 수 있어요.',
     levelQuestion: '이 언어는 얼마나 할 수 있어요?',
     levelLabels: ['처음이에요', '조금 알아요', '일상 대화', '능숙해요', '원어민 수준'],
@@ -43,7 +43,7 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
   },
   en: {
     onboardingStep: 'Interested in',
-    onboardingTitle: 'Who would you like to meet?',
+    onboardingTitle: 'Which language do the friends you want to meet mostly speak?',
     onboardingDescription: 'Pick the language of the people you most want to talk with. You can change it later in your profile.',
     levelQuestion: 'How well do you know it?',
     levelLabels: ['Brand new', 'A little', 'Everyday talk', 'Fluent', 'Native-like'],
@@ -58,7 +58,7 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
   },
   ja: {
     onboardingStep: '興味のある言語',
-    onboardingTitle: 'どの言語を話す友達と出会いたいですか?',
+    onboardingTitle: '主にどの言語を話す友達と出会いたいですか?',
     onboardingDescription: 'よく話したい相手の言語を選んでください。あとでプロフィールから変更できます。',
     levelQuestion: 'この言語はどのくらいできますか?',
     levelLabels: ['はじめて', '少しだけ', '日常会話', '流暢', 'ネイティブ並み'],
@@ -73,7 +73,7 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
   },
   'zh-CN': {
     onboardingStep: '感兴趣的语言',
-    onboardingTitle: '你想认识说哪种语言的朋友?',
+    onboardingTitle: '你主要想认识说哪种语言的朋友?',
     onboardingDescription: '选择你最想交流的对象所说的语言。之后可以在个人资料中更改。',
     levelQuestion: '你对这门语言掌握得怎么样?',
     levelLabels: ['完全不会', '会一点', '日常对话', '流利', '接近母语'],
@@ -88,7 +88,7 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
   },
   'zh-TW': {
     onboardingStep: '感興趣的語言',
-    onboardingTitle: '你想認識說哪種語言的朋友?',
+    onboardingTitle: '你主要想認識說哪種語言的朋友?',
     onboardingDescription: '選擇你最想交流的對象所說的語言。之後可以在個人檔案中更改。',
     levelQuestion: '你對這門語言掌握得怎麼樣?',
     levelLabels: ['完全不會', '會一點', '日常對話', '流利', '接近母語'],
@@ -103,7 +103,7 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
   },
   fr: {
     onboardingStep: 'Intéressé par',
-    onboardingTitle: 'Qui aimeriez-vous rencontrer ?',
+    onboardingTitle: 'Vous voulez surtout rencontrer des amis qui parlent quelle langue ?',
     onboardingDescription: 'Choisissez la langue des personnes avec qui vous voulez surtout parler. Vous pourrez la changer plus tard dans votre profil.',
     levelQuestion: 'Quel est votre niveau ?',
     levelLabels: ['Débutant total', 'Quelques bases', 'Conversation courante', 'Courant', 'Quasi natif'],
@@ -118,7 +118,7 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
   },
   de: {
     onboardingStep: 'Interessiert an',
-    onboardingTitle: 'Wen möchtest du kennenlernen?',
+    onboardingTitle: 'Welche Sprache sprechen die Freunde, die du vor allem kennenlernen willst?',
     onboardingDescription: 'Wähle die Sprache der Menschen, mit denen du am liebsten sprechen möchtest. Du kannst sie später im Profil ändern.',
     levelQuestion: 'Wie gut kannst du sie?',
     levelLabels: ['Ganz neu', 'Ein bisschen', 'Alltagsgespräche', 'Fließend', 'Fast muttersprachlich'],
@@ -133,7 +133,7 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
   },
   es: {
     onboardingStep: 'Me interesa',
-    onboardingTitle: '¿A quién te gustaría conocer?',
+    onboardingTitle: '¿Qué idioma hablan sobre todo los amigos que quieres conocer?',
     onboardingDescription: 'Elige el idioma de las personas con las que más quieres hablar. Puedes cambiarlo luego en tu perfil.',
     levelQuestion: '¿Qué tal lo hablas?',
     levelLabels: ['Desde cero', 'Un poco', 'Conversación diaria', 'Con fluidez', 'Casi nativo'],
@@ -148,7 +148,7 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
   },
   pt: {
     onboardingStep: 'Tenho interesse',
-    onboardingTitle: 'Quem você gostaria de conhecer?',
+    onboardingTitle: 'Que idioma falam principalmente os amigos que você quer conhecer?',
     onboardingDescription: 'Escolha o idioma das pessoas com quem você mais quer conversar. Você pode mudar depois no seu perfil.',
     levelQuestion: 'Quanto você sabe desse idioma?',
     levelLabels: ['Do zero', 'Um pouco', 'Conversa do dia a dia', 'Fluente', 'Quase nativo'],
@@ -163,7 +163,7 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
   },
   it: {
     onboardingStep: 'Mi interessa',
-    onboardingTitle: 'Chi ti piacerebbe conoscere?',
+    onboardingTitle: 'Che lingua parlano soprattutto gli amici che vuoi conoscere?',
     onboardingDescription: 'Scegli la lingua delle persone con cui vuoi parlare di più. Potrai cambiarla dopo nel profilo.',
     levelQuestion: 'Quanto la conosci?',
     levelLabels: ['Da zero', 'Un po’', 'Conversazione quotidiana', 'Fluente', 'Quasi madrelingua'],
@@ -178,7 +178,7 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
   },
   ru: {
     onboardingStep: 'Интересует',
-    onboardingTitle: 'С кем вы хотите познакомиться?',
+    onboardingTitle: 'На каком языке в основном говорят друзья, с которыми вы хотите познакомиться?',
     onboardingDescription: 'Выберите язык людей, с которыми вы больше всего хотите общаться. Его можно изменить позже в профиле.',
     levelQuestion: 'Насколько хорошо вы его знаете?',
     levelLabels: ['С нуля', 'Немного', 'Бытовое общение', 'Свободно', 'Почти как носитель'],
@@ -193,7 +193,7 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
   },
   ar: {
     onboardingStep: 'مهتم بـ',
-    onboardingTitle: 'من تودّ أن تتعرّف عليه؟',
+    onboardingTitle: 'بأي لغة يتحدث غالبًا الأصدقاء الذين تريد التعرّف عليهم؟',
     onboardingDescription: 'اختر لغة الأشخاص الذين تريد التحدث معهم أكثر. يمكنك تغييرها لاحقًا من ملفك الشخصي.',
     levelQuestion: 'ما مستواك في هذه اللغة؟',
     levelLabels: ['مبتدئ تمامًا', 'قليلًا', 'محادثة يومية', 'بطلاقة', 'قريب من اللغة الأم'],
@@ -208,7 +208,7 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
   },
   hi: {
     onboardingStep: 'रुचि की भाषा',
-    onboardingTitle: 'आप किस भाषा के दोस्तों से मिलना चाहते हैं?',
+    onboardingTitle: 'आप मुख्य रूप से किस भाषा के दोस्तों से मिलना चाहते हैं?',
     onboardingDescription: 'उन लोगों की भाषा चुनें जिनसे आप सबसे ज़्यादा बात करना चाहते हैं। इसे बाद में प्रोफ़ाइल में बदल सकते हैं।',
     levelQuestion: 'आप यह भाषा कितनी जानते हैं?',
     levelLabels: ['बिल्कुल नए', 'थोड़ी-सी', 'रोज़मर्रा की बातचीत', 'धाराप्रवाह', 'लगभग मातृभाषा जैसी'],
@@ -223,7 +223,7 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
   },
   th: {
     onboardingStep: 'ภาษาที่สนใจ',
-    onboardingTitle: 'อยากเจอเพื่อนที่พูดภาษาอะไร?',
+    onboardingTitle: 'อยากเจอเพื่อนที่พูดภาษาอะไรเป็นหลัก?',
     onboardingDescription: 'เลือกภาษาของคนที่คุณอยากคุยด้วยมากที่สุด เปลี่ยนได้ภายหลังในโปรไฟล์',
     levelQuestion: 'คุณรู้ภาษานี้แค่ไหน?',
     levelLabels: ['เริ่มต้นใหม่', 'รู้นิดหน่อย', 'สนทนาในชีวิตประจำวัน', 'คล่อง', 'ใกล้เคียงเจ้าของภาษา'],
@@ -238,7 +238,7 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
   },
   vi: {
     onboardingStep: 'Quan tâm',
-    onboardingTitle: 'Bạn muốn gặp gỡ ai?',
+    onboardingTitle: 'Bạn chủ yếu muốn gặp bạn bè nói ngôn ngữ nào?',
     onboardingDescription: 'Chọn ngôn ngữ của những người bạn muốn trò chuyện nhiều nhất. Bạn có thể đổi sau trong hồ sơ.',
     levelQuestion: 'Bạn biết ngôn ngữ này đến đâu?',
     levelLabels: ['Mới bắt đầu', 'Biết một chút', 'Giao tiếp hằng ngày', 'Thành thạo', 'Gần như bản xứ'],
