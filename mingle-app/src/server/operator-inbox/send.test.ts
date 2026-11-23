@@ -362,6 +362,17 @@ describe('sendOperatorMessage', () => {
     expect(contentRows()[0]).toMatchObject({ contentType: 'SOURCE', language: 'pt', text: 'Oi, tudo bem?' })
   })
 
+  it('keeps the staff text exactly as typed even when the model rewrites it in the same language', async () => {
+    m.translateTexts.mockResolvedValue({
+      translations: { en: 'Hi, how are you?', ko: '안녕, 잘 지내?', pt: 'Oi, tudo bem.' },
+      detectedSourceLanguage: 'pt',
+      provider: 'gemini',
+      model: 'gemini-test',
+    })
+    await send({ text: 'oi tudo bem' })
+    expect(contentRows()[0]).toMatchObject({ contentType: 'SOURCE', language: 'pt', text: 'oi tudo bem' })
+  })
+
   it('retries once for room languages the first call missed, and still sends when that fails', async () => {
     m.translateTexts
       .mockResolvedValueOnce({ translations: { pt: 'Olá' }, detectedSourceLanguage: 'ko', provider: 'gemini', model: 'm' })
