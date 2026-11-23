@@ -3,7 +3,9 @@ import { toKoreanDomesticNumber } from '@/server/sms-codes'
 
 // Solapi plain SMS (about 18 KRW a message). SOLAPI_API_KEY and
 // SOLAPI_API_SECRET come from the Solapi console, SOLAPI_SENDER is a sender
-// number registered there (digits only). No IP allow list is needed.
+// number registered there (digits only). The API key may carry an allowed-IP
+// list in the console: a request from another address is refused with 403
+// ("허용되지 않은 IP", 2026-11-23 on a devbox).
 
 type SolapiConfig = { apiKey: string; apiSecret: string; sender: string }
 
@@ -21,7 +23,7 @@ export function buildSolapiAuthorization(config: Pick<SolapiConfig, 'apiKey' | '
 }
 
 export class SolapiSendError extends Error {
-  constructor(readonly status: number, readonly errorCode: string) {
+  constructor(readonly status: number, readonly errorCode: string, readonly providerMessage = '') {
     super(`solapi_send_${status}_${errorCode}`)
   }
 }
@@ -41,6 +43,6 @@ export async function sendSolapiSms(config: SolapiConfig, toE164: string, text: 
     signal: AbortSignal.timeout(10_000),
   })
   if (response.ok) return
-  const body = await response.json().catch(() => ({})) as { errorCode?: string }
-  throw new SolapiSendError(response.status, body.errorCode ?? 'unknown')
+  const body = await response.json().catch(() => ({})) as { errorCode?: string; errorMessage?: string }
+  throw new SolapiSendError(response.status, body.errorCode ?? 'unknown', (body.errorMessage ?? '').slice(0, 200))
 }

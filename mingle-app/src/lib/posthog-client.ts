@@ -34,6 +34,8 @@ export type MingleClientEvent =
   | "mingle_first_message_gate"
   | "mingle_selfie_verify"
   | "mingle_push_prompt"
+  // The phone number screen, step by step (sign-in and verification), see phone-verify-sheet.
+  | "mingle_phone_auth"
   // Posting-feed events; names and allowed properties live in `@/lib/feed-analytics`.
   | FeedEventName;
 

@@ -2,7 +2,8 @@
 
 import { Loader2, X } from "lucide-react";
 import { useSession } from "next-auth/react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { captureMingleClientEvent } from "@/lib/posthog-client";
 import { fillPhoneFriendsCopy, type PhoneFriendsCopy } from "@/i18n/phone-friends-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { resolveSignInMethodsCopy } from "@/i18n/sign-in-methods-copy";
@@ -62,6 +63,21 @@ export default function PhoneVerifySheet({
 
   const phone = normalizePhoneNumber(number, country.callingCode);
 
+  // Each step goes to PostHog as `mingle_phone_auth` (owner, 2026-11-23: new
+  // users drop off at the code step). Never the number, only its country.
+  const flow = sendPath === "/phone/sign-in" ? "sign_in" : "verify";
+  const lastFailureRef = useRef<string | null>(null);
+  const track = useCallback((stepName: string, extra?: Record<string, string | number | null>) => {
+    captureMingleClientEvent("mingle_phone_auth", { flow, step: stepName, country: countryIso, ...extra });
+  }, [countryIso, flow]);
+  const trackRef = useRef(track);
+  useEffect(() => {
+    trackRef.current = track;
+  }, [track]);
+  useEffect(() => {
+    trackRef.current("opened");
+  }, []);
+
   const errorText = useCallback((value: string | undefined) => (
     value === "invalid_phone" ? copy.errorPhone
       : value === "invalid_code" || value === "wrong_code" ? copy.errorCode
@@ -76,6 +92,7 @@ export default function PhoneVerifySheet({
     if (busy) return;
     setBusy(true);
     setError(null);
+    track("code_requested", { resend: step.kind === "code" ? 1 : 0 });
     try {
       const response = await fetch(buildClientApiPath(sendPath), {
         method: "POST",
@@ -84,9 +101,13 @@ export default function PhoneVerifySheet({
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({})) as { error?: string };
+        lastFailureRef.current = body.error ?? `http_${response.status}`;
+        track("code_send_failed", { reason: lastFailureRef.current, http_status: response.status });
         setError(errorText(body.error));
         return;
       }
+      lastFailureRef.current = null;
+      track("code_sent");
       const sentAt = Date.now();
       setNow(sentAt);
       setStep({ kind: "code", phone: target, sentAt });
@@ -95,23 +116,30 @@ export default function PhoneVerifySheet({
       // Lets "send again" appear without a timer running all the time.
       window.setTimeout(() => setNow(Date.now()), RESEND_AFTER_MS + 50);
     } catch {
+      lastFailureRef.current = "network";
+      track("code_send_failed", { reason: "network", http_status: null });
       setError(copy.errorGeneric);
     } finally {
       setBusy(false);
     }
-  }, [busy, copy.errorGeneric, errorText, locale, sendPath]);
+  }, [busy, copy.errorGeneric, errorText, locale, sendPath, step.kind, track]);
 
   const confirm = useCallback(async () => {
     if (busy || step.kind !== "code" || code.length !== 6) return;
     setBusy(true);
     setError(null);
+    track("code_submitted");
     try {
       if (confirmCode) {
         const failure = await confirmCode(step.phone, code);
         if (failure) {
+          lastFailureRef.current = failure;
+          track("code_rejected", { reason: failure });
           setError(errorText(failure));
           return;
         }
+        lastFailureRef.current = null;
+        track("verified");
         announcePhoneVerified(step.phone);
         onVerified(step.phone);
         return;
@@ -124,9 +152,13 @@ export default function PhoneVerifySheet({
       });
       const body = await response.json().catch(() => ({})) as { error?: string; phoneE164?: string; switched?: boolean };
       if (!response.ok || !body.phoneE164) {
+        lastFailureRef.current = body.error ?? `http_${response.status}`;
+        track("code_rejected", { reason: lastFailureRef.current });
         setError(errorText(body.error));
         return;
       }
+      lastFailureRef.current = null;
+      track("verified", { switched: body.switched ? 1 : 0 });
       if (body.switched) {
         // The number (or this device) already had an account: this sign-in was
         // folded into it. Renew the session so it becomes that account's, then
@@ -141,17 +173,25 @@ export default function PhoneVerifySheet({
       announcePhoneVerified(body.phoneE164);
       onVerified(body.phoneE164);
     } catch {
+      lastFailureRef.current = "network";
+      track("code_rejected", { reason: "network" });
       setError(copy.errorGeneric);
     } finally {
       setBusy(false);
     }
-  }, [busy, code, confirmCode, copy.errorGeneric, errorText, locale, onVerified, renewSession, step]);
+  }, [busy, code, confirmCode, copy.errorGeneric, errorText, locale, onVerified, renewSession, step, track]);
+
+  // Closing the sheet without finishing: where it was left, and the last failure seen.
+  const close = useCallback(() => {
+    track("closed", { at: step.kind, last_failure: lastFailureRef.current });
+    onClose();
+  }, [onClose, step.kind, track]);
 
   const canResend = step.kind === "code" && now - step.sentAt >= RESEND_AFTER_MS;
 
   return (
     <div className="fixed inset-0 z-[150] flex items-end justify-center" role="dialog" aria-modal="true" aria-label={copy.sheetTitle}>
-      <button type="button" className="absolute inset-0 bg-black/45" aria-label={copy.close} onClick={onClose} />
+      <button type="button" className="absolute inset-0 bg-black/45" aria-label={copy.close} onClick={close} />
       <div
         className="relative w-full max-w-[520px] rounded-t-[1.6rem] bg-white px-5 pt-4 text-slate-950"
         style={{
@@ -167,7 +207,7 @@ export default function PhoneVerifySheet({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={close}
             aria-label={copy.close}
             className="-mr-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-gray-500 active:bg-gray-100"
           >

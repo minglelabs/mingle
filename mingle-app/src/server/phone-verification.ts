@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
 import { isE164 } from '@/lib/phone-number'
 import { KoreanSmsError, koreanSmsProvider, sendKoreanSms } from '@/server/korean-sms'
+import { reportPhoneCodeSendFailure } from '@/server/phone-code-send-failure'
 import { buildSmsCodeText, checkSmsCode, issueSmsCode } from '@/server/sms-codes'
 import { isIdentityBlocked, type RequestIdentityContext } from '@/server/identity/links'
 import { PhoneClaimRefused, claimVerifiedPhone } from '@/server/identity/phone-claim'
@@ -140,8 +141,11 @@ async function sendCode(route: CodeRoute, phone: string, uiLocale: string | unde
     try {
       await sendKoreanSms(phone, buildSmsCodeText(issueSmsCode(phone)))
     } catch (error) {
-      if (error instanceof KoreanSmsError) throw new PhoneVerificationFailure(error.kind)
-      throw error
+      const kind = error instanceof KoreanSmsError ? error.kind : 'unavailable'
+      reportPhoneCodeSendFailure({ route, phone, kind, error })
+      // A provider refusal we have no word for (an IP not allowed, no balance)
+      // reads as "unavailable", not a bare 500.
+      throw new PhoneVerificationFailure(kind)
     }
     return
   }
@@ -151,10 +155,17 @@ async function sendCode(route: CodeRoute, phone: string, uiLocale: string | unde
   const response = await twilioRequest(config, 'Verifications', { To: phone, Channel: 'sms', ...(locale ? { Locale: locale } : {}) })
   if (response.ok) return
   // 60200: invalid parameter (a number Twilio cannot text); 60203: Twilio's own send cap.
-  const body = await response.json().catch(() => ({})) as { code?: number }
-  if (body.code === 60200 || response.status === 400) throw new PhoneVerificationFailure('invalid_phone')
-  if (body.code === 60203 || response.status === 429) throw new PhoneVerificationFailure('too_many_requests')
-  throw new Error(`twilio_verify_${response.status}`)
+  const body = await response.json().catch(() => ({})) as { code?: number; message?: string }
+  const kind = body.code === 60200 || response.status === 400 ? 'invalid_phone'
+    : body.code === 60203 || response.status === 429 ? 'too_many_requests'
+      : 'unavailable'
+  reportPhoneCodeSendFailure({
+    route,
+    phone,
+    kind,
+    provider: { name: 'twilio', status: response.status, code: body.code ? String(body.code) : undefined, message: body.message },
+  })
+  throw new PhoneVerificationFailure(kind)
 }
 
 async function checkCode(phone: string, code: string): Promise<boolean> {
