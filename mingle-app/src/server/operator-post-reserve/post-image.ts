@@ -9,6 +9,7 @@ import { decodePostPhoto, type PostPhotoKind } from './post-photo'
 import { pairImages, stripImages } from './pair-images'
 import { pickPersonVariety } from './post-person-variety'
 import { faceStickerLine } from './face-stickers'
+import { contrastLines, describeReferenceForContrast } from './reference-contrast'
 
 /** Most group photos hide the friends' faces under stickers; some friends are fine being seen. */
 const FRIEND_STICKER_SHARE = 0.85
@@ -246,7 +247,10 @@ export async function reservePostImageRequest(operatorUserId: string, descriptio
   ])
   const style = pickPostImageStyle(account?.avatarSpec, kind, random)
   const withPerson = kind === 'scene' ? null : await reservePostPerson(operatorUserId, style)
-  return { prompt: buildPostImagePrompt(description, place, random, withPerson?.person ?? null, style), reference: withPerson?.reference ?? null }
+  const prompt = buildPostImagePrompt(description, place, random, withPerson?.person ?? null, style)
+  // A photo of the poster is attached: name what it shows so the new one changes each point.
+  const contrast = withPerson?.reference && style === 'photo' ? await describeReferenceForContrast(withPerson.reference) : null
+  return { prompt: contrast ? [prompt, ...contrastLines(contrast)].join('\n') : prompt, reference: withPerson?.reference ?? null }
 }
 
 /**
