@@ -45,7 +45,7 @@ vi.mock('@/server/operator-post-reserve/worker', () => ({
   PHOTO_REQUESTED: 'photo_requested',
 }))
 
-import { normalizeReviewFeedback, parseReviewAction, releaseOrphanedDrawings, reviewOperatorPost, reviewOperatorProfile, setReviewPostText } from './review'
+import { normalizeReviewFeedback, parseReviewAction, releaseOrphanedDrawings, reviewOperatorPost, reviewOperatorProfile, setReviewPostText, editReviewPost } from './review'
 
 const PENDING_ACCOUNT = { reviewState: 'pending', user: { isOperator: true, isDeleted: false } }
 const REVIEW_POST = {
@@ -299,5 +299,32 @@ describe('setReviewPostText', () => {
     await expect(setReviewPostText({} as never, 'r1', 'a'.repeat(1001))).resolves.toEqual({ ok: false, error: 'invalid_text' })
     mocks.reserveFindUnique.mockResolvedValueOnce({ state: 'published', operatorUserId: 'op1' })
     await expect(setReviewPostText({} as never, 'r1', 'ok')).resolves.toEqual({ ok: false, error: 'not_found' })
+  })
+})
+
+describe('editReviewPost', () => {
+  it('saves text, language, topic and time together', async () => {
+    mocks.reserveFindUnique
+      .mockResolvedValueOnce({ state: 'review', operatorUserId: 'op1' })
+      .mockResolvedValueOnce({ ...REVIEW_POST, text: '새 글' })
+    mocks.reserveUpdateMany.mockResolvedValue({ count: 1 })
+    const now = new Date('2026-11-23T09:00:00Z')
+    await expect(editReviewPost({} as never, 'r1', { text: ' 새 글 ', language: 'ja', topic: ' food ', publishAt: '2026-11-22T06:30:00.000Z' }, now)).resolves.toMatchObject({ ok: true })
+    expect(mocks.reserveUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'r1', state: 'review' },
+      data: { text: '새 글', language: 'ja', topic: 'food', releaseAt: new Date('2026-11-22T06:30:00.000Z') },
+    })
+  })
+
+  it('clears the time and refuses a future one or an unknown language', async () => {
+    const now = new Date('2026-11-23T09:00:00Z')
+    await expect(editReviewPost({} as never, 'r1', { publishAt: '2026-11-24T00:00:00Z' }, now)).resolves.toEqual({ ok: false, error: 'invalid_time' })
+    await expect(editReviewPost({} as never, 'r1', { language: 'xx-nope' }, now)).resolves.toEqual({ ok: false, error: 'invalid_language' })
+    mocks.reserveFindUnique
+      .mockResolvedValueOnce({ state: 'regenerating', operatorUserId: 'op1' })
+      .mockResolvedValueOnce({ ...REVIEW_POST })
+    mocks.reserveUpdateMany.mockResolvedValue({ count: 1 })
+    await expect(editReviewPost({} as never, 'r1', { publishAt: null }, now)).resolves.toMatchObject({ ok: true })
+    expect(mocks.reserveUpdateMany).toHaveBeenLastCalledWith({ where: { id: 'r1', state: { in: ['review', 'regenerating'] } }, data: { releaseAt: null } })
   })
 })
