@@ -160,6 +160,18 @@ describe('avatar taxonomy', () => {
     expect(expressions.size).toBeGreaterThan(25)
   })
 
+  it('sometimes uses an ID photo, shot in a studio rather than on a phone', () => {
+    const specs = Array.from({ length: 3000 }, (_, index) => pickAvatarSpec(korean, seededRandom(`id:${index}`)))
+    const ids = specs.filter((spec) => spec.subtype === 'id_photo')
+    expect(ids.length / specs.length).toBeGreaterThan(0.02)
+    expect(ids.length / specs.length).toBeLessThan(0.1)
+    for (const spec of ids) {
+      expect(spec.prompt).toContain('ID-style photo')
+      expect(spec.prompt).toMatch(/backdrop/)
+      expect(spec.prompt).not.toMatch(/front-camera|selfie|Setting:/)
+    }
+  })
+
   it('draws Japanese women with Japanese makeup, hair and dress', () => {
     const japanese: AvatarPersona = { gender: 'female', name: 'ゆき', age: 24, country: 'JP', countryName: 'Japan', city: 'Tokyo', bio: null }
     let faces = 0

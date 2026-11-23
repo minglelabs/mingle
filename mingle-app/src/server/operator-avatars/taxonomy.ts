@@ -112,6 +112,8 @@ export const AVATAR_SUBTYPES: Record<AvatarCategory, readonly Subtype[]> = {
     sub('look_back', '뒤돌아보는 순간', 2, 'glancing back over the shoulder toward the camera'),
     sub('laughing', '웃다가 찍힘', 2, 'caught laughing, eyes half closed, not posed'),
     sub('lying_down', '누워서 셀카', 1, 'lying on a bed or sofa, phone held above the face'),
+    // Staff (2026-11-23): many real people use their ID or studio profile photo; almost none here did.
+    sub('id_photo', '증명사진', 3.5, 'a head-and-shoulders ID photo'),
   ],
   partial: [
     sub('mirror_phone', '폰으로 가린 거울 셀카', 5, 'a mirror selfie where the phone covers most of the face'),
@@ -998,6 +1000,25 @@ const DIGITAL_RULES = [
   'No text, captions, watermarks, logos, signatures, borders or frames.',
 ].join(' ')
 
+/** 증명사진: how the photo came to be (a studio file, or the printed one photographed). */
+const ID_PHOTO_SOURCES: readonly Option[] = [
+  ['studio_file', 6, 'the digital file from a neighborhood photo studio: shot straight on against a plain seamless background, even soft studio light from the front, sharp focus'],
+  ['studio_profile', 3, 'a slightly more relaxed studio profile shot of the kind people get for a resume or a job application: straight on, plain backdrop, soft even light, shoulders a little turned'],
+  ['phone_of_print', 1.5, 'a phone photo of a small printed ID photo lying on a desk, the print filling most of the frame, a bit of the desk around it, faint reflections on the glossy paper'],
+]
+const ID_PHOTO_BACKDROPS: readonly Option[] = [
+  ['white', 3, 'a white backdrop'], ['light_gray', 2, 'a light gray backdrop'], ['pale_blue', 2, 'a pale blue backdrop'],
+  ['ivory', 1, 'an ivory backdrop'], ['soft_gradient', 1, 'a soft gray gradient backdrop'],
+]
+const ID_PHOTO_EXPRESSIONS: readonly Option[] = [
+  ['neutral', 3, 'a calm, neutral face with the mouth closed'], ['slight_smile', 3, 'a slight closed-lip smile'],
+  ['polite_smile', 2, 'a polite smile just showing the upper teeth'],
+]
+const ID_PHOTO_OUTFITS: readonly Option[] = [
+  ['shirt', 3, 'a plain collared shirt'], ['blouse_knit', 2, 'a plain knit or blouse in a muted color'],
+  ['jacket', 2, 'a dark jacket over a plain top'], ['tee', 1, 'a plain crew-neck top'],
+]
+
 const RULES = [
   'It must look like a real, unedited photo from an ordinary person\'s phone gallery.',
   'Square 1:1 image. No text, captions, watermarks, logos, brand names, borders or frames anywhere in the image.',
@@ -1050,11 +1071,23 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
     take('filter', FILTERS),
     take('flaw', flawsFor(mirrorShot)),
   ].filter(Boolean).join('; ')
+  const idPhoto = category === 'face' && subtype.key === 'id_photo'
   const lines: string[] = [category === 'other' && DIGITAL_SUBTYPES.has(subtype.key)
     ? 'A picture that someone uses as their social media profile picture.'
+    : idPhoto
+    ? 'An ID-style photo (the kind taken for a resume or a document) that someone uses as their social media profile picture.'
     : 'A casual photo that someone uses as their social media profile picture.']
 
-  if (category === 'face' || category === 'partial') {
+  if (idPhoto) {
+    // Its own shot: no phone, shooter or location; the studio decides the frame and the light.
+    lines.push(`Subject: ${describePerson(persona, { face: true, body: false, hair: true }, take, random, attributes)}, hair neatly done.`)
+    lines.push(`Framing: head and shoulders, centered, facing the camera; ${take('idSource', ID_PHOTO_SOURCES)}; ${take('backdrop', ID_PHOTO_BACKDROPS)}.`)
+    lines.push(`Expression and pose: ${take('expression', ID_PHOTO_EXPRESSIONS)}, ${take('headPose', [['straight', 1, 'head upright and straight']])}, eyes looking into the lens.`)
+    lines.push(`Wearing ${take('outfit', ID_PHOTO_OUTFITS)}.`)
+    lines.push('Real studio photo: real skin texture under a light, ordinary studio retouch (not airbrushed or smoothed over), natural colors, no props, nothing else in the frame.')
+    lines.push('Square 1:1 image. No text, captions, watermarks, logos, brand names, borders or frames anywhere in the image.')
+    lines.push('Any person shown is an adult, fully and ordinarily dressed. Not a real, identifiable or famous person, and no existing character.')
+  } else if (category === 'face' || category === 'partial') {
     const mirror = subtype.key === 'mirror_phone'
     // Some angles only a selfie can take, some only someone else can; the rest take either.
     const shooters = SELFIE_SUBTYPES.has(subtype.key)
@@ -1160,7 +1193,9 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
     if (LETTER_SUBTYPES.has(subtype.key)) lines.push('The words are the subject: spelled correctly, something a young person there would really write, and nothing else is written anywhere.')
   }
 
-  if (category === 'other' && DIGITAL_SUBTYPES.has(subtype.key)) {
+  if (idPhoto) {
+    // Already complete: phone-photo realism would fight the studio look.
+  } else if (category === 'other' && DIGITAL_SUBTYPES.has(subtype.key)) {
     lines.push(LETTER_SUBTYPES.has(subtype.key) ? DIGITAL_RULES.replace('No text, captions,', 'No other text, captions,') : DIGITAL_RULES)
   } else {
     if (category !== 'other') lines.push(`Camera and light: ${shot()}.`)
