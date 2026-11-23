@@ -393,6 +393,22 @@ describe('POST /api/posts/{postId}/comments', () => {
     expect(body.error).toBe('text_too_long')
   })
 
+  it("returns the author's current identity so the new row shows today's avatar", async () => {
+    mockCreateComment.mockResolvedValue({
+      id: 'c1', postId: 'post-1', parentId: null,
+      replyToUserId: null, bodyVersion: 1, createdAt: new Date(),
+    })
+    mockUserFindUnique.mockResolvedValue({
+      id: 'user-1', handle: 'royce', name: 'Royce', image: 'https://cdn/new.jpg',
+      imageCropScale: null, imageCropX: null, imageCropY: null, isOfficial: false, isOperator: false,
+    })
+
+    const res = await POST(makeRequest({ sourceText: 'hi', sourceLanguage: 'en' }), makeCtx('post-1'))
+    expect(res.status).toBe(201)
+    const body = await res.json()
+    expect(body.author).toMatchObject({ id: 'user-1', name: 'Royce', image: 'https://cdn/new.jpg' })
+  })
+
   it('creates comment successfully with server-detected language + settled translations', async () => {
     mockCreateComment.mockResolvedValue({
       id: 'c1', postId: 'post-1', parentId: null,
