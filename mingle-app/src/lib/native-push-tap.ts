@@ -133,8 +133,11 @@ export function resolveNativePushTapNavigation(
     };
   }
 
+  // The home feed is a tab root: land on it as a fresh root, never as a stacked
+  // entry an edge swipe / Android back could leave into pre-notification history.
+  const isHomeFeed = segments[1] === "feed" && segments.length === 2;
   const href = new URL(
-    buildNativeAwareTabPath(target.pathname, currentSearchParams),
+    buildNativeAwareTabPath(target.pathname, currentSearchParams, { tabRoot: isHomeFeed }),
     THROWAWAY_ORIGIN,
   );
   target.searchParams.forEach((value, key) => {
@@ -144,6 +147,10 @@ export function resolveNativePushTapNavigation(
   return { kind: "route", href: `${href.pathname}${href.search}${href.hash}` };
 }
 
+function isTabRootHref(href: string): boolean {
+  return new URL(href, THROWAWAY_ORIGIN).searchParams.get("nativeTabRoot") === "1";
+}
+
 export type NativePushTapHandlerDeps = {
   /** Current page query (`window.location.search`), to carry the native shell params over. */
   readCurrentSearch: () => string;
@@ -151,6 +158,8 @@ export type NativePushTapHandlerDeps = {
   /** Remove the pending request from the window slot. */
   clearPendingRequest: () => void;
   pushRoute: (href: string) => void;
+  /** Replace the current entry — used for tab-root destinations (`nativeTabRoot=1`). */
+  replaceRoute: (href: string) => void;
   openConversation: (conversationListHref: string, conversationId: string) => void;
   /** Full-page load (`window.location.assign`), for admin console paths. */
   loadDocument: (href: string) => void;
@@ -181,6 +190,10 @@ export function createNativePushTapHandler(deps: NativePushTapHandlerDeps): (raw
     }
     if (navigation.kind === "document") {
       deps.loadDocument(navigation.href);
+      return;
+    }
+    if (isTabRootHref(navigation.href)) {
+      deps.replaceRoute(navigation.href);
       return;
     }
     deps.pushRoute(navigation.href);

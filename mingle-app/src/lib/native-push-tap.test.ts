@@ -112,7 +112,7 @@ describe("resolveNativePushTapNavigation", () => {
 
   it("works for a plain web page without native query", () => {
     const navigation = resolve("/ko/feed?postId=p1", true, "");
-    expect(navigation).toEqual({ kind: "route", href: "/ko/feed?postId=p1" });
+    expect(navigation).toEqual({ kind: "route", href: "/ko/feed?nativeTabRoot=1&postId=p1" });
   });
 
   it("opens an admin console path (no locale) as a full-page load, without the native query", () => {
@@ -151,6 +151,7 @@ describe("createNativePushTapHandler", () => {
       supportsPostingFeed: () => supportsPostingFeed,
       clearPendingRequest: vi.fn(),
       pushRoute: vi.fn(),
+      replaceRoute: vi.fn(),
       openConversation: vi.fn(),
       loadDocument: vi.fn(),
     };
@@ -167,11 +168,12 @@ describe("createNativePushTapHandler", () => {
     expect(deps.loadDocument).toHaveBeenCalledTimes(1);
   });
 
-  it("routes a feed tap and clears the pending slot", () => {
+  it("lands a feed tap on the home feed as a fresh tab root (replace) and clears the pending slot", () => {
     const { deps, handle } = setup();
     handle({ path: "/ko/feed?postId=p1&commentId=c9", sequence: 1 });
     expect(deps.clearPendingRequest).toHaveBeenCalledTimes(1);
-    expect(deps.pushRoute).toHaveBeenCalledWith("/ko/feed?postId=p1&commentId=c9");
+    expect(deps.replaceRoute).toHaveBeenCalledWith("/ko/feed?nativeTabRoot=1&postId=p1&commentId=c9");
+    expect(deps.pushRoute).not.toHaveBeenCalled();
     expect(deps.openConversation).not.toHaveBeenCalled();
   });
 
@@ -190,9 +192,9 @@ describe("createNativePushTapHandler", () => {
     const request = { path: "/ko/feed?postId=p1", sequence: 4 };
     handle(request);
     handle(request);
-    expect(deps.pushRoute).toHaveBeenCalledTimes(1);
+    expect(deps.replaceRoute).toHaveBeenCalledTimes(1);
     handle({ path: "/ko/feed?postId=p2", sequence: 5 });
-    expect(deps.pushRoute).toHaveBeenCalledTimes(2);
+    expect(deps.replaceRoute).toHaveBeenCalledTimes(2);
   });
 
   it("ignores unsafe requests but still clears the slot", () => {
@@ -206,6 +208,7 @@ describe("createNativePushTapHandler", () => {
   it("gates posting destinations for a pre-posting client", () => {
     const { deps, handle } = setup(false);
     handle({ path: "/ko/feed?postId=p1", sequence: 1 });
-    expect(deps.pushRoute).toHaveBeenCalledWith("/ko/conversations?nativeTabRoot=1");
+    expect(deps.replaceRoute).toHaveBeenCalledWith("/ko/conversations?nativeTabRoot=1");
+    expect(deps.pushRoute).not.toHaveBeenCalled();
   });
 });
