@@ -7,6 +7,7 @@ import { markPostViewed } from '@/server/feed/post-view'
 import { commentOnPostAsOperator, replyToCommentAsOperator } from '@/server/operator-comments/comment'
 import { seededRandom } from '@/server/operator-avatars/taxonomy'
 import { visiblePostWhere } from '@/server/posts/post-visibility'
+import { isHostileComment } from './hostile-comment'
 
 /**
  * Reactions on operator posts, the way they build up on a real one: likes come
@@ -240,6 +241,10 @@ export type EngagementRunResult = {
   replies: number
   commentLikes: number
   realLikes: number
+  /** Real comments not liked because they were judged hostile. */
+  hostileSkipped: number
+  /** Follow rows added between operator accounts and the team accounts. */
+  teamFollows: number
   realReplies: number
   realPostLikes: number
   realPostComments: number
@@ -250,7 +255,7 @@ type CommentRow = { id: string; postId: string; authorId: string; parentId: stri
 /** One run: adds every reaction that is due and missing on recent operator posts. */
 export async function runOperatorEngagement(now: Date = new Date(), options: { maxWritten?: number } = {}): Promise<EngagementRunResult> {
   const result: EngagementRunResult = {
-    likes: 0, comments: 0, replies: 0, commentLikes: 0, realLikes: 0, realReplies: 0, realPostLikes: 0, realPostComments: 0,
+    likes: 0, comments: 0, replies: 0, commentLikes: 0, realLikes: 0, hostileSkipped: 0, teamFollows: 0, realReplies: 0, realPostLikes: 0, realPostComments: 0,
   }
   let writeBudget = options.maxWritten ?? MAX_WRITTEN_PER_RUN
   const nowMs = now.getTime()
@@ -263,6 +268,7 @@ export async function runOperatorEngagement(now: Date = new Date(), options: { m
   const operators = operatorRows.map((user) => user.id)
   if (operators.length === 0) return result
   const isOperator = new Set(operators)
+  result.teamFollows = await ensureOperatorTeamFollows(operators)
   await engageRealComments(now, isOperator, result)
   await engageRealPosts(now, operatorRows, result)
   if (operators.length < 2) return result
@@ -374,6 +380,39 @@ export async function runOperatorEngagement(now: Date = new Date(), options: { m
 }
 
 /**
+ * Every approved operator account follows, and is followed by, both team
+ * accounts (@royce and the mascot), the way every real person is at sign-up
+ * (`signup-welcome-onboarding.ts`; staff, 2026-11-23: most operators had only
+ * one of the two). Rows only, no notifications or welcome messages. Returns
+ * how many rows were added.
+ */
+export async function ensureOperatorTeamFollows(operatorIds: readonly string[]): Promise<number> {
+  if (operatorIds.length === 0) return 0
+  const team = (await prisma.user.findMany({
+    where: { id: { in: TEAM_USER_IDS }, isDeleted: { not: true } },
+    select: { id: true },
+  })).map((user) => user.id)
+  if (team.length === 0) return 0
+  const existing = await prisma.userFollow.findMany({
+    where: {
+      OR: [
+        { followerId: { in: [...operatorIds] }, followingId: { in: team } },
+        { followerId: { in: team }, followingId: { in: [...operatorIds] } },
+      ],
+    },
+    select: { followerId: true, followingId: true },
+  })
+  const have = new Set(existing.map((row) => `${row.followerId}>${row.followingId}`))
+  const missing = operatorIds.flatMap((operatorId) => team.flatMap((teamId) => [
+    { followerId: operatorId, followingId: teamId },
+    { followerId: teamId, followingId: operatorId },
+  ])).filter((row) => row.followerId !== row.followingId && !have.has(`${row.followerId}>${row.followingId}`))
+  if (missing.length === 0) return 0
+  const created = await prisma.userFollow.createMany({ data: missing, skipDuplicates: true })
+  return created.count
+}
+
+/**
  * Real people's comments on operator posts from the last `ENGAGEMENT_WINDOW_MS`
  * (on a post of any age): a root comment is liked and maybe answered by the
  * post's author; a reply is liked by the operator it answers (else the post's
@@ -392,7 +431,7 @@ async function engageRealComments(now: Date, isOperator: Set<string>, result: En
     },
     orderBy: { createdAt: 'asc' },
     select: {
-      id: true, parentId: true, replyToUserId: true, createdAt: true,
+      id: true, parentId: true, replyToUserId: true, createdAt: true, sourceText: true,
       post: { select: { authorId: true } },
       likes: { select: { userId: true } },
       replies: { where: { OR: [{ isDeleted: null }, { isDeleted: false }] }, select: { authorId: true } },
@@ -404,7 +443,11 @@ async function engageRealComments(now: Date, isOperator: Set<string>, result: En
     const operatorId = comment.replyToUserId && isOperator.has(comment.replyToUserId) ? comment.replyToUserId : comment.post.authorId
     if (!isOperator.has(operatorId)) continue
 
-    if (plan.like !== null && start + plan.like <= nowMs && !comment.likes.some((like) => like.userId === operatorId)) {
+    const likeDue = plan.like !== null && start + plan.like <= nowMs && !comment.likes.some((like) => like.userId === operatorId)
+    // Never like an insult: judged only once a like is actually due.
+    const hostile = likeDue && await isHostileComment(comment.id, comment.sourceText)
+    if (hostile) result.hostileSkipped += 1
+    if (likeDue && !hostile && plan.like !== null) {
       const createdAt = new Date(Math.min(nowMs, start + plan.like))
       const created = await prisma.postCommentLike.createMany({ data: [{ commentId: comment.id, userId: operatorId, createdAt }], skipDuplicates: true })
       if (created.count) {
