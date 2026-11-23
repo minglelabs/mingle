@@ -399,12 +399,12 @@ function ReviewActions({
         </AdminButton>
       </div>
       {drawAction ? (
-        <AdminButton block disabled={busy !== null || drawAction.requested || drawAction.drawing} onClick={() => { onAction('draw', feedback, image); reset() }}>
+        <AdminButton block disabled={busy !== null || inProgress || drawAction.requested || drawAction.drawing} onClick={() => { onAction('draw', feedback, image); reset() }}>
           {busy === 'draw' || drawAction.drawing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <ImageIcon className="h-4 w-4" aria-hidden="true" />}
           {drawAction.drawing ? '사진 그리는 중…' : drawAction.requested ? 'ChatGPT로 그리기 요청됨' : '글은 그대로, 사진만 그리기'}
         </AdminButton>
       ) : null}
-      {inProgress ? <p className="text-xs text-slate-500">사진을 그리는 중이라 끝나면 누를 수 있어요.</p> : null}
+      {inProgress ? <p className="text-xs text-slate-500">작업 중(글 다시 쓰기·사진 그리기)이라 끝나면 누를 수 있어요.</p> : null}
       {publishDisabledReason ? <p className="text-xs text-slate-500">{publishDisabledReason}</p> : null}
     </div>
   )
