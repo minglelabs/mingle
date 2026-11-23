@@ -1,7 +1,7 @@
 import { SchemaType, type ResponseSchema } from '@google/generative-ai'
 import { getSttLanguageDisplayName } from '@/lib/stt-languages'
-import { generateJson, type GenerateJsonRequest, OPERATOR_TEXT_MODEL } from '@/server/llm/generate-json'
-import { reserveLearnerPlan, reservePosterProfile, type LearningLanguage } from '@/server/operator-post-reserve/generate'
+import { generateJson, type GenerateJsonRequest, OPERATOR_POST_TEXT_MODEL, OPERATOR_TEXT_MODEL } from '@/server/llm/generate-json'
+import { IMMERSION_RULE, reserveLearnerPlan, reservePosterProfile, type LearningLanguage } from '@/server/operator-post-reserve/generate'
 import { hasContactDetails } from '@/server/operators/persona-rules'
 
 /**
@@ -13,17 +13,26 @@ import { hasContactDetails } from '@/server/operators/persona-rules'
  */
 export const OPERATOR_COMMENT_GENERATED_MAX_CHARS = 200
 const CALL_TIMEOUT_MS = 60_000
-/** Every operator comment and reply: Claude Haiku 5.5 on the Anthropic API, not the ChatGPT pool (staff decided 2026-11-22). */
-export const OPERATOR_COMMENT_DEFAULT_MODEL = OPERATOR_TEXT_MODEL
+/**
+ * Every operator comment and reply goes to the Anthropic API, never the ChatGPT
+ * pool. Claude Opus 5.5 through 2026-12-12 (KST), Claude Haiku 5.5 after
+ * (staff decided 2026-11-23: a reply that reads machine-made broke a real
+ * user's immersion).
+ */
+export const OPERATOR_COMMENT_OPUS_UNTIL = new Date('2026-12-13T00:00:00+09:00')
+
+export function operatorCommentDefaultModel(now: Date = new Date()): string {
+  return now.getTime() < OPERATOR_COMMENT_OPUS_UNTIL.getTime() ? OPERATOR_POST_TEXT_MODEL : OPERATOR_TEXT_MODEL
+}
 
 /** Comments between operator accounts (OPERATOR_COMMENT_MODEL overrides). */
-export function resolveOperatorCommentModel(env: NodeJS.ProcessEnv = process.env): string {
-  return env.OPERATOR_COMMENT_MODEL?.trim() || OPERATOR_COMMENT_DEFAULT_MODEL
+export function resolveOperatorCommentModel(env: NodeJS.ProcessEnv = process.env, now: Date = new Date()): string {
+  return env.OPERATOR_COMMENT_MODEL?.trim() || operatorCommentDefaultModel(now)
 }
 
 /** Replies to a real person's comment (OPERATOR_REAL_REPLY_MODEL overrides). */
-export function resolveRealUserReplyModel(env: NodeJS.ProcessEnv = process.env): string {
-  return env.OPERATOR_REAL_REPLY_MODEL?.trim() || OPERATOR_COMMENT_DEFAULT_MODEL
+export function resolveRealUserReplyModel(env: NodeJS.ProcessEnv = process.env, now: Date = new Date()): string {
+  return env.OPERATOR_REAL_REPLY_MODEL?.trim() || operatorCommentDefaultModel(now)
 }
 
 export const COMMENT_KINDS: ReadonlyArray<{ key: string; weight: number; brief: string }> = [
@@ -116,7 +125,9 @@ export function buildCommentInstructions(language: string, reply = false): strin
       : 'Do what "kind" says, about the specific thing in this post. No generic praise that would fit any post, no summary of the post, no advice, no "thanks for sharing", and do not repeat what an existing comment already says.',
     'Follow "voice" for register, laughter, emoji and punctuation, lightly: a quirk from "voice" appears in at most one comment in three, so usually leave it out. No hashtags.',
     'Do not claim to have visited a place the post mentions, and do not name a specific shop, restaurant or business unless the post already names it.',
+    'Only say what the post, its photo description, the thread or the commenter\'s profile supports. When the comment asks about something you cannot know (a detail of the photo, what exactly is in it, a fact you are not sure of), answer vaguely or casually, or turn it back with a question; never invent a confident specific.',
     'Never include contact details, links, other apps, @mentions or phone numbers, and never mention being an AI.',
+    IMMERSION_RULE,
     'Answer with JSON: {"text": "<the comment>"}.',
   ].join('\n')
 }
