@@ -162,7 +162,9 @@ for (const [i, s] of rows.entries()) {
          toNum(u.follower_count ?? r.dom.followers), toNum(u.following_count ?? r.dom.following),
          toNum(u.media_count ?? r.dom.posts), u.is_business ?? u.is_business_account ?? null,
          u.business_contact_method ?? null,
-         { user: u, bio_links: u.bio_links, email: u.public_email, phone: u.public_phone_number || u.contact_phone_number, posts, header: r.dom.text }],
+         // \u0000·짝 없는 서로게이트는 Postgres json이 거부 → 제거
+         JSON.stringify({ user: u, bio_links: u.bio_links, email: u.public_email, phone: u.public_phone_number || u.contact_phone_number, posts, header: r.dom.text })
+           .replace(/\\u0000/g, '').replace(/\\ud[89ab][0-9a-f]{2}(?!\\ud[c-f])/gi, '').replace(/(?<!\\ud[89ab][0-9a-f]{2})\\ud[c-f][0-9a-f]{2}/gi, '')],
       );
       for (const [n, p] of posts.entries()) {
         const local = await download(s.id, n, p.img);
