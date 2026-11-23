@@ -6,9 +6,10 @@ import { describeAccountLook, pickAnimeStyle, seededRandom, type AvatarSpec } fr
 import { newPostImageKey } from '@/server/posts/post-image-keys'
 import { getPostImage, putPostImage } from '@/server/posts/post-image-storage'
 import { decodePostPhoto, type PostPhotoKind } from './post-photo'
+import { pickPersonVariety } from './post-person-variety'
 
 /** The poster as photos of them show them: their look, and whether a photo of them goes along. */
-export type PostPhotoPerson = { look: string; hasReference: boolean }
+export type PostPhotoPerson = { look: string; hasReference: boolean; gender?: string | null }
 
 const PERSON_LINES: Record<Exclude<PostPhotoKind, 'scene'>, string> = {
   self: 'The poster\'s face is clearly visible.',
@@ -50,6 +51,9 @@ export function buildPostImagePrompt(
     ].join('\n')
   }
   const faces = kind === 'self' || kind === 'friends'
+  const realism = phonePhotoRealism(random, { people: true, faces, focusOnPerson: true, lens: lensForShot(description), pickTime: true, scene: `${description} ${place ?? ''}` })
+  // Picked after the realism block so its picks stay what they were for a given seed.
+  const variety = pickPersonVariety(random, { faces: kind === 'self' || (kind === 'friends' && person.hasReference), female: person.gender === 'female', hasReference: person.hasReference })
   return [
     'A casual photo of the person who posts it, from their phone gallery, posted on their social media.',
     `It shows: ${description}`,
@@ -64,9 +68,10 @@ export function buildPostImagePrompt(
         ]
       : [`The poster: ${person.look}.`]),
     PERSON_LINES[kind],
+    ...variety,
     ...placeLine,
     'It must look like a real, unedited snapshot, not a photoshoot: an ordinary moment, the outfit the person would really wear there.',
-    phonePhotoRealism(random, { people: true, faces, focusOnPerson: true, lens: lensForShot(description), pickTime: true, scene: `${description} ${place ?? ''}` }),
+    realism,
     `Everyone in the image is an adult; no school uniforms. Not a photo of a phone, tablet or computer screen. ${frame}`,
   ].join('\n')
 }
@@ -168,7 +173,7 @@ export async function reservePostPerson(operatorUserId: string, style: PostImage
     // The anime profile picture is the character, unless it shows a pet or a thing.
     const character = isAnimeSpec(spec) && (spec?.attributes?.animeSubject ?? 'person') === 'person'
     const reference = character && user?.image ? await fetchReference(user.image) : null
-    return { person: { look: describeAccountLook(persona, seededRandom(`${operatorUserId}:look`)), hasReference: Boolean(reference) }, reference }
+    return { person: { look: describeAccountLook(persona, seededRandom(`${operatorUserId}:look`)), hasReference: Boolean(reference), gender: persona.gender }, reference }
   }
   const subject = specSubject(spec)
   let reference: AvatarReference | null = null
@@ -183,7 +188,7 @@ export async function reservePostPerson(operatorUserId: string, style: PostImage
     if (post?.imageObjectKey) reference = { bytes: Buffer.from(await getPostImage(post.imageObjectKey)), mimeType: 'image/jpeg' }
   }
   const look = subject ?? describeAccountLook(persona, seededRandom(`${operatorUserId}:look`))
-  return { person: { look, hasReference: Boolean(reference) }, reference }
+  return { person: { look, hasReference: Boolean(reference), gender: persona.gender }, reference }
 }
 
 /** Re-encodes a drawn photo and stores it as a post image of the operator. Throws when storing fails. */
