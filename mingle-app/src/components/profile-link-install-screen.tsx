@@ -5,7 +5,9 @@ import {
   Smartphone,
 } from "lucide-react";
 import ProfileGenderAgeBadge from "@/components/profile-gender-age-badge";
-import { useMemo, useRef, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { renderStyledQrDataUrl } from "@/components/profile-qr-card";
+import { buildProfileLinkPath } from "@/lib/profile-link";
 import {
   buildProfileAppUrl,
   isValidProfileLinkUserId,
@@ -120,7 +122,7 @@ export default function ProfileLinkInstallScreen({
     <main className="flex min-h-screen items-center justify-center bg-[linear-gradient(145deg,#1295e8_0%,#3569ed_52%,#7338f2_100%)] px-5 py-10 text-slate-950">
       <section className="w-full max-w-md rounded-[2rem] bg-white/95 p-7 shadow-[0_24px_70px_rgba(22,50,140,0.28)] backdrop-blur">
         {profile ? (
-          <div className="mx-auto flex max-w-[18rem] items-center justify-center gap-3.5">
+          <div className="mx-auto flex max-w-[22rem] items-center gap-3.5">
             <div className="flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 shadow-sm">
               {profile.image ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -142,7 +144,7 @@ export default function ProfileLinkInstallScreen({
                 <span className="text-2xl font-bold text-slate-400" aria-hidden="true">M</span>
               )}
             </div>
-            <div className="min-w-0 text-left">
+            <div className="min-w-0 flex-1 text-left">
               <p className="flex min-w-0 items-center gap-1.5">
                 <span className="truncate text-lg font-bold tracking-tight text-slate-950">{profileName}</span>
                 <AccountBadge kind={profileBadge} locale={locale} tone="dark" />
@@ -152,6 +154,7 @@ export default function ProfileLinkInstallScreen({
                 <p className="mt-0.5 truncate text-sm font-medium text-slate-500">{profileHandle}</p>
               ) : null}
             </div>
+            <ProfileLinkQr userId={userId} label={profileName} />
           </div>
         ) : (
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-[#F3C35A] shadow-sm">
@@ -195,5 +198,48 @@ export default function ProfileLinkInstallScreen({
         </div>
       </section>
     </main>
+  );
+}
+
+/**
+ * This profile's share QR, the same styled code the app's share screen shows,
+ * the size of the profile photo. People who opened the link still use it to
+ * let someone next to them scan it (staff, 2026-11-23). A tap shows it large.
+ */
+function ProfileLinkQr({ userId, label }: { userId: string; label: string }) {
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+  const [enlarged, setEnlarged] = useState(false);
+
+  useEffect(() => {
+    const path = buildProfileLinkPath(userId);
+    if (!path) return;
+    let cancelled = false;
+    void renderStyledQrDataUrl(new URL(path, window.location.origin).toString())
+      .then((value) => { if (!cancelled) setDataUrl(value); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  if (!dataUrl) return <div className="h-[4.5rem] w-[4.5rem] shrink-0" aria-hidden="true" />;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setEnlarged(true)}
+        aria-label={`${label} QR`}
+        className="h-[4.5rem] w-[4.5rem] shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-sm transition active:scale-95"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={dataUrl} alt="" className="h-full w-full" />
+      </button>
+      {enlarged ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6" onClick={() => setEnlarged(false)} role="dialog" aria-modal="true" aria-label={`${label} QR`}>
+          <div className="w-full max-w-xs rounded-3xl bg-white p-4 shadow-2xl">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={dataUrl} alt={`${label} QR`} className="h-auto w-full" />
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
