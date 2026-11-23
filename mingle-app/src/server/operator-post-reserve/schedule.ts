@@ -16,7 +16,7 @@ const MORNING_SPREAD_HOURS = 3
 const UTC_OFFSET_HOURS: Record<string, number> = {
   KR: 9, JP: 9, TW: 8, CN: 8, VN: 7, TH: 7, ID: 7, PH: 8, MY: 8, SG: 8, IN: 5.5,
   US: -6, CA: -5, GB: 0, AU: 10, FR: 1, DE: 1, ES: 1, IT: 1, BR: -3, MX: -6, AR: -3, TR: 3,
-  RU: 3, SA: 3, AE: 4, KZ: 5,
+  RU: 3, SA: 3, AE: 4, KZ: 5, UZ: 5,
 }
 
 export function utcOffsetHoursOf(personaCountry: string | null | undefined): number {

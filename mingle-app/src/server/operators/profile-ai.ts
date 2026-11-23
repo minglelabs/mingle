@@ -67,7 +67,7 @@ export async function draftOperatorProfile(userId: string, scope: ProfileAiScope
     const native = sanitizeSttLanguageSelection(user.primaryLanguages)[0] ?? draft.primaryLanguage
     const learning = canonicalizeSttLanguageCode(learnerPlan(userId, native).language)
     const interestLanguages: InterestLanguage[] = learning && learning !== canonicalizeSttLanguageCode(native)
-      ? [{ code: learning, level: randomLearnerDots(random) }]
+      ? [{ code: learning, level: randomLearnerDots(random, native, learning) }]
       : []
     const rest: ProfileAiDraft = { name: draft.name, handle: draft.handle, city: draft.city, birthYear: draft.birthYear, interestLanguages }
     return { ok: true, draft: scope === 'all' ? { ...rest, bio: draft.bio } : rest }

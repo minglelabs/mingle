@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildPostImagePrompt } from './post-image'
-import { EXPRESSIONS, FEMALE_HAIRSTYLES, HEAD_ANGLES, pickPersonVariety } from './post-person-variety'
+import { CAMERA_DISTANCES, EXPRESSIONS, FEMALE_HAIRSTYLES, HEAD_ANGLES, pickPersonVariety } from './post-person-variety'
 
 describe('variety in photos of the poster', () => {
   it('names a head angle, expression, hairstyle, outfit and light for a woman\'s selfie', () => {
@@ -10,6 +10,21 @@ describe('variety in photos of the poster', () => {
     expect(prompt).toContain('Hairstyle today, unlike the attached photo:')
     expect(prompt).toContain('Outfit today')
     expect(prompt).toContain('Light on the face')
+    expect(prompt).toContain('Camera distance')
+  })
+
+  it('takes the poster from very close to far away, and never face-filling without a face', () => {
+    const seen = new Set<string>()
+    for (let i = 0; i < 200; i += 1) {
+      const value = i / 200
+      const line = pickPersonVariety(() => value, { faces: true, female: false, hasReference: false }).at(-1)!
+      seen.add(line)
+    }
+    expect(seen.size).toBe(CAMERA_DISTANCES.length)
+    for (let i = 0; i < 50; i += 1) {
+      const value = i / 50
+      expect(pickPersonVariety(() => value, { faces: false, female: false, hasReference: false }).at(-1)).not.toContain('the face fills')
+    }
   })
 
   it('leaves the hairstyle to men and the face picks to photos without a face', () => {

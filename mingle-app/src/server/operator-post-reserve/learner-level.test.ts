@@ -3,19 +3,30 @@ import { learnerPlan, operatorInterestLanguageFields, posterProfile } from './po
 import { reserveLearnerPlan } from './generate'
 
 describe('learner level', () => {
-  it('is mostly level 1: about 60 / 25 / 10 / 5 across accounts', () => {
+  const shares = (native: string) => {
     const counts = [0, 0, 0, 0, 0]
     const total = 20_000
-    for (let index = 0; index < total; index += 1) counts[learnerPlan(`user-${index}`, 'ja').level.dots - 1] += 1
-    const share = counts.map((count) => count / total)
-    expect(share[0]).toBeGreaterThan(0.57)
-    expect(share[0]).toBeLessThan(0.63)
-    expect(share[1]).toBeGreaterThan(0.22)
-    expect(share[1]).toBeLessThan(0.28)
-    expect(share[2]).toBeGreaterThan(0.08)
-    expect(share[2]).toBeLessThan(0.12)
-    expect(share[3] + share[4]).toBeGreaterThan(0.035)
-    expect(share[3] + share[4]).toBeLessThan(0.065)
+    for (let index = 0; index < total; index += 1) counts[learnerPlan(`user-${index}`, native).level.dots - 1] += 1
+    return counts.map((count) => count / total)
+  }
+
+  it('puts most foreign accounts at the lowest Korean level, Westerners most of all', () => {
+    const western = shares('en')
+    expect(western[0]).toBeGreaterThan(0.81)
+    expect(western[3] + western[4]).toBeLessThan(0.02)
+    const japanese = shares('ja')
+    expect(japanese[0]).toBeGreaterThan(0.71)
+    expect(japanese[0]).toBeLessThan(0.77)
+    expect(japanese[3] + japanese[4]).toBeLessThan(0.035)
+    const vietnamese = shares('vi')
+    expect(vietnamese[0]).toBeGreaterThan(0.61)
+    expect(vietnamese[0]).toBeLessThan(japanese[0])
+  })
+
+  it('keeps Korean accounts learning other languages at about 60 / 25 / 10 / 5', () => {
+    const korean = shares('ko')
+    expect(korean[0]).toBeGreaterThan(0.57)
+    expect(korean[0]).toBeLessThan(0.63)
   })
 
   it('puts the same level on the profile as the posts use', () => {

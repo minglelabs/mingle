@@ -69,6 +69,21 @@ export const FACE_LIGHTS = [
   'light from above, soft shadows under the brows and chin',
 ] as const
 
+/**
+ * How far the camera is, spread wide on purpose: left alone the model takes
+ * nearly every photo from the same chest-up distance (staff, 2026-11-23).
+ * The first one only for photos that show the face.
+ */
+export const CAMERA_DISTANCES = [
+  'very close: the face fills most of the frame, the top of the head or the chin cut off by the edge',
+  'close, from arm\'s length: head and shoulders',
+  'chest up, from about a meter away',
+  'waist up, from a couple of meters away',
+  'knees up, from a few meters away, a good part of the place around them in frame',
+  'full body, head to shoes in frame, from several meters away',
+  'from far away: the person small in a wide view of the place, taken from across the street, the room or the park, zoomed in a little so the background looks compressed',
+] as const
+
 /** The concrete picks for one photo of the poster, as prompt lines. */
 export function pickPersonVariety(random: Random, options: { faces: boolean; female: boolean; hasReference: boolean }): string[] {
   const lines: string[] = []
@@ -80,5 +95,7 @@ export function pickPersonVariety(random: Random, options: { faces: boolean; fem
   if (options.female) lines.push(`Hairstyle today${versus}: ${pick(random, FEMALE_HAIRSTYLES)} (same hair color and length).`)
   lines.push(`Outfit today, unless the description already names one: ${pick(random, OUTFITS)}, mostly ${pick(random, OUTFIT_COLORS)}; no garment or main color${options.hasReference ? ' from the attached photo' : ' repeated from another photo'}.`)
   if (options.faces) lines.push(`Light on the face, within what the place gives: ${pick(random, FACE_LIGHTS)}.`)
+  const distances = options.faces ? CAMERA_DISTANCES : CAMERA_DISTANCES.slice(1)
+  lines.push(`Camera distance, unless the description already fixes it (a mirror selfie, a selfie at arm's length): ${pick(random, distances)}.`)
   return lines
 }
