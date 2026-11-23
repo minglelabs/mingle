@@ -5,6 +5,7 @@ import { normalizeActivityId } from '@/server/operator-activity/activity'
 import { loadOperatorPostThread } from '@/server/operator-activity/thread'
 import { loadOperatorPostStats } from '@/server/operator-post-stats/load'
 import { PostThreadView } from '../../_components/post-thread-view'
+import { safeBackPath } from '../../../_lib/back-path'
 
 export const dynamic = 'force-dynamic'
 
@@ -67,6 +68,7 @@ export default async function AdminActivityPostPage({ params, searchParams }: Pa
       initialThread={result.thread}
       focusCommentId={normalizeActivityId(firstParam(query.comment))}
       postStats={stats}
+      backHref={safeBackPath(query.back)}
     />
   )
 }

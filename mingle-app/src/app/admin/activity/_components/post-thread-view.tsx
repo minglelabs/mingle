@@ -175,9 +175,11 @@ function CommentRow({ postId, comment, korean, nowMs, focused, isReply, canReply
  * that comments or replies as that operator. The draft is converted to the
  * operator's language on the server, like posts and inbox replies.
  */
-export function PostThreadView({ initialThread, focusCommentId, postStats = null }: {
+export function PostThreadView({ initialThread, focusCommentId, postStats = null, backHref = null }: {
   initialThread: OperatorPostThread
   focusCommentId: string | null
+  /** Where the back arrow returns (e.g. the profile the thread was opened from); the activity list by default. */
+  backHref?: string | null
   /** The post's stats row (operator posts only), as of the page load. */
   postStats?: OperatorPostStats | null
 }) {
@@ -307,10 +309,10 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
     <div className="flex min-h-full flex-col bg-slate-50 text-slate-900">
       <header className="sticky top-0 z-10 flex items-center gap-1 border-b border-slate-200 bg-white px-1 py-1 lg:px-4">
         <Link
-          href="/admin/activity"
+          href={backHref ?? '/admin/activity'}
           prefetch={false}
-          aria-label="알림으로 돌아가기"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-700 active:bg-slate-100 lg:hidden"
+          aria-label={backHref ? '뒤로' : '알림으로 돌아가기'}
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-700 active:bg-slate-100 ${backHref ? '' : 'lg:hidden'}`}
         >
           <ChevronLeft size={24} aria-hidden="true" />
         </Link>

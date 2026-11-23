@@ -235,6 +235,15 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
                       </ul>
                     </details>
                   ) : null}
+                  {post.commentCount > 0 ? (
+                    <Link
+                      href={withBack(`/admin/activity/posts/${encodeURIComponent(post.id)}${operator ? `?as=${encodeURIComponent(user.id)}` : ''}`, href({}, `post-${post.id}`))}
+                      className="mt-2 flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-sky-700"
+                    >
+                      <span>댓글 {post.commentCount}개 전체 보기{operator ? ' · 답글 달기' : ''}</span>
+                      <span aria-hidden="true">›</span>
+                    </Link>
+                  ) : null}
                   {post.comments.length ? (
                     <ul className="mt-2 space-y-1 rounded-lg bg-slate-50 p-2 text-sm">
                       {post.comments.map((comment) => (
