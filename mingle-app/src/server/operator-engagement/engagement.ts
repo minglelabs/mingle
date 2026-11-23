@@ -52,6 +52,47 @@ function delay(random: Random, minMs: number, maxMs: number): number {
   return Math.round(Math.exp(Math.log(minMs) + random() * (Math.log(maxMs) - Math.log(minMs))))
 }
 
+/** [from, to, share]: a reaction lands in a band by its share, log-uniform inside it. */
+type Band = readonly [number, number, number]
+
+/**
+ * When a reaction comes in: a post keeps being found in the feed for days, so
+ * reactions slow down but never stop at once (staff, 2026-11-23: likes all
+ * arrived in the first hour, then nothing, which reads as staged).
+ */
+const LIKE_BANDS: readonly Band[] = [
+  [3 * MINUTE_MS, HOUR_MS, 0.22],
+  [HOUR_MS, 6 * HOUR_MS, 0.28],
+  [6 * HOUR_MS, 24 * HOUR_MS, 0.28],
+  [24 * HOUR_MS, 48 * HOUR_MS, 0.14],
+  [48 * HOUR_MS, 90 * HOUR_MS, 0.08],
+]
+const COMMENT_BANDS: readonly Band[] = [
+  [8 * MINUTE_MS, HOUR_MS, 0.15],
+  [HOUR_MS, 6 * HOUR_MS, 0.3],
+  [6 * HOUR_MS, 24 * HOUR_MS, 0.3],
+  [24 * HOUR_MS, 48 * HOUR_MS, 0.15],
+  [48 * HOUR_MS, 90 * HOUR_MS, 0.1],
+]
+/** Real people's posts: after the fast first like, the rest over about two and a half days. */
+const REAL_LIKE_BANDS: readonly Band[] = [
+  [4 * MINUTE_MS, HOUR_MS, 0.25],
+  [HOUR_MS, 6 * HOUR_MS, 0.3],
+  [6 * HOUR_MS, 24 * HOUR_MS, 0.3],
+  [24 * HOUR_MS, 60 * HOUR_MS, 0.15],
+]
+
+function bandDelay(random: Random, bands: readonly Band[]): number {
+  let roll = random() * bands.reduce((sum, band) => sum + band[2], 0)
+  const inner = random()
+  for (const [min, max, share] of bands) {
+    roll -= share
+    if (roll < 0) return Math.round(Math.exp(Math.log(min) + inner * (Math.log(max) - Math.log(min))))
+  }
+  const [min] = bands[bands.length - 1]
+  return min
+}
+
 function weightedCount(random: Random, weights: readonly number[]): number {
   const total = weights.reduce((sum, weight) => sum + weight, 0)
   let roll = random() * total
@@ -86,9 +127,9 @@ export function planPostEngagement(postId: string, appeal: PostAppeal = { photo:
   const shape = APPEAL_REACTIONS[appeal.attractive ? (appeal.photo ? 'attractivePhoto' : 'attractiveText') : appeal.photo ? 'photo' : 'text']
   // A photo post by an ordinary account: 1-24 likes, most around 6-10.
   const likeCount = shape.likesMin + Math.floor(shape.likesSpread * random() ** shape.skew)
-  const likes = Array.from({ length: likeCount }, () => delay(random, 3 * MINUTE_MS, 36 * HOUR_MS)).sort((a, b) => a - b)
+  const likes = Array.from({ length: likeCount }, () => bandDelay(random, LIKE_BANDS)).sort((a, b) => a - b)
   const commentCount = weightedCount(random, shape.comments)
-  const comments = Array.from({ length: commentCount }, () => delay(random, 8 * MINUTE_MS, 30 * HOUR_MS)).sort((a, b) => a - b)
+  const comments = Array.from({ length: commentCount }, () => bandDelay(random, COMMENT_BANDS)).sort((a, b) => a - b)
   return { likes, comments }
 }
 
@@ -164,7 +205,7 @@ const REAL_POST_REACTIONS: Record<'text' | 'photo', { likesMin: number; likesSpr
 /**
  * How a real person's own post is liked and commented on: never the same twice
  * (seeded per post), a photo drawing more than text. The first like comes fast
- * (1-20 minutes), the rest spread over the day; comments come hours apart.
+ * (1-20 minutes), the rest over about two and a half days; comments come hours apart.
  */
 export function planRealPostEngagement(postId: string, options: { photo?: boolean } = {}): RealPostEngagementPlan {
   const random = seededRandom(`engage-real-post:${postId}`)
@@ -178,7 +219,7 @@ export function planRealPostEngagement(postId: string, options: { photo?: boolea
   }
   const likeCount = shape.likesMin + Math.floor((shape.likesSpread + 1) * random() ** shape.skew)
   const first = delay(random, MINUTE_MS, 20 * MINUTE_MS)
-  const rest = Array.from({ length: likeCount - 1 }, () => first + delay(random, 4 * MINUTE_MS, 18 * HOUR_MS))
+  const rest = Array.from({ length: likeCount - 1 }, () => first + bandDelay(random, REAL_LIKE_BANDS))
   return { comments, likes: [first, ...rest].sort((a, b) => a - b) }
 }
 
