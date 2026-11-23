@@ -1109,6 +1109,14 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
           if (commentPostId) handleCommentCountChange(commentPostId, count);
         }}
         onRequireLogin={() => goToLogin(commentPostId)}
+        onOpenAuthor={(authorId) => {
+          // Profiles are for signed-in readers only (the profile API answers 401).
+          if (!viewerId) {
+            goToLogin(commentPostId);
+            return;
+          }
+          router.push(userProfileHref(locale, authorId));
+        }}
       />
 
       {actionPost ? (
