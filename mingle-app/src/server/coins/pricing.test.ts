@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { quoteCoinUsage, selectCoinPricingRate, type CoinPricingRateRow } from './pricing'
+import { isFreeCoinQuote, quoteCoinUsage, selectCoinPricingRate, type CoinPricingRateRow } from './pricing'
 
 const AT = new Date('2026-10-03T00:00:00Z')
 
@@ -52,5 +52,28 @@ describe('selectCoinPricingRate', () => {
     ]
     expect(selectCoinPricingRate(rows, { kind: 'stt', model: null, unit: 'second', at: AT })?.id).toBe('new')
     expect(selectCoinPricingRate(rows, { kind: 'stt', model: null, unit: 'second', at: new Date('2026-03-01T00:00:00Z') })?.id).toBe('old')
+  })
+})
+
+describe('free period', () => {
+  const at = new Date('2026-11-23T00:00:00.000Z')
+  const paid = { id: 'paid', kind: 'translation', model: '*', unit: 'message', usdMicroPerMillionUnits: 200_000_000n, marginBps: 15_000, effectiveFrom: new Date('2026-10-29T00:00:00.000Z'), effectiveTo: null }
+  const free = { ...paid, id: 'free', marginBps: 0, effectiveFrom: new Date('2026-11-22T00:00:00.000Z'), effectiveTo: new Date('2026-12-12T15:00:00.000Z') }
+
+  it('a later zero-margin row makes the usage free while it is open, and keeps the cost', () => {
+    const quote = quoteCoinUsage([paid, free], { kind: 'translation', units: { message: 1 }, at })
+    expect(quote.chargedMicro).toBe(0n)
+    expect(quote.costUsdMicro).toBe(200n)
+    expect(isFreeCoinQuote(quote)).toBe(true)
+  })
+
+  it('the paid row applies again once the free row has ended', () => {
+    const quote = quoteCoinUsage([paid, free], { kind: 'translation', units: { message: 1 }, at: new Date('2026-12-12T15:00:00.000Z') })
+    expect(quote.chargedMicro).toBe(300_000n)
+    expect(isFreeCoinQuote(quote)).toBe(false)
+  })
+
+  it('a unit with no rate is unpriced, not free', () => {
+    expect(isFreeCoinQuote(quoteCoinUsage([], { kind: 'translation', units: { message: 1 }, at }))).toBe(false)
   })
 })
