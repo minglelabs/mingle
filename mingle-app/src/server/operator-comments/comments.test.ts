@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/server/llm/generate-json', () => ({ OPERATOR_POST_TEXT_MODEL: 'claude-opus-5-5', OPERATOR_TEXT_MODEL: 'claude-haiku-5-5', resolveJsonProvider: () => 'gemini', extractJsonText: (t: string) => t, generateJson: vi.fn() }))
+vi.mock('@/server/llm/generate-json', () => ({ OPERATOR_TEXT_OPUS_UNTIL: new Date('2026-12-13T00:00:00+09:00'), operatorTextModel: (now: Date = new Date()) => (now.getTime() < new Date('2026-12-13T00:00:00+09:00').getTime() ? 'claude-opus-5-5' : 'claude-haiku-5-5'), OPERATOR_POST_TEXT_MODEL: 'claude-opus-5-5', OPERATOR_TEXT_MODEL: 'claude-haiku-5-5', resolveJsonProvider: () => 'gemini', extractJsonText: (t: string) => t, generateJson: vi.fn() }))
 
 import { buildCommentInstructions, cleanGeneratedComment, commentLanguageFor, generateOperatorComment, operatorCommentDefaultModel, pickCommentKind, resolveRealUserReplyModel, COMMENT_KINDS } from './generate'
 
