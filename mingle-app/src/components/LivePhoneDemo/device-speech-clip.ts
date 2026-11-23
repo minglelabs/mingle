@@ -1,4 +1,4 @@
-// On-device TTS (iOS system voice): no audio comes from the server. The TTS
+// On-device TTS (iOS / Android system voice): no audio comes from the server. The TTS
 // queue still carries a Blob per clip, so an on-device clip is a small JSON
 // Blob with the sentence and its language, tagged with its own content type;
 // the player hands it to the shell as `native_tts_speak` instead of audio.
@@ -7,7 +7,7 @@ export const DEVICE_SPEECH_CLIP_TYPE = 'application/x-mingle-device-speech+json'
 
 // Per device, not an account preference: a server model choice stays as it was.
 export const ON_DEVICE_TTS_STORAGE_KEY = 'mingle_on_device_tts'
-export const ON_DEVICE_TTS_OPTION_LABEL = 'iOS on-device (free)'
+export const ON_DEVICE_TTS_OPTION_LABEL = 'On-device (free)'
 
 export type DeviceSpeechClip = {
   text: string

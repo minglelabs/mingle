@@ -36,7 +36,7 @@ type NativeTtsSpeakOptions = {
 
 type NativeTtsModuleType = {
   play(options: NativeTtsPlayOptions): Promise<unknown>;
-  // On-device speech with the system voice (iOS shells that have it).
+  // On-device speech with the system voice (shells that have it).
   speak?(options: NativeTtsSpeakOptions): Promise<unknown>;
   stop(): Promise<{ ok: boolean }>;
   // Streamed playback (headerless 16-bit mono PCM handed over in pieces).
@@ -127,10 +127,11 @@ export function endNativeTtsStream(playbackId: string): void {
 
 /**
  * True when this shell speaks text with the on-device system voice
- * (`native_tts_speak`), reported to the page as `ttsSpeak`. iOS only for now.
+ * (`native_tts_speak`), reported to the page as `ttsSpeak`: iOS
+ * AVSpeechSynthesizer, Android TextToSpeech.
  */
 export function isNativeTtsSpeakAvailable(): boolean {
-  return Platform.OS === 'ios' && isNativeTtsAvailable() && typeof nativeModule?.speak === 'function';
+  return isNativeTtsAvailable() && typeof nativeModule?.speak === 'function';
 }
 
 /** Resolves once the rendered sentence really started playing (or was refused). */

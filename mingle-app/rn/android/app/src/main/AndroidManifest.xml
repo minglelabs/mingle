@@ -17,6 +17,13 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
   <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
 
+    <!-- Android 11+: lets the on-device TTS (NativeTTSModule.speak) find the system speech engine. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+
     <application
       android:name=".MainApplication"
       android:label="@string/app_name"

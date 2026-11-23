@@ -10,6 +10,9 @@ import android.media.MediaPlayer
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
+import android.speech.tts.Voice
 import android.util.Base64
 import android.util.Log
 import com.facebook.react.bridge.Arguments
@@ -21,6 +24,7 @@ import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import java.io.File
+import java.util.Locale
 import java.util.UUID
 
 /**
@@ -53,6 +57,16 @@ class NativeTTSModule(
   private var focusRequest: AudioFocusRequest? = null
   private var deviceCallback: AudioDeviceCallback? = null
 
+  // On-device speech (`speak`): the system TextToSpeech engine, created on
+  // first use. Requests made before it is ready wait in `pendingSpeech`.
+  // The latest request's playbackId; a newer speak/play/playStream/stop
+  // supersedes it. Main thread only.
+  private var textToSpeech: TextToSpeech? = null
+  private var textToSpeechReady = false
+  private var textToSpeechFailed = false
+  private val pendingSpeech = mutableListOf<() -> Unit>()
+  private var pendingSpeechPlaybackId: String? = null
+
   override fun getName(): String = NAME
 
   override fun initialize() {
@@ -65,6 +79,10 @@ class NativeTTSModule(
       unregisterDeviceCallback()
       releasePlayer()
       clearIdentity()
+      cancelPendingSpeech()
+      textToSpeech?.shutdown()
+      textToSpeech = null
+      textToSpeechReady = false
     }
     super.invalidate()
   }
@@ -98,6 +116,7 @@ class NativeTTSModule(
       options.hasKey("stopOnEarphoneDisconnect") && options.getBoolean("stopOnEarphoneDisconnect")
 
     mainHandler.post {
+      cancelPendingSpeech()
       // A new clip replaces the current one without a stopped event, like iOS.
       releasePlayer()
       currentPlaybackId = playbackId
@@ -159,6 +178,7 @@ class NativeTTSModule(
       options.hasKey("stopOnEarphoneDisconnect") && options.getBoolean("stopOnEarphoneDisconnect")
 
     mainHandler.post {
+      cancelPendingSpeech()
       releasePlayer()
       currentPlaybackId = playbackId
       currentUtteranceId = rawUtteranceId
@@ -240,6 +260,7 @@ class NativeTTSModule(
     mainHandler.post {
       val wasPlaying = streamPlayer != null || runCatching { player?.isPlaying == true }.getOrDefault(false)
       val stopped = playbackPayload()
+      cancelPendingSpeech()
       releasePlayer()
       clearIdentity()
       if (wasPlaying) {
@@ -247,6 +268,170 @@ class NativeTTSModule(
       }
       promise.resolve(Arguments.createMap().apply { putBoolean("ok", true) })
     }
+  }
+
+  // ── On-device speech (TextToSpeech) ─────────────────────────────────────
+
+  /**
+   * Speaks `text` with the device's system voice for `language`, without a
+   * server. The sentence is rendered to a WAV file first, then played through
+   * `play`, so it gets the same ducking, earphone guard and events.
+   */
+  @ReactMethod
+  fun speak(options: ReadableMap, promise: Promise) {
+    val text = optionalString(options, "text")
+    if (text == null) {
+      promise.reject("invalid_text", "Nothing to speak")
+      return
+    }
+    val language = optionalString(options, "language") ?: ""
+    val rawPlaybackId = optionalString(options, "playbackId")
+    val rawUtteranceId = optionalString(options, "utteranceId")
+    val playbackId = rawPlaybackId ?: rawUtteranceId ?: UUID.randomUUID().toString()
+    val stopsOnEarphoneDisconnect =
+      options.hasKey("stopOnEarphoneDisconnect") && options.getBoolean("stopOnEarphoneDisconnect")
+
+    mainHandler.post {
+      cancelPendingSpeech()
+      pendingSpeechPlaybackId = playbackId
+      withTextToSpeech { engine ->
+        if (engine == null) {
+          if (pendingSpeechPlaybackId == playbackId) pendingSpeechPlaybackId = null
+          promise.reject("speech_unavailable", "No text-to-speech engine on this device")
+          return@withTextToSpeech
+        }
+        if (pendingSpeechPlaybackId != playbackId) {
+          promise.resolve(Arguments.createMap().apply {
+            putBoolean("ok", false)
+            putString("reason", "superseded")
+          })
+          return@withTextToSpeech
+        }
+        synthesizeAndPlay(engine, text, language, playbackId, rawUtteranceId, stopsOnEarphoneDisconnect, promise)
+      }
+    }
+  }
+
+  private fun synthesizeAndPlay(
+    engine: TextToSpeech,
+    text: String,
+    language: String,
+    playbackId: String,
+    utteranceId: String?,
+    stopsOnEarphoneDisconnect: Boolean,
+    promise: Promise,
+  ) {
+    val locale = Locale.forLanguageTag(speechLanguageTag(language))
+    val voice = bestVoice(engine, locale)
+    if (voice != null) {
+      engine.voice = voice
+    } else {
+      engine.language = locale
+    }
+    val file = File.createTempFile("native-speech-", ".wav", reactApplicationContext.cacheDir)
+    val startedAt = System.currentTimeMillis()
+    Log.i(TAG, "speak playbackId=$playbackId language=$language voice=${voice?.name ?: "default"} quality=${voice?.quality ?: 0} chars=${text.length}")
+    engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+      override fun onStart(id: String?) {}
+
+      override fun onDone(id: String?) {
+        if (id != playbackId) return
+        mainHandler.post {
+          if (pendingSpeechPlaybackId != playbackId) {
+            file.delete()
+            promise.resolve(Arguments.createMap().apply {
+              putBoolean("ok", false)
+              putString("reason", "superseded")
+            })
+            return@post
+          }
+          pendingSpeechPlaybackId = null
+          val bytes = runCatching { file.readBytes() }.getOrNull()
+          file.delete()
+          if (bytes == null || bytes.size <= WAV_HEADER_BYTES) {
+            promise.reject("speech_empty", "The system voice produced no audio")
+            return@post
+          }
+          Log.i(TAG, "speak rendered playbackId=$playbackId ms=${System.currentTimeMillis() - startedAt} bytes=${bytes.size}")
+          val playOptions = Arguments.createMap().apply {
+            putString("audioBase64", Base64.encodeToString(bytes, Base64.NO_WRAP))
+            putString("playbackId", playbackId)
+            utteranceId?.let { putString("utteranceId", it) }
+            putBoolean("stopOnEarphoneDisconnect", stopsOnEarphoneDisconnect)
+          }
+          play(playOptions, promise)
+        }
+      }
+
+      @Deprecated("Deprecated in Java")
+      override fun onError(id: String?) {
+        onError(id, TextToSpeech.ERROR)
+      }
+
+      override fun onError(id: String?, errorCode: Int) {
+        if (id != playbackId) return
+        mainHandler.post {
+          file.delete()
+          if (pendingSpeechPlaybackId == playbackId) pendingSpeechPlaybackId = null
+          Log.w(TAG, "speak failed playbackId=$playbackId code=$errorCode")
+          promise.reject("speech_error", "The system voice failed ($errorCode)")
+        }
+      }
+    })
+    val result = engine.synthesizeToFile(text, null, file, playbackId)
+    if (result != TextToSpeech.SUCCESS) {
+      file.delete()
+      if (pendingSpeechPlaybackId == playbackId) pendingSpeechPlaybackId = null
+      promise.reject("speech_error", "The system voice refused the sentence")
+    }
+  }
+
+  /** Calls `block` once the engine is ready (null when it cannot start). Main thread. */
+  private fun withTextToSpeech(block: (TextToSpeech?) -> Unit) {
+    if (textToSpeechFailed) {
+      block(null)
+      return
+    }
+    val engine = textToSpeech
+    if (engine != null && textToSpeechReady) {
+      block(engine)
+      return
+    }
+    pendingSpeech.add { block(if (textToSpeechReady) textToSpeech else null) }
+    if (engine != null) return
+    textToSpeech = TextToSpeech(reactApplicationContext) { status ->
+      mainHandler.post {
+        textToSpeechReady = status == TextToSpeech.SUCCESS
+        textToSpeechFailed = !textToSpeechReady
+        Log.i(TAG, "text-to-speech engine ready=$textToSpeechReady engine=${textToSpeech?.defaultEngine ?: ""}")
+        val waiting = pendingSpeech.toList()
+        pendingSpeech.clear()
+        waiting.forEach { it() }
+      }
+    }
+  }
+
+  private fun cancelPendingSpeech() {
+    if (pendingSpeechPlaybackId == null) return
+    pendingSpeechPlaybackId = null
+    runCatching { textToSpeech?.stop() }
+  }
+
+  /**
+   * The best installed voice for `locale`: offline before network voices,
+   * then the highest quality; the exact country first, then any country of
+   * the language. Null leaves the engine's default for the language.
+   */
+  private fun bestVoice(engine: TextToSpeech, locale: Locale): Voice? {
+    val voices = runCatching { engine.voices }.getOrNull()?.filter { voice ->
+      !voice.features.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)
+    } ?: return null
+    val sameLanguage = voices.filter { it.locale.language == locale.language }
+    val exact = sameLanguage.filter { locale.country.isEmpty() || it.locale.country == locale.country }
+    val pool = exact.ifEmpty { sameLanguage }
+    return pool.maxWithOrNull(
+      compareBy<Voice>({ !it.isNetworkConnectionRequired }, { it.quality }, { -it.latency }),
+    )
   }
 
   private fun onClipFinished(finished: MediaPlayer) {
@@ -388,6 +573,28 @@ class NativeTTSModule(
     private const val TAG = "NativeTTS"
     private const val EARPHONES_DISCONNECTED_REASON = "earphones_disconnected"
     private const val DEFAULT_STREAM_SAMPLE_RATE = 24000
+    private const val WAV_HEADER_BYTES = 44
+
+    /** The app's language code (`ko`, `zh-Hant`, `pt-BR`) as a BCP-47 tag the system voices use. */
+    fun speechLanguageTag(language: String): String {
+      val normalized = language.replace('_', '-').lowercase(Locale.ROOT)
+      when (normalized) {
+        "zh-hant", "zh-tw" -> return "zh-TW"
+        "zh-hk", "yue" -> return "zh-HK"
+        "zh", "zh-hans", "zh-cn" -> return "zh-CN"
+      }
+      if (normalized.contains('-')) {
+        val parts = normalized.split('-')
+        return "${parts[0]}-${parts[1].uppercase(Locale.ROOT)}"
+      }
+      return DEFAULT_SPEECH_LOCALES[normalized] ?: normalized
+    }
+
+    private val DEFAULT_SPEECH_LOCALES = mapOf(
+      "ko" to "ko-KR", "en" to "en-US", "ja" to "ja-JP", "es" to "es-ES", "fr" to "fr-FR",
+      "de" to "de-DE", "vi" to "vi-VN", "th" to "th-TH", "id" to "id-ID", "ru" to "ru-RU",
+      "pt" to "pt-BR", "ar" to "ar-SA", "hi" to "hi-IN", "it" to "it-IT", "tr" to "tr-TR",
+    )
 
     private val PLAYBACK_ATTRIBUTES: AudioAttributes = AudioAttributes.Builder()
       .setUsage(AudioAttributes.USAGE_MEDIA)

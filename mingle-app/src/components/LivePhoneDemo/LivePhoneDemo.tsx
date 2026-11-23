@@ -2430,7 +2430,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     initialCachedAccountPreferences?.translationModel ?? DEFAULT_SELECTABLE_TRANSLATION_MODEL,
   )
   // null = never picked; the settings row shows the effective default instead.
-  // On-device TTS (iOS system voice) chosen on this device; server TTS is
+  // On-device TTS (iOS / Android system voice) chosen on this device; server TTS is
   // skipped while it is on. Kept apart from the account's server model.
   const [onDeviceTtsSelected, setOnDeviceTtsSelected] = useState(false)
   const onDeviceTtsSelectedRef = useRef(false)
