@@ -393,6 +393,8 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   // Sign-in by phone number: offered once the server says it can send codes.
   // null = the server has not answered yet.
   const [phoneSignInAvailable, setPhoneSignInAvailable] = useState<boolean | null>(null);
+  // false: the server texts Korean (+82) numbers only (no international SMS provider yet).
+  const [phoneSignInWorldwide, setPhoneSignInWorldwide] = useState(false);
   // Korean sign-in (2026-11-21): the phone number leads; Apple, Google and email open under "other ways".
   const [otherSignInOpen, setOtherSignInOpen] = useState(false);
   const [isPhoneSheetOpen, setIsPhoneSheetOpen] = useState(false);
@@ -401,7 +403,9 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   const isKoreanSignIn = isKoreanUser(props.locale);
   // A Korean sees the phone button from the first paint, before the server has
   // answered (2026-11-22: the other buttons showed for a moment, then folded away).
-  const phoneButtonShown = phoneSignInAvailable === true || (phoneSignInAvailable === null && isKoreanSignIn);
+  // Not Korean and no international SMS (2026-11-23): no phone button at all.
+  const phoneButtonShown = (phoneSignInAvailable === true && (isKoreanSignIn || phoneSignInWorldwide))
+    || (phoneSignInAvailable === null && isKoreanSignIn);
   const phoneFirstSignIn = phoneButtonShown
     && isKoreanSignIn
     && (lastSignInMethod === null || lastSignInMethod === "phone");
@@ -1415,8 +1419,10 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
     let cancelled = false;
     void fetch(buildClientApiPath("/phone/sign-in"), { cache: "no-store" })
       .then((response) => (response.ok ? response.json() : null))
-      .then((body: { available?: unknown } | null) => {
-        if (!cancelled) setPhoneSignInAvailable(body?.available === true);
+      .then((body: { available?: unknown; worldwide?: unknown } | null) => {
+        if (cancelled) return;
+        setPhoneSignInAvailable(body?.available === true);
+        setPhoneSignInWorldwide(body?.worldwide === true);
       })
       .catch(() => {
         if (!cancelled) setPhoneSignInAvailable(false);
@@ -1810,6 +1816,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
             copy={phoneSheetCopy}
             locale={props.locale}
             sendPath="/phone/sign-in"
+            koreaOnly={!phoneSignInWorldwide}
             confirmCode={confirmPhoneSignIn}
             onClose={() => setIsPhoneSheetOpen(false)}
             onVerified={() => {}}

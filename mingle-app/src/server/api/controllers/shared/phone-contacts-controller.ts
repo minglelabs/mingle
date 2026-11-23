@@ -7,6 +7,7 @@ import { isReviewAccount } from '@/server/app-access'
 import { buildRequestIdentityContext } from '@/server/identity/links'
 import {
   PhoneVerificationFailure,
+  canTextWorldwide,
   confirmPhoneVerification,
   isPhoneVerificationAvailable,
   readReviewPhoneLogins,
@@ -89,7 +90,11 @@ function readClientKey(request: NextRequest): string {
 
 /** GET /phone/sign-in — whether the sign-in screen offers the phone number button. */
 export async function readPhoneSignInAvailability() {
-  return json({ available: isPhoneVerificationAvailable() || readReviewPhoneLogins().size > 0 })
+  return json({
+    available: isPhoneVerificationAvailable() || readReviewPhoneLogins().size > 0,
+    // false: Korean numbers only (the app shows the phone button to Koreans, +82 only).
+    worldwide: canTextWorldwide(),
+  })
 }
 
 /**

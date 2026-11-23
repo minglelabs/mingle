@@ -39,6 +39,7 @@ export default function PhoneVerifySheet({
   onVerified,
   sendPath = "/phone/verification",
   confirmCode,
+  koreaOnly = false,
 }: {
   copy: PhoneFriendsCopy;
   locale: string;
@@ -46,10 +47,19 @@ export default function PhoneVerifySheet({
   onVerified: (phoneE164: string) => void;
   sendPath?: "/phone/verification" | "/phone/sign-in";
   confirmCode?: (phoneE164: string, code: string) => Promise<string | null>;
+  /** Only +82: the server cannot text other countries yet (no international provider). */
+  koreaOnly?: boolean;
 }) {
-  const defaultCountry = useMemo(() => resolveDefaultPhoneCountry(locale), [locale]);
+  const countries = useMemo(
+    () => (koreaOnly ? PHONE_COUNTRIES.filter((entry) => entry.iso === "KR") : PHONE_COUNTRIES),
+    [koreaOnly],
+  );
+  const defaultCountry = useMemo(
+    () => (koreaOnly ? countries[0] ?? resolveDefaultPhoneCountry(locale) : resolveDefaultPhoneCountry(locale)),
+    [countries, koreaOnly, locale],
+  );
   const [countryIso, setCountryIso] = useState(defaultCountry.iso);
-  const country = PHONE_COUNTRIES.find((entry) => entry.iso === countryIso) ?? defaultCountry;
+  const country = countries.find((entry) => entry.iso === countryIso) ?? defaultCountry;
   const [number, setNumber] = useState("");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<Step>({ kind: "phone" });
@@ -233,7 +243,7 @@ export default function PhoneVerifySheet({
             disabled={busy}
             className="h-12 w-[92px] shrink-0 rounded-xl border border-gray-200 bg-gray-50 px-2 text-[15px] outline-none focus:border-slate-400"
           >
-            {PHONE_COUNTRIES.map((entry) => (
+            {countries.map((entry) => (
               <option key={entry.iso} value={entry.iso}>{`${entry.iso} +${entry.callingCode}`}</option>
             ))}
           </select>

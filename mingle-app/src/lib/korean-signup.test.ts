@@ -15,8 +15,9 @@ const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf
 // right after the language, since many Koreans pick English.
 describe('Korean sign-up: asked, phone first, then the contact sync', () => {
   it('asks "Are you Korean?" right after the language, in every first run', () => {
-    expect(FIRST_RUN_ONBOARDING_STEPS).toEqual(['language', 'korean'])
-    expect(INVITE_ONBOARDING_STEPS.slice(0, 2)).toEqual(['language', 'korean'])
+    // "korea-visit" shows only after "no" (the modal filters it).
+    expect(FIRST_RUN_ONBOARDING_STEPS).toEqual(['language', 'korean', 'korea-visit'])
+    expect(INVITE_ONBOARDING_STEPS.slice(0, 3)).toEqual(['language', 'korean', 'korea-visit'])
     for (const locale of PRIMARY_UI_LOCALES) {
       const copy = resolveKoreanCheckCopy(locale)
       for (const text of [copy.label, copy.title, copy.yes, copy.no]) expect(text.trim(), locale).not.toBe('')
@@ -56,7 +57,10 @@ describe('Korean sign-up: asked, phone first, then the contact sync', () => {
     const login = read('../components/mingle-home.tsx')
     expect(login).toContain('const isKoreanSignIn = isKoreanUser(props.locale);')
     // No flash of the other buttons while the server is still answering.
-    expect(login).toContain('phoneSignInAvailable === true || (phoneSignInAvailable === null && isKoreanSignIn)')
+    expect(login).toContain('|| (phoneSignInAvailable === null && isKoreanSignIn)')
+    // No international SMS yet: no phone button for someone who is not Korean, and +82 only.
+    expect(login).toContain('(phoneSignInAvailable === true && (isKoreanSignIn || phoneSignInWorldwide))')
+    expect(login).toContain('koreaOnly={!phoneSignInWorldwide}')
     expect(login).toContain('{phoneFirstSignIn && !otherSignInOpen ? (')
   })
 

@@ -228,6 +228,16 @@ export function phoneCodeReach(): { worldwide: boolean; korea: boolean } {
   return { worldwide, korea: worldwide || koreanSmsProvider() !== null }
 }
 
+/**
+ * Whether a real code reaches numbers outside Korea (an international SMS
+ * provider is set up). Without it the app offers sign-in by phone to Koreans
+ * only, with +82 the only country (owner, 2026-11-23: no Twilio yet). Dev codes
+ * do not count: they are for tests, not for people.
+ */
+export function canTextWorldwide(): boolean {
+  return readTwilioConfig() !== null
+}
+
 export function isPhoneVerificationAvailable(): boolean {
   return readTwilioConfig() !== null || koreanSmsProvider() !== null || devCodesAllowed()
 }
