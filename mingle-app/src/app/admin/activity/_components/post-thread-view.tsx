@@ -1,11 +1,14 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { ChevronLeft, Heart, Loader2, MessageCircle, SendHorizontal, X } from 'lucide-react'
 import type { OperatorPostStats } from '@/lib/operator-post-stats'
+import type { InboxPerson } from '@/server/operator-inbox/inbox'
 import type { OperatorPostThread, StoredTranslation, ThreadComment } from '@/server/operator-activity/thread'
 import { OperatorPostStatsRow } from '../../_components/operator-post-stats-row'
+import { adminProfileHref } from '../../_lib/profile-href'
 import { InboxAvatar, KoreanViewSwitch } from '../../inbox/_components/inbox-ui'
 import { useAdminInboxRealtime } from '../../inbox/_components/use-admin-inbox-realtime'
 import { useStaffKoreanView } from '../../inbox/_components/use-staff-korean-view'
@@ -54,12 +57,51 @@ function StoredTranslations({ translations }: { translations: StoredTranslation[
   )
 }
 
-/** Avatar (and name) that open the person's public profile in a new tab. */
-function ProfileLink({ userId, children, className = '' }: { userId: string; children: ReactNode; className?: string }) {
+/** This thread's address, for the profile screen's back link. */
+function useThreadPath(): string | undefined {
+  const pathname = usePathname()
+  const search = useSearchParams()?.toString() ?? ''
+  return pathname ? `${pathname}${search ? `?${search}` : ''}` : undefined
+}
+
+/** Avatar (or name) that opens the person's profile inside the admin. */
+function ProfileLink({ userId, children, className = 'shrink-0 rounded-full' }: { userId: string; children: ReactNode; className?: string }) {
+  const back = useThreadPath()
   return (
-    <a href={`/p/${encodeURIComponent(userId)}`} target="_blank" rel="noreferrer" className={`shrink-0 rounded-full active:opacity-70 ${className}`}>
+    <Link href={adminProfileHref(userId, back)} className={`active:opacity-70 ${className}`}>
       {children}
-    </a>
+    </Link>
+  )
+}
+
+/** The like count; tapping it lists who liked (each opens their profile). */
+function Likes({ count, likers, size }: { count: number; likers?: InboxPerson[]; size: number }) {
+  const [open, setOpen] = useState(false)
+  const people = likers ?? []
+  return (
+    <span className="inline-flex flex-col">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        disabled={people.length === 0}
+        aria-expanded={open}
+        className="-mx-1 inline-flex min-h-7 items-center gap-1 rounded-full px-1 active:bg-slate-100 disabled:active:bg-transparent"
+      >
+        <Heart size={size} aria-hidden="true" />{count}
+      </button>
+      {open && people.length ? (
+        <ul className="mt-1 w-64 max-w-[80vw] space-y-1 rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+          {people.map((person) => (
+            <li key={person.userId}>
+              <ProfileLink userId={person.userId} className="flex min-w-0 items-center gap-2 rounded-md px-1 py-0.5">
+                <InboxAvatar person={person} size={24} />
+                <span className="min-w-0 truncate text-xs font-semibold text-slate-800">{inboxPersonLabel(person)}</span>
+              </ProfileLink>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </span>
   )
 }
 
@@ -92,7 +134,7 @@ function CommentRow({ postId, comment, korean, nowMs, focused, isReply, canReply
         ) : (
           <>
             <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
-              <a href={`/p/${encodeURIComponent(comment.author.userId)}`} target="_blank" rel="noreferrer" className="min-w-0 truncate text-sm font-semibold text-slate-900 active:opacity-70">{inboxPersonLabel(comment.author)}</a>
+              <ProfileLink userId={comment.author.userId} className="min-w-0 truncate text-sm font-semibold text-slate-900">{inboxPersonLabel(comment.author)}</ProfileLink>
               <span className="text-xs text-slate-500">{formatInboxRelativeTime(comment.createdAt, nowMs)}</span>
             </p>
             <p className="mt-0.5 whitespace-pre-wrap break-words text-[15px] leading-6 text-slate-800">
@@ -109,10 +151,8 @@ function CommentRow({ postId, comment, korean, nowMs, focused, isReply, canReply
                 className="mt-1 max-h-60 w-auto max-w-full rounded-lg border border-slate-200"
               />
             ) : null}
-            <p className="mt-0.5 flex items-center gap-3 text-xs text-slate-500">
-              {comment.likeCount > 0 ? (
-                <span className="inline-flex items-center gap-1"><Heart size={12} aria-hidden="true" />{comment.likeCount}</span>
-              ) : null}
+            <div className="mt-0.5 flex items-start gap-3 text-xs text-slate-500">
+              {comment.likeCount > 0 ? <Likes count={comment.likeCount} likers={comment.likers} size={12} /> : null}
               {canReply ? (
                 <button
                   type="button"
@@ -122,7 +162,7 @@ function CommentRow({ postId, comment, korean, nowMs, focused, isReply, canReply
                   답글 달기
                 </button>
               ) : null}
-            </p>
+            </div>
           </>
         )}
       </div>
@@ -307,7 +347,7 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
             <ProfileLink userId={post.author.userId}>
               <InboxAvatar person={post.author} size={36} />
             </ProfileLink>
-            <a href={`/p/${encodeURIComponent(post.author.userId)}`} target="_blank" rel="noreferrer" className="min-w-0 truncate text-sm font-semibold active:opacity-70">{inboxPersonLabel(post.author)}</a>
+            <ProfileLink userId={post.author.userId} className="min-w-0 truncate text-sm font-semibold">{inboxPersonLabel(post.author)}</ProfileLink>
             <span className="ml-auto shrink-0 text-xs text-slate-500">{formatInboxRelativeTime(post.publishedAt, nowMs)}</span>
           </p>
           {postText ? (
@@ -318,10 +358,10 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
             // eslint-disable-next-line @next/next/no-img-element
             <img src={`/admin/api/posts/${postId}/image`} alt="글 사진" loading="lazy" className="mt-2 max-h-[28rem] w-auto max-w-full rounded-xl border border-slate-200" />
           ) : null}
-          <p className="mt-2 flex items-center gap-3 text-xs text-slate-500">
-            <span className="inline-flex items-center gap-1"><Heart size={13} aria-hidden="true" />{post.likeCount}</span>
-            <span className="inline-flex items-center gap-1"><MessageCircle size={13} aria-hidden="true" />{post.commentCount}</span>
-          </p>
+          <div className="mt-2 flex items-start gap-3 text-xs text-slate-500">
+            <Likes count={post.likeCount} likers={post.likers} size={13} />
+            <span className="inline-flex min-h-7 items-center gap-1"><MessageCircle size={13} aria-hidden="true" />{post.commentCount}</span>
+          </div>
           <OperatorPostStatsRow stats={postStats} className="mt-2" />
         </article>
 

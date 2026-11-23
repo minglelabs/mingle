@@ -11,6 +11,7 @@ import ProfileLanguageLevels, { CompactLanguageLevels } from '@/components/profi
 import type { InterestLanguage } from '@/lib/interest-languages'
 import PostLanguageChips, { ORIGINAL_CHIP } from '@/components/feed/post-language-chips'
 import { withBack } from '../../_lib/back-path'
+import { adminProfileHref } from '../../_lib/profile-href'
 import { OperatorAvatar } from '../_components/operator-ui'
 import { PhotoRedrawPanel } from '../../feed/_components/photo-redraw-panel'
 import { koreanLanguageName } from '../_lib/options'
@@ -43,8 +44,7 @@ const MAX_POST_PHOTOS = 10
 
 /** The account's profile in the admin: its posts in review and published, as on the app's My Page. */
 export function profileHref(userId: string, back?: string): string {
-  const href = `/admin/operators/${encodeURIComponent(userId)}/profile`
-  return back ? withBack(href, back) : href
+  return adminProfileHref(userId, back)
 }
 
 /** The review page the reader is on (with its page of the list), for the screens opened from it to return to. */

@@ -22,7 +22,7 @@ import { reviewImageUrl } from '../../review/review-image-url'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: '운영 계정 프로필 · HashChat Admin',
+  title: '프로필 · HashChat Admin',
   robots: { index: false, follow: false },
 }
 
@@ -73,32 +73,34 @@ function Tile({ href, image, text, badge, dimmed }: { href: string; image: strin
 }
 
 /**
- * An operator account seen as the app's My Page shows it: the profile on top,
+ * Anyone's profile as staff see it. An operator account is seen as the app's My Page shows it: the profile on top,
  * then its published posts and the ones waiting in review, as a grid or as
- * full cards (review cards keep their review actions).
+ * full cards (review cards keep their review actions). A real person's
+ * profile is read-only: their posts, no editing and no review tab.
  */
 export default async function OperatorProfilePage({ params, searchParams }: ProfilePageProps) {
   const { userId: rawUserId } = await params
   const userId = decodeSegment(rawUserId).trim()
   await requireAdmin(`/admin/operators/${rawUserId}/profile`)
   const query = await searchParams
-  const tab: Tab = query.tab === 'review' ? 'review' : 'published'
   const view: View = query.view === 'list' ? 'list' : 'grid'
 
   const user = await prisma.user.findFirst({
-    where: { id: userId, isOperator: true },
+    where: { id: userId },
     select: {
-      id: true, name: true, handle: true, image: true, bio: true, birthDate: true, locationCity: true, locationCountry: true,
+      id: true, name: true, handle: true, image: true, bio: true, birthDate: true, locationCity: true, locationCountry: true, gender: true, isOperator: true,
       primaryLanguages: true, interestLanguages: true, interestLanguageLevels: true, isDeleted: true,
       operatorAccount: { select: { personaGender: true, reviewState: true } },
       _count: { select: { followerRelations: true, followingRelations: true } },
     },
   })
   if (!user) notFound()
+  const operator = user.isOperator
+  const tab: Tab = operator && query.tab === 'review' ? 'review' : 'published'
 
   const [publishedCount, reviewCount, published, queue] = await Promise.all([
     prisma.post.count({ where: { authorId: user.id, ...NOT_DELETED } }),
-    prisma.operatorPostReserve.count({ where: { operatorUserId: user.id, state: { in: ['review', 'regenerating'] } } }),
+    operator ? prisma.operatorPostReserve.count({ where: { operatorUserId: user.id, state: { in: ['review', 'regenerating'] } } }) : Promise.resolve(0),
     tab === 'published'
       ? prisma.post.findMany({
         where: { authorId: user.id, ...NOT_DELETED },
@@ -108,6 +110,7 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
           id: true, sourceText: true, sourceLanguage: true, publishedAt: true, likeCount: true, commentCount: true, bodyVersion: true,
           imageObjectKey: true, imageWidth: true, imageHeight: true, moderationHiddenAt: true,
           extraImages: { orderBy: { position: 'asc' }, select: { imageObjectKey: true, imageWidth: true, imageHeight: true } },
+          likes: { orderBy: { createdAt: 'desc' }, select: { user: { select: { id: true, name: true, handle: true, isOperator: true } } } },
           comments: {
             where: { moderationHiddenAt: null },
             orderBy: { createdAt: 'asc' },
@@ -136,7 +139,7 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
   const age = ageOn(user.birthDate, new Date())
   const facts = [
     age ? `${age}세` : null,
-    user.operatorAccount?.personaGender === 'female' ? '여성' : user.operatorAccount?.personaGender === 'male' ? '남성' : null,
+    (user.operatorAccount?.personaGender ?? user.gender) === 'female' ? '여성' : (user.operatorAccount?.personaGender ?? user.gender) === 'male' ? '남성' : null,
     [user.locationCity, user.locationCountry].filter(Boolean).join(', ') || null,
   ].filter(Boolean)
   const reviewState = user.operatorAccount?.reviewState ?? 'approved'
@@ -148,8 +151,12 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
     <OperatorsMain>
       <div className="mx-auto w-full max-w-[520px]">
         <div className="mb-3 flex items-center justify-between text-sm">
-          <AdminBackLink href={back ?? '/admin/operators/review'} className="font-semibold text-sky-700">‹ 검토</AdminBackLink>
-          <Link href={withBack(`/admin/operators/${encodeURIComponent(user.id)}?from=review`, href({}))} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-700">프로필 편집</Link>
+          <AdminBackLink href={back ?? '/admin/operators/review'} className="font-semibold text-sky-700">{!back || back.startsWith('/admin/operators/review') ? '‹ 검토' : '‹ 뒤로'}</AdminBackLink>
+          {operator ? (
+            <Link href={withBack(`/admin/operators/${encodeURIComponent(user.id)}?from=review`, href({}))} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-700">프로필 편집</Link>
+          ) : (
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">실제 유저</span>
+          )}
         </div>
 
         {/* Profile header, laid out like the app's My Page. */}
@@ -164,7 +171,7 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
           </div>
           <p className="mt-3 text-base font-bold text-slate-900">{user.name ?? '(이름 없음)'}</p>
           <p className="text-sm text-slate-500">@{user.handle}{facts.length ? ` · ${facts.join(' · ')}` : ''}</p>
-          {reviewState !== 'approved' || user.isDeleted ? (
+          {(operator && reviewState !== 'approved') || user.isDeleted ? (
             <p className="mt-2 inline-block rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">{user.isDeleted ? '삭제된 계정' : REVIEW_STATE[reviewState] ?? reviewState}</p>
           ) : null}
           {user.bio ? <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-800">{user.bio}</p> : null}
@@ -173,7 +180,7 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
 
         <div className="mt-3 flex items-center gap-2 border-b border-slate-200 bg-white">
           <Link href={href({ tab: 'published', after: undefined })} className={tabClass(tab === 'published')}>올라간 글 {publishedCount}</Link>
-          <Link href={href({ tab: 'review', after: undefined })} className={tabClass(tab === 'review')}>검토 대기 {reviewCount}</Link>
+          {operator ? <Link href={href({ tab: 'review', after: undefined })} className={tabClass(tab === 'review')}>검토 대기 {reviewCount}</Link> : null}
           <div className="flex gap-1 pr-2">
             <Link href={href({ view: 'grid' })} className={viewClass(view === 'grid')} aria-label="격자로 보기"><Grid3x3 size={18} /></Link>
             <Link href={href({ view: 'list' })} className={viewClass(view === 'list')} aria-label="글로 보기"><List size={18} /></Link>
@@ -214,6 +221,20 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
                     {DATE_FORMAT.format(post.publishedAt)} · {post.sourceLanguage ?? '?'} · 좋아요 {post.likeCount} · 댓글 {post.commentCount}
                   </p>
                   <OperatorPostStatsRow stats={statsByPost.get(post.id)} className="mt-2" />
+                  {post.likes.length ? (
+                    <details className="mt-2 rounded-lg bg-slate-50 p-2 text-sm">
+                      <summary className="cursor-pointer text-xs font-semibold text-slate-600">좋아요 누른 사람 {post.likes.length}</summary>
+                      <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                        {post.likes.map(({ user: liker }) => (
+                          <li key={liker.id}>
+                            <Link href={withBack(`/admin/operators/${encodeURIComponent(liker.id)}/profile`, href({}, `post-${post.id}`))} className="font-semibold text-sky-700">
+                              {liker.name ?? `@${liker.handle}`}{liker.isOperator ? ' (운영)' : ''}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  ) : null}
                   {post.comments.length ? (
                     <ul className="mt-2 space-y-1 rounded-lg bg-slate-50 p-2 text-sm">
                       {post.comments.map((comment) => (
@@ -225,9 +246,9 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
                   ) : null}
                   {post.moderationHiddenAt ? (
                     <div className="mt-3"><PostTakedownButton postId={post.id} hidden /></div>
-                  ) : (
+                  ) : operator ? (
                     <OperatorPostEditor key={`${post.id}:${post.bodyVersion}`} postId={post.id} text={post.sourceText} hasPhoto={Boolean(post.imageObjectKey)} />
-                  )}
+                  ) : null}
                 </article>
               ))}
             </div>
