@@ -452,12 +452,13 @@ export function OperatorEditor({
           <ul className="space-y-2">
             {interest.map((entry, index) => (
               <li key={index} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 p-2">
+                {/* Phone width: the language gets its own line (it was squeezed to just the arrows); level and ✕ go below. */}
                 <select
                   value={entry.code}
                   onChange={event => editInterest(interest.map((item, at) => (at === index ? { ...item, code: event.target.value as InterestLanguage['code'] } : item)))}
                   disabled={saving}
                   aria-label="관심 언어"
-                  className="h-11 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2 text-base"
+                  className="h-11 w-full min-w-0 basis-full rounded-lg border border-slate-300 bg-white px-2 text-base sm:basis-0 sm:flex-1"
                 >
                   <option value="">언어 고르기</option>
                   {languages
@@ -465,7 +466,7 @@ export function OperatorEditor({
                     .map(option => <option key={option.code} value={option.code}>{option.label}</option>)}
                 </select>
                 <LanguageLevelPicker level={entry.level} locale="ko" disabled={saving} onChange={level => editInterest(interest.map((item, at) => (at === index ? { ...item, level } : item)))} />
-                <button type="button" onClick={() => editInterest(interest.filter((_, at) => at !== index))} disabled={saving} className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 active:bg-slate-100" aria-label="관심 언어 빼기">
+                <button type="button" onClick={() => editInterest(interest.filter((_, at) => at !== index))} disabled={saving} className="ml-auto inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 active:bg-slate-100" aria-label="관심 언어 빼기">
                   <X className="h-4 w-4" aria-hidden="true" />
                 </button>
               </li>
