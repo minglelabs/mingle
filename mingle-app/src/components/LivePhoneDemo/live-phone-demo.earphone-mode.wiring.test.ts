@@ -243,7 +243,7 @@ describe('earphone mode wiring', () => {
   it('names it speaker mode without earphones and earphone mode with them (2.3.2+)', () => {
     expect(liveDemoSource).toContain('const speakerModeOnSpeaker = speakerMode && !nativeAudioRoute.earphonesConnected')
     expect(liveDemoSource).toContain('speakerModeOnSpeaker ? { ...earphoneModeBaseCopy, label: earphoneModeBaseCopy.speakerLabel } : earphoneModeBaseCopy')
-    expect(liveDemoSource).toContain('{speakerModeOnSpeaker ? <Volume2 size={18} strokeWidth={2.15} /> : <Headphones size={18} strokeWidth={2.15} />}')
+    expect(liveDemoSource).toContain('{speakerModeOnSpeaker ? <Volume2 size={VOICE_MODE_SIDE_ICON_SIZE_PX} strokeWidth={2} /> : <Headphones size={VOICE_MODE_SIDE_ICON_SIZE_PX} strokeWidth={2} />}')
   })
 
   it('asks about screen recording only with earphones in, and never switches to it unasked', () => {
