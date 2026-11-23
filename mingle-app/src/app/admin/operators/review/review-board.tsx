@@ -16,6 +16,7 @@ import { OperatorAvatar } from '../_components/operator-ui'
 import { PhotoRedrawPanel } from '../../feed/_components/photo-redraw-panel'
 import { koreanLanguageName } from '../_lib/options'
 import { reviewImageUrl } from './review-image-url'
+import { pastedImage } from '../_lib/pasted-image'
 
 type Action = 'publish' | 'delete' | 'regenerate' | 'draw' | 'redraw_photo'
 
@@ -358,19 +359,7 @@ function PinButton({ kind, id, pinned }: { kind: 'profile' | 'post'; id: string;
   )
 }
 
-const PASTE_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
-
-/** The image in a paste (a copied photo or screenshot), or null when it pastes text. */
-export function pastedImage(data: Pick<DataTransfer, 'items'> | null): File | null {
-  if (!data) return null
-  for (const item of Array.from(data.items)) {
-    if (item.kind === 'file' && PASTE_IMAGE_TYPES.includes(item.type)) {
-      const file = item.getAsFile()
-      if (file) return file
-    }
-  }
-  return null
-}
+export { pastedImage }
 
 /** A preview URL for a picked file, revoked when it changes. */
 function useObjectUrl(file: File | null): string | null {
