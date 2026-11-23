@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, type ChangeEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { ArrowLeft, Camera, Check, Copy, ExternalLink, Loader2, Plus, RefreshCw, Sparkles, X } from 'lucide-react'
 import LanguageLevelPicker from '@/components/language-level-picker'
 import { MAX_INTEREST_LANGUAGES, type InterestLanguage } from '@/lib/interest-languages'
@@ -12,6 +12,7 @@ import { InactiveChip, Notice, OperatorChip } from '../_components/operator-ui'
 import { ZoomableAvatar } from '../_components/zoomable-avatar'
 import { PersonaFields, type PersonaFieldValues } from '../_components/persona-fields'
 import { AVATAR_ACCEPT, getJson, sendJson, uploadOperatorAvatar } from '../_lib/client-api'
+import { pastedImage } from '../_lib/pasted-image'
 import { bioStatusLabel, fieldErrorMessage, requestErrorMessage } from '../_lib/copy'
 import { koreanLanguageName, type CountryOption, type LanguageOption } from '../_lib/options'
 
@@ -163,7 +164,24 @@ export function OperatorEditor({
   const changePhoto = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     event.target.value = ''
-    if (!file) return
+    if (file) await uploadPhoto(file)
+  }
+
+  // A photo pasted anywhere on the page (⌘V / Ctrl+V) becomes the profile photo, after a confirm.
+  const uploadPhotoRef = useRef<(file: File) => Promise<void>>(async () => {})
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      const file = pastedImage(event.clipboardData)
+      if (!file) return
+      event.preventDefault()
+      if (window.confirm('붙여넣은 사진으로 프로필 사진을 바꿀까요?')) void uploadPhotoRef.current(file)
+    }
+    document.addEventListener('paste', onPaste)
+    return () => document.removeEventListener('paste', onPaste)
+  }, [])
+
+  async function uploadPhoto(file: File) {
+    if (photo.status === 'uploading') return
     setPhoto({ status: 'uploading' })
     const result = await uploadOperatorAvatar(account.id, file)
     if (result.ok) {
@@ -173,6 +191,7 @@ export function OperatorEditor({
       setPhoto({ status: 'failed', error: requestErrorMessage(result.error) })
     }
   }
+  useEffect(() => { uploadPhotoRef.current = uploadPhoto })
 
   const requestDraft = async (scope: ProfileAiScope): Promise<ProfileAiDraft | null> => {
     const result = await sendJson<{ draft: ProfileAiDraft }>(`${endpoint}/ai`, { scope })
@@ -313,7 +332,7 @@ export function OperatorEditor({
         </div>
         {photo.status === 'failed' && photo.error ? <div className="mt-3"><Notice tone="error">{photo.error}</Notice></div> : null}
         <p className="mt-3 break-words text-xs leading-5 text-slate-500">
-          이 계정은 로그인할 수 없고, 앱에서 이름 옆에 항상 &lsquo;운영 계정&rsquo; 표시가 붙습니다. 사진은 정사각형으로 잘리고 위치 정보는 지워집니다.
+          이 계정은 로그인할 수 없고, 앱에서 이름 옆에 항상 &lsquo;운영 계정&rsquo; 표시가 붙습니다. 사진은 정사각형으로 잘리고 위치 정보는 지워집니다. 복사한 사진을 이 화면에 붙여넣어도(⌘V) 프로필 사진이 바뀝니다.
         </p>
       </section>
 
