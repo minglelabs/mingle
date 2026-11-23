@@ -10,7 +10,7 @@ import {
   QrCode,
   Share2,
 } from "lucide-react";
-import * as QRCode from "qrcode";
+import { renderProfileQrCardDataUrl, renderStyledQrDataUrl } from "@/components/profile-qr-card";
 import { useSession } from "next-auth/react";
 import { formatHandle } from "@/lib/handles";
 import { buildProfileLinkUrl, parseMingleProfileLink } from "@/lib/profile-link";
@@ -179,15 +179,7 @@ export default function ProfileShareScreen({
     }
 
     let cancelled = false;
-    void QRCode.toDataURL(profileUrl, {
-      errorCorrectionLevel: "M",
-      margin: 2,
-      width: 720,
-      color: {
-        dark: "#111827",
-        light: "#ffffff",
-      },
-    })
+    void renderStyledQrDataUrl(profileUrl)
       .then((dataUrl) => {
         if (!cancelled) setQrData({ profileUrl, dataUrl });
       })
@@ -264,9 +256,17 @@ export default function ProfileShareScreen({
     }));
   }, [copy.back, copy.qrInstruction, copy.qrScan, copy.qrScannerUnavailable, copy.qrSettings, showStatus, locale]);
 
-  const handleDownloadQr = useCallback(() => {
+  const handleDownloadQr = useCallback(async () => {
     if (!qrDataUrl) {
       showStatus(copy.qrUnavailable);
+      return;
+    }
+
+    let cardDataUrl: string;
+    try {
+      cardDataUrl = await renderProfileQrCardDataUrl({ value: profileUrl, handle: profileHandle, name });
+    } catch {
+      showStatus(copy.qrDownloadFailed);
       return;
     }
 
@@ -278,7 +278,7 @@ export default function ProfileShareScreen({
         bridgeWindow.ReactNativeWebView.postMessage(JSON.stringify({
           type: "native_qr_save",
           payload: {
-            dataUrl: qrDataUrl,
+            dataUrl: cardDataUrl,
             fileName,
           },
         }));
@@ -290,7 +290,7 @@ export default function ProfileShareScreen({
 
     try {
       const anchor = document.createElement("a");
-      anchor.href = qrDataUrl;
+      anchor.href = cardDataUrl;
       anchor.download = fileName;
       document.body.appendChild(anchor);
       anchor.click();
@@ -299,7 +299,7 @@ export default function ProfileShareScreen({
     } catch {
       showStatus(copy.qrDownloadFailed);
     }
-  }, [copy.qrDownloadFailed, copy.qrDownloaded, copy.qrSaving, copy.qrUnavailable, profileUserId, qrDataUrl, showStatus]);
+  }, [copy.qrDownloadFailed, copy.qrDownloaded, copy.qrSaving, copy.qrUnavailable, name, profileHandle, profileUrl, profileUserId, qrDataUrl, showStatus]);
 
   const handleShareProfile = useCallback(async () => {
     if (!profileUrl) {
@@ -417,17 +417,26 @@ export default function ProfileShareScreen({
             <img
               src={qrDataUrl}
               alt={`${name} · QR`}
-              className="h-64 w-64 rounded-xl"
+              className="h-60 w-60"
             />
           ) : (
             <QrCode size={92} strokeWidth={1.35} className="text-indigo-500" aria-hidden="true" />
           )}
-          <span className="mt-6 text-center text-[15px] font-semibold text-gray-500">
-            {qrDataUrl ? profileHandle || profileUrl : copy.qrLoading}
-          </span>
-          {profileUrl ? (
-            <span className="mt-2 max-w-full truncate text-center text-[11px] text-gray-400">{profileUrl}</span>
-          ) : null}
+          {qrDataUrl ? (
+            <>
+              <span
+                className="mt-6 max-w-full truncate bg-clip-text text-center text-[24px] font-bold text-transparent"
+                style={{ backgroundImage: PROFILE_SHARE_BACKGROUND }}
+              >
+                {profileHandle || name}
+              </span>
+              {profileHandle ? (
+                <span className="mt-1 max-w-full truncate text-center text-[14px] font-medium text-gray-500">{name}</span>
+              ) : null}
+            </>
+          ) : (
+            <span className="mt-6 text-center text-[15px] font-semibold text-gray-500">{copy.qrLoading}</span>
+          )}
         </div>
 
         <div className="mx-auto mt-7 grid w-full max-w-[360px] grid-cols-3 gap-3">
@@ -449,7 +458,7 @@ export default function ProfileShareScreen({
           </button>
           <button
             type="button"
-            onClick={handleDownloadQr}
+            onClick={() => void handleDownloadQr()}
             className="flex min-h-[112px] flex-col items-center justify-center rounded-[22px] bg-white px-2 py-4 text-[14px] font-semibold text-slate-900 shadow-[0_12px_30px_rgba(22,50,140,0.16)] transition active:bg-white/90"
           >
             <Download size={30} strokeWidth={1.8} aria-hidden="true" />
