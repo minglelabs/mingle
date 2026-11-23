@@ -11,12 +11,15 @@ type Random = () => number
 export type PostPhotoKind = 'self' | 'self_faceless' | 'self_back' | 'friends' | 'scene'
 
 // Staff want far more photos with people in them, face shown or not, and fewer food shots (2026-11).
+// Staff 2026-11-23: about 71 % of post photos were the poster alone (selfie or
+// faceless), which read as a feed of selfies; now half, and scenes (food, a view,
+// a thing) went from 15 to 34 %.
 export const POST_PHOTO_KINDS: ReadonlyArray<{ key: PostPhotoKind; weight: number }> = [
-  { key: 'self', weight: 51 },
-  { key: 'self_faceless', weight: 18 },
+  { key: 'self', weight: 35 },
+  { key: 'self_faceless', weight: 15 },
   { key: 'self_back', weight: 6 },
   { key: 'friends', weight: 10 },
-  { key: 'scene', weight: 15 },
+  { key: 'scene', weight: 34 },
 ]
 
 /** Setups for each kind with the poster in it, written as briefs for the post generator. */
