@@ -79,6 +79,26 @@ export function buildNativeAwareTabPath(
   return nextSearch ? `${pathname}?${nextSearch}` : pathname;
 }
 
+/**
+ * `buildNativeAwareTabPath` for an href that carries its own query (e.g.
+ * `/ko/feed?postId=…`): the native shell keys are kept and the href's own
+ * params are appended, instead of producing a second `?`.
+ */
+export function buildNativeAwareTabHref(
+  href: string,
+  searchParams: Pick<URLSearchParams, "getAll">,
+  options?: { tabRoot?: boolean },
+): string {
+  const queryStart = href.indexOf("?");
+  const pathname = queryStart >= 0 ? href.slice(0, queryStart) : href;
+  const own = new URLSearchParams(queryStart >= 0 ? href.slice(queryStart + 1) : "");
+  const base = buildNativeAwareTabPath(pathname, searchParams, { tabRoot: options?.tabRoot });
+  const merged = new URLSearchParams(base.includes("?") ? base.slice(base.indexOf("?") + 1) : "");
+  for (const [key, value] of own) merged.set(key, value);
+  const query = merged.toString();
+  return query ? `${pathname}?${query}` : pathname;
+}
+
 // A top-level tab switch unmounts the conversations page, but it is not an STT
 // session boundary: the native shell keeps recognizing, and the conversations
 // tab re-attaches the live room as a hidden consumer when it returns

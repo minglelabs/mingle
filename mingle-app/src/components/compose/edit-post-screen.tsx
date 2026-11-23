@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { buildClientApiPath } from '@/lib/api-contract'
-import { postEndpoint, feedHref } from '@/lib/feed-routes'
+import { postEndpoint } from '@/lib/feed-routes'
+import { homeFeedRootHref } from '@/lib/home-feed-href'
 import type { FeedPostResponse } from '@/lib/feed-post-dto'
 import { composeCopy } from '@/i18n/compose-copy'
 import { moderationCopy } from '@/i18n/moderation-copy'
@@ -171,7 +172,8 @@ export default function EditPostScreen({ locale, postId }: { locale: string; pos
         return
       }
 
-      if (mounted.current) router.push(feedHref(locale, { postId }))
+      // Replace: back from the feed must not reopen the editor.
+      if (mounted.current) router.replace(homeFeedRootHref(locale, { postId }))
     } catch {
       if (mounted.current) setSaveError('failed')
     } finally {

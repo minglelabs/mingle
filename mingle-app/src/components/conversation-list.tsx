@@ -225,7 +225,7 @@ import { useUnreadNotifications } from "@/components/notifications/use-unread-no
 import { feedHref } from "@/lib/feed-routes";
 import { requestProfileBasics } from "@/lib/profile-basics";
 import { feedCopy } from "@/i18n/feed-copy";import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
-import { clearTopLevelTabSwitch, NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY } from "@/lib/tab-navigation";
+import { buildNativeAwareTabHref, clearTopLevelTabSwitch, markTopLevelTabSwitch, NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY } from "@/lib/tab-navigation";
 
 const MingleHome = lazy(() => import("@/components/mingle-home"));
 
@@ -6244,7 +6244,17 @@ export default function ConversationList({
               onOpenProfile={openConversationProfile}
               onOpenPost={showPostingHeader ? (postId, commentId) => {
                 closeConversationSurface({ id: CONVERSATION_NOTIFICATIONS_SURFACE_ID });
-                router.push(feedHref(locale, { postId, commentId }));
+                // Going to the feed is a switch to the home tab: replace with
+                // the tab-root marker, like the bottom tab bar, so the home tab
+                // has no edge-swipe "back" into the conversations tab.
+                markTopLevelTabSwitch();
+                router.replace(
+                  buildNativeAwareTabHref(
+                    feedHref(locale, { postId, commentId }),
+                    new URL(window.location.href).searchParams,
+                    { tabRoot: true },
+                  ),
+                );
               } : undefined}
               onUnreadCountChange={setUnreadNotificationCount}
             />
