@@ -161,6 +161,8 @@ export default function CommentComposer({
     const image = readyImage;
     setValue("");
     clearAttachment();
+    // Sending ends the edit: drop the keyboard (hardware-Enter sends keep focus).
+    if (isTouchInput()) textareaRef.current?.blur();
     void Promise.resolve(onSubmit(text, image)).then((outcome) => {
       // No failed row exists for a restricted account, so keep what was typed
       // (unless the viewer already started typing something else).

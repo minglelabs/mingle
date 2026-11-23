@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { commentsCopy } from "@/i18n/comments-copy";
@@ -45,7 +46,6 @@ export default function CommentMenu({
     const onDocClick = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false);
-        setConfirming(false);
       }
     };
     document.addEventListener("mousedown", onDocClick);
@@ -91,36 +91,64 @@ export default function CommentMenu({
               }}
             />
           )}
-          {deletable && !confirming && (
-            <MenuItem destructive label={copy.delete} onClick={() => setConfirming(true)} />
-          )}
-          {deletable && confirming && (
-            <div className="px-3 py-2">
-              <p className="mb-1.5 text-[13px] text-muted-foreground">{copy.deleteConfirm}</p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpen(false);
-                    setConfirming(false);
-                    onDelete();
-                  }}
-                  className="rounded-md bg-destructive px-2.5 py-1 text-[13px] font-medium text-destructive-foreground"
-                >
-                  {copy.deleteConfirmYes}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirming(false)}
-                  className="rounded-md bg-gray-100 px-2.5 py-1 text-[13px] font-medium"
-                >
-                  {copy.cancel}
-                </button>
-              </div>
-            </div>
+          {deletable && (
+            <MenuItem
+              destructive
+              label={copy.delete}
+              onClick={() => {
+                setOpen(false);
+                setConfirming(true);
+              }}
+            />
           )}
         </div>
       )}
+
+      {confirming &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[140] flex items-center justify-center bg-black/40 px-6"
+            // The portal still bubbles React events up the comment sheet
+            // (drag handle, swipe); keep them inside the modal.
+            onPointerDown={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              setConfirming(false);
+            }}
+          >
+            <div
+              role="alertdialog"
+              aria-modal="true"
+              aria-label={copy.deleteConfirm}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-[18rem] rounded-2xl bg-white p-5 text-center shadow-xl"
+            >
+              <p className="text-[15px] font-semibold text-gray-900">{copy.deleteConfirm}</p>
+              <div className="mt-5 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirming(false)}
+                  className="h-10 rounded-xl bg-gray-100 text-[14px] font-medium text-gray-700"
+                >
+                  {copy.cancel}
+                </button>
+                <button
+                  type="button"
+                  autoFocus
+                  onClick={() => {
+                    setConfirming(false);
+                    onDelete();
+                  }}
+                  className="h-10 rounded-xl bg-destructive text-[14px] font-semibold text-destructive-foreground"
+                >
+                  {copy.deleteConfirmYes}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
