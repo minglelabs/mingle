@@ -8,6 +8,7 @@ import { chromium } from 'playwright-core';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 import { pool, sleep } from './db.mjs';
 
 // 실행마다 새 브라우저로 → 메모리 누적 방지. 실행당 개수는 MIN~MAX 사이 랜덤 (일정한 패턴 회피)
@@ -19,15 +20,30 @@ const GAP = Number(process.env.GAP || 30) * 1000;
 const PROFILE_DIR = process.env.PROFILE_DIR || path.join(os.homedir(), 'salon-db', 'chrome-ig');
 const PHOTO_DIR = path.join(os.homedir(), 'salon-db', 'photos', 'ig');
 
-const ctx = await chromium.launchPersistentContext(PROFILE_DIR, {
-  channel: 'chrome',
-  headless: false,
-  locale: 'ko-KR',
-  viewport: { width: 1100, height: 900 },
-  // 자동화 표시(배너·navigator.webdriver)를 끈다: 켜져 있으면 인스타가 로그인을 거부한다
-  ignoreDefaultArgs: ['--enable-automation'],
-  args: ['--disk-cache-size=1', '--media-cache-size=1', '--disable-blink-features=AutomationControlled'],
-});
+// Playwright가 띄운 크롬은 자동화 플래그(--enable-automation, --no-sandbox 등) 때문에 인스타가 로그인을 거부한다.
+// 그래서 평범한 크롬을 직접 띄우고 디버깅 포트로 붙는다. 이미 떠 있으면(이전 실행이 남긴 창) 그대로 붙는다.
+const CDP_PORT = Number(process.env.IG_CDP_PORT || 9333);
+const CDP = `http://127.0.0.1:${CDP_PORT}`;
+const cdpUp = () => fetch(`${CDP}/json/version`).then((r) => r.ok, () => false);
+let chromeProc = null;
+if (!(await cdpUp())) {
+  chromeProc = spawn('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', [
+    `--user-data-dir=${PROFILE_DIR}`, `--remote-debugging-port=${CDP_PORT}`, '--no-first-run',
+    '--no-default-browser-check', '--disk-cache-size=1', '--media-cache-size=1', '--window-size=1100,900',
+    'about:blank',
+  ], { stdio: 'ignore' });
+  for (let i = 0; i < 60 && !(await cdpUp()); i++) await sleep(500);
+}
+const browser = await chromium.connectOverCDP(CDP);
+const ctx = browser.contexts()[0];
+// 실행이 끝나면 크롬을 끈다 (메모리 누적 방지, 다음 실행은 새 창)
+const closeChrome = async () => {
+  try {
+    const cdp = await browser.newBrowserCDPSession();
+    await cdp.send('Browser.close');
+  } catch {}
+  chromeProc?.kill();
+};
 const page = ctx.pages()[0] || (await ctx.newPage());
 
 async function ensureLogin() {
@@ -193,5 +209,5 @@ for (const [i, s] of rows.entries()) {
   // 간격도 들쭉날쭉하게: 평균 GAP 기준 0.4~2배, 가끔(10%) 1~4분 더 쉼
   await sleep(GAP * (0.4 + Math.random() * 1.6) + (Math.random() < 0.1 ? 60_000 + Math.random() * 180_000 : 0));
 }
-await ctx.close();
+await closeChrome();
 await pool.end();
