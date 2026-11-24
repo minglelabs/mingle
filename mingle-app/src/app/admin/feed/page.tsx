@@ -84,7 +84,16 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
     ? await loadLatestPosts(cursor?.trim() || null)
     : await getFeed(viewer?.id ?? null, cursor?.trim() || null, PAGE_SIZE, starterView ? { starterSegment: starterView.segment } : {})
   const starter = await loadStarterFeed()
-  const starterOrder = new Map((starterView && starter ? starter[starterView.segment] : []).map((id, index) => [id, index + 1]))
+  // Numbered as readers see them: a listed post that was taken down, deleted or
+  // made private is skipped by the feed, so it gets no number and is named apart.
+  const listed = starterView && starter ? starter[starterView.segment] : []
+  const listedVisible = new Set(listed.length
+    ? (await prisma.post.findMany({ where: { id: { in: listed }, ...visiblePostWhere(null) }, select: { id: true } })).map((post) => post.id)
+    : [])
+  const starterOrder = new Map(listed.filter((id) => listedVisible.has(id)).map((id, index) => [id, index + 1]))
+  const starterHidden = listed.length
+    ? await prisma.post.findMany({ where: { id: { in: listed.filter((id) => !listedVisible.has(id)) } }, select: { id: true, author: { select: { name: true, handle: true } } } })
+    : []
 
   const postIds = feed.posts.map((post) => post.id)
   const authors = await prisma.user.findMany({
@@ -149,6 +158,12 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
           </Link>
         ))}
       </nav>
+
+      {starterHidden.length ? (
+        <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+          첫 피드 목록에 있지만 내려가거나 삭제돼서 안 보이는 글 {starterHidden.length}개(번호에서 빠짐): {starterHidden.map((post) => `${post.author.name ?? post.author.handle}(@${post.author.handle})`).join(', ')}
+        </p>
+      ) : null}
 
       {feed.posts.length === 0 ? (
         <p className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">보여 줄 글이 없습니다.</p>
