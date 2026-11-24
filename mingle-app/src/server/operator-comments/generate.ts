@@ -12,6 +12,12 @@ import { hasContactDetails } from '@/server/operators/persona-rules'
  * posts in (`poster-profile.ts`).
  */
 export const OPERATOR_COMMENT_GENERATED_MAX_CHARS = 200
+/**
+ * A comment (not a reply) is the shortest thing written: staff 2026-11-25
+ * found them rambling (median 33, one in ten over 69 characters). Longer
+ * ones are thrown away and written again.
+ */
+export const OPERATOR_TOP_COMMENT_MAX_CHARS = 45
 const CALL_TIMEOUT_MS = 60_000
 /**
  * Every operator comment and reply goes to the Anthropic API, never the ChatGPT
@@ -34,12 +40,12 @@ export function resolveRealUserReplyModel(env: NodeJS.ProcessEnv = process.env, 
 }
 
 export const COMMENT_KINDS: ReadonlyArray<{ key: string; weight: number; brief: string }> = [
-  { key: 'answer', weight: 4, brief: 'answer what the post asks, or add one concrete thing from their own life' },
-  { key: 'reaction', weight: 4, brief: 'react in a few words to the specific thing in the post, not a generic compliment' },
-  { key: 'offer', weight: 2, brief: 'offer to talk or help, in one short line' },
-  { key: 'joke', weight: 1.5, brief: 'a small tease or joke about the post' },
-  { key: 'question', weight: 2, brief: 'ask one short follow-up question about the post' },
-  { key: 'encourage', weight: 1.5, brief: 'a word of encouragement, or a gentle correction of one mistake if the author is clearly learning the commenter\'s own language' },
+  { key: 'answer', weight: 4, brief: 'answer what the post asks in a few words (just the answer, no explanation)' },
+  { key: 'reaction', weight: 4, brief: 'react in two to five words to the specific thing in the post, not a generic compliment' },
+  { key: 'offer', weight: 2, brief: 'offer to talk, in a few words' },
+  { key: 'joke', weight: 1.5, brief: 'a small tease or joke about the post, a few words' },
+  { key: 'question', weight: 2, brief: 'one very short question about the post, a few words' },
+  { key: 'encourage', weight: 1.5, brief: 'a few words of encouragement, or fixing one mistake in a few words if the author is clearly learning the commenter\'s own language' },
 ]
 
 type Random = () => number
@@ -116,8 +122,8 @@ export function buildCommentInstructions(language: string, reply = false): strin
         ]),
     `Write the ${reply ? 'reply' : 'comment'} in ${languageName} (${language}). If "asLearner" is true the commenter is still learning that language, at the level in "learnerLevel": keep it very simple and let the level show. Otherwise write the way a native speaker of the commenter's age types on their phone.`,
     reply
-      ? 'Length: a few words; replies are even shorter than comments, most under 20 characters, never more than one short sentence.'
-      : 'Length: a few words to one short sentence; never more than two short sentences. Most real comments are under 25 characters.',
+      ? 'Length: as long as the answer needs and no longer: usually one short sentence; two short sentences only when it really answers a question. Never a paragraph, no small talk added around it.'
+      : 'Length: as short as possible (staff, 2026-11-25): a few words, one line, no second sentence. Most real comments are under 15 characters and none here may pass 40. No lead-in, no explanation, no story from their own life.',
     reply
       ? 'Answer the comment in "replyingTo" directly and do what "kind" says. When "asPostAuthor" is true you are the person who wrote the post, answering someone under it; otherwise you are another reader joining in. No stock "thanks for the comment", and do not repeat anything already in "thread".'
       : 'Do what "kind" says, about the specific thing in this post. No generic praise that would fit any post, no summary of the post, no advice, no "thanks for sharing", and do not repeat what an existing comment already says.',
@@ -168,27 +174,33 @@ export async function generateOperatorComment(args: {
   const learner = reserveLearnerPlan(args.commenter.id, args.commenter.language, args.commenter.learning)
   const random = args.random ?? Math.random
   const kind = args.replyTo ? pickKind(args.replyTo.asPostAuthor ? AUTHOR_REPLY_KINDS : OTHER_REPLY_KINDS, random) : pickCommentKind(random)
-  const answer = await (args.generate ?? generateJson)({
-    instructions: buildCommentInstructions(choice.language, Boolean(args.replyTo)),
-    input: {
-      commenter: { name: args.commenter.name, bio: args.commenter.bio, age: args.commenter.age, city: args.commenter.city, country: args.commenter.country },
-      voice: profile.voice,
-      asLearner: choice.asLearner,
-      learnerLevel: choice.asLearner ? learner.level.brief : null,
-      post: { text: args.post.text ?? '', language: args.post.language, photo: args.post.photo ?? null },
-      ...(args.replyTo
-        ? { replyingTo: args.replyTo.text, thread: args.replyTo.thread.slice(-6), asPostAuthor: args.replyTo.asPostAuthor }
-        : { existingComments: args.existingComments.slice(-8) }),
-      kind: kind.brief,
-    },
-    responseSchema: RESPONSE_SCHEMA,
-    validate: (value) => (value as { text?: unknown } | null)?.text,
-    model: args.toRealUser ? resolveRealUserReplyModel() : resolveOperatorCommentModel(),
-    provider: 'direct',
-    temperature: 1,
-    maxOutputTokens: 1024,
-    timeoutMs: CALL_TIMEOUT_MS,
-  })
-  const text = cleanGeneratedComment(answer)
-  return text ? { text, language: choice.language, kind: kind.key } : null
+  // A comment that comes out too long is written once more before giving up.
+  for (let attempt = 0; attempt < (args.replyTo ? 1 : 2); attempt += 1) {
+    const answer = await (args.generate ?? generateJson)({
+      instructions: buildCommentInstructions(choice.language, Boolean(args.replyTo)),
+      input: {
+        commenter: { name: args.commenter.name, bio: args.commenter.bio, age: args.commenter.age, city: args.commenter.city, country: args.commenter.country },
+        voice: profile.voice,
+        asLearner: choice.asLearner,
+        learnerLevel: choice.asLearner ? learner.level.brief : null,
+        post: { text: args.post.text ?? '', language: args.post.language, photo: args.post.photo ?? null },
+        ...(args.replyTo
+          ? { replyingTo: args.replyTo.text, thread: args.replyTo.thread.slice(-6), asPostAuthor: args.replyTo.asPostAuthor }
+          : { existingComments: args.existingComments.slice(-8) }),
+        kind: kind.brief,
+      },
+      responseSchema: RESPONSE_SCHEMA,
+      validate: (value) => (value as { text?: unknown } | null)?.text,
+      model: args.toRealUser ? resolveRealUserReplyModel() : resolveOperatorCommentModel(),
+      provider: 'direct',
+      temperature: 1,
+      maxOutputTokens: 1024,
+      timeoutMs: CALL_TIMEOUT_MS,
+    })
+    const text = cleanGeneratedComment(answer)
+    // A long comment is never posted.
+    if (text && !args.replyTo && Array.from(text).length > OPERATOR_TOP_COMMENT_MAX_CHARS) continue
+    return text ? { text, language: choice.language, kind: kind.key } : null
+  }
+  return null
 }
