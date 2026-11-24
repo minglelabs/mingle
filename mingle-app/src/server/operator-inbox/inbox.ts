@@ -128,6 +128,8 @@ export type InboxRoomDetail = {
   counterparts: InboxPerson[]
   isGroup: boolean
   blocked: boolean
+  /** Counterparts the acting operator account itself blocked (it can unblock them). */
+  blockedByOperator: string[]
   replyUnavailableReason: InboxReplyUnavailableReason | null
 }
 
@@ -814,6 +816,13 @@ export async function resolveInboxRoomAccess(args: {
     ? { ...actingOperator, personaLanguage: await resolveHamzziStaffReplyLanguage(channel.sessionKey) }
     : actingOperator
   const blocked = blockedRooms.has(channel.id)
+  const counterpartIds = members.filter((member) => !isOperatorMember(member)).map((member) => member.userId)
+  const blockedByOperator = blocked && counterpartIds.length > 0
+    ? (await prisma.userBlock.findMany({
+      where: { blockerId: operator.userId, blockedId: { in: counterpartIds } },
+      select: { blockedId: true },
+    })).map((row) => row.blockedId)
+    : []
   const recipientCount = members.length - 1 + channel.pendingInviteeUserIds.length
   const replyUnavailableReason: InboxReplyUnavailableReason | null = !operator.isActive
     ? 'operator_inactive'
@@ -829,6 +838,7 @@ export async function resolveInboxRoomAccess(args: {
       counterparts: members.filter((member) => !isOperatorMember(member)).map((member) => toInboxPerson(member.user)),
       isGroup: members.length > 2,
       blocked,
+      blockedByOperator,
       replyUnavailableReason,
     },
   }
