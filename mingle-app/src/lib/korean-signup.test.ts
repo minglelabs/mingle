@@ -18,10 +18,10 @@ describe('Korean sign-up: asked, phone first, then the contact sync', () => {
     // "korea-visit" shows only after "no" (the modal filters it).
     // One pass before sign-in (2026-11-24): the profile, then the microphone.
     expect(FIRST_RUN_ONBOARDING_STEPS).toEqual([
-      'language', 'korean', 'korea-visit', 'interest-language',
+      'language', 'korean', 'nationality', 'korea-visit', 'interest-language',
       'gender', 'height', 'birth-date', 'profile-photo', 'discovery-source', 'voice-intro',
     ])
-    expect(INVITE_ONBOARDING_STEPS.slice(0, 4)).toEqual(['language', 'korean', 'korea-visit', 'interest-language'])
+    expect(INVITE_ONBOARDING_STEPS.slice(0, 5)).toEqual(['language', 'korean', 'nationality', 'korea-visit', 'interest-language'])
     expect(INVITE_ONBOARDING_STEPS).not.toContain('discovery-source')
     for (const locale of PRIMARY_UI_LOCALES) {
       const copy = resolveKoreanCheckCopy(locale)

@@ -1,7 +1,8 @@
 "use client";
 
 import { resolveKoreanCheckCopy } from "@/i18n/korean-check-copy";
-import { readKoreanAnswer, writeKoreanAnswer, type KoreanAnswer } from "@/lib/korean-signup";
+import { readKoreanAnswer, readNationalityAnswer, writeKoreanAnswer, writeNationalityAnswer, type KoreanAnswer } from "@/lib/korean-signup";
+import { NATIONALITY_COUNTRY_CODES, countryFlagEmoji, defaultNationalityForLanguage, getCountryDisplayName } from "@/lib/nationality";
 import { resolveKoreaVisitCopy } from "@/i18n/korea-visit-copy";
 import {
   fromIsoDay,
@@ -108,7 +109,7 @@ interface LanguageOnboardingModalProps {
   onConfirm: (payload: LanguageOnboardingConfirmPayload) => void | Promise<void>;
 }
 
-export type OnboardingStep = "language" | "korean" | "korea-visit" | "interest-language" | "profile-photo" | "voice-intro" | "usage-purpose" | "discovery-source" | "gender" | "birth-date" | "height";
+export type OnboardingStep = "language" | "korean" | "nationality" | "korea-visit" | "interest-language" | "profile-photo" | "voice-intro" | "usage-purpose" | "discovery-source" | "gender" | "birth-date" | "height";
 
 // "korean": asked on its own, since many Koreans pick English (owner, 2026-11-21; see @/lib/korean-signup).
 // "korea-visit": only after "no, not Korean" (owner, 2026-11-23; see @/lib/korea-visit).
@@ -118,7 +119,7 @@ export type OnboardingStep = "language" | "korean" | "korea-visit" | "interest-l
 // asked here, then the microphone ("HashChat is spoken"), then sign-in. Gender,
 // height (men), birth date and the photo used to be asked later, one at a time.
 export const FIRST_RUN_ONBOARDING_STEPS: readonly OnboardingStep[] = [
-  "language", "korean", "korea-visit", "interest-language",
+  "language", "korean", "nationality", "korea-visit", "interest-language",
   "gender", "height", "birth-date", "profile-photo", "discovery-source", "voice-intro",
 ];
 // An invite already says where they came from (a friend).
@@ -145,6 +146,12 @@ export default function LanguageOnboardingModal({
   const [gender, setGender] = useState<ProfileGender | null>(null);
   const [koreanAnswer, setKoreanAnswer] = useState<KoreanAnswer | null>(() => readKoreanAnswer());
   const [koreaVisit, setKoreaVisit] = useState<KoreaVisitRange>({ start: null, end: null });
+  // 국적 for someone who is not Korean; the avatar flag (2026-11-24), apart from languages.
+  const [nationality, setNationality] = useState<string | null>(() => {
+    const stored = readNationalityAnswer();
+    return stored && stored !== "KR" ? stored : null;
+  });
+  const [nationalityQuery, setNationalityQuery] = useState("");
   // Steps passed with "later" (the trip, the photo): finishing does not wait for them.
   const [skippedSteps, setSkippedSteps] = useState<readonly OnboardingStep[]>([]);
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(() => readPendingPhoto());
@@ -160,7 +167,7 @@ export default function LanguageOnboardingModal({
   const steps = useMemo(
     () => baseSteps.filter((entry) => (
       (entry !== "height" || gender === "male" || !baseSteps.includes("gender"))
-      && (entry !== "korea-visit" || koreanAnswer === "no")
+      && ((entry !== "korea-visit" && entry !== "nationality") || koreanAnswer === "no")
     )),
     [baseSteps, gender, koreanAnswer],
   );
@@ -200,6 +207,22 @@ export default function LanguageOnboardingModal({
   const koreanCopy = useMemo(() => resolveKoreanCheckCopy(language), [language]);
   const koreaVisitCopy = useMemo(() => resolveKoreaVisitCopy(language), [language]);
   const extraCopy = useMemo(() => resolveOnboardingExtraCopy(language), [language]);
+  const countryNameLocale = resolveUiLocaleForLanguage(language);
+  const nationalityRows = useMemo(() => {
+    const collator = new Intl.Collator(countryNameLocale);
+    const suggested = defaultNationalityForLanguage(language);
+    const rows = NATIONALITY_COUNTRY_CODES
+      .filter((code) => code !== "KR")
+      .map((code) => ({ code, name: getCountryDisplayName(code, countryNameLocale) }))
+      .sort((a, b) => collator.compare(a.name, b.name));
+    const needle = nationalityQuery.trim().toLocaleLowerCase(countryNameLocale);
+    const visible = needle
+      ? rows.filter((row) => row.name.toLocaleLowerCase(countryNameLocale).includes(needle) || row.code.toLowerCase() === needle)
+      : rows;
+    // The suggested country and the one picked stay on top.
+    const top = new Set([nationality, suggested].filter((code): code is string => Boolean(code)));
+    return [...visible.filter((row) => top.has(row.code)), ...visible.filter((row) => !top.has(row.code))];
+  }, [countryNameLocale, language, nationality, nationalityQuery]);
   const koreaVisitSummary = useMemo(() => {
     if (!koreaVisit.start) return koreaVisitCopy.pickStart;
     if (!koreaVisit.end) return koreaVisitCopy.pickEnd;
@@ -352,6 +375,7 @@ export default function LanguageOnboardingModal({
   const isStepAnswered = (target: OnboardingStep): boolean => (
     target === "language" ? true
       : target === "korean" ? koreanAnswer !== null
+      : target === "nationality" ? Boolean(nationality)
       : target === "korea-visit" ? Boolean(koreaVisit.start && koreaVisit.end)
       : target === "profile-photo" ? Boolean(photoDataUrl)
       : target === "voice-intro" ? true
@@ -467,6 +491,14 @@ export default function LanguageOnboardingModal({
   // Entering the 관심 언어 step: someone who is not Korean starts with Korean
   // checked (the app is for meeting Koreans), so one tap moves on.
   const goToStep = (next: OnboardingStep) => {
+    // The country of the language just picked starts checked (not Korea: they said no).
+    if (next === "nationality" && !nationality) {
+      const suggested = defaultNationalityForLanguage(language);
+      if (suggested && suggested !== "KR") {
+        setNationality(suggested);
+        writeNationalityAnswer(suggested);
+      }
+    }
     if (next === "interest-language" && !interestCode && koreanAnswer === "no" && ownLanguageCode !== "ko") {
       const korean = languageItems.find((item) => canonicalizeSttLanguageCode(item.code) === "ko");
       if (korean) setInterestCode(korean.code);
@@ -484,7 +516,7 @@ export default function LanguageOnboardingModal({
     if (isLastStep) return;
     const nextSteps = baseSteps.filter((entry) => (
       (entry !== "height" || nextGender === "male" || !baseSteps.includes("gender"))
-      && (entry !== "korea-visit" || koreanAnswer === "no")
+      && ((entry !== "korea-visit" && entry !== "nationality") || koreanAnswer === "no")
     ));
     const next = nextSteps[nextSteps.indexOf("gender") + 1];
     if (!next) return;
@@ -719,6 +751,33 @@ export default function LanguageOnboardingModal({
               </h2>
               <p className="text-[0.92rem] leading-snug text-slate-500">{koreanCopy.description}</p>
             </div>
+          ) : step === "nationality" ? (
+            <div className="space-y-3 px-4 pb-4 pt-0">
+              <div className="space-y-1.5 px-2 text-center">
+                <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
+                  {extraCopy.nationalityLabel}
+                </p>
+                <h2 id={titleId} className="text-[1.6rem] font-extrabold leading-tight tracking-[-0.02em] text-slate-950">
+                  {extraCopy.nationalityTitle}
+                </h2>
+                <p className="text-[0.92rem] leading-snug text-slate-500">{extraCopy.nationalityDescription}</p>
+              </div>
+              <div className="flex h-12 min-w-0 items-center gap-2.5 rounded-[16px] border border-[#e6dfd2] bg-white px-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+                <Search size={18} className="shrink-0 text-slate-400" />
+                <input
+                  type="search"
+                  value={nationalityQuery}
+                  disabled={isConfirming}
+                  onChange={(event) => setNationalityQuery(event.target.value)}
+                  placeholder={extraCopy.nationalitySearch}
+                  className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-slate-400"
+                  enterKeyHint="search"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
+              </div>
+            </div>
           ) : step === "korea-visit" ? (
             <div className="space-y-1.5 px-6 pb-3 pt-0 text-center">
               <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
@@ -937,6 +996,44 @@ export default function LanguageOnboardingModal({
                     {answer === "yes" ? <span aria-hidden>🇰🇷</span> : null}
                     {answer === "yes" ? koreanCopy.yes : koreanCopy.no}
                     {selected ? <Check size={20} strokeWidth={3} className="text-amber-600" aria-hidden /> : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : step === "nationality" ? (
+          <div
+            className="flex-1 overflow-y-auto px-4"
+            style={{ paddingBottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))" }}
+          >
+            <div className="space-y-2 py-3" role="radiogroup" aria-labelledby={titleId}>
+              {nationalityRows.length === 0 ? (
+                <p className="py-10 text-center text-sm text-slate-500">{copy.noResultsLabel}</p>
+              ) : nationalityRows.map((row) => {
+                const selected = nationality === row.code;
+                return (
+                  <button
+                    key={row.code}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    data-qa={`onboarding-nationality-${row.code}`}
+                    disabled={isConfirming}
+                    onClick={() => {
+                      setNationality(row.code);
+                      writeNationalityAnswer(row.code);
+                    }}
+                    className={`flex w-full items-center gap-3 rounded-[1.2rem] border px-4 py-3 text-left transition ${
+                      selected
+                        ? "border-amber-400 bg-amber-50/95"
+                        : "border-[#ece6db] bg-white"
+                    }`}
+                  >
+                    <span className="text-[1.9rem] leading-none" aria-hidden>{countryFlagEmoji(row.code)}</span>
+                    <span className="min-w-0 flex-1 text-[1.02rem] font-semibold text-slate-900">{row.name}</span>
+                    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${selected ? "border-amber-500 bg-amber-500 text-white" : "border-slate-300 text-transparent"}`}>
+                      <Check size={14} strokeWidth={3.2} />
+                    </span>
                   </button>
                 );
               })}

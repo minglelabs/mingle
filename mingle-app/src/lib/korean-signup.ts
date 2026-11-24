@@ -11,6 +11,9 @@
  * question) the Korean app language counts.
  */
 const ANSWER_KEY = "mingle.koreanAnswer.v1";
+// The country picked after "no" (2026-11-24): the profile's 국적, shown as the
+// flag on the avatar; separate from the languages.
+const COUNTRY_KEY = "mingle.nationalityAnswer.v1";
 const SYNCED_KEY = "mingle.koreanAnswer.synced.v1";
 
 export type KoreanAnswer = "yes" | "no";
@@ -38,6 +41,24 @@ export function writeKoreanAnswer(answer: KoreanAnswer): void {
     storage()?.removeItem(SYNCED_KEY);
   } catch {
     // The language rule decides instead.
+  }
+}
+
+export function readNationalityAnswer(): string | null {
+  try {
+    const value = storage()?.getItem(COUNTRY_KEY) ?? "";
+    return /^[A-Z]{2}$/.test(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeNationalityAnswer(country: string): void {
+  try {
+    storage()?.setItem(COUNTRY_KEY, country.toUpperCase());
+    storage()?.removeItem(SYNCED_KEY);
+  } catch {
+    // The language's country is used instead.
   }
 }
 

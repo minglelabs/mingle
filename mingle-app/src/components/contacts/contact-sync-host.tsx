@@ -12,7 +12,7 @@ import { fillInviteTicketCopy, resolveInviteTicketCopy } from "@/i18n/invite-tic
 import LazyOverlayBoundary from "@/components/lazy-overlay-boundary";
 import { runAfterStartup } from "@/lib/after-startup";
 import { isFirstSpeakPending } from "@/lib/first-run";
-import { appAccessQuery, isKoreanAnswerUnsynced, isKoreanUser, markKoreanAnswerSynced, readKoreanAnswer } from "@/lib/korean-signup";
+import { appAccessQuery, isKoreanAnswerUnsynced, isKoreanUser, markKoreanAnswerSynced, readKoreanAnswer, readNationalityAnswer } from "@/lib/korean-signup";
 import { resolveDeviceIdentityHeaders } from "@/lib/native-device-identity";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { refreshCoinWallet } from "@/lib/coin-wallet-client";
@@ -103,15 +103,19 @@ export default function ContactSyncHost() {
 
   /**
    * Saves the first screen's "Are you Korean?" answer on the profile as its
-   * nationality: yes = KR; no clears a KR that was guessed from the language.
+   * nationality: yes = KR; no = the country picked next (2026-11-24), or,
+   * without one (older first runs), clears a KR guessed from the language.
    */
   const syncKoreanAnswer = useCallback(async () => {
     if (!isKoreanAnswerUnsynced()) return;
     const answer = readKoreanAnswer();
     try {
       let nationalityCountry: string | null | undefined;
+      const pickedCountry = readNationalityAnswer();
       if (answer === "yes") {
         nationalityCountry = "KR";
+      } else if (pickedCountry && pickedCountry !== "KR") {
+        nationalityCountry = pickedCountry;
       } else {
         const profileResponse = await fetch(buildClientApiPath("/profile"), { cache: "no-store" });
         if (!profileResponse.ok) return;
