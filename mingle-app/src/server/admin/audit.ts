@@ -24,6 +24,8 @@ export type AdminAuditAction =
   | 'inbox.report'
   | 'activity.mark_read'
   | 'activity.comment'
+  | 'activity.comment_like'
+  | 'activity.comment_unlike'
   | 'activity.comment_generated'
   | 'activity.reply_generated'
   | 'inbox.auto_reply'
