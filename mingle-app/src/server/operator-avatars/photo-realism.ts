@@ -79,6 +79,16 @@ const WORLD = 'The world in the photo is physically right. Real landmarks appear
 const SUN = 'The sun rises in the east and sets in the west: a setting sun only ever appears in a view facing west, so a coast or riverbank facing east (Haeundae, Gwangalli, the east coast) gets a sunrise or a sky lit from behind the camera, never a sun setting into the water.'
 const LOW_SUN = /sunset|sunrise|setting sun|dusk|golden hour|evening sun|late-afternoon sun|low sun/i
 
+/**
+ * Outdoor post photos kept coming out in a low, late-afternoon sun with a dusky
+ * blue-pink sky (staff 2026-11-24), though few descriptions asked for it: left
+ * alone, and with "side light" or "backlit" picks, the image model reaches for
+ * golden hour. Said to every outdoor photo whose description and time line do
+ * not name another time of day.
+ */
+export const DAYTIME = 'Time of day: plain daytime with the sun well up in the sky, between late morning and mid-afternoon: neutral white daylight, fairly short shadows, a clear or evenly bright sky. No golden-hour glow, no low orange or pink sun, no dusky blue or purple sky, no sunset tones anywhere.'
+const OTHER_TIME = /\b(night|evening|dusk|sunset|sunrise|dawn|twilight|after dark|golden hour|blue hour|early morning|morning|low sun|sun low|street ?lamps?|neon|fog|foggy|mist|rain|rainy|drizzle|snow|snowy|overcast|cloudy|grey sky|gray sky)\b/i
+
 const LIGHT = 'Light: only what the place itself gives, with its natural falloff (the sky, a window, ceiling lights or street lamps); soft natural shadows; mixed color temperatures where different lights meet; whites that are slightly grey or slightly warm, not pure.'
 const FACE_LIGHT = 'Any face is lit like its surroundings and no more brightly: no extra light falling on the face. Sunlit skin stays matte, a broad soft brightness with no shiny specular spots on the nose, forehead, cheekbones or lips.'
 /** Only for dim scenes: said to every photo, it pulled daytime photos toward dusk too (staff, 2026-11). */
@@ -264,7 +274,7 @@ export const PHOTO_LIGHTS: Readonly<Record<'home' | 'eatery' | 'transit' | 'work
     'a sunny day at a viewpoint, a clear view far into the distance',
     'a bright overcast day in the city, soft light, colours clear',
     'a sunny crosswalk at noon, strong shadows of people on the stripes',
-    'a breezy autumn afternoon, sun low in the south, warm side light',
+    'a breezy autumn day, bright sun, a cool clear sky',
     'a bright, cool morning with a little mist rising from the river',
     'mid-afternoon under a striped awning, bright street behind',
     'a sunny rooftop at noon, a wide blue sky',
@@ -409,6 +419,11 @@ const LIGHT_VENUES: readonly RegExp[] = [
 export function lightFitsScene(light: string, scene: string): boolean {
   const venue = LIGHT_VENUES.find((pattern) => pattern.test(light))
   return !venue || venue.test(scene)
+}
+
+function isOutdoor(scene: string, environment: PhotoEnvironment): boolean {
+  const kind = sceneKindOf(scene, environment)
+  return kind === 'nature' || kind === 'street'
 }
 
 /** The time and light line for a post photo, from its kind of place, or null when the description already says when it was taken. */
@@ -588,6 +603,7 @@ export function phonePhotoRealism(
     ...(options.lens ? [LENS[options.lens]] : []),
     ...(time ? [`Time and light, like this: ${time}. Take only the time, weather and light from it; the place stays the one described above.`] : []),
     ...(variation ? [variation] : []),
+    ...(options.pickTime && isOutdoor(options.scene ?? '', environment) && !OTHER_TIME.test(`${options.scene ?? ''} ${time ?? ''}`) ? [DAYTIME] : []),
     LIGHT,
     WORLD,
     ...(LOW_SUN.test(options.scene ?? '') ? [SUN] : []),
