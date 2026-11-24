@@ -31,3 +31,12 @@ describe('automatic tagging window', () => {
     expect(referenceAutoTagEnabled(new Date('2026-12-13T00:00:00+09:00'))).toBe(false)
   })
 })
+
+describe('group photos', () => {
+  it('reads a group answer without a gender and writes the group prompt', () => {
+    expect(parseClassification('{"kind":"group","gender":"female","summary":"three friends at a bar"}')).toEqual({ kind: 'group', gender: null, summary: 'three friends at a bar' })
+    const lines = referenceRecreateLines({ kind: 'group', look: 'a man in his 20s', poster: true }).join('\n')
+    expect(lines).toMatch(/different group of friends/)
+    expect(lines).toMatch(/RIGHT photo is one of the people/)
+  })
+})

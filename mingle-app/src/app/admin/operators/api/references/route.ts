@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireAdminApi } from '@/server/admin/guard'
 import { writeAdminAudit } from '@/server/admin/audit'
 import { classifyReferencePhoto, referenceAutoTagEnabled } from '@/server/reference-library/classify'
-import { addReferencePhoto, REFERENCE_MAX_BYTES, REFERENCE_TYPES, type ReferenceGender, type ReferenceKind } from '@/server/reference-library/library'
+import { addReferencePhoto, isReferenceKind, REFERENCE_MAX_BYTES, REFERENCE_TYPES, referenceKindHasGender, type ReferenceGender, type ReferenceKind } from '@/server/reference-library/library'
 import { listReferencePhotoViews } from '@/server/reference-library/view'
 
 export const runtime = 'nodejs'
@@ -21,8 +21,8 @@ export async function GET() {
 }
 
 /**
- * POST (form): `file` (one or more) adds photos to the library. `kind` (face |
- * person | thing) and `gender` (female | male | none) set them for the whole
+ * POST (form): `file` (one or more) adds photos to the library. `kind` (thing |
+ * face | person | group) and `gender` (female | male | none) set them for the whole
  * batch; left out (or `auto`), Claude looks at each photo and tags it, through
  * 2026-12-12 only. After that `kind` is required and an unset gender is none.
  * `note` is staff's one-line note for every photo of the batch.
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
   const rawGender = form.get('gender')
   const fixedGender: ReferenceGender | null | undefined = rawGender === 'female' || rawGender === 'male' ? rawGender : rawGender === 'none' ? null : undefined
   const rawKind = form.get('kind')
-  const fixedKind: ReferenceKind | undefined = rawKind === 'face' || rawKind === 'person' || rawKind === 'thing' ? rawKind : undefined
+  const fixedKind: ReferenceKind | undefined = isReferenceKind(rawKind) ? rawKind : undefined
   const note = typeof form.get('note') === 'string' ? form.get('note') as string : null
   const autoTag = referenceAutoTagEnabled()
   if (!autoTag && !fixedKind) return json({ error: 'kind_required' }, 400)
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
       const kind = fixedKind ?? look?.kind ?? null
       await addReferencePhoto(bytes, {
         kind,
-        gender: kind === 'thing' ? null : fixedGender !== undefined ? fixedGender : look?.gender ?? null,
+        gender: !referenceKindHasGender(kind) ? null : fixedGender !== undefined ? fixedGender : look?.gender ?? null,
         summary: look?.summary ?? null,
         note,
       })

@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import sharp from 'sharp'
 import { OPERATOR_TEXT_MODEL } from '@/server/llm/generate-json'
-import type { ReferenceGender, ReferenceKind } from './library'
+import { isReferenceKind, referenceKindHasGender, type ReferenceGender, type ReferenceKind } from './library'
 
 /**
  * A look at an uploaded reference photo (Claude, text only): what kind it is
@@ -10,11 +10,12 @@ import type { ReferenceGender, ReferenceKind } from './library'
  * both by hand on the page.
  */
 const INSTRUCTIONS = [
-  'You sort one photo for a library of reference photos.',
-  'kind: "face" when a person is the subject and their face can be seen (even partly: sunglasses, a hand, a phone in a mirror);',
-  '"person" when a person is the subject but their face cannot be seen (from behind, turned away, cropped above the face, covered, a silhouette, only the body);',
-  '"thing" when no person is the subject: food, drinks, a place or view, an object, an animal, a screen.',
-  'gender: "female" or "male" for the main person when kind is face or person and it is clear; else null.',
+  'You sort one photo for a library of reference photos. First count the people who are a subject of the photo (not tiny passers-by far away).',
+  'kind: "thing" when nobody is: food, drinks, a place or view, an object, an animal, a screen;',
+  '"group" when two or more people are;',
+  '"face" when one person is and their face can be seen (even partly: sunglasses, a hand, a phone in a mirror);',
+  '"person" when one person is but their face cannot be seen (from behind, turned away, cropped above the face, covered, a silhouette, only the body).',
+  'gender: "female" or "male" for that one person when kind is face or person and it is clear; else null.',
   'summary: at most 12 English words on what the photo shows.',
   'Answer with JSON only: {"kind": "...", "gender": "female"|"male"|null, "summary": "..."}',
 ].join('\n')
@@ -36,9 +37,9 @@ export function parseClassification(text: string): ReferenceClassification | nul
   if (!match) return null
   try {
     const value = JSON.parse(match[0]) as Record<string, unknown>
-    const kind = value.kind === 'face' || value.kind === 'person' || value.kind === 'thing' ? value.kind : null
+    const kind = isReferenceKind(value.kind) ? value.kind : null
     if (!kind) return null
-    const gender = kind !== 'thing' && (value.gender === 'female' || value.gender === 'male') ? value.gender : null
+    const gender = referenceKindHasGender(kind) && (value.gender === 'female' || value.gender === 'male') ? value.gender : null
     const summary = typeof value.summary === 'string' && value.summary.trim() ? value.summary.trim().slice(0, 160) : null
     return { kind, gender, summary }
   } catch {

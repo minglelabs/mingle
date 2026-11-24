@@ -261,9 +261,9 @@ export async function generateOperatorAvatar(
       ? {
         version: AVATAR_SPEC_VERSION,
         // face: later post photos keep this face (post-image.ts); body/object: the profile shows no face.
-        category: library.kind === 'face' ? 'face' : library.kind === 'person' ? 'body' : 'object',
+        category: library.kind === 'face' ? 'face' : library.kind === 'person' ? 'body' : library.kind === 'group' ? 'group' : 'object',
         subtype: 'reference',
-        labelKo: library.kind === 'face' ? '레퍼런스 사진 · 얼굴' : library.kind === 'person' ? '레퍼런스 사진 · 얼굴 없음' : '레퍼런스 사진 · 사물·풍경',
+        labelKo: `레퍼런스 사진 · ${{ face: '1명 얼굴', person: '1명 얼굴 없음', group: '여러 명', thing: '사람 없음' }[library.kind]}`,
         attributes: { source: 'reference_library', referenceKind: library.kind },
         prompt: [
           ...(library.kind === 'face' ? [`Subject: ${look}.`] : []),
