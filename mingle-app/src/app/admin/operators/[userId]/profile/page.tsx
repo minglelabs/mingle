@@ -286,17 +286,12 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
             </div>
           ) : (
             <div className="mt-3">
-              <ReviewBoard key={`${user.id}:${query.after ?? ''}:${queue.items.map((item) => item.key).join(',')}`} items={queue.items} />
+              <ReviewBoard key={`${user.id}:${query.after ?? ''}:${queue.items.map((item) => item.key).join(',')}`} items={queue.items} more={{ cursor: queue.nextCursor, userId: user.id }} />
             </div>
           )
         ) : (
           <p className="py-10 text-center text-sm text-slate-500">검토 대기 중인 글이 없어요.</p>
         )}
-        {tab === 'review' && queue?.nextCursor ? (
-          <Link href={href({ after: queue.nextCursor })} className="mt-4 block rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm font-semibold text-sky-700">
-            다음 글 더 보기
-          </Link>
-        ) : null}
       </div>
     </OperatorsMain>
   )
