@@ -11,8 +11,8 @@ const FACE_KEY = "mingle.pending.faceSimilarity.v1";
 // Men's self-introduction (owner, 2026-11-25).
 const BIO_KEY = "mingle.pending.bio.v1";
 
-/** The shortest self-introduction a man can sign up with. */
-export const BIO_MIN_LENGTH = 20;
+/** The shortest self-introduction a man can sign up with (owner, 2026-11-25: 20 → 30). Women: no minimum. */
+export const BIO_MIN_LENGTH = 30;
 
 /** Characters as people count them (an emoji or a Hangul syllable is one). */
 export function bioLength(text: string): number {

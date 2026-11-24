@@ -2619,7 +2619,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     getNativeAudioRouteServerSnapshot,
   )
   const earphoneModeSupported = isEarphoneModeControlSupported(nativeAudioRoute)
-  const speakerMode = isSpeakerModeClient()
+  // The speak trial is speaker mode unless earphones are really in (owner, 2026-11-25).
+  const speakerMode = isSpeakerModeClient() || Boolean(trialSpeechLength)
   const earphoneModeGate = resolveEarphoneModeGate({
     supported: earphoneModeSupported,
     enabled: earphoneModeEnabled,
@@ -2674,7 +2675,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // broadcast, no capture of other apps' sound.
   const sttCaptureSource = resolveEffectiveSttCaptureSource({
     // A call writes down the microphone only, never other apps' sound.
-    supported: nativeDeviceAudioSupported && !speakerModeOnSpeaker && !voiceTalkState.joined,
+    supported: nativeDeviceAudioSupported && !speakerModeOnSpeaker && !voiceTalkState.joined && !trialSpeechLength,
     earphoneModeEnabled,
     deviceAudioOptIn,
     pick: sttCaptureSourcePick,
@@ -11476,12 +11477,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   className="flex items-end gap-1.5"
                 >
                   <motion.div className="flex shrink-0 items-end justify-center self-end">
-                    <ChatActionPlusButton
-                      open={actionPanelOpen}
-                      label={conversationImageCopy.attach}
-                      sizePx={COMPOSER_MODE_CONTROL_SIZE_PX}
-                      onToggle={handleActionPanelToggle}
-                    />
+                    {trialSpeechLength ? (
+                      <button
+                        type="button"
+                        data-qa="live-demo-trial-voice-mode"
+                        aria-label={composerCopy.switchToVoiceModeLabel}
+                        onClick={handleToggleComposer}
+                        className="inline-flex shrink-0 items-center justify-center self-end rounded-full bg-gray-100 text-gray-600 active:scale-95"
+                        style={{ width: COMPOSER_MODE_CONTROL_SIZE_PX, height: COMPOSER_MODE_CONTROL_SIZE_PX }}
+                      >
+                        <Mic size={Math.round(COMPOSER_MODE_CONTROL_SIZE_PX * 0.5)} strokeWidth={2.1} />
+                      </button>
+                    ) : (
+                      <ChatActionPlusButton
+                        open={actionPanelOpen}
+                        label={conversationImageCopy.attach}
+                        sizePx={COMPOSER_MODE_CONTROL_SIZE_PX}
+                        onToggle={handleActionPanelToggle}
+                      />
+                    )}
                   </motion.div>
 
                   <motion.form
@@ -11727,12 +11741,26 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   </motion.div>
 
                   <div className="flex items-center gap-1 self-end justify-self-end">
-                    <ChatActionPlusButton
-                      open={actionPanelOpen}
-                      label={conversationImageCopy.attach}
-                      sizePx={VOICE_MODE_PLUS_BUTTON_SIZE_PX}
-                      onToggle={handleActionPanelToggle}
-                    />
+                    {/* The speak trial: no "+", only the switch to typing (owner, 2026-11-25). */}
+                    {trialSpeechLength ? (
+                      <button
+                        type="button"
+                        data-qa="live-demo-trial-keyboard-mode"
+                        aria-label={composerCopy.switchToKeyboardModeLabel}
+                        onClick={handleToggleComposer}
+                        className="inline-flex shrink-0 items-center justify-center self-end rounded-full bg-gray-100 text-gray-600 active:scale-95"
+                        style={{ width: VOICE_MODE_PLUS_BUTTON_SIZE_PX, height: VOICE_MODE_PLUS_BUTTON_SIZE_PX }}
+                      >
+                        <Keyboard size={Math.round(VOICE_MODE_PLUS_BUTTON_SIZE_PX * 0.5)} strokeWidth={2.1} />
+                      </button>
+                    ) : (
+                      <ChatActionPlusButton
+                        open={actionPanelOpen}
+                        label={conversationImageCopy.attach}
+                        sizePx={VOICE_MODE_PLUS_BUTTON_SIZE_PX}
+                        onToggle={handleActionPanelToggle}
+                      />
+                    )}
                   </div>
                 </motion.div>
               )}
@@ -11762,7 +11790,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 languages={normalizedDisplayLanguageOptions}
                 readLanguage={earphoneModeReadLanguage}
                 onSelectReadLanguage={handleEarphoneModeReadLanguageSelect}
-                captureSource={nativeDeviceAudioSupported && !speakerModeOnSpeaker ? sttCaptureSourcePick : undefined}
+                // The speak trial asks nothing about other apps' sound: microphone only.
+                captureSource={nativeDeviceAudioSupported && !speakerModeOnSpeaker && !trialSpeechLength ? sttCaptureSourcePick : undefined}
                 onSelectCaptureSource={setSttCaptureSourcePick}
                 deviceAudioViaBroadcast={isLikelyIOSPlatform()}
                 onConfirm={closeEarphoneModeNotice}

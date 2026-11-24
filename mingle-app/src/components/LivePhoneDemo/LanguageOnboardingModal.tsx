@@ -21,6 +21,7 @@ import {
 import { captureMingleClientEvent } from "@/lib/posthog-client";
 import KoreaVisitCalendar from "@/components/onboarding/korea-visit-calendar";
 import { resolveOnboardingExtraCopy } from "@/i18n/onboarding-extra-copy";
+import { buildClientApiPath } from "@/lib/api-contract";
 import { canAskMicPermission, requestMicPermission, type MicPermissionResult } from "@/lib/mic-permission";
 import {
   BIO_MIN_LENGTH,
@@ -147,8 +148,10 @@ export const FIRST_RUN_ONBOARDING_STEPS: readonly OnboardingStep[] = [
   "language", "nationality", "korea-trip-plan", "korea-visit", "korea-visit-past", "interest-language",
   "gender", "height", "birth-date", "profile-photo", "bio", "discovery-source", "voice-intro",
 ];
-// Sign-up needs a face-verified photo (no "later"), and men also a
-// self-introduction of BIO_MIN_LENGTH+ characters (owner, 2026-11-25).
+// Sign-up needs a face-verified photo (no "later"). Everyone may write a
+// self-introduction; men must (BIO_MIN_LENGTH+ characters), others may skip
+// it (owner, 2026-11-25). It is previewed in other languages as it is written.
+const BIO_PREVIEW_IDLE_MS = 5000;
 // An invite already says where they came from (a friend).
 export const INVITE_ONBOARDING_STEPS: readonly OnboardingStep[] = FIRST_RUN_ONBOARDING_STEPS.filter(
   (entry) => entry !== "discovery-source",
@@ -202,13 +205,18 @@ export default function LanguageOnboardingModal({
   // A wheel like the birth date, starting at a typical height (no keyboard).
   const [heightCm, setHeightCm] = useState<number>(DEFAULT_HEIGHT_CM);
   const [bio, setBio] = useState(() => readPendingBio() ?? "");
+  // The self-introduction shown in other languages (Haiku, @/server/bio-preview):
+  // asked BIO_PREVIEW_IDLE_MS after the typing stops.
+  const [bioPreview, setBioPreview] = useState<{ text: string; translations: Record<string, string> } | null>(null);
+  const [bioPreviewBusy, setBioPreviewBusy] = useState(false);
+  const [bioPreviewLanguage, setBioPreviewLanguage] = useState<string | null>(null);
   // Height is asked of men only: when the gender is asked in this same run the
   // step appears once "male" is picked; asked alone, the caller already knows.
   const stepsFor = useCallback((
     nextGender: ProfileGender | null,
     nextPlan: KoreaVisitPlan | null,
   ) => baseSteps.filter((entry) => (
-    ((entry !== "height" && entry !== "bio") || nextGender === "male" || !baseSteps.includes("gender"))
+    (entry !== "height" || nextGender === "male" || !baseSteps.includes("gender"))
     && (!entry.startsWith("korea-") || koreanAnswer === "no")
     && (entry !== "korea-visit" || nextPlan === "planned")
     && (entry !== "korea-visit-past" || nextPlan === "visited")
@@ -350,6 +358,43 @@ export default function LanguageOnboardingModal({
     return partitionLanguageSelectorItemsByPriority(sortByBrowseOrder(visibleItems));
   }, [interestQuery, languageItems, sortByBrowseOrder]);
 
+  // Own language (most likely what it is written in), the 관심 언어, then
+  // English, Korean, Chinese, Japanese: at most six.
+  const bioPreviewLanguages = useMemo(() => {
+    const codes = [ownLanguageCode, interestCode ? canonicalizeSttLanguageCode(interestCode) : "", "en", "ko", "zh-CN", "ja"]
+      .filter((code): code is string => Boolean(code));
+    return [...new Set(codes)].slice(0, 6);
+  }, [interestCode, ownLanguageCode]);
+  useEffect(() => {
+    if (step !== "bio") return;
+    const text = bio.trim();
+    if (!text || bioLength(text) < 2 || bioPreview?.text === text) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setBioPreviewBusy(true);
+      void fetch(buildClientApiPath("/profile/bio-preview"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, languages: bioPreviewLanguages }),
+        signal: controller.signal,
+      })
+        .then(async (response) => {
+          if (!response.ok) return;
+          const data = await response.json() as { translations?: Record<string, string> };
+          if (data.translations) setBioPreview({ text, translations: data.translations });
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (!controller.signal.aborted) setBioPreviewBusy(false);
+        });
+    }, BIO_PREVIEW_IDLE_MS);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [bio, bioPreview?.text, bioPreviewLanguages, step]);
+  const bioPreviewFresh = bioPreview !== null && bioPreview.text === bio.trim();
+
   const handleStepBack = useCallback(() => {
     if (isConfirming) return;
     setStep((currentStep) => steps[Math.max(0, steps.indexOf(currentStep) - 1)] ?? firstStep);
@@ -448,7 +493,8 @@ export default function LanguageOnboardingModal({
       : target === "korea-visit" ? Boolean(koreaVisit.start)
       : target === "korea-visit-past" ? visitedAgo !== null
       : target === "profile-photo" ? Boolean(photoDataUrl) && faceVerified
-      : target === "bio" ? bioLength(bio) >= BIO_MIN_LENGTH
+      // Men: at least BIO_MIN_LENGTH characters; others may leave it empty (owner, 2026-11-25).
+      : target === "bio" ? gender !== "male" || bioLength(bio) >= BIO_MIN_LENGTH
       : target === "voice-intro" ? true
       : target === "interest-language" ? Boolean(interestCode)
       : target === "usage-purpose" ? Boolean(usagePurpose)
@@ -904,13 +950,10 @@ export default function LanguageOnboardingModal({
             </div>
           ) : step === "voice-intro" ? (
             <div className="space-y-3 px-6 pb-4 pt-2 text-left">
-              <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
-                {extraCopy.voiceLabel}
-              </p>
+              {/* Title only (owner, 2026-11-25): no label, no paragraph. */}
               <h2 id={titleId} className="whitespace-pre-line text-[1.75rem] font-extrabold leading-[1.25] tracking-[-0.03em] text-slate-950">
                 {extraCopy.voiceTitle}
               </h2>
-              <p className="text-[0.98rem] leading-relaxed text-slate-500">{extraCopy.voiceDescription}</p>
             </div>
           ) : step === "gender" ? (
             <div className="space-y-2 px-6 pb-4 pt-0 text-center">
@@ -947,7 +990,27 @@ export default function LanguageOnboardingModal({
               <h2 id={titleId} className="text-[1.6rem] font-extrabold leading-tight tracking-[-0.02em] text-slate-950">
                 {extraCopy.bioTitle}
               </h2>
-              <p className="text-[0.92rem] leading-snug text-slate-500">{extraCopy.bioDescription}</p>
+              <p className="text-[0.92rem] leading-snug text-slate-500">
+                {gender === "male" ? extraCopy.bioDescription : extraCopy.bioDescriptionOptional}
+              </p>
+              {gender !== "male" ? (
+                <button
+                  type="button"
+                  data-qa="onboarding-bio-skip"
+                  disabled={isConfirming}
+                  onClick={() => {
+                    setBio("");
+                    if (isLastStep) {
+                      void handleFinalConfirm();
+                      return;
+                    }
+                    goToStep(steps[stepIndex + 1]);
+                  }}
+                  className="pt-0.5 text-[0.85rem] font-medium text-slate-500 underline underline-offset-4"
+                >
+                  {extraCopy.photoSkip}
+                </button>
+              ) : null}
             </div>
           ) : step === "birth-date" ? (
             <div className="space-y-2 px-6 pb-4 pt-0 text-center">
@@ -1279,12 +1342,48 @@ export default function LanguageOnboardingModal({
               placeholder={extraCopy.bioPlaceholder}
               className="w-full resize-none rounded-[18px] border border-[#e6dfd2] bg-white px-4 py-3.5 text-[1rem] leading-relaxed text-slate-900 shadow-[0_8px_24px_rgba(15,23,42,0.05)] outline-none placeholder:text-slate-400 focus:border-amber-400"
             />
-            <p
-              data-qa="onboarding-bio-count"
-              className={`mt-2 text-right text-[0.85rem] font-semibold tabular-nums ${bioLength(bio) >= BIO_MIN_LENGTH ? "text-emerald-600" : "text-slate-400"}`}
-            >
-              {extraCopy.bioCount.replace("{count}", String(Math.min(bioLength(bio), BIO_MIN_LENGTH)))}
-            </p>
+            {gender === "male" ? (
+              <p
+                data-qa="onboarding-bio-count"
+                className={`mt-2 text-right text-[0.85rem] font-semibold tabular-nums ${bioLength(bio) >= BIO_MIN_LENGTH ? "text-emerald-600" : "text-slate-400"}`}
+              >
+                {extraCopy.bioCount.replace("{count}", String(Math.min(bioLength(bio), BIO_MIN_LENGTH)))}
+              </p>
+            ) : null}
+            {/* The flags: tap one to read the introduction in that language. */}
+            <div data-qa="onboarding-bio-languages" className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setBioPreviewLanguage(null)}
+                className={`h-9 rounded-full border px-3 text-[0.85rem] font-semibold ${bioPreviewLanguage === null || !bioPreviewFresh ? "border-amber-500 bg-amber-50 text-slate-900" : "border-[#e6dfd2] bg-white text-slate-600"}`}
+              >
+                {extraCopy.bioOriginal}
+              </button>
+              {bioPreviewLanguages.map((code) => {
+                const ready = bioPreviewFresh && Boolean(bioPreview?.translations[code]);
+                return (
+                  <button
+                    key={code}
+                    type="button"
+                    data-qa={`onboarding-bio-flag-${code}`}
+                    disabled={!ready}
+                    aria-pressed={bioPreviewLanguage === code}
+                    onClick={() => setBioPreviewLanguage(code)}
+                    className={`flex h-9 w-11 items-center justify-center rounded-full border transition disabled:opacity-30 ${bioPreviewLanguage === code && ready ? "border-amber-500 bg-amber-50" : "border-[#e6dfd2] bg-white"}`}
+                  >
+                    <LanguageFlag language={code} className="text-[1.3rem] leading-none" />
+                  </button>
+                );
+              })}
+              {bioPreviewBusy ? <Loader2 size={16} className="animate-spin text-slate-400" aria-label={extraCopy.bioTranslating} /> : null}
+            </div>
+            {bioPreviewFresh && bioPreviewLanguage && bioPreview?.translations[bioPreviewLanguage] ? (
+              <p data-qa="onboarding-bio-translation" className="mt-3 whitespace-pre-line rounded-[18px] bg-slate-100 px-4 py-3 text-[0.98rem] leading-relaxed text-slate-800">
+                {bioPreview.translations[bioPreviewLanguage]}
+              </p>
+            ) : (
+              <p className="mt-3 text-[0.8rem] text-slate-400">{bioPreviewBusy ? extraCopy.bioTranslating : extraCopy.bioTranslateHint}</p>
+            )}
           </div>
         ) : step === "birth-date" ? (
           <div
