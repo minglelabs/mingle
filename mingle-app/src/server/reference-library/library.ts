@@ -203,6 +203,8 @@ export async function claimReferencePhoto(args: {
   /** Skip photos that should not be used now (e.g. the wrong season, direction.ts). */
   skip?: (item: ReferencePhoto) => boolean
 }): Promise<ReferencePhoto | null> {
+  // Photos whose use never went out are free again before picking.
+  if (!args.id) await releaseAbandonedReferences()
   return updateLibrary((items) => {
     const fits = (item: ReferencePhoto) => !item.usedBy
       && !(args.skip && !args.id && args.skip(item))
@@ -226,6 +228,51 @@ export async function markReferenceImage(id: string, imageKey: string): Promise<
     items: items.map((item) => (item.id === id && item.usedBy ? { ...item, usedBy: { ...item.usedBy, imageKey } } : item)),
     result: null,
   }))
+}
+
+/**
+ * Frees library photos whose use never went out (staff, 2026-11-25): a post
+ * deleted before it was published, or whose photo was redrawn (no post holds
+ * the drawn photo any more), an account deleted, and an account whose
+ * profile photo was redrawn the usual way (its spec no longer the library's).
+ * A post photo only counts once recorded (markReferenceImage) and ten minutes
+ * old, so a drawing still being stored is never freed. Never throws.
+ */
+export async function releaseAbandonedReferences(now: Date = new Date()): Promise<number> {
+  try {
+    const items = await listReferencePhotos()
+    const settled = (at: string) => now.getTime() - Date.parse(at) > 10 * 60_000
+    const postUses = items.filter((item) => item.usedBy?.kind === 'post' && item.usedBy.imageKey && settled(item.usedBy.at))
+    const avatarUses = items.filter((item) => item.usedBy?.kind === 'avatar' && item.usedBy.userId !== 'pending' && settled(item.usedBy.at))
+    if (!postUses.length && !avatarUses.length) return 0
+    const [rows, users] = await Promise.all([
+      postUses.length
+        ? prisma.operatorPostReserve.findMany({ where: { imageObjectKey: { in: postUses.map((item) => item.usedBy!.imageKey!) } }, select: { imageObjectKey: true, state: true } })
+        : [],
+      avatarUses.length
+        ? prisma.user.findMany({ where: { id: { in: avatarUses.map((item) => item.usedBy!.userId) }, isDeleted: false }, select: { id: true, operatorAccount: { select: { avatarSpec: true } } } })
+        : [],
+    ])
+    const liveKeys = new Set(rows.filter((row) => row.state !== 'cancelled').map((row) => row.imageObjectKey))
+    const fromLibrary = (spec: unknown) => {
+      const attributes = spec && typeof spec === 'object' ? (spec as { attributes?: { source?: unknown } }).attributes : undefined
+      return attributes?.source === 'reference_library'
+    }
+    const liveUsers = new Set(users.filter((user) => fromLibrary(user.operatorAccount?.avatarSpec)).map((user) => user.id))
+    const abandoned = new Set([
+      ...postUses.filter((item) => !liveKeys.has(item.usedBy!.imageKey!)).map((item) => item.id),
+      ...avatarUses.filter((item) => !liveUsers.has(item.usedBy!.userId)).map((item) => item.id),
+    ])
+    if (!abandoned.size) return 0
+    await updateLibrary((current) => ({
+      items: current.map((item) => (abandoned.has(item.id) ? { ...item, usedBy: null } : item)),
+      result: null,
+    }))
+    return abandoned.size
+  } catch (error) {
+    console.warn('[reference-library] release_abandoned_failed', { error: error instanceof Error ? error.name : 'unknown' })
+    return 0
+  }
 }
 
 /** Puts a claimed photo back when the drawing it was claimed for failed. */
