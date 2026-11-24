@@ -603,8 +603,9 @@ function outfitsFor(options: readonly Option[], gender: 'female' | 'male' | null
 // ─── 4. How it was shot, and where ───────────────────────────────────────────
 
 const SHOOTERS: readonly Option[] = [
-  ['selfie', 5, 'a front-camera selfie held at arm\'s length'], ['friend', 4, 'taken by a friend standing a few steps away'],
-  ['candid', 2.5, 'a candid shot, the subject not posing'], ['timer', 1, 'taken with a timer, the phone propped on something'],
+  // Fewer selfies (staff, 2026-11-25): a selfie cannot be taken from far away.
+  ['selfie', 3, 'a front-camera selfie held at arm\'s length'], ['friend', 5, 'taken by a friend standing a few steps away'],
+  ['candid', 3.5, 'a candid shot, the subject not posing'], ['timer', 1, 'taken with a timer, the phone propped on something'],
   ['group_crop', 1, 'cropped out of a group photo, part of someone else\'s shoulder at the edge'],
 ]
 
@@ -612,9 +613,10 @@ const SHOOTERS: readonly Option[] = [
 const DISTANCES: readonly Option[] = [
   ['extreme_closeup', 1.5, 'very close: the face fills most of the frame, the top of the head or the chin cut off by the edge'],
   ['closeup', 2.5, 'a close-up of the face'], ['shoulders', 3, 'framed from the shoulders up'], ['chest', 2.5, 'framed from the chest up'],
-  ['waist', 2, 'framed from the waist up'], ['knees', 1.2, 'framed from the knees up, taken from a few meters away'],
-  ['full', 1.5, 'a full-body shot, the face small in the frame'],
-  ['far', 1, 'taken from far away: the person small in a wide view of the place, from across the street or the room, zoomed in a little so the background looks compressed'],
+  // Far shots much more often (staff, 2026-11-25: almost every face came out the same size).
+  ['waist', 2, 'framed from the waist up'], ['knees', 2, 'framed from the knees up, taken from a few meters away'],
+  ['full', 3, 'a full-body shot, the face small in the frame'],
+  ['far', 5, 'taken from far away: the person small in a wide view of the place, from across the street or the room, zoomed in a little so the background looks compressed'],
 ]
 /** Distances an arm's length cannot reach. */
 const BEYOND_ARM = new Set(['knees', 'full', 'far'])
