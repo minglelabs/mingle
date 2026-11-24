@@ -10,6 +10,7 @@ import {
   deleteProfileImage,
   putProfileImage,
 } from "@/server/profile-image-storage";
+import { stripImageMetadata } from "@/server/strip-image-metadata";
 import {
   serializeUserProfile,
   userProfileSelect,
@@ -85,13 +86,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "invalid_image_crop" }, { status: 400 });
   }
 
-  const objectKey = `profiles/${userId}/${crypto.randomUUID()}.${extension}`;
+  // Strip EXIF (including GPS), C2PA, IPTC, and XMP metadata by re-encoding
+  // to JPEG through sharp. If decoding or conversion fails, reject as invalid_image.
+  let cleanJpeg: Buffer;
+  try {
+    cleanJpeg = await stripImageMetadata(
+      Buffer.from(await file.arrayBuffer()),
+      { quality: 90, maxDimension: 2048, format: "jpeg" },
+    );
+  } catch {
+    return NextResponse.json({ error: "invalid_image" }, { status: 400 });
+  }
+
+  const objectKey = `profiles/${userId}/${crypto.randomUUID()}.jpg`;
   let imageUrl: string;
   try {
     imageUrl = await putProfileImage({
       objectKey,
-      body: new Uint8Array(await file.arrayBuffer()),
-      contentType,
+      body: new Uint8Array(cleanJpeg),
+      contentType: "image/jpeg",
     });
   } catch (error) {
     if (error instanceof Error && error.message === "profile_image_storage_not_configured") {
