@@ -376,8 +376,11 @@ function ReviewActions({
   publishDisabledReason,
   drawAction,
   inProgress,
+  labels,
 }: {
   busy: Action | null
+  /** Button words other than 게시 / 삭제 / 전체 재제작 (a live account's new profile photo). */
+  labels?: { publish: string; delete: string; regenerate: string }
   /** A job for this card is running; the answers wait until it is done. */
   inProgress?: boolean
   onAction: (action: Action, feedback: string, image?: File | null) => void
@@ -450,18 +453,18 @@ function ReviewActions({
           onClick={() => onAction('publish', feedback)}
         >
           {busy === 'publish' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
-          게시
+          {labels?.publish ?? '게시'}
         </AdminButton>
         <AdminButton variant="danger" disabled={busy !== null || inProgress} onClick={() => onAction('delete', feedback)}>
           {busy === 'delete' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Trash2 className="h-4 w-4" aria-hidden="true" />}
-          삭제
+          {labels?.delete ?? '삭제'}
         </AdminButton>
         <AdminButton
           disabled={busy !== null || inProgress}
           onClick={() => { onAction('regenerate', feedback, image); reset() }}
         >
           {busy === 'regenerate' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
-          전체 재제작
+          {labels?.regenerate ?? '전체 재제작'}
         </AdminButton>
       </div>
       {drawAction ? (
@@ -979,26 +982,38 @@ function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDelete
   const [busy, setBusy] = useState<Action | null>(null)
   const [error, setError] = useState<string | null>(null)
   const bio = useStaffTranslation({ kind: 'profile', id: profile.userId }, profile.bio ?? '', setError)
-  const [drawing, setDrawing] = useState(profile.profileState === 'drawing')
+  // A live account's new profile photo: its own image, so the account's other cards keep the current one.
+  const candidate = profile.candidate
+  const [candidateImage, setCandidateImage] = useState(candidate?.image ?? null)
+  const [drawing, setDrawing] = useState(candidate ? candidate.drawing : profile.profileState === 'drawing')
+  const shownImage = candidate ? candidateImage : image
 
   // Where the pool draws, a new profile photo arrives in the background; ask every 10s.
   useDrawPolling(drawing, async () => {
     const latest = await readReview('profile', profile.userId)
     if (!latest || latest.profileState === 'drawing') return false
     setDrawing(false)
-    if (typeof latest.image === 'string') onImage(latest.image)
+    if (typeof latest.image === 'string') {
+      if (candidate) setCandidateImage(latest.image)
+      else onImage(latest.image)
+    }
     return true
   })
 
   async function handle(action: Action, feedback: string, image?: File | null) {
-    if (action === 'delete' && !window.confirm(`${profile.name ?? profile.handle} 계정과 검토 중인 글을 모두 삭제할까요?`)) return
+    const confirmDelete = candidate
+      ? '새 프사를 버리고 지금 프사를 그대로 둘까요?'
+      : `${profile.name ?? profile.handle} 계정과 검토 중인 글을 모두 삭제할까요?`
+    if (action === 'delete' && !window.confirm(confirmDelete)) return
     setBusy(action)
     setError(null)
     try {
       const result = await sendReview('profile', profile.userId, action, feedback, image)
       if (action === 'delete') onDeleted()
-      else if (action === 'publish') onApproved()
-      else if (result.state === 'drawing') setDrawing(true)
+      else if (action === 'publish') {
+        if (candidate && typeof result.image === 'string') onImage(result.image)
+        onApproved()
+      } else if (result.state === 'drawing') setDrawing(true)
       else if (typeof result.image === 'string') onImage(result.image)
     } catch (caught) {
       setError(ERROR_COPY[(caught as Error).message] ?? '요청하지 못했어요.')
@@ -1018,7 +1033,7 @@ function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDelete
       <div className="mb-2 flex items-center justify-between gap-2">
         {/* Two short lines so the header never breaks a word at phone width ("프로필 보/기"). */}
         <Link href={profileHref(profile.userId, reviewPath)} className="min-w-0 text-xs font-semibold leading-5 text-slate-500">
-          <span className="block truncate">새 계정 · 가입 {formatAt(at)}</span>
+          <span className="block truncate">{candidate ? '프사 변경' : `새 계정 · 가입 ${formatAt(at)}`}</span>
           <span className="block whitespace-nowrap">프로필 보기 ›</span>
         </Link>
         <div className="flex shrink-0 items-center">
@@ -1026,10 +1041,16 @@ function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDelete
           <PinButton kind="profile" id={profile.userId} pinned={pinned} />
         </div>
       </div>
-      {image ? (
+      {candidate ? (
+        <div className="mb-2 flex items-center gap-2 text-xs text-slate-500">
+          <OperatorAvatar image={image} name={profile.name} size={40} />
+          <span>지금 프사 → 아래 새 프사로 바꿀지 검토해 주세요.</span>
+        </div>
+      ) : null}
+      {shownImage ? (
         <div className="relative">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={image} alt="" className="aspect-square max-h-[75svh] w-full rounded-xl bg-slate-100 object-cover" />
+          <img src={shownImage} alt="" className="aspect-square max-h-[75svh] w-full rounded-xl bg-slate-100 object-cover" />
           {profile.primaryLanguages.length ? (
             <div className="absolute bottom-2 left-2 flex gap-1 rounded-full bg-white/90 px-2 py-1 text-2xl leading-none shadow-sm">
               {profile.primaryLanguages.map((code) => <LanguageFlag key={code} language={code} />)}
@@ -1042,7 +1063,7 @@ function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDelete
       <div className="mt-3">
         <div className="flex flex-wrap items-center gap-1.5">
           <h2 className="break-words text-lg font-semibold text-slate-900">{profile.name ?? '(이름 없음)'}</h2>
-          <AdminChip tone="warning">계정 검토 중</AdminChip>
+          <AdminChip tone="warning">{candidate ? '새 프사 검토 중' : '계정 검토 중'}</AdminChip>
         </div>
         <p className="text-sm text-slate-500">@{profile.handle}</p>
         {facts.length ? <p className="mt-1 text-sm text-slate-600">{facts.join(' · ')}</p> : null}
@@ -1057,7 +1078,13 @@ function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDelete
       {profile.profileFeedback ? <p className="mt-2 text-xs text-slate-500">지난 피드백: {profile.profileFeedback}</p> : null}
       {drawing ? <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">새 프로필 사진을 ChatGPT로 그리는 중이에요. 그려서 올라오면 다시 검토할 수 있어요.</p> : null}
       {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}
-      <ReviewActions busy={busy} inProgress={drawing} onAction={handle} publishDisabledReason={drawing ? '새 사진을 그리는 중이에요.' : undefined} />
+      <ReviewActions
+        busy={busy}
+        inProgress={drawing}
+        onAction={handle}
+        publishDisabledReason={drawing ? '새 사진을 그리는 중이에요.' : candidate && !candidateImage ? '새 프사가 아직 없어요.' : undefined}
+        labels={candidate ? { publish: '새 프사로', delete: '버리기', regenerate: '다시 그리기' } : undefined}
+      />
     </AdminCard>
   )
 }
@@ -1094,7 +1121,7 @@ export function ReviewBoard({ items: initial }: { items: ReviewItem[] }) {
                 setApproved((current) => new Set(current).add(userId))
                 remove((other) => other.key === item.key)
               }}
-              onDeleted={() => remove((other) => authorOf(other) === userId)}
+              onDeleted={() => (item.profile.candidate ? remove((other) => other.key === item.key) : remove((other) => authorOf(other) === userId))}
             />
           )
         }

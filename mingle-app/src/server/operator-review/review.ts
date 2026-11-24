@@ -11,6 +11,7 @@ import { drawReservePostImage, type RedrawContext } from '@/server/operator-post
 import { MAX_RESERVE_EXTRA_IMAGES, reserveExtraImages, type ReserveExtraImage } from '@/server/operator-post-reserve/extra-images'
 import { decodePostPhoto } from '@/server/operator-post-reserve/post-photo'
 import { loadExistingReserveTexts, loadReservePersona, PHOTO_REQUESTED, publishReservePostNow } from '@/server/operator-post-reserve/worker'
+import { applyAvatarCandidate, candidateDrawing, discardAvatarCandidate } from '@/server/operators/avatar-candidate'
 
 /**
  * Staff review of operator profiles and their pre-written posts. A profile
@@ -126,8 +127,15 @@ export async function getReviewPost(reserveId: string): Promise<ReviewPost | nul
 
 /** A profile's review state and photo, for its card to poll while a new photo is drawn. */
 export async function getReviewProfileState(userId: string): Promise<{ profileState: string; image: string | null } | null> {
-  const account = await prisma.operatorAccount.findUnique({ where: { userId }, select: { reviewState: true, user: { select: { image: true } } } })
+  const account = await prisma.operatorAccount.findUnique({ where: { userId }, select: { reviewState: true, pendingImage: true, pendingDrawingAt: true, user: { select: { image: true } } } })
   if (!account) return null
+  // A live account's new photo: the card shows the photo waiting for review.
+  if (account.reviewState === 'approved') {
+    if (account.pendingDrawingAt && !candidateDrawing(account.pendingDrawingAt)) {
+      await prisma.operatorAccount.updateMany({ where: { userId, pendingDrawingAt: account.pendingDrawingAt }, data: { pendingDrawingAt: null } })
+    }
+    return { profileState: candidateDrawing(account.pendingDrawingAt) ? 'drawing' : 'pending', image: account.pendingImage }
+  }
   const cutOff = account.reviewState === 'drawing' && (await releaseProfileIfCutOff(userId))
   return { profileState: cutOff ? 'pending' : account.reviewState, image: account.user.image }
 }
@@ -188,6 +196,8 @@ export type ReviewProfile = {
   personaGender: string | null
   profileState: string
   profileFeedback: string | null
+  /** A live account's new profile photo waiting for review (`image` = the current one); null for a new account. */
+  candidate: { image: string | null; drawing: boolean } | null
 }
 
 export type ReviewAuthor = {
@@ -266,7 +276,7 @@ const TIMELINE_SQL = `
   SELECT rank, late, round, "authorAt", "kindOrder", kind, id, at, "userId" FROM (
     SELECT COALESCE(o.review_rank, ${UNRANKED})::bigint AS rank, false AS late, 1::bigint AS round, u.created_at AS "authorAt", 0 AS "kindOrder", 'profile' AS kind, u.id, u.created_at AS at, u.id AS "userId"
     FROM app.app_users u JOIN app.app_operator_accounts o ON o.user_id = u.id
-    WHERE u.is_operator AND NOT u.is_deleted AND o.review_state <> 'approved'
+    WHERE u.is_operator AND NOT u.is_deleted AND (o.review_state <> 'approved' OR o.pending_image IS NOT NULL OR o.pending_drawing_at IS NOT NULL)
     UNION ALL
     SELECT rank, late, round, "authorAt", 1 AS "kindOrder", 'post' AS kind, id, at, "userId" FROM (
       SELECT COALESCE(r.review_rank, ${UNRANKED})::bigint AS rank, r.image_object_key IS NULL AS late,
@@ -328,14 +338,14 @@ export async function listReviewQueue(options: { cursor?: string; now?: Date; us
   const profileIds = page.filter((row) => row.kind === 'profile').map((row) => row.id)
   const postIds = page.filter((row) => row.kind === 'post').map((row) => row.id)
   const [totalProfiles, totalPosts, users, posts] = await Promise.all([
-    prisma.operatorAccount.count({ where: { reviewState: { not: 'approved' }, user: { isOperator: true, isDeleted: false } } }),
+    prisma.operatorAccount.count({ where: { OR: [{ reviewState: { not: 'approved' } }, { pendingImage: { not: null } }, { pendingDrawingAt: { not: null } }], user: { isOperator: true, isDeleted: false } } }),
     prisma.operatorPostReserve.count({ where: { state: { in: REVIEW_POST_STATES }, operatorUser: { isDeleted: false } } }),
     prisma.user.findMany({
       where: { id: { in: profileIds } },
       select: {
         id: true, name: true, handle: true, image: true, bio: true, birthDate: true,
         locationCity: true, locationCountry: true, primaryLanguages: true, interestLanguages: true, interestLanguageLevels: true,
-        operatorAccount: { select: { personaGender: true, reviewState: true, reviewFeedback: true } },
+        operatorAccount: { select: { personaGender: true, reviewState: true, reviewFeedback: true, pendingImage: true, pendingDrawingAt: true } },
       },
     }),
     prisma.operatorPostReserve.findMany({
@@ -372,6 +382,9 @@ export async function listReviewQueue(options: { cursor?: string; now?: Date; us
           personaGender: user.operatorAccount?.personaGender ?? null,
           profileState: user.operatorAccount?.reviewState ?? 'approved',
           profileFeedback: user.operatorAccount?.reviewFeedback ?? null,
+          candidate: user.operatorAccount?.reviewState === 'approved'
+            ? { image: user.operatorAccount.pendingImage, drawing: candidateDrawing(user.operatorAccount.pendingDrawingAt, now) }
+            : null,
         },
       })
     } else {
@@ -399,6 +412,48 @@ export async function listReviewQueue(options: { cursor?: string; now?: Date; us
   }
 }
 
+/**
+ * A live account's profile photo: 재제작 draws a new one for review (also how
+ * the account page sends one), 게시 takes it, 삭제 passes on it. The account
+ * and its current photo are never touched until staff take the new one.
+ */
+async function reviewAvatarCandidate(
+  ctx: AdminContext | null,
+  userId: string,
+  action: ReviewAction,
+  feedback: string | null,
+  reference?: AvatarReference,
+): Promise<ProfileReviewResult> {
+  const account = await prisma.operatorAccount.findUnique({ where: { userId }, select: { pendingImage: true, pendingDrawingAt: true } })
+  const drawing = candidateDrawing(account?.pendingDrawingAt)
+  if (action === 'publish') {
+    if (drawing) return { ok: false, error: 'busy' }
+    const taken = await applyAvatarCandidate(ctx, userId)
+    return taken.ok ? { ok: true, state: 'approved', image: taken.image } : { ok: false, error: 'already_approved' }
+  }
+  if (action === 'delete') {
+    const discarded = await discardAvatarCandidate(ctx, userId)
+    return discarded.ok ? { ok: true, state: 'deleted' } : { ok: false, error: 'already_approved' }
+  }
+  if (action !== 'regenerate') return { ok: false, error: 'already_approved' }
+  if (drawing) return { ok: false, error: 'busy' }
+  if (!canDrawImagesHere()) return { ok: false, error: 'regenerate_failed' }
+  await prisma.operatorAccount.update({ where: { userId }, data: { pendingDrawingAt: new Date(), reviewFeedback: feedback } })
+  runningHere.add(profileJob(userId))
+  void (async () => {
+    try {
+      const drawn = await generateOperatorAvatar(ctx, userId, { feedback, reference, candidate: true })
+      await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'candidate_regenerate', feedback, drawn: drawn.ok } })
+    } catch (error) {
+      console.warn('[operator-review] background_candidate_failed', { userId, error: error instanceof Error ? error.name : 'unknown' })
+    } finally {
+      await prisma.operatorAccount.updateMany({ where: { userId }, data: { pendingDrawingAt: null } }).catch(() => {})
+      runningHere.delete(profileJob(userId))
+    }
+  })()
+  return { ok: true, state: 'drawing' }
+}
+
 export type ProfileReviewResult =
   | { ok: true; state: 'approved' | 'deleted' | 'pending' | 'drawing'; image?: string | null }
   | { ok: false; error: 'not_found' | 'already_approved' | 'busy' | 'regenerate_failed' }
@@ -416,7 +471,7 @@ export async function reviewOperatorProfile(
     select: { reviewState: true, user: { select: { isOperator: true, isDeleted: true } } },
   })
   if (!account || !account.user.isOperator || account.user.isDeleted) return { ok: false, error: 'not_found' }
-  if (account.reviewState === 'approved') return { ok: false, error: 'already_approved' }
+  if (account.reviewState === 'approved') return reviewAvatarCandidate(ctx, userId, action, feedback, options.reference)
 
   if (action === 'publish') {
     await prisma.$transaction([

@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import type { AdminContext } from '@/server/admin/guard'
 import { ageOn } from '@/server/operator-auto-reply/generate'
 import { setOperatorAvatarFromBytes } from '@/server/operators/operator-avatar'
+import { storeAvatarCandidate } from '@/server/operators/avatar-candidate'
 import { chatgptPoolImage, chatgptPoolKey } from '@/server/chatgpt-pool/client'
 import { pickAvatarSpec, seededRandom, type AvatarPersona, type AvatarSpec } from './taxonomy'
 
@@ -240,7 +241,11 @@ export async function planOperatorAvatar(
 export async function generateOperatorAvatar(
   ctx: AdminContext | null,
   userId: string,
-  options: { nonce?: string; now?: Date; fetchImpl?: typeof fetch; feedback?: string | null; reference?: AvatarReference } = {},
+  options: {
+    nonce?: string; now?: Date; fetchImpl?: typeof fetch; feedback?: string | null; reference?: AvatarReference
+    /** A live account: the photo waits for staff review instead of replacing the current one (avatar-candidate.ts). */
+    candidate?: boolean
+  } = {},
 ): Promise<AvatarGenerationResult> {
   try {
     const now = options.now ?? new Date()
@@ -256,6 +261,12 @@ export async function generateOperatorAvatar(
     ].join('\n')
     const image = await requestAvatarImage(prompt, { fetchImpl: options.fetchImpl, reference: options.reference })
     if (!image.ok) return image
+
+    if (options.candidate) {
+      const candidate = await storeAvatarCandidate(userId, image.bytes, spec)
+      if (!candidate.ok) return { ok: false, error: 'image_storage_failed', detail: candidate.error }
+      return { ok: true, image: candidate.image, spec }
+    }
 
     const stored = await setOperatorAvatarFromBytes(ctx, userId, image.bytes, {
       generated: true, category: spec.category, subtype: spec.subtype, model: image.model,
