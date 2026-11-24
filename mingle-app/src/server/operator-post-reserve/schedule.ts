@@ -75,3 +75,18 @@ export function pickBackdatedPublishAt(args: { createdAt: Date; now: Date; perso
   }
   return new Date(Math.round(pick))
 }
+
+/** How far ahead a post staff schedule from review goes out, when they leave the time to us. */
+export const SCHEDULE_MIN_AHEAD_MS = 2 * HOUR_MS
+export const SCHEDULE_MAX_AHEAD_MS = 30 * HOUR_MS
+
+/**
+ * A publish time for a post staff schedule in review without naming one: 2 to
+ * 30 hours ahead, out of the persona country's night, on a whole minute.
+ */
+export function pickScheduledPublishAt(args: { now: Date; personaCountry: string | null | undefined; random?: () => number }): Date {
+  const random = args.random ?? Math.random
+  const ahead = SCHEDULE_MIN_AHEAD_MS + random() * (SCHEDULE_MAX_AHEAD_MS - SCHEDULE_MIN_AHEAD_MS)
+  const at = avoidLocalNight(new Date(args.now.getTime() + ahead), utcOffsetHoursOf(args.personaCountry), random)
+  return new Date(Math.round(at.getTime() / 60_000) * 60_000)
+}

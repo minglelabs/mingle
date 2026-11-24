@@ -3,7 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Clock, ImageIcon, ImagePlus, Loader2, MessageSquarePlus, Pencil, Pin, PinOff, RefreshCw, Send, Sparkles, Trash2, X } from 'lucide-react'
+import { CalendarClock, Clock, ImageIcon, ImagePlus, Loader2, MessageSquarePlus, Pencil, Pin, PinOff, RefreshCw, Send, Sparkles, Trash2, X } from 'lucide-react'
 import type { ReviewItem, ReviewPost, ReviewProfile } from '@/server/operator-review/review'
 import { AdminButton, AdminCard, AdminChip, adminTextareaClassName } from '../../_components/ui'
 import LanguageFlag from '@/components/language-flag'
@@ -39,6 +39,7 @@ const ERROR_COPY: Record<string, string> = {
   invalid_photos: '사진 목록이 올바르지 않아요. 새로고침 후 다시 해 주세요.',
   invalid_text: '글은 1~1000자로 써 주세요.',
   invalid_time: '지금보다 늦은 시각으로는 정할 수 없어요.',
+  invalid_schedule_time: '예약은 지금부터 1분 뒤 ~ 30일 안으로 정해 주세요.',
   invalid_language: '언어를 다시 골라 주세요.',
 }
 
@@ -271,6 +272,92 @@ function PublishAtEditor({ post, writtenAt, onSaved, disabled }: { post: ReviewP
 }
 
 /** How often and how long a card asks whether the pool has drawn its photo yet. */
+/**
+ * 예약 게시: a post in review goes out by itself later. 예약 picks a time 2-30
+ * hours ahead (server side); a scheduled post shows its time, which staff can
+ * change or cancel (back to review).
+ */
+function ScheduleBox({ post, onSaved, disabledReason, disabled }: {
+  post: ReviewPost
+  onSaved: (post: ReviewPost) => void
+  disabledReason?: string
+  disabled: boolean
+}) {
+  const [value, setValue] = useState(post.scheduledAt ? toLocalInput(new Date(post.scheduledAt)) : '')
+  const [saving, setSaving] = useState<'schedule' | 'time' | 'cancel' | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  async function send(kind: 'schedule' | 'time' | 'cancel') {
+    setSaving(kind)
+    setError(null)
+    try {
+      const at = kind === 'time' ? new Date(value).toISOString() : undefined
+      const response = await fetch('/admin/operators/api/review/schedule', {
+        method: kind === 'cancel' ? 'DELETE' : 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: post.id, ...(at ? { at } : {}) }),
+      })
+      const payload = await response.json().catch(() => ({})) as { post?: ReviewPost; error?: string }
+      if (!response.ok || !payload.post) throw new Error(payload.error ?? 'request_failed')
+      onSaved(payload.post)
+      setValue(payload.post.scheduledAt ? toLocalInput(new Date(payload.post.scheduledAt)) : '')
+    } catch (caught) {
+      const code = (caught as Error).message
+      setError(ERROR_COPY[code === 'invalid_time' ? 'invalid_schedule_time' : code] ?? '예약하지 못했어요.')
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  if (!post.scheduledAt) {
+    return (
+      <div className="mt-2">
+        <AdminButton block disabled={disabled || Boolean(disabledReason) || saving !== null} title={disabledReason} onClick={() => void send('schedule')}>
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <CalendarClock className="h-4 w-4" aria-hidden="true" />}
+          예약 게시 (시각은 2~30시간 뒤 무작위, 나중에 수정 가능)
+        </AdminButton>
+        {error ? <p className="mt-1 text-xs text-rose-700">{error}</p> : null}
+      </div>
+    )
+  }
+  const parsed = value ? new Date(value) : null
+  const changed = Boolean(parsed && !Number.isNaN(parsed.getTime()) && parsed.getTime() !== new Date(post.scheduledAt).getTime())
+  return (
+    <div className="mt-3 space-y-2 rounded-xl border border-sky-200 bg-sky-50 p-3">
+      <p className="inline-flex items-center gap-1 text-sm font-semibold text-sky-900">
+        <CalendarClock className="h-4 w-4" aria-hidden="true" />
+        {formatAt(post.scheduledAt)}에 게시 예약됨
+      </p>
+      <div className="flex gap-2">
+        <input
+          type="datetime-local"
+          value={value}
+          min={toLocalInput(new Date())}
+          onChange={(event) => setValue(event.target.value)}
+          disabled={saving !== null}
+          className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+        />
+        <AdminButton variant="primary" disabled={saving !== null || !changed} onClick={() => void send('time')}>
+          {saving === 'time' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+          시각 저장
+        </AdminButton>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <AdminButton disabled={saving !== null} onClick={() => void send('schedule')}>
+          {saving === 'schedule' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
+          다른 시각 뽑기
+        </AdminButton>
+        <AdminButton disabled={saving !== null} onClick={() => void send('cancel')}>
+          {saving === 'cancel' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <X className="h-4 w-4" aria-hidden="true" />}
+          예약 취소
+        </AdminButton>
+      </div>
+      <p className="text-xs text-sky-800">예약 중에는 글·사진을 고칠 수 없어요. 고치려면 예약을 취소하세요.</p>
+      {error ? <p className="text-xs text-rose-700">{error}</p> : null}
+    </div>
+  )
+}
+
 const DRAW_POLL_MS = 10_000
 const DRAW_POLL_LIMIT_MS = 15 * 60_000
 
@@ -772,6 +859,7 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
       setSavingText(false)
     }
   }
+  const publishBlocked = !profileApproved ? '계정을 먼저 게시해야 글을 올릴 수 있어요.' : post.photoDescription && !post.imageObjectKey ? '사진을 그린 뒤에 게시할 수 있어요.' : undefined
   const photos: ReviewPhoto[] = post.imageObjectKey
     ? [{ objectKey: post.imageObjectKey, width: post.imageWidth, height: post.imageHeight }, ...post.extraImages]
     : []
@@ -822,7 +910,7 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
         <button
           type="button"
           onClick={startEditing}
-          disabled={editingText || busy !== null}
+          disabled={editingText || busy !== null || Boolean(post.scheduledAt)}
           className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100 disabled:opacity-40"
         >
           <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
@@ -834,7 +922,7 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
         {post.language ? <AdminChip tone="accent">{koreanLanguageName(post.language)}로 씀</AdminChip> : null}
         {post.topic ? <AdminChip>{post.topic}</AdminChip> : null}
         {post.photoKind ? <AdminChip tone="warning">사진: {PHOTO_KIND[post.photoKind] ?? post.photoKind}</AdminChip> : null}
-        <PublishAtEditor post={post} writtenAt={at} onSaved={setPost} disabled={busy !== null} />
+        {post.scheduledAt ? null : <PublishAtEditor post={post} writtenAt={at} onSaved={setPost} disabled={busy !== null} />}
       </div>
       {editingText ? (
         <div className="space-y-2">
@@ -931,7 +1019,7 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
           <ReviewPhotos photos={photos} />
           <PhotoRedoOverlay
             drawing={post.photoDrawing}
-            disabled={busy !== null || working}
+            disabled={busy !== null || working || Boolean(post.scheduledAt)}
             onRedo={(feedback, image) => void handle('redraw_photo', feedback, image)}
           />
         </div>
@@ -945,7 +1033,7 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
           <p className="text-sm leading-6 text-slate-700">{post.photoDescription}</p>
         </div>
       ) : null}
-      {editingPhotos ? null : (
+      {editingPhotos || post.scheduledAt ? null : (
         <button type="button" onClick={() => setEditingPhotos(true)} className="mt-2 text-sm font-semibold text-sky-700">
           {post.imageObjectKey ? '사진 편집 (바꾸기·추가·순서)' : '사진 직접 올리기'}
         </button>
@@ -958,13 +1046,20 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
       ) : null}
       {post.reviewFeedback ? <p className="mt-2 text-xs text-slate-500">지난 피드백: {post.reviewFeedback}</p> : null}
       {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}
-      <ReviewActions
-        busy={busy}
-        inProgress={working}
-        onAction={handle}
-        publishDisabledReason={!profileApproved ? '계정을 먼저 게시해야 글을 올릴 수 있어요.' : post.photoDescription && !post.imageObjectKey ? '사진을 그린 뒤에 게시할 수 있어요.' : undefined}
-        drawAction={post.photoDescription && !post.imageObjectKey ? { requested: post.photoRequested, drawing: post.photoDrawing } : undefined}
-      />
+      {post.scheduledAt ? (
+        <ScheduleBox post={post} onSaved={setPost} disabled={busy !== null} />
+      ) : (
+        <>
+          <ReviewActions
+            busy={busy}
+            inProgress={working}
+            onAction={handle}
+            publishDisabledReason={publishBlocked}
+            drawAction={post.photoDescription && !post.imageObjectKey ? { requested: post.photoRequested, drawing: post.photoDrawing } : undefined}
+          />
+          <ScheduleBox post={post} onSaved={setPost} disabled={busy !== null || working} disabledReason={publishBlocked} />
+        </>
+      )}
     </AdminCard>
   )
 }

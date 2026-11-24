@@ -10,6 +10,7 @@ import { generateReservePosts, isKoreaCountry, pickReserveTopics, reservePosterP
 import { drawReservePostImage, type RedrawContext } from '@/server/operator-post-reserve/post-image'
 import { MAX_RESERVE_EXTRA_IMAGES, reserveExtraImages, type ReserveExtraImage } from '@/server/operator-post-reserve/extra-images'
 import { decodePostPhoto } from '@/server/operator-post-reserve/post-photo'
+import { pickScheduledPublishAt } from '@/server/operator-post-reserve/schedule'
 import { loadExistingReserveTexts, loadReservePersona, PHOTO_REQUESTED, publishReservePostNow } from '@/server/operator-post-reserve/worker'
 import { applyAvatarCandidate, candidateDrawing, discardAvatarCandidate } from '@/server/operators/avatar-candidate'
 
@@ -174,6 +175,8 @@ export type ReviewPost = {
   photoRequested: boolean
   /** The pool is drawing the photo right now (the card polls). */
   photoDrawing: boolean
+  /** Scheduled by staff: the post goes out by itself at this time. */
+  scheduledAt: string | null
   /** 재제작 is rewriting the text right now (the card polls; the photo follows). */
   rewriting: boolean
   /** The pool's last try at the photo failed; drawing it again is allowed. */
@@ -247,8 +250,9 @@ function toReviewPost(row: {
     photoDrawing: row.state === 'regenerating' && row.error === PHOTO_DRAWING,
     rewriting: row.state === 'regenerating' && row.error !== PHOTO_DRAWING,
     photoDrawFailed: !row.imageObjectKey && row.error === PHOTO_DRAW_FAILED,
-    // In review, release_at is never a schedule: it only holds the time staff set.
-    publishAt: row.releaseAt ? row.releaseAt.toISOString() : null,
+    // In review, release_at only holds the (past) time staff set; once scheduled, it is when the post goes out.
+    publishAt: row.state !== 'scheduled' && row.releaseAt ? row.releaseAt.toISOString() : null,
+    scheduledAt: row.state === 'scheduled' && row.releaseAt ? row.releaseAt.toISOString() : null,
   }
 }
 
@@ -284,7 +288,7 @@ const TIMELINE_SQL = `
         u.created_at AS "authorAt", r.id, r.created_at AS at, r.state, u.is_deleted, r.operator_user_id AS "userId"
       FROM app.app_operator_post_reserve r JOIN app.app_users u ON u.id = r.operator_user_id
     ) p
-    WHERE state IN ('review', 'regenerating') AND NOT is_deleted
+    WHERE state IN ('review', 'regenerating', 'scheduled') AND NOT is_deleted
   ) t`
 
 /** Cursor = `<rank>|<0|1 late>|<round>|<author iso time>|<0 profile, 1 post>|<id>` of the last item shown. */
@@ -339,7 +343,7 @@ export async function listReviewQueue(options: { cursor?: string; now?: Date; us
   const postIds = page.filter((row) => row.kind === 'post').map((row) => row.id)
   const [totalProfiles, totalPosts, users, posts] = await Promise.all([
     prisma.operatorAccount.count({ where: { OR: [{ reviewState: { not: 'approved' } }, { pendingImage: { not: null } }, { pendingDrawingAt: { not: null } }], user: { isOperator: true, isDeleted: false } } }),
-    prisma.operatorPostReserve.count({ where: { state: { in: REVIEW_POST_STATES }, operatorUser: { isDeleted: false } } }),
+    prisma.operatorPostReserve.count({ where: { state: { in: [...REVIEW_POST_STATES, 'scheduled'] }, operatorUser: { isDeleted: false } } }),
     prisma.user.findMany({
       where: { id: { in: profileIds } },
       select: {
@@ -932,4 +936,45 @@ export async function draftReviewPostText(
     console.warn('[operator-review] draft_text_failed', { id, error: error instanceof Error ? error.message.slice(0, 60) : 'unknown' })
     return { ok: false, error: 'regenerate_failed' }
   }
+}
+
+export type ScheduleResult =
+  | { ok: true; post: ReviewPost }
+  | { ok: false; error: 'not_found' | 'busy' | 'profile_pending' | 'photo_pending' | 'invalid_time' }
+
+/** A scheduled time must be at least a minute ahead and at most this far. */
+export const SCHEDULE_LATEST_MS = 30 * 24 * 60 * 60_000
+
+/**
+ * 예약 게시: the post goes out by itself at `at` (the worker publishes it).
+ * Without `at`, a time 2-30 hours ahead outside the persona's night. A
+ * scheduled post takes a new time the same way.
+ */
+export async function scheduleReviewPost(ctx: AdminContext | null, id: string, at: Date | null, now: Date = new Date()): Promise<ScheduleResult> {
+  const row = await prisma.operatorPostReserve.findUnique({
+    where: { id },
+    select: { state: true, imagePrompt: true, imageObjectKey: true, operatorUserId: true, operatorUser: { select: { isActive: true, operatorAccount: { select: { personaCountry: true } } } } },
+  })
+  if (!row) return { ok: false, error: 'not_found' }
+  if (row.state === 'regenerating') return { ok: false, error: 'busy' }
+  if (row.state !== 'review' && row.state !== 'scheduled') return { ok: false, error: 'not_found' }
+  if (!row.operatorUser.isActive) return { ok: false, error: 'profile_pending' }
+  if (row.imagePrompt && !row.imageObjectKey) return { ok: false, error: 'photo_pending' }
+  const when = at ?? pickScheduledPublishAt({ now, personaCountry: row.operatorUser.operatorAccount?.personaCountry })
+  if (Number.isNaN(when.getTime()) || when.getTime() < now.getTime() + 60_000 || when.getTime() > now.getTime() + SCHEDULE_LATEST_MS) return { ok: false, error: 'invalid_time' }
+  const updated = await prisma.operatorPostReserve.updateMany({ where: { id, state: { in: ['review', 'scheduled'] } }, data: { state: 'scheduled', releaseAt: when, error: null } })
+  if (updated.count === 0) return { ok: false, error: 'busy' }
+  await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: row.operatorUserId, targetType: 'reserve', targetId: id, metadata: { decision: 'schedule', at: when.toISOString() } })
+  const post = await getReviewPost(id)
+  return post ? { ok: true, post } : { ok: false, error: 'not_found' }
+}
+
+/** 예약 취소: back to review, with no time set. */
+export async function unscheduleReviewPost(ctx: AdminContext | null, id: string): Promise<ScheduleResult> {
+  const row = await prisma.operatorPostReserve.findUnique({ where: { id }, select: { operatorUserId: true } })
+  const updated = await prisma.operatorPostReserve.updateMany({ where: { id, state: 'scheduled' }, data: { state: 'review', releaseAt: null } })
+  if (!row || updated.count === 0) return { ok: false, error: 'not_found' }
+  await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: row.operatorUserId, targetType: 'reserve', targetId: id, metadata: { decision: 'unschedule' } })
+  const post = await getReviewPost(id)
+  return post ? { ok: true, post } : { ok: false, error: 'not_found' }
 }

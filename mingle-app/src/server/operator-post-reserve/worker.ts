@@ -77,13 +77,13 @@ export function reserveClientPostId(reserveId: string): string {
   return `rs-${reserveId}`
 }
 
-async function claimDueReservePosts(now: Date, limit: number): Promise<ClaimedReservePost[]> {
+async function claimDueReservePosts(now: Date, limit: number, from: 'queued' | 'scheduled' = 'queued'): Promise<ClaimedReservePost[]> {
   return prisma.$queryRaw<ClaimedReservePost[]>`
     UPDATE app.app_operator_post_reserve
     SET state = 'publishing', attempts = attempts + 1, updated_at = ${sqlUtcTimestamp(now)}
     WHERE id IN (
       SELECT id FROM app.app_operator_post_reserve
-      WHERE state = 'queued' AND release_at IS NOT NULL AND release_at <= ${sqlUtcTimestamp(now)}
+      WHERE state = ${from} AND release_at IS NOT NULL AND release_at <= ${sqlUtcTimestamp(now)}
       ORDER BY release_at ASC, id ASC
       LIMIT ${limit}
       FOR UPDATE SKIP LOCKED
@@ -117,7 +117,11 @@ async function backdateReviewPost(postId: string, row: ClaimedReservePost, now: 
   }
 }
 
-async function releaseOne(row: ClaimedReservePost, now: Date, origin: 'queued' | 'review' = 'queued'): Promise<boolean> {
+/**
+ * `scheduled`: staff scheduled it in review; it goes out at its time (no
+ * backdating) and returns to review, unscheduled, when publishing fails.
+ */
+async function releaseOne(row: ClaimedReservePost, now: Date, origin: 'queued' | 'review' | 'scheduled' = 'queued'): Promise<boolean> {
   const settle = (data: Prisma.OperatorPostReserveUpdateManyMutationInput) =>
     prisma.operatorPostReserve.updateMany({ where: { id: row.id, state: 'publishing', attempts: row.attempts }, data })
   try {
@@ -134,7 +138,7 @@ async function releaseOne(row: ClaimedReservePost, now: Date, origin: 'queued' |
       ? { objectKey: row.imageObjectKey, width: row.imageWidth ?? 0, height: row.imageHeight ?? 0 }
       : row.imagePrompt ? await drawReservePostImage(row.operatorUserId, row.imagePrompt) : null
     if (row.imagePrompt && !image) {
-      await settle({ state: 'review', error: PHOTO_PENDING, releaseAt: row.chosenAt ?? null })
+      await settle({ state: 'review', error: PHOTO_PENDING, releaseAt: origin === 'scheduled' ? null : row.chosenAt ?? null })
       return false
     }
     const result = await publishPost({
@@ -171,8 +175,8 @@ async function releaseOne(row: ClaimedReservePost, now: Date, origin: 'queued' |
     return true
   } catch (error) {
     try {
-      await settle(origin === 'review'
-        ? { state: 'review', error: describeError(error), releaseAt: row.chosenAt ?? null }
+      await settle(origin === 'review' || origin === 'scheduled'
+        ? { state: 'review', error: describeError(error), releaseAt: origin === 'scheduled' ? null : row.chosenAt ?? null }
         : row.attempts >= RESERVE_MAX_ATTEMPTS
         ? { state: 'failed', error: describeError(error), releaseAt: null }
         // Back in line; retried a few minutes later.
@@ -353,6 +357,11 @@ export async function runOperatorPostReserve(options: { now?: () => Date; random
   const random = options.random ?? Math.random
   const settings = await getPostReserveSettings()
   const summary: ReserveRunSummary = { enabled: settings.enabled, released: 0, releaseFailed: 0, scheduled: 0, refilledAccounts: 0, generated: 0 }
+  // Posts staff scheduled in review go out at their time, whether or not the automatic queue is on.
+  for (const row of await claimDueReservePosts(now(), RESERVE_MAX_RELEASES_PER_RUN, 'scheduled')) {
+    if (await releaseOne(row, now(), 'scheduled')) summary.released += 1
+    else summary.releaseFailed += 1
+  }
   if (!settings.enabled) return summary
 
   await requeueStale(now())
