@@ -106,16 +106,28 @@ const PLACE_MARKER = /^\[at: ([^\]]{1,120})\]\s*/
  * knows who is in it, and, for a photo taken away from the author's city (a
  * trip to Korea), the place as `[at: …]`.
  */
+/**
+ * A self-intro photo post that shows the account's own profile photo (staff
+ * 2026-11-24: people often post their profile photo with a two-line intro).
+ * The description keeps a drawable fallback after the marker, for an account
+ * whose profile photo shows no face and for a redraw.
+ */
+export const PROFILE_PHOTO_MARKER = '(the profile photo) '
+
+export const INTRO_PHOTO_SETUP = 'their best, most flattering recent photo of themself, the one they would pick to introduce themself: clear, well lit, the face plainly visible, looking good'
+
 export function encodePostPhoto(kind: PostPhotoKind, description: string, place: string | null = null): string {
   const at = place ? `[at: ${place.replace(/[\[\]]/g, '').trim()}] ` : ''
   return kind === 'scene' ? `${at}${description}` : `[${kind}] ${at}${description}`
 }
 
 /** A stored description split into kind, place and text. Untagged (older) descriptions are scenes in the author's city. */
-export function decodePostPhoto(stored: string): { kind: PostPhotoKind; description: string; place: string | null } {
+export function decodePostPhoto(stored: string): { kind: PostPhotoKind; description: string; place: string | null; profilePhoto: boolean } {
   const match = MARKER.exec(stored)
   const kind = match ? match[1] as PostPhotoKind : 'scene'
   const rest = match ? stored.slice(match[0].length) : stored
   const at = PLACE_MARKER.exec(rest)
-  return { kind, description: at ? rest.slice(at[0].length) : rest, place: at ? at[1].trim() : null }
+  const text = at ? rest.slice(at[0].length) : rest
+  const profilePhoto = text.startsWith(PROFILE_PHOTO_MARKER)
+  return { kind, description: profilePhoto ? text.slice(PROFILE_PHOTO_MARKER.length) : text, place: at ? at[1].trim() : null, profilePhoto }
 }

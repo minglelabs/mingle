@@ -319,8 +319,25 @@ export async function withRedrawContext(
 }
 
 /** Draws and stores the photo. Null when it cannot be drawn or stored; never throws. */
+/**
+ * A photo intro that shows the profile photo: the profile photo itself, when
+ * it shows the face. Null otherwise (the post then gets a drawn photo).
+ */
+async function profilePhotoForPost(operatorUserId: string): Promise<ReservePostImage | null> {
+  const user = await prisma.user.findUnique({ where: { id: operatorUserId }, select: { image: true, operatorAccount: { select: { avatarSpec: true } } } })
+  const spec = user?.operatorAccount?.avatarSpec as Partial<AvatarSpec> | null | undefined
+  if (!user?.image || spec?.category !== 'face') return null
+  const photo = await fetchReference(user.image)
+  return photo ? storeReservePostImage(operatorUserId, photo.bytes) : null
+}
+
 export async function drawReservePostImage(operatorUserId: string, description: string, staffReference?: AvatarReference, context?: RedrawContext): Promise<ReservePostImage | null> {
   try {
+    // A redo always draws a new photo.
+    if (!staffReference && !context && decodePostPhoto(description).profilePhoto) {
+      const profile = await profilePhotoForPost(operatorUserId)
+      if (profile) return profile
+    }
     const base = await reservePostImageRequest(operatorUserId, description)
     const request = context
       ? await withRedrawContext(base, { ...context, staffReference })
