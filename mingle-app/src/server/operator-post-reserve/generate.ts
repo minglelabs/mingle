@@ -2,7 +2,7 @@ import { SchemaType, type ResponseSchema } from '@google/generative-ai'
 import { getSttLanguageDisplayName } from '@/lib/stt-languages'
 import { generateJson, type GenerateJsonRequest, OPERATOR_POST_TEXT_MODEL } from '@/server/llm/generate-json'
 import { hasContactDetails } from '@/server/operators/persona-rules'
-import { encodePostPhoto, pickPostPhoto } from './post-photo'
+import { encodePostPhoto, INTRO_PHOTO_SETUP, pickPostPhoto, PROFILE_PHOTO_MARKER } from './post-photo'
 import { canonicalizeSttLanguageCode } from '@/lib/stt-languages'
 import { learnerLevelForDots, learnerPlan, posterProfile, type LearnerPlan, type PosterProfile } from './poster-profile'
 
@@ -45,17 +45,23 @@ export const RESERVE_TOPICS: ReadonlyArray<{ key: string; weight: number; brief:
   { key: 'self_intro', weight: 4, brief: 'introducing themself: where they are from, what they study or do, what they like; sometimes as a short list of facts on separate lines (age band, city, a personality trait, hobbies)' },
   { key: 'place_request', weight: 3, brief: 'asking about real places or plans: where to go, what to eat or see in a named city or neighborhood, or whether anyone wants to study or talk together' },
   { key: 'photo_caption', weight: 4, brief: 'a caption of a few words for the attached photo, nothing more' },
+  // Staff 2026-11-24: a very common post is a good photo of oneself with a two-line intro, mostly without a name.
+  { key: 'photo_intro', weight: 6, brief: 'a photo of themself with a very short self-introduction: only their age and nationality or city, maybe one thing they like or want here, often asking back ("And you?", "where are you from?"); no name; one to three short lines' },
+  { key: 'photo_intro_named', weight: 2.5, brief: 'a photo of themself with a very short self-introduction starting with their first name, then their age and nationality or city, maybe one thing they like, sometimes asking back ("And you?"); one to three short lines' },
   // Only for accounts outside Korea (pickReserveTopics `korea`): the app is where they meet Koreans.
   { key: 'korea_trip', weight: 0, brief: 'a trip to Korea they are on right now or just came back from: a named spot (a Seoul neighborhood, a palace, a market, a café street, a beach in Busan or Jeju), a Korean dish they tried there, something that surprised them; written by someone who loves Korea' },
   { key: 'korean_study', weight: 0, brief: 'studying Korean: one concrete Korean word, expression, ending or 반말/존댓말 nuance that confused or amused them, a K-drama or K-pop line they looked up, or asking Koreans how they really say something; quote the Korean itself' },
   { key: 'korean_friends', weight: 0, brief: 'Korean friends: wanting to make Korean friends or a Korean language partner, or a small concrete moment with a Korean friend (what they ate together, a phrase the friend taught them, a culture gap that made them laugh)' },
 ]
 
-/** Topics of accounts outside Korea, by weight (the others sum to about 62, so these are about a quarter of their posts). */
+/** Topics of accounts outside Korea, by weight (the others sum to about 70, so these are about a fifth of their posts). */
 export const KOREA_TOPIC_WEIGHTS: Readonly<Record<string, number>> = { korea_trip: 8, korean_study: 6, korean_friends: 6 }
 
 /** Topics that always go out with a photo, and the place the photo was taken when it is not the author's city. */
-const PHOTO_TOPICS = new Set(['photo_caption', 'korea_trip', 'korean_friends'])
+const PHOTO_TOPICS = new Set(['photo_caption', 'korea_trip', 'korean_friends', 'photo_intro', 'photo_intro_named'])
+const INTRO_TOPICS = new Set(['photo_intro', 'photo_intro_named'])
+/** Half the photo intros show the account's own profile photo; the other half a new flattering photo. */
+const INTRO_PROFILE_PHOTO_SHARE = 0.5
 const KOREA_TRIP_PLACES: ReadonlyArray<{ place: string; weight: number }> = [
   { place: 'Seoul, South Korea', weight: 6 },
   { place: 'Busan, South Korea', weight: 2 },
@@ -286,8 +292,11 @@ export async function generateReservePosts(args: {
       topic: briefs.get(topic) ?? topic,
       shape: pickShape(random, profile.shapeFactors).brief,
       language,
-      photo: PHOTO_TOPICS.has(topic) || random() < profile.photoShare ? pickPostPhoto(random) : null,
+      photo: INTRO_TOPICS.has(topic)
+        ? { kind: 'self' as const, setup: INTRO_PHOTO_SETUP }
+        : PHOTO_TOPICS.has(topic) || random() < profile.photoShare ? pickPostPhoto(random) : null,
       photoPlace: topic === 'korea_trip' ? pickKoreaTripPlace(random) : null,
+      profilePhoto: INTRO_TOPICS.has(topic) && random() < INTRO_PROFILE_PHOTO_SHARE,
     }
   })
   const seen = new Set(args.existingTexts.map(reservePostKey))
@@ -301,7 +310,7 @@ export async function generateReservePosts(args: {
       persona: modelPersona(args.persona),
       poster: { type: profile.type.brief, length: profile.length.brief, voice: profile.voice },
       learner: { language: learner.language, level: learner.level.brief },
-      slots: slots.map(({ photoPlace, ...slot }) => ({
+      slots: slots.map(({ photoPlace, profilePhoto: _profilePhoto, ...slot }) => ({
         ...slot,
         photo: slot.photo ? slot.photo.kind : false,
         ...(slot.photo?.setup ? { setup: slot.photo.setup } : {}),
@@ -437,7 +446,7 @@ export function languageOfPost(text: string, planned: string, own: string): stri
 
 function collectGeneratedPosts(
   items: Array<{ slot?: unknown; text?: unknown; photo?: unknown }>,
-  slots: Array<{ language: string; photo: ReturnType<typeof pickPostPhoto> | null; photoPlace: string | null }>,
+  slots: Array<{ language: string; photo: ReturnType<typeof pickPostPhoto> | null; photoPlace: string | null; profilePhoto?: boolean }>,
   topics: string[],
   seen: Set<string>,
   ownLanguage: string,
@@ -455,7 +464,7 @@ function collectGeneratedPosts(
     usedSlots.add(slot)
     const plan = slots[slot - 1].photo
     const photo = plan && typeof item.photo === 'string' ? item.photo.replace(/\s+/g, ' ').trim().slice(0, IMAGE_PROMPT_MAX_CHARS) : ''
-    result.push({ topic: topics[slot - 1], text, language: languageOfPost(text, slots[slot - 1].language, ownLanguage), imagePrompt: plan && photo ? encodePostPhoto(plan.kind, photo, slots[slot - 1].photoPlace) : null })
+    result.push({ topic: topics[slot - 1], text, language: languageOfPost(text, slots[slot - 1].language, ownLanguage), imagePrompt: plan && photo ? encodePostPhoto(plan.kind, `${slots[slot - 1].profilePhoto ? PROFILE_PHOTO_MARKER : ''}${photo}`, slots[slot - 1].photoPlace) : null })
   }
   return result
 }

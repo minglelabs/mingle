@@ -150,6 +150,16 @@ describe('reserve post generation', () => {
     expect(request.input.learner.language).toBe('ko')
   })
 
+  it('gives a photo intro a flattering photo of the poster, half of them the profile photo itself', async () => {
+    answer([{ slot: 1, text: '24, Korea 🇰🇷 and you?', photo: 'a clear smiling photo of them at a café' }])
+    const withProfile = await generateReservePosts({ persona, topics: ['photo_intro'], existingTexts: [], random: () => 0 })
+    expect(withProfile[0].imagePrompt).toBe('[self] (the profile photo) a clear smiling photo of them at a café')
+    expect(mocks.generateJson.mock.calls.at(-1)![0].input.slots[0]).toMatchObject({ photo: 'self', setup: expect.stringContaining('best, most flattering') })
+    answer([{ slot: 1, text: '24, Korea 🇰🇷 and you?', photo: 'a clear smiling photo of them at a café' }])
+    const drawn = await generateReservePosts({ persona, topics: ['photo_intro'], existingTexts: [], random: () => 0.99 })
+    expect(drawn[0].imagePrompt).toBe('[self] a clear smiling photo of them at a café')
+  })
+
   it('drops a photo description the slot did not ask for', async () => {
     answer([{ slot: 1, text: '그냥 글', photo: 'a cat' }])
     const posts = await generateReservePosts({ persona, topics: ['thought'], existingTexts: [], random: () => 0.99 })
