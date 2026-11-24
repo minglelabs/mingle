@@ -118,6 +118,15 @@ const PLACE_MARKER = /^\[at: ([^\]]{1,120})\]\s*/
  */
 export const PROFILE_PHOTO_MARKER = '(the profile photo) '
 
+/**
+ * A self photo-booth print (Korean 인생네컷 style): four shots of the poster in
+ * one print (staff 2026-11-24). The description from the post generator names
+ * the booth's backdrop, the frame and any props; the poses are picked when the
+ * photo is drawn.
+ */
+export const PHOTO_BOOTH_MARKER = '(photo booth) '
+export const PHOTO_BOOTH_SETUP = 'a self photo-booth print (the Korean 인생네컷 kind) of the poster alone: four shots in one print; describe only the booth backdrop color, the print frame color and any booth props or the outfit (fully and ordinarily dressed), not the poses'
+
 export const INTRO_PHOTO_SETUP = 'their best, most flattering recent photo of themself, the one they would pick to introduce themself: clear, well lit, the face plainly visible, looking good'
 
 export function encodePostPhoto(kind: PostPhotoKind, description: string, place: string | null = null): string {
@@ -126,12 +135,14 @@ export function encodePostPhoto(kind: PostPhotoKind, description: string, place:
 }
 
 /** A stored description split into kind, place and text. Untagged (older) descriptions are scenes in the author's city. */
-export function decodePostPhoto(stored: string): { kind: PostPhotoKind; description: string; place: string | null; profilePhoto: boolean } {
+export function decodePostPhoto(stored: string): { kind: PostPhotoKind; description: string; place: string | null; profilePhoto: boolean; photoBooth: boolean } {
   const match = MARKER.exec(stored)
   const kind = match ? match[1] as PostPhotoKind : 'scene'
   const rest = match ? stored.slice(match[0].length) : stored
   const at = PLACE_MARKER.exec(rest)
   const text = at ? rest.slice(at[0].length) : rest
   const profilePhoto = text.startsWith(PROFILE_PHOTO_MARKER)
-  return { kind, description: profilePhoto ? text.slice(PROFILE_PHOTO_MARKER.length) : text, place: at ? at[1].trim() : null, profilePhoto }
+  const photoBooth = text.startsWith(PHOTO_BOOTH_MARKER)
+  const description = profilePhoto ? text.slice(PROFILE_PHOTO_MARKER.length) : photoBooth ? text.slice(PHOTO_BOOTH_MARKER.length) : text
+  return { kind, description, place: at ? at[1].trim() : null, profilePhoto, photoBooth }
 }
