@@ -27,17 +27,21 @@ export const STARTER_VIEWS: ReadonlyArray<{ key: string; segment: StarterSegment
 ]
 /** `as=latest`: every visible post, newest first (not the recommended order). */
 export const LATEST_VIEW = 'latest'
+/** `as=oldest`: every visible post, oldest first (staff, 2026-11-25). */
+export const OLDEST_VIEW = 'oldest'
 
-/** Visible posts by published time, newest first; cursor `<iso>|<id>`. */
-async function loadLatestPosts(rawCursor: string | null): Promise<FeedResult> {
+/** Visible posts by published time, newest (or oldest) first; cursor `<iso>|<id>`. */
+async function loadLatestPosts(rawCursor: string | null, oldest = false): Promise<FeedResult> {
   const [iso, id] = (rawCursor ?? '').split('|')
   const at = iso ? new Date(iso) : null
+  const beyond = oldest ? 'gt' as const : 'lt' as const
   const after = at && !Number.isNaN(at.getTime()) && id
-    ? { AND: [{ OR: [{ publishedAt: { lt: at } }, { publishedAt: at, id: { lt: id } }] }] }
+    ? { AND: [{ OR: [{ publishedAt: { [beyond]: at } }, { publishedAt: at, id: { [beyond]: id } }] }] }
     : {}
+  const direction = oldest ? 'asc' as const : 'desc' as const
   const rows = await prisma.post.findMany({
     where: { ...visiblePostWhere(null), ...after },
-    orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
+    orderBy: [{ publishedAt: direction }, { id: direction }],
     take: PAGE_SIZE + 1,
     select: FEED_PAGE_SELECT,
   })
@@ -61,19 +65,20 @@ function relativeTime(date: Date, now: Date): string {
 export async function resolveFeedView(as: string | null | undefined) {
   const key = as?.trim() || null
   const starterView = STARTER_VIEWS.find((view) => view.key === key) ?? null
-  const latest = key === LATEST_VIEW
+  const oldest = key === OLDEST_VIEW
+  const latest = key === LATEST_VIEW || oldest
   const viewer = key && !starterView && !latest
     ? await prisma.user.findFirst({ where: { id: key, isOperator: true, isDeleted: false, isActive: true }, select: { id: true, name: true, handle: true } })
     : null
-  return { key: viewer?.id ?? starterView?.key ?? (latest ? LATEST_VIEW : null), viewer, starterView, latest }
+  return { key: viewer?.id ?? starterView?.key ?? (oldest ? OLDEST_VIEW : latest ? LATEST_VIEW : null), viewer, starterView, latest, oldest }
 }
 
 export type FeedView = Awaited<ReturnType<typeof resolveFeedView>>
 
 export async function loadFeedChunk(view: FeedView, cursor: string | null, here: string): Promise<{ node: React.ReactNode; nextCursor: string | null; count: number }> {
-  const { viewer, starterView, latest } = view
+  const { viewer, starterView, latest, oldest } = view
   const feed = latest
-    ? await loadLatestPosts(cursor)
+    ? await loadLatestPosts(cursor, oldest)
     : await getFeed(viewer?.id ?? null, cursor, PAGE_SIZE, starterView ? { starterSegment: starterView.segment } : {})
   const starter = starterView ? await loadStarterFeed() : null
   const listed = starterView && starter ? starter[starterView.segment] : []
