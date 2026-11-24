@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import type { AdminContext } from '@/server/admin/guard'
+import { assignReferencePhoto, claimReferencePhoto, loadReferenceBytes, releaseReferencePhoto } from '@/server/reference-library/library'
 import { generateOperatorAvatar, type AvatarGenerationResult } from '@/server/operator-avatars/generate'
 import { createOperatorAccount, type CreatedOperatorAccount } from '@/server/operators/create-operator'
 import { generatePersonaDrafts } from '@/server/operators/persona-draft'
@@ -96,13 +97,17 @@ export function koreanDay(now: Date): string {
 }
 
 export type AccountStepResult =
-  | { done: false; reason: 'target_reached' | 'draft_failed' }
-  | { done: true; country: string; account: CreatedOperatorAccount }
+  | { done: false; reason: 'target_reached' | 'draft_failed' | 'reference_unavailable' }
+  | { done: true; country: string; account: CreatedOperatorAccount; referenceUsed?: boolean }
 
 /** Creates one account in the country furthest below its share of the seed plan. */
 export async function createNextSeedAccount(
   ctx: AdminContext,
-  options: { totalTarget?: number | null; now?: Date; inReview?: boolean } = {},
+  options: {
+    totalTarget?: number | null; now?: Date; inReview?: boolean
+    /** A photo from the reference library to draw the profile photo from (staff pick); else the oldest unused one, when any. */
+    referenceId?: string | null
+  } = {},
 ): Promise<AccountStepResult> {
   const rows = await prisma.operatorAccount.groupBy({
     by: ['personaCountry'],
@@ -115,19 +120,40 @@ export async function createNextSeedAccount(
   const byCountry = new Map(rows.flatMap((row) => (row.personaCountry ? [[row.personaCountry, row._count._all] as const] : [])))
   const country = mostUnderrepresentedCountry(byCountry)
 
+  // 레퍼런스 짤 저장소: while unused photos are left, each new account's profile photo is drawn from one.
+  const drawsHere = options.inReview === true && canDrawImagesHere()
+  const reference = drawsHere || options.referenceId
+    ? await claimReferencePhoto({ userId: 'pending', kind: 'avatar', id: options.referenceId ?? null }).catch(() => null)
+    : null
+  if (options.referenceId && !reference) return { done: false, reason: 'reference_unavailable' }
   try {
     const { drafts } = await generatePersonaDrafts({
-      count: 1, countries: [country], ageMin: ACCOUNT_AGE_MIN, ageMax: ACCOUNT_AGE_MAX, genderMix: 'balanced',
+      count: 1, countries: [country], ageMin: ACCOUNT_AGE_MIN, ageMax: ACCOUNT_AGE_MAX,
+      genderMix: reference?.gender ?? 'balanced',
     })
-    if (!drafts[0]) return { done: false, reason: 'draft_failed' }
+    if (!drafts[0]) {
+      if (reference) await releaseReferencePhoto(reference.id).catch(() => {})
+      return { done: false, reason: 'draft_failed' }
+    }
     const account = await createOperatorAccount(ctx, drafts[0], {
       now: options.now,
       ...(options.inReview ? { inReview: { reviewRank: await frontOfReviewRank() } } : {}),
     })
+    if (reference) await assignReferencePhoto(reference.id, account.userId).catch(() => {})
+    let referenceUsed = false
     // A new account waiting for review gets its photo now, so staff judge both together.
-    if (options.inReview && canDrawImagesHere()) await generateOperatorAvatar(ctx, account.userId, { now: options.now }).catch(() => null)
-    return { done: true, country, account }
+    if (options.inReview && canDrawImagesHere()) {
+      const libraryReference = reference ? await loadReferenceBytes(reference).catch(() => null) : null
+      const drawn = await generateOperatorAvatar(ctx, account.userId, { now: options.now, ...(libraryReference ? { libraryReference } : {}) }).catch(() => null)
+      // A photo that was not drawn from goes back to the library for the next account.
+      referenceUsed = Boolean(reference && libraryReference && drawn?.ok)
+      if (reference && !referenceUsed) await releaseReferencePhoto(reference.id).catch(() => {})
+    } else if (reference) {
+      await releaseReferencePhoto(reference.id).catch(() => {})
+    }
+    return { done: true, country, account, referenceUsed }
   } catch (error) {
+    if (reference) await releaseReferencePhoto(reference.id).catch(() => {})
     console.warn('[operator-automation] account_failed', {
       country,
       error: error instanceof Error ? (error as { code?: string }).code ?? error.name : 'unknown',

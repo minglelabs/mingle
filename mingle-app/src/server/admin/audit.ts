@@ -37,6 +37,8 @@ export type AdminAuditAction =
   | 'operator_post.redraw_photo'
   | 'operator_post.takedown'
   | 'operator_post.delete'
+  | 'reference.add'
+  | 'reference.remove'
   | 'operator_post.app_post_queued'
   | 'operator_post.restore'
   | 'post.takedown'
