@@ -243,8 +243,10 @@ export async function releaseAbandonedReferences(now: Date = new Date()): Promis
     const items = await listReferencePhotos()
     const settled = (at: string) => now.getTime() - Date.parse(at) > 10 * 60_000
     const postUses = items.filter((item) => item.usedBy?.kind === 'post' && item.usedBy.imageKey && settled(item.usedBy.at))
+    // A post use never recorded with its photo after an hour: the drawing died with its process.
+    const lostDrawings = items.filter((item) => item.usedBy?.kind === 'post' && !item.usedBy.imageKey && now.getTime() - Date.parse(item.usedBy.at) > 60 * 60_000)
     const avatarUses = items.filter((item) => item.usedBy?.kind === 'avatar' && item.usedBy.userId !== 'pending' && settled(item.usedBy.at))
-    if (!postUses.length && !avatarUses.length) return 0
+    if (!postUses.length && !avatarUses.length && !lostDrawings.length) return 0
     const [rows, users] = await Promise.all([
       postUses.length
         ? prisma.operatorPostReserve.findMany({ where: { imageObjectKey: { in: postUses.map((item) => item.usedBy!.imageKey!) } }, select: { imageObjectKey: true, state: true } })
@@ -260,6 +262,7 @@ export async function releaseAbandonedReferences(now: Date = new Date()): Promis
     }
     const liveUsers = new Set(users.filter((user) => fromLibrary(user.operatorAccount?.avatarSpec)).map((user) => user.id))
     const abandoned = new Set([
+      ...lostDrawings.map((item) => item.id),
       ...postUses.filter((item) => !liveKeys.has(item.usedBy!.imageKey!)).map((item) => item.id),
       ...avatarUses.filter((item) => !liveUsers.has(item.usedBy!.userId)).map((item) => item.id),
     ])

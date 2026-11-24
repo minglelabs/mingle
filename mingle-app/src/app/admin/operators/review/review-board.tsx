@@ -1086,6 +1086,17 @@ function PostCard({ post: initial, at, pinned, fromReference, reference, author,
       ) : post.imageObjectKey ? (
         <div className="relative">
           <ReviewPhotos photos={photos} />
+          {reference && !post.photoDrawing ? (
+            // The library photo this one was drawn from, on the photo itself: tap to open it in the library.
+            <Link
+              href={`/admin/operators/references?photo=${encodeURIComponent(reference.id)}`}
+              className="absolute bottom-2 left-2 z-[1] flex items-end gap-1.5 rounded-xl bg-black/60 p-1.5 pr-2.5 text-xs font-semibold text-white backdrop-blur active:bg-black/75"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={reviewImageUrl(reference.objectKey)} alt="레퍼런스 원본" className="h-20 w-[3.75rem] rounded-lg object-cover ring-1 ring-white/60" />
+              레퍼런스 원본
+            </Link>
+          ) : null}
           <PhotoRedoOverlay
             drawing={post.photoDrawing}
             disabled={busy !== null || working || Boolean(post.scheduledAt)}
