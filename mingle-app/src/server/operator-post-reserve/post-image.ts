@@ -10,6 +10,7 @@ import { pairImages, stripImages } from './pair-images'
 import { pickPersonVariety, pickPoseVariety } from './post-person-variety'
 import { faceStickerLine } from './face-stickers'
 import { contrastLines, describeReferenceForContrast } from './reference-contrast'
+import { referenceDirectionLines, referencePersonaLine } from '@/server/reference-library/direction'
 import { claimReferencePhoto, loadReferenceBytes, referenceKindOf, referenceRecreateLines, releaseReferencePhoto, type ReferenceKind } from '@/server/reference-library/library'
 
 /** Most group photos hide the friends' faces under stickers; some friends are fine being seen. */
@@ -410,7 +411,10 @@ async function libraryPostRequest(
     const look = specSubject(spec) ?? describeAccountLook(persona, seededRandom(`${operatorUserId}:look`))
     const place = brief.place ?? await reservePostPlace(operatorUserId)
     const prompt = [
-      ...referenceRecreateLines({ kind, look, poster: Boolean(poster), fit: brief.description, note: photo.note }),
+      ...referenceRecreateLines({
+        kind, look, poster: Boolean(poster), fit: brief.description, note: photo.note,
+        direction: referenceDirectionLines(photo.attributes), persona: referencePersonaLine(persona),
+      }),
       ...(place ? [`It was taken around ${place}.`] : []),
       'Vertical 3:4 image, one single photo (never two side by side). No watermarks, logos, borders or frames.',
     ].join('\n')

@@ -240,13 +240,29 @@ const NO_INTERFACE_LINE = 'If the attached photo is a screenshot of an app or a 
  * `poster` = the attachment is two photos side by side, the reference LEFT and
  * the poster RIGHT, whose face the new photo keeps.
  */
-export function referenceRecreateLines(input: { kind: ReferenceKind; look: string | null; poster?: boolean; fit?: string | null; note?: string | null }): string[] {
+export function referenceRecreateLines(input: {
+  kind: ReferenceKind
+  look: string | null
+  poster?: boolean
+  fit?: string | null
+  note?: string | null
+  /** The shot's analyzed direction (direction.ts), reproduced exactly. */
+  direction?: readonly string[]
+  /** Who the account is (direction.ts): the person and the life the photo shows. */
+  persona?: string | null
+}): string[] {
   const fit = input.fit?.trim()
   const note = input.note?.trim()
+  const persona = input.persona?.trim()
   const fitLine = [
+    ...(input.direction ?? []),
+    ...(persona ? [persona] : []),
     ...(note ? [`Staff note about the reference photo, to follow: ${note}`] : []),
     ...(fit ? [`What the photo is for (change details so it fits, keeping the shot): ${fit}`] : []),
   ]
+  const ownLife = persona
+    ? 'Everything that says who they are comes from the persona, not from the reference: hairstyle, outfit and accessories in their own style, and the place recast as the same kind of place in their own life and city.'
+    : null
   if (input.kind === 'group') {
     const posterLines = input.poster
       ? [
@@ -258,7 +274,7 @@ export function referenceRecreateLines(input: { kind: ReferenceKind; look: strin
     return [
       `Recreate ${source} as a new phone photo of a different group of friends, as many people as in it.`,
       ...posterLines,
-      `Keep from ${source}: the composition and camera angle, how the people stand or sit and what they do, the kind of outfits, the place and background, the light and the mood.`,
+      `Keep from ${source}: the shot's direction (composition, camera angle and distance, shake, focus and exposure), how the people stand or sit and what they do, the light and the mood.${persona ? ' Outfits and the place fit the persona and their friends.' : ' Also the kind of outfits and the place.'}`,
       ...fitLine,
       `Nobody's face may resemble anyone in ${source}: everyone gets a new, ordinary everyday face, so nobody could be recognized. Faces that do not show in ${source} stay hidden.`,
       NO_INTERFACE_LINE,
@@ -268,7 +284,7 @@ export function referenceRecreateLines(input: { kind: ReferenceKind; look: strin
   if (input.kind === 'thing') {
     return [
       'Recreate the attached photo as a new phone photo, as if the same person took another photo of the same kind of thing.',
-      'Keep the kind of subject, the composition and camera angle, the light, the colors and the mood. It is not a copy: change the details (another dish or arrangement, another spot, other small objects) so the two photos are clearly different.',
+      'Keep the kind of subject and the shot\'s direction: composition, camera angle and distance, shake, focus and exposure, the light, the colors and the mood. It is not a copy: change the details (another dish or arrangement, another spot, other small objects) so the two photos are clearly different, and so they fit the persona\'s own life.',
       ...fitLine,
       'No people in it, unless the attached photo shows some; then only hands, backs or people far away, with no face that can be made out.',
       NO_INTERFACE_LINE,
@@ -285,7 +301,9 @@ export function referenceRecreateLines(input: { kind: ReferenceKind; look: strin
   return [
     `Recreate ${source} as a new phone photo of a different person.`,
     ...who,
-    `Keep from ${source}: the composition and camera angle, the pose and gesture, the hairstyle, the outfit and accessories, the place and background, the light and the mood.`,
+    ...(ownLife
+      ? [`Keep from ${source}: the shot's direction (who took it, composition, camera angle and distance, shake, focus and exposure), the pose, gesture, expression and gaze, the light and the mood.`, ownLife]
+      : [`Keep from ${source}: the composition and camera angle, the pose and gesture, the hairstyle, the outfit and accessories, the place and background, the light and the mood.`]),
     ...fitLine,
     input.kind === 'person'
       ? `The face does not show, exactly as in ${source} (turned away, from behind, covered, cropped out or in shadow). Never show a face.`
