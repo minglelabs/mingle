@@ -19,10 +19,11 @@ function isImage(file: File): boolean {
   return file.type.startsWith('image/')
 }
 
-export function ReferenceLibrary({ initialItems, canDraw }: { initialItems: ReferencePhotoView[]; canDraw: boolean }) {
+export function ReferenceLibrary({ initialItems, canDraw, autoTag }: { initialItems: ReferencePhotoView[]; canDraw: boolean; autoTag: boolean }) {
   const [items, setItems] = useState(initialItems)
-  const [gender, setGender] = useState<UploadGender>('auto')
-  const [kind, setKind] = useState<UploadKind>('auto')
+  // The automatic tags (AI) end after 2026-12-12: then staff pick both for every upload.
+  const [gender, setGender] = useState<UploadGender>(autoTag ? 'auto' : 'none')
+  const [kind, setKind] = useState<UploadKind>(autoTag ? 'auto' : 'face')
   const [uploading, setUploading] = useState(0)
   const [dragging, setDragging] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
@@ -116,7 +117,7 @@ export function ReferenceLibrary({ initialItems, canDraw }: { initialItems: Refe
       >
         <div className="flex flex-wrap items-center justify-center gap-1.5 text-sm">
           <span className="w-full font-semibold text-slate-700 sm:w-auto">종류</span>
-          {(['auto', ...KINDS] as const).map((value) => (
+          {(autoTag ? ['auto', ...KINDS] as const : KINDS).map((value) => (
             <button
               key={value}
               type="button"
@@ -129,7 +130,7 @@ export function ReferenceLibrary({ initialItems, canDraw }: { initialItems: Refe
         </div>
         <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5 text-sm">
           <span className="w-full font-semibold text-slate-700 sm:w-auto">성별</span>
-          {(['auto', 'female', 'male', 'none'] as const).map((value) => (
+          {(autoTag ? ['auto', 'female', 'male', 'none'] as const : ['female', 'male', 'none'] as const).map((value) => (
             <button
               key={value}
               type="button"
@@ -151,7 +152,7 @@ export function ReferenceLibrary({ initialItems, canDraw }: { initialItems: Refe
           {uploading ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" />올리는 중 {uploading}</> : '사진 고르기'}
           <input type="file" accept="image/*" multiple className="sr-only" onChange={(event) => { void upload(Array.from(event.target.files ?? [])); event.target.value = '' }} />
         </label>
-        <p className="mt-2 text-xs text-slate-500">여러 장을 끌어다 놓거나 ⌘V로 붙여넣어도 됩니다. “자동”이면 AI가 사진마다 종류와 성별을 붙이고, 나중에 사진마다 고칠 수 있어요.</p>
+        <p className="mt-2 text-xs text-slate-500">여러 장을 끌어다 놓거나 ⌘V로 붙여넣어도 됩니다. {autoTag ? '“자동”이면 AI가 사진마다 종류와 성별을 붙이고(12월 12일까지), 나중에 사진마다 고칠 수 있어요.' : '고른 종류·성별이 이번에 올리는 사진 모두에 붙고, 나중에 사진마다 고칠 수 있어요.'}</p>
         {status ? <p role="status" className="mt-1 text-xs font-semibold text-slate-700">{status}</p> : null}
       </div>
 

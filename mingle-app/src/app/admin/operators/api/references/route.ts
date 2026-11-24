@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAdminApi } from '@/server/admin/guard'
 import { writeAdminAudit } from '@/server/admin/audit'
-import { classifyReferencePhoto } from '@/server/reference-library/classify'
+import { classifyReferencePhoto, referenceAutoTagEnabled } from '@/server/reference-library/classify'
 import { addReferencePhoto, REFERENCE_MAX_BYTES, REFERENCE_TYPES, type ReferenceGender, type ReferenceKind } from '@/server/reference-library/library'
 import { listReferencePhotoViews } from '@/server/reference-library/view'
 
@@ -23,7 +23,8 @@ export async function GET() {
 /**
  * POST (form): `file` (one or more) adds photos to the library. `kind` (face |
  * person | thing) and `gender` (female | male | none) set them for the whole
- * batch; left out (or `auto`), Claude looks at each photo and tags it.
+ * batch; left out (or `auto`), Claude looks at each photo and tags it, through
+ * 2026-12-12 only. After that `kind` is required and an unset gender is none.
  * `note` is staff's one-line note for every photo of the batch.
  */
 export async function POST(request: Request) {
@@ -36,6 +37,8 @@ export async function POST(request: Request) {
   const rawKind = form.get('kind')
   const fixedKind: ReferenceKind | undefined = rawKind === 'face' || rawKind === 'person' || rawKind === 'thing' ? rawKind : undefined
   const note = typeof form.get('note') === 'string' ? form.get('note') as string : null
+  const autoTag = referenceAutoTagEnabled()
+  if (!autoTag && !fixedKind) return json({ error: 'kind_required' }, 400)
   const files = form.getAll('file').filter((value): value is File => value instanceof File && value.size > 0)
   if (files.length === 0) return json({ error: 'file_required' }, 400)
   let added = 0
@@ -44,7 +47,7 @@ export async function POST(request: Request) {
     if (!(REFERENCE_TYPES as readonly string[]).includes(file.type) || file.size > REFERENCE_MAX_BYTES) { rejected += 1; continue }
     try {
       const bytes = Buffer.from(await file.arrayBuffer())
-      const look = fixedKind === undefined || fixedGender === undefined ? await classifyReferencePhoto(bytes) : null
+      const look = autoTag && (fixedKind === undefined || fixedGender === undefined) ? await classifyReferencePhoto(bytes) : null
       const kind = fixedKind ?? look?.kind ?? null
       await addReferencePhoto(bytes, {
         kind,
