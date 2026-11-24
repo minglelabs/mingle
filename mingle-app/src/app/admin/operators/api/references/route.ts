@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server'
 import { requireAdminApi } from '@/server/admin/guard'
 import { writeAdminAudit } from '@/server/admin/audit'
-import { addReferencePhoto, REFERENCE_MAX_BYTES, REFERENCE_TYPES, type ReferenceGender } from '@/server/reference-library/library'
+import { classifyReferencePhoto } from '@/server/reference-library/classify'
+import { addReferencePhoto, REFERENCE_MAX_BYTES, REFERENCE_TYPES, type ReferenceGender, type ReferenceKind } from '@/server/reference-library/library'
 import { listReferencePhotoViews } from '@/server/reference-library/view'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-export const maxDuration = 120
+export const maxDuration = 300
 
 function json(payload: object, status = 200): NextResponse {
   return NextResponse.json(payload, { status, headers: { 'Cache-Control': 'no-store' } })
@@ -19,14 +20,20 @@ export async function GET() {
   return json({ items: await listReferencePhotoViews() })
 }
 
-/** POST (form): `file` (one or more) and `gender` (female | male | empty) adds photos to the library. */
+/**
+ * POST (form): `file` (one or more) adds photos to the library. `kind` (face |
+ * person | thing) and `gender` (female | male | none) set them for the whole
+ * batch; left out (or `auto`), Claude looks at each photo and tags it.
+ */
 export async function POST(request: Request) {
   const auth = await requireAdminApi()
   if (!auth.ok) return auth.response
   const form = await request.formData().catch(() => null)
   if (!form) return json({ error: 'invalid_body' }, 400)
   const rawGender = form.get('gender')
-  const gender: ReferenceGender | null = rawGender === 'female' || rawGender === 'male' ? rawGender : null
+  const fixedGender: ReferenceGender | null | undefined = rawGender === 'female' || rawGender === 'male' ? rawGender : rawGender === 'none' ? null : undefined
+  const rawKind = form.get('kind')
+  const fixedKind: ReferenceKind | undefined = rawKind === 'face' || rawKind === 'person' || rawKind === 'thing' ? rawKind : undefined
   const files = form.getAll('file').filter((value): value is File => value instanceof File && value.size > 0)
   if (files.length === 0) return json({ error: 'file_required' }, 400)
   let added = 0
@@ -34,13 +41,20 @@ export async function POST(request: Request) {
   for (const file of files.slice(0, 50)) {
     if (!(REFERENCE_TYPES as readonly string[]).includes(file.type) || file.size > REFERENCE_MAX_BYTES) { rejected += 1; continue }
     try {
-      await addReferencePhoto(Buffer.from(await file.arrayBuffer()), gender)
+      const bytes = Buffer.from(await file.arrayBuffer())
+      const look = fixedKind === undefined || fixedGender === undefined ? await classifyReferencePhoto(bytes) : null
+      const kind = fixedKind ?? look?.kind ?? null
+      await addReferencePhoto(bytes, {
+        kind,
+        gender: kind === 'thing' ? null : fixedGender !== undefined ? fixedGender : look?.gender ?? null,
+        summary: look?.summary ?? null,
+      })
       added += 1
     } catch (error) {
       console.warn('[reference-library] add_failed', { error: error instanceof Error ? error.name : 'unknown' })
       rejected += 1
     }
   }
-  if (added) await writeAdminAudit(auth.ctx, { action: 'reference.add', targetType: 'reference_library', metadata: { added, gender } })
+  if (added) await writeAdminAudit(auth.ctx, { action: 'reference.add', targetType: 'reference_library', metadata: { added, kind: fixedKind ?? 'auto', gender: fixedGender === undefined ? 'auto' : fixedGender } })
   return json({ added, rejected, items: await listReferencePhotoViews() }, added ? 201 : 400)
 }

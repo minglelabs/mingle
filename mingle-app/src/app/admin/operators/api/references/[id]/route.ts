@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAdminApi } from '@/server/admin/guard'
 import { writeAdminAudit } from '@/server/admin/audit'
-import { removeReferencePhoto, setReferenceGender } from '@/server/reference-library/library'
+import { removeReferencePhoto, updateReferenceTags, type ReferenceGender, type ReferenceKind } from '@/server/reference-library/library'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -12,14 +12,17 @@ function json(payload: object, status = 200): NextResponse {
   return NextResponse.json(payload, { status, headers: { 'Cache-Control': 'no-store' } })
 }
 
-/** PATCH `{ gender: 'female' | 'male' | null }`. */
+/** PATCH `{ gender?: 'female' | 'male' | null, kind?: 'face' | 'person' | 'thing' }`. */
 export async function PATCH(request: Request, context: Ctx) {
   const auth = await requireAdminApi()
   if (!auth.ok) return auth.response
   const { id } = await context.params
-  const body = await request.json().catch(() => null) as { gender?: unknown } | null
-  const gender = body?.gender === 'female' || body?.gender === 'male' ? body.gender : null
-  return (await setReferenceGender(id, gender)) ? json({ ok: true }) : json({ error: 'not_found' }, 404)
+  const body = await request.json().catch(() => null) as { gender?: unknown; kind?: unknown } | null
+  if (!body) return json({ error: 'invalid_body' }, 400)
+  const tags: { gender?: ReferenceGender | null; kind?: ReferenceKind } = {}
+  if ('gender' in body) tags.gender = body.gender === 'female' || body.gender === 'male' ? body.gender : null
+  if (body.kind === 'face' || body.kind === 'person' || body.kind === 'thing') tags.kind = body.kind
+  return (await updateReferenceTags(id, tags)) ? json({ ok: true }) : json({ error: 'not_found' }, 404)
 }
 
 /** DELETE: removes the photo from the library and storage. */

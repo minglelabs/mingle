@@ -18,6 +18,9 @@ export const REFERENCE_MAX_BYTES = 15 * 1024 * 1024
 export const REFERENCE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'] as const
 
 export type ReferenceGender = 'female' | 'male'
+/** face: a person whose face shows · person: a person whose face does not show · thing: food, a place, an object, an animal. */
+export type ReferenceKind = 'face' | 'person' | 'thing'
+export const REFERENCE_KINDS: readonly ReferenceKind[] = ['face', 'person', 'thing']
 export type ReferenceUse = { userId: string; kind: 'avatar' | 'post'; at: string }
 export type ReferencePhoto = {
   id: string
@@ -25,12 +28,25 @@ export type ReferencePhoto = {
   width: number | null
   height: number | null
   gender: ReferenceGender | null
+  /** Null for a photo added before kinds existed: counted as a face photo. */
+  kind: ReferenceKind | null
+  /** One line on what the photo shows (from the automatic look at upload). */
+  summary: string | null
   createdAt: string
   usedBy: ReferenceUse | null
 }
 
 function parseGender(value: unknown): ReferenceGender | null {
   return value === 'female' || value === 'male' ? value : null
+}
+
+function parseKind(value: unknown): ReferenceKind | null {
+  return value === 'face' || value === 'person' || value === 'thing' ? value : null
+}
+
+/** The kind a photo is used as (an untagged one counts as a face photo). */
+export function referenceKindOf(photo: Pick<ReferencePhoto, 'kind'>): ReferenceKind {
+  return photo.kind ?? 'face'
 }
 
 function parseItems(value: unknown): ReferencePhoto[] {
@@ -47,6 +63,8 @@ function parseItems(value: unknown): ReferencePhoto[] {
       width: typeof row.width === 'number' ? row.width : null,
       height: typeof row.height === 'number' ? row.height : null,
       gender: parseGender(row.gender),
+      kind: parseKind(row.kind),
+      summary: typeof row.summary === 'string' ? row.summary : null,
       createdAt: typeof row.createdAt === 'string' ? row.createdAt : new Date(0).toISOString(),
       usedBy: used && typeof used.userId === 'string' && (used.kind === 'avatar' || used.kind === 'post')
         ? { userId: used.userId, kind: used.kind, at: typeof used.at === 'string' ? used.at : new Date(0).toISOString() }
@@ -83,7 +101,7 @@ async function updateLibrary<T>(change: (items: ReferencePhoto[]) => { items: Re
 }
 
 /** Stores one uploaded photo (re-encoded, at most 1600 px) and adds it to the library. */
-export async function addReferencePhoto(bytes: Buffer, gender: ReferenceGender | null): Promise<ReferencePhoto> {
+export async function addReferencePhoto(bytes: Buffer, tags: { gender: ReferenceGender | null; kind: ReferenceKind | null; summary?: string | null }): Promise<ReferencePhoto> {
   const { data, info } = await sharp(bytes, { limitInputPixels: 80_000_000 })
     .rotate()
     .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
@@ -93,16 +111,23 @@ export async function addReferencePhoto(bytes: Buffer, gender: ReferenceGender |
   const objectKey = `${OBJECT_PREFIX}/${id}.jpg`
   await putPostImage(objectKey, data)
   const photo: ReferencePhoto = {
-    id, objectKey, width: info.width ?? null, height: info.height ?? null, gender, createdAt: new Date().toISOString(), usedBy: null,
+    id, objectKey, width: info.width ?? null, height: info.height ?? null,
+    gender: tags.kind === 'thing' ? null : tags.gender, kind: tags.kind, summary: tags.summary ?? null,
+    createdAt: new Date().toISOString(), usedBy: null,
   }
   await updateLibrary((items) => ({ items: [photo, ...items], result: null }))
   return photo
 }
 
-export async function setReferenceGender(id: string, gender: ReferenceGender | null): Promise<boolean> {
+export async function updateReferenceTags(id: string, tags: { gender?: ReferenceGender | null; kind?: ReferenceKind }): Promise<boolean> {
   return updateLibrary((items) => {
     const found = items.some((item) => item.id === id)
-    return { items: items.map((item) => (item.id === id ? { ...item, gender } : item)), result: found }
+    return {
+      items: items.map((item) => (item.id === id
+        ? { ...item, ...(tags.kind ? { kind: tags.kind } : {}), ...(tags.gender !== undefined ? { gender: tags.gender } : {}) }
+        : item)),
+      result: found,
+    }
   })
 }
 
@@ -124,11 +149,16 @@ export async function claimReferencePhoto(args: {
   userId: string
   kind: ReferenceUse['kind']
   gender?: ReferenceGender | null
+  /** Only photos of these kinds (any kind when absent). */
+  kinds?: readonly ReferenceKind[]
   id?: string | null
 }): Promise<ReferencePhoto | null> {
   return updateLibrary((items) => {
     const fits = (item: ReferencePhoto) => !item.usedBy
-      && (args.id ? item.id === args.id : !args.gender || !item.gender || item.gender === args.gender)
+      && (args.id
+        ? item.id === args.id
+        : (!args.kinds || args.kinds.includes(referenceKindOf(item)))
+          && (!args.gender || !item.gender || item.gender === args.gender))
     const candidates = items.filter(fits)
     // Prefer a photo tagged with the gender asked for over an untagged one.
     const pick = (args.gender ? candidates.filter((item) => item.gender === args.gender).at(-1) : null) ?? candidates.at(-1) ?? null
@@ -156,18 +186,46 @@ export async function loadReferenceBytes(photo: Pick<ReferencePhoto, 'objectKey'
   return { bytes: Buffer.from(await getPostImage(photo.objectKey)), mimeType: 'image/jpeg' }
 }
 
+const SNAPSHOT_LINE = 'It must look like a real, unedited snapshot from an ordinary person\'s phone, not a photoshoot. Everyone in the image is an adult.'
+const NO_INTERFACE_LINE = 'If the attached photo is a screenshot of an app or a video (top bar, buttons, usernames, likes, captions, timers), draw only the photo itself, edge to edge, with none of that interface. No writing, stickers or emoji added on top.'
+
 /**
- * The prompt lines that recreate a library photo with someone else's face:
- * the shot stays (composition, pose, outfit, hair, place, light), the face is
- * the account's own, never the face of whoever is in the reference.
+ * The prompt lines that recreate a library photo for an account, by the
+ * photo's kind: the shot stays (composition, angle, light, mood), the person
+ * is the account's own and never the one in the photo; a thing photo becomes
+ * another photo of the same kind of subject, not a copy.
+ * `poster` = the attachment is two photos side by side, the reference LEFT and
+ * the poster RIGHT, whose face the new photo keeps.
  */
-export function referenceRecreateLines(look: string): string[] {
+export function referenceRecreateLines(input: { kind: ReferenceKind; look: string | null; poster?: boolean; fit?: string | null }): string[] {
+  const fit = input.fit?.trim()
+  const fitLine = fit ? [`What the photo is for (change details so it fits, keeping the shot): ${fit}`] : []
+  if (input.kind === 'thing') {
+    return [
+      'Recreate the attached photo as a new phone photo, as if the same person took another photo of the same kind of thing.',
+      'Keep the kind of subject, the composition and camera angle, the light, the colors and the mood. It is not a copy: change the details (another dish or arrangement, another spot, other small objects) so the two photos are clearly different.',
+      ...fitLine,
+      'No people in it, unless the attached photo shows some; then only hands, backs or people far away, with no face that can be made out.',
+      NO_INTERFACE_LINE,
+      SNAPSHOT_LINE,
+    ]
+  }
+  const who = input.poster
+    ? [
+        'The attached image is two photos side by side. LEFT: the shot to recreate. RIGHT: the poster, the person this account belongs to.',
+        'The person in the new photo is the poster from the RIGHT photo: the same eye shape, nose, mouth, jawline, skin tone and apparent ethnicity. Take nothing else from the RIGHT photo (no background, clothes, pose or light). Draw one single photo, never two side by side.',
+      ]
+    : [`The person in the new photo: ${input.look ?? 'an ordinary adult'}.`]
+  const source = input.poster ? 'the LEFT photo' : 'the attached photo'
   return [
-    'Recreate the attached photo as a new phone photo of a different person.',
-    `The person in the new photo: ${look}.`,
-    'Keep from the attached photo: the composition and camera angle, the pose and gesture, the hairstyle, the outfit and accessories, the place and background, the light and the mood.',
-    'The face must NOT be the face of the person in the attached photo: it must not resemble them, so nobody could recognize them. Give the person a new, ordinary everyday face of their own; nobody looks like a celebrity or a model.',
-    'If the attached photo is a screenshot of an app or a video (top bar, buttons, usernames, likes, captions, timers), draw only the photo itself, edge to edge, with none of that interface. No writing, stickers or emoji added on top.',
-    'It must look like a real, unedited snapshot from an ordinary person\'s phone. Everyone in the image is an adult.',
+    `Recreate ${source} as a new phone photo of a different person.`,
+    ...who,
+    `Keep from ${source}: the composition and camera angle, the pose and gesture, the hairstyle, the outfit and accessories, the place and background, the light and the mood.`,
+    ...fitLine,
+    input.kind === 'person'
+      ? `The face does not show, exactly as in ${source} (turned away, from behind, covered, cropped out or in shadow). Never show a face.`
+      : `The face must NOT be the face of the person in ${source}: it must not resemble them, so nobody could recognize them.${input.poster ? '' : ' Give the person a new, ordinary everyday face of their own; nobody looks like a celebrity or a model.'}`,
+    NO_INTERFACE_LINE,
+    SNAPSHOT_LINE,
   ]
 }
