@@ -6536,6 +6536,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return
     }
     if (earphoneCaptureNoticeOpen || earphoneModeNoticeOpen || screenCaptureNoticeOpen) return
+    // The speak trial listens to the mic only: no "mic or this device's sound" question.
+    if (trialSpeechLength) return
     const notice = resolveEarphoneListeningNotice({
       visible: isVisible,
       earphonesConnected: nativeAudioRoute.earphonesConnected,
@@ -6563,6 +6565,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     nativeEarphoneMicrophoneCapable,
     screenCaptureNoticeOpen,
     sttCaptureSource,
+    trialSpeechLength,
   ])
 
   const confirmEarphoneCaptureNotice = useCallback(({ source, microphonePick }: EarphoneListeningNoticeResult) => {
@@ -11109,7 +11112,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               )}
 
             {/* Error state */}
-              {isError && (
+              {isError && !trialSpeechLength && (
                 <div className="flex min-h-full flex-col items-center justify-center gap-2 text-center text-red-400">
                   <p className="text-sm">{connectionFailedLabel}</p>
                 </div>
@@ -11228,7 +11231,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 />
               </div>
             ) : null}
-            {showEmptyState && !directPeerMember && (
+            {showEmptyState && !directPeerMember && !trialSpeechLength && (
               <ConversationEmptyState uiLocale={uiLocale} topInsetPx={trialTopInsetPx} />
             )}
             <AnimatePresence>
@@ -11243,7 +11246,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   <div className="absolute inset-0 flex items-center justify-center px-6">
                     <div className="flex items-center gap-2 rounded-full bg-white/92 px-4 py-2.5 shadow-[0_6px_20px_rgba(15,23,42,0.14)]">
                       <Loader2 size={18} className="animate-spin text-amber-500" />
-                      <p className="text-sm font-medium text-slate-700">{connectingLabel}</p>
+                      {/* The speak trial shows no words but its card (owner, 2026-11-25). */}
+                      {trialSpeechLength ? null : <p className="text-sm font-medium text-slate-700">{connectingLabel}</p>}
                     </div>
                   </div>
                 </motion.div>
@@ -11581,7 +11585,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     // photo and PiP are in the "+").
                     className="flex w-full min-w-0 items-center justify-between gap-1 self-end pl-1"
                   >
-                    <div data-qa="live-demo-voice-usage" className="flex min-w-0 flex-col items-start justify-center leading-4">
+                    <div data-qa="live-demo-voice-usage" className={`flex min-w-0 flex-col items-start justify-center leading-4 ${trialSpeechLength ? 'invisible' : ''}`}>
                       {isUsageLimited ? (
                         <span className="flex min-w-0 max-w-full items-center gap-1.5">
                           <span className="h-1.5 w-12 shrink-0 overflow-hidden rounded-full bg-gray-200">

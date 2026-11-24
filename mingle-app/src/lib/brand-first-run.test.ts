@@ -33,10 +33,13 @@ describe('first run speaks as the friends app', () => {
 
   it('asks for first words to a friend, not for a try of the interpreter', () => {
     expect(resolveFirstRunCopy('ko').speakTitle).toBe('외국인 친구에게 건넬 첫 마디, 먼저 말해 볼까요?')
-    expect(resolveSpeakTrialCopy('ko').hint).toBe('Start를 누르고, 10초 동안 아래 문장을 말해 보세요')
+    // Owner, 2026-11-25: no Start to press (the room listens by itself), few words.
+    expect(resolveSpeakTrialCopy('ko').hint).toBe('음성 인식 테스트')
+    expect(resolveSpeakTrialCopy('ko').followAlong).toBe('따라 해 보세요')
     for (const locale of PRIMARY_UI_LOCALES) {
       expect(resolveFirstRunCopy(locale).speakTitle.trim(), locale).not.toBe('')
-      expect(resolveSpeakTrialCopy(locale).hint, locale).toContain('10')
+      expect(resolveSpeakTrialCopy(locale).hint, locale).not.toContain('Start')
+      expect(resolveSpeakTrialCopy(locale).followAlong.trim(), locale).not.toBe('')
     }
   })
 

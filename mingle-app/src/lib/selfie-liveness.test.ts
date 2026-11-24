@@ -122,8 +122,8 @@ describe('selfie check steps', () => {
     expect(screen).toContain('bg-white text-gray-950')
     expect(screen).not.toContain('bg-gray-950 text-white"')
     expect(read('../components/my-page.tsx')).toContain('onPhotoUploaded={(image) =>')
-    // The first-message sheet uploads through the same helper.
-    expect(read('../components/first-message-gate.tsx')).toContain('await uploadProfilePhotoWithFaceCheck(file, userId)')
+    // The first-message sheet opens this screen (a photo is added here when there is none).
+    expect(read('../components/first-message-gate.tsx')).toContain('hasPhoto={!needs.includes("face_photo")}')
   })
 
   // Owner, 2026-11-20: the camera should be on before Start, and the turn should be shown, not only told.

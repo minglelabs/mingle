@@ -75,7 +75,10 @@ function CountdownRing({ secondsLeft, active, label }: { secondsLeft: number; ac
 
 /**
  * Before sign-in, a new device speaks for SPEAK_TRIAL_SECONDS in a room with
- * no menu and no back button (only the countdown in the header). When time
+ * no menu and no back button (only the countdown in the header). The room
+ * starts listening on its own (and again after a try that heard nothing);
+ * only the card on top says anything: "음성 인식 테스트", "따라 해 보세요" and
+ * the line. When time
  * is up (or the user stops), it asks how it was and lets them pick the
  * sentence length, the recommended one already chosen; then `onDone` moves
  * on to sign-in. The pick is kept for the account (@/lib/speak-trial).
@@ -225,8 +228,12 @@ export default function SpeakTrial({
           speechLength: DEFAULT_SPEECH_LENGTH_LEVEL,
           headerAccessory,
           topInsetPx: phase === "ready" || phase === "listening" ? hintCardHeight + 24 : undefined,
-          highlightStart: phase === "ready",
+          // No Start to find (owner, 2026-11-25): the room starts listening
+          // by itself, the mic prompt first if needed; the ten seconds count
+          // from when it really listens.
+          highlightStart: false,
         }}
+        autoStartOnMount={phase === "ready"}
         onSttSessionRunningChange={handleRunningChange}
         onSttListeningChange={handleListeningChange}
         onConversationStatsChange={(stats) => {
@@ -249,19 +256,19 @@ export default function SpeakTrial({
               <p data-qa="speak-trial-hint" className="text-[1.05rem] font-bold leading-snug">
                 {silentTries > 0 ? copy.retryHint : copy.hint}
               </p>
-              <p data-qa="speak-trial-phrase" className="mt-2.5 rounded-2xl bg-white px-4 py-3 text-[1.3rem] font-extrabold leading-snug text-slate-950">
+              <p className="mt-1 text-[0.9rem] font-medium text-white/75">{copy.followAlong}</p>
+              <p data-qa="speak-trial-phrase" className="mt-2 rounded-2xl bg-white px-4 py-3 text-[1.3rem] font-extrabold leading-snug text-slate-950">
                 “{phrase}”
               </p>
-              {phase === "ready" ? (
-                <button
-                  type="button"
-                  data-qa="speak-trial-have-account"
-                  onClick={skip}
-                  className="pointer-events-auto mt-2.5 rounded-full px-3 py-1.5 text-[0.85rem] font-semibold text-white/75 underline-offset-4 active:text-white"
-                >
-                  {copy.haveAccount}
-                </button>
-              ) : null}
+              {/* Shown while listening too: the room starts by itself, so "ready" lasts a moment. */}
+              <button
+                type="button"
+                data-qa="speak-trial-have-account"
+                onClick={skip}
+                className="pointer-events-auto mt-2.5 rounded-full px-3 py-1.5 text-[0.85rem] font-semibold text-white/75 underline-offset-4 active:text-white"
+              >
+                {copy.haveAccount}
+              </button>
             </div>
           </motion.div>
         ) : null}
