@@ -409,7 +409,7 @@ async function libraryPostRequest(
     const look = specSubject(spec) ?? describeAccountLook(persona, seededRandom(`${operatorUserId}:look`))
     const place = brief.place ?? await reservePostPlace(operatorUserId)
     const prompt = [
-      ...referenceRecreateLines({ kind, look, poster: Boolean(poster), fit: brief.description }),
+      ...referenceRecreateLines({ kind, look, poster: Boolean(poster), fit: brief.description, note: photo.note }),
       ...(place ? [`It was taken around ${place}.`] : []),
       'Vertical 3:4 image, one single photo (never two side by side). No watermarks, logos, borders or frames.',
     ].join('\n')

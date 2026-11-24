@@ -144,7 +144,7 @@ export async function createNextSeedAccount(
     // A new account waiting for review gets its photo now, so staff judge both together.
     if (options.inReview && canDrawImagesHere()) {
       const bytes = reference ? await loadReferenceBytes(reference).catch(() => null) : null
-      const libraryReference = reference && bytes ? { reference: bytes, kind: referenceKindOf(reference) } : null
+      const libraryReference = reference && bytes ? { reference: bytes, kind: referenceKindOf(reference), note: reference.note } : null
       const drawn = await generateOperatorAvatar(ctx, account.userId, { now: options.now, ...(libraryReference ? { libraryReference } : {}) }).catch(() => null)
       // A photo that was not drawn from goes back to the library for the next account.
       referenceUsed = Boolean(reference && libraryReference && drawn?.ok)

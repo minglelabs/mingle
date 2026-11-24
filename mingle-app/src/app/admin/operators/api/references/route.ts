@@ -24,6 +24,7 @@ export async function GET() {
  * POST (form): `file` (one or more) adds photos to the library. `kind` (face |
  * person | thing) and `gender` (female | male | none) set them for the whole
  * batch; left out (or `auto`), Claude looks at each photo and tags it.
+ * `note` is staff's one-line note for every photo of the batch.
  */
 export async function POST(request: Request) {
   const auth = await requireAdminApi()
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
   const fixedGender: ReferenceGender | null | undefined = rawGender === 'female' || rawGender === 'male' ? rawGender : rawGender === 'none' ? null : undefined
   const rawKind = form.get('kind')
   const fixedKind: ReferenceKind | undefined = rawKind === 'face' || rawKind === 'person' || rawKind === 'thing' ? rawKind : undefined
+  const note = typeof form.get('note') === 'string' ? form.get('note') as string : null
   const files = form.getAll('file').filter((value): value is File => value instanceof File && value.size > 0)
   if (files.length === 0) return json({ error: 'file_required' }, 400)
   let added = 0
@@ -48,6 +50,7 @@ export async function POST(request: Request) {
         kind,
         gender: kind === 'thing' ? null : fixedGender !== undefined ? fixedGender : look?.gender ?? null,
         summary: look?.summary ?? null,
+        note,
       })
       added += 1
     } catch (error) {
