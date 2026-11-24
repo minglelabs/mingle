@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client'
 import sharp from 'sharp'
 import { prisma } from '@/lib/prisma'
 import { deletePostImage, getPostImage, putPostImage } from '@/server/posts/post-image-storage'
+import type { ReferenceAttributes } from './classify'
 
 /**
  * 레퍼런스 짤 저장소 (staff, 2026-11-24): photos staff pour in so new operator
@@ -47,6 +48,8 @@ export type ReferencePhoto = {
   summary: string | null
   /** Staff's own one-line note on the photo; goes into the drawing prompt. */
   note: string | null
+  /** What the automatic look read off the photo, axis by axis (classify.ts). */
+  attributes: ReferenceAttributes | null
   createdAt: string
   usedBy: ReferenceUse | null
 }
@@ -81,6 +84,7 @@ function parseItems(value: unknown): ReferencePhoto[] {
       kind: parseKind(row.kind),
       summary: typeof row.summary === 'string' ? row.summary : null,
       note: typeof row.note === 'string' && row.note.trim() ? row.note : null,
+      attributes: row.attributes && typeof row.attributes === 'object' && !Array.isArray(row.attributes) ? row.attributes as ReferenceAttributes : null,
       createdAt: typeof row.createdAt === 'string' ? row.createdAt : new Date(0).toISOString(),
       usedBy: used && typeof used.userId === 'string' && (used.kind === 'avatar' || used.kind === 'post')
         ? { userId: used.userId, kind: used.kind, at: typeof used.at === 'string' ? used.at : new Date(0).toISOString() }
@@ -117,7 +121,7 @@ async function updateLibrary<T>(change: (items: ReferencePhoto[]) => { items: Re
 }
 
 /** Stores one uploaded photo (re-encoded, at most 1600 px) and adds it to the library. */
-export async function addReferencePhoto(bytes: Buffer, tags: { gender: ReferenceGender | null; kind: ReferenceKind | null; summary?: string | null; note?: string | null }): Promise<ReferencePhoto> {
+export async function addReferencePhoto(bytes: Buffer, tags: { gender: ReferenceGender | null; kind: ReferenceKind | null; summary?: string | null; note?: string | null; attributes?: ReferenceAttributes | null }): Promise<ReferencePhoto> {
   const { data, info } = await sharp(bytes, { limitInputPixels: 80_000_000 })
     .rotate()
     .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
@@ -128,11 +132,19 @@ export async function addReferencePhoto(bytes: Buffer, tags: { gender: Reference
   await putPostImage(objectKey, data)
   const photo: ReferencePhoto = {
     id, objectKey, width: info.width ?? null, height: info.height ?? null,
-    gender: referenceKindHasGender(tags.kind) ? tags.gender : null, kind: tags.kind, summary: tags.summary ?? null, note: normalizeReferenceNote(tags.note),
+    gender: referenceKindHasGender(tags.kind) ? tags.gender : null, kind: tags.kind, summary: tags.summary ?? null, note: normalizeReferenceNote(tags.note), attributes: tags.attributes ?? null,
     createdAt: new Date().toISOString(), usedBy: null,
   }
   await updateLibrary((items) => ({ items: [photo, ...items], result: null }))
   return photo
+}
+
+/** Stores a fresh automatic look (description and attributes); kind and gender stay as they are. */
+export async function setReferenceAnalysis(id: string, analysis: { summary: string | null; attributes: ReferenceAttributes | null }): Promise<boolean> {
+  return updateLibrary((items) => {
+    const found = items.some((item) => item.id === id)
+    return { items: items.map((item) => (item.id === id ? { ...item, ...analysis } : item)), result: found }
+  })
 }
 
 export const REFERENCE_NOTE_MAX_LENGTH = 200

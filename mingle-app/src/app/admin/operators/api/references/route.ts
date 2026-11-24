@@ -69,6 +69,7 @@ export async function POST(request: Request) {
         kind,
         gender: !referenceKindHasGender(kind) ? null : fixedGender !== undefined ? fixedGender : look?.gender ?? null,
         summary: look?.summary ?? null,
+        attributes: look?.attributes ?? null,
         note,
       })
       added += 1

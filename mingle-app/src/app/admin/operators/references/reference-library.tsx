@@ -8,6 +8,7 @@ import type { ReferenceGender, ReferenceKind } from '@/server/reference-library/
 import type { ReferencePhotoView } from '@/server/reference-library/view'
 import { adminProfileHref } from '../../_lib/profile-href'
 import { UploadQueueOverlay, type QueueItem } from './upload-queue-overlay'
+import { ReferenceAttributesView } from './reference-attributes'
 import { reviewImageUrl } from '../review/review-image-url'
 
 /** How the page asks about a photo: how many people first, then (for one person) face and gender. */
@@ -317,6 +318,7 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag }: { initialIt
           key={editing.id}
           item={editing}
           canDraw={canDraw}
+          autoTag={autoTag}
           onSave={saveTags}
           onRemove={remove}
           onItems={setItems}
@@ -328,9 +330,10 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag }: { initialIt
 }
 
 /** The sheet a photo opens: its tags and note to change, plus 계정 만들기 and 지우기. */
-function ReferenceEditor({ item, canDraw, onSave, onRemove, onItems, onClose }: {
+function ReferenceEditor({ item, canDraw, autoTag, onSave, onRemove, onItems, onClose }: {
   item: ReferencePhotoView
   canDraw: boolean
+  autoTag: boolean
   onSave: (id: string, tags: Tags) => Promise<boolean>
   onRemove: (id: string) => Promise<boolean>
   onItems: (items: ReferencePhotoView[]) => void
@@ -341,8 +344,26 @@ function ReferenceEditor({ item, canDraw, onSave, onRemove, onItems, onClose }: 
   const [faceShown, setFaceShown] = useState(kind !== 'person')
   const [gender, setGender] = useState<GenderChoice>(item.gender ?? 'unknown')
   const [note, setNote] = useState(item.note ?? '')
-  const [busy, setBusy] = useState<'save' | 'remove' | 'create' | null>(null)
+  const [busy, setBusy] = useState<'save' | 'remove' | 'create' | 'analyze' | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [analysis, setAnalysis] = useState({ summary: item.summary, attributes: item.attributes })
+
+  async function reanalyze() {
+    setBusy('analyze')
+    setMessage(null)
+    try {
+      const response = await fetch(`/admin/operators/api/references/${encodeURIComponent(item.id)}/analyze`, { method: 'POST' })
+      const body = await response.json().catch(() => ({})) as { summary?: string | null; attributes?: ReferencePhotoView['attributes']; suggested?: { kind: ReferenceKind; gender: ReferenceGender | null } }
+      if (!response.ok) throw new Error()
+      setAnalysis({ summary: body.summary ?? null, attributes: body.attributes ?? null })
+      const suggested = body.suggested
+      if (suggested && (suggested.kind !== kindFrom(people, faceShown))) setMessage(`AI는 '${KIND_LABEL[suggested.kind]}'로 봤어요. 맞으면 위에서 바꾸고 저장하세요.`)
+    } catch {
+      setMessage('AI 분석에 실패했어요.')
+    } finally {
+      setBusy(null)
+    }
+  }
 
   async function save() {
     setBusy('save')
@@ -404,12 +425,21 @@ function ReferenceEditor({ item, canDraw, onSave, onRemove, onItems, onClose }: 
         </div>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={reviewImageUrl(item.objectKey)} alt="" className="mx-auto max-h-[42dvh] w-auto max-w-full rounded-xl bg-slate-100 object-contain" />
-        {item.summary ? (
-          <details className="mt-2 text-xs text-slate-500">
-            <summary className="cursor-pointer font-semibold text-slate-600">AI 묘사 보기</summary>
-            <p className="mt-1 whitespace-pre-wrap leading-5">{item.summary}</p>
-          </details>
-        ) : null}
+        <details className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500">
+          <summary className="cursor-pointer font-semibold text-slate-600">AI 판별 {analysis.attributes || analysis.summary ? '보기' : '없음'}</summary>
+          {analysis.attributes ? <div className="mt-2"><ReferenceAttributesView attributes={analysis.attributes} /></div> : null}
+          {analysis.summary ? <p className="mt-2 whitespace-pre-wrap leading-5">{analysis.summary}</p> : null}
+          {autoTag ? (
+            <button
+              type="button"
+              onClick={() => void reanalyze()}
+              disabled={busy !== null}
+              className="mt-2 inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 font-semibold text-slate-700 disabled:opacity-50"
+            >
+              {busy === 'analyze' ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : null}AI 다시 분석
+            </button>
+          ) : null}
+        </details>
         {item.usedBy ? (
           <p className="mt-2 text-xs font-semibold text-slate-600">
             {item.usedBy.kind === 'avatar' ? '프사에 씀' : '글 사진에 씀'}
