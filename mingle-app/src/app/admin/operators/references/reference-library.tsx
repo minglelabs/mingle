@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
-import { Loader2, Trash2, UserPlus, X } from 'lucide-react'
+import { Loader2, RefreshCw, Trash2, UserPlus, X } from 'lucide-react'
 import type { ReferenceGender, ReferenceKind } from '@/server/reference-library/library'
 import type { ReferencePhotoView } from '@/server/reference-library/view'
 import { adminProfileHref } from '../../_lib/profile-href'
@@ -201,6 +201,29 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag }: { initialIt
     return true
   }, [])
 
+  // 전체 AI 다시 분석: one photo at a time through the per-photo endpoint, so progress shows and nothing times out.
+  const [reanalysis, setReanalysis] = useState<{ done: number; total: number; failed: number; differs: number } | null>(null)
+  const reanalyzeAll = useCallback(async () => {
+    const targets = items.map((item) => ({ id: item.id, kind: item.kind ?? 'face' }))
+    if (!targets.length || !window.confirm(`사진 ${targets.length}장을 AI로 다시 분석할까요? 설명과 판별만 바뀌고, 사람 수·얼굴·성별은 그대로예요.`)) return
+    let failed = 0
+    let differs = 0
+    setReanalysis({ done: 0, total: targets.length, failed, differs })
+    for (const [index, target] of targets.entries()) {
+      try {
+        const response = await fetch(`/admin/operators/api/references/${encodeURIComponent(target.id)}/analyze`, { method: 'POST' })
+        const body = await response.json().catch(() => ({})) as { summary?: string | null; attributes?: ReferencePhotoView['attributes']; suggested?: { kind: ReferenceKind } }
+        if (!response.ok) throw new Error()
+        setItems((current) => current.map((item) => (item.id === target.id ? { ...item, summary: body.summary ?? null, attributes: body.attributes ?? null } : item)))
+        if (body.suggested && body.suggested.kind !== target.kind) differs += 1
+      } catch {
+        failed += 1
+      }
+      setReanalysis({ done: index + 1, total: targets.length, failed, differs })
+    }
+  }, [items])
+  const reanalyzing = reanalysis !== null && reanalysis.done < reanalysis.total
+
   const unused = items.filter((item) => !item.usedBy).length
   const shown = items.filter((item) => (filter === 'all' ? true : filter === 'used' ? Boolean(item.usedBy) : !item.usedBy))
   const editing = editingId ? items.find((item) => item.id === editingId) ?? null : null
@@ -275,7 +298,24 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag }: { initialIt
             {label}
           </button>
         ))}
+        {autoTag && items.length ? (
+          <button
+            type="button"
+            onClick={() => void reanalyzeAll()}
+            disabled={reanalyzing}
+            className="ml-auto inline-flex min-h-9 items-center gap-1.5 rounded-full bg-white px-3 font-semibold text-slate-700 ring-1 ring-slate-200 disabled:opacity-60"
+          >
+            {reanalyzing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
+            {reanalyzing ? `분석 중 ${reanalysis.done}/${reanalysis.total}` : '전체 AI 다시 분석'}
+          </button>
+        ) : null}
       </div>
+      {reanalysis && !reanalyzing ? (
+        <p role="status" className="mt-2 text-xs font-semibold text-slate-700">
+          {reanalysis.total - reanalysis.failed}장 다시 분석함{reanalysis.failed ? ` · ${reanalysis.failed}장 실패` : ''}
+          {reanalysis.differs ? ` · AI가 종류를 다르게 본 사진 ${reanalysis.differs}장 (사진을 눌러 확인)` : ''}
+        </p>
+      ) : null}
       <p className="mt-2 text-xs leading-5 text-slate-500">
         안 쓴 사진은 오래된 순서로 씁니다. 새 계정 프사는 아무 사진이나 한 장(1명 사진이면 그 성별로 계정 생성). 글 사진은 셀카 ← 1명·얼굴 보임, 얼굴 없는 셀카·뒷모습 ← 1명·얼굴 안 보임, 친구 사진 ← 2명 이상, 일상 사진 ← 사람 없음. 한 장은 한 계정만 씁니다.
         {' '}남은 사진: {KIND_ORDER.map((kind) => `${KIND_LABEL[kind]} ${items.filter((item) => !item.usedBy && (item.kind ?? 'face') === kind).length}`).join(' · ')}

@@ -117,7 +117,8 @@ async function updateLibrary<T>(change: (items: ReferencePhoto[]) => { items: Re
       data: { value: { items } as unknown as Prisma.InputJsonValue },
     })
     return result
-  })
+  // The pooled connection can be slow to answer (a script run from a laptop): more than Prisma's 5 s default.
+  }, { maxWait: 15_000, timeout: 30_000 })
 }
 
 /** Stores one uploaded photo (re-encoded, at most 1600 px) and adds it to the library. */
