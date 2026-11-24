@@ -245,7 +245,7 @@ export async function generateOperatorAvatar(
   options: {
     nonce?: string; now?: Date; fetchImpl?: typeof fetch; feedback?: string | null; reference?: AvatarReference
     /** A photo from the reference library: the photo is that shot redrawn (a person with this account's own face; a thing as another photo of its kind). */
-    libraryReference?: { reference: AvatarReference; kind: ReferenceKind }
+    libraryReference?: { reference: AvatarReference; kind: ReferenceKind; note?: string | null }
     /** A live account: the photo waits for staff review instead of replacing the current one (avatar-candidate.ts). */
     candidate?: boolean
   } = {},
@@ -267,7 +267,7 @@ export async function generateOperatorAvatar(
         attributes: { source: 'reference_library', referenceKind: library.kind },
         prompt: [
           ...(library.kind === 'face' ? [`Subject: ${look}.`] : []),
-          ...referenceRecreateLines({ kind: library.kind, look }),
+          ...referenceRecreateLines({ kind: library.kind, look, note: library.note }),
           'Vertical 3:4 image, one single photo. No watermarks, logos, borders or frames.',
         ].join('\n'),
       }

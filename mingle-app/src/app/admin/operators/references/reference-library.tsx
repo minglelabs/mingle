@@ -31,6 +31,9 @@ export function ReferenceLibrary({ initialItems, canDraw }: { initialItems: Refe
   genderRef.current = gender
   const kindRef = useRef(kind)
   kindRef.current = kind
+  const [note, setNote] = useState('')
+  const noteRef = useRef(note)
+  noteRef.current = note
 
   const upload = useCallback(async (files: File[]) => {
     const images = files.filter(isImage)
@@ -46,6 +49,7 @@ export function ReferenceLibrary({ initialItems, canDraw }: { initialItems: Refe
       for (const file of batch) form.append('file', file)
       form.set('gender', genderRef.current)
       form.set('kind', kindRef.current)
+      if (noteRef.current.trim()) form.set('note', noteRef.current.trim())
       try {
         const response = await fetch('/admin/operators/api/references', { method: 'POST', body: form })
         const body = await response.json().catch(() => ({})) as { added?: number; rejected?: number; items?: ReferencePhotoView[] }
@@ -59,6 +63,7 @@ export function ReferenceLibrary({ initialItems, canDraw }: { initialItems: Refe
       }
     }
     setStatus(`${added}장 추가${rejected ? ` · ${rejected}장 실패` : ''}`)
+    if (added) setNote('')
   }, [])
 
   useEffect(() => {
@@ -74,7 +79,7 @@ export function ReferenceLibrary({ initialItems, canDraw }: { initialItems: Refe
     return () => document.removeEventListener('paste', onPaste)
   }, [upload])
 
-  const setItemTags = useCallback(async (id: string, tags: { gender?: ReferenceGender | null; kind?: ReferenceKind }) => {
+  const setItemTags = useCallback(async (id: string, tags: { gender?: ReferenceGender | null; kind?: ReferenceKind; note?: string | null }) => {
     setItems((current) => current.map((item) => (item.id === id ? { ...item, ...tags } : item)))
     await fetch(`/admin/operators/api/references/${encodeURIComponent(id)}`, {
       method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(tags),
@@ -135,6 +140,13 @@ export function ReferenceLibrary({ initialItems, canDraw }: { initialItems: Refe
             </button>
           ))}
         </div>
+        <input
+          type="text"
+          value={note}
+          onChange={(event) => setNote(event.target.value.slice(0, 200))}
+          placeholder="한 줄 설명 (선택) — 이번에 올리는 사진 모두에 붙어요"
+          className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2 text-base text-slate-900 outline-none focus:border-slate-400 sm:text-sm"
+        />
         <label className="mt-3 inline-flex min-h-11 cursor-pointer items-center justify-center rounded-xl bg-sky-600 px-4 text-sm font-semibold text-white active:bg-sky-700">
           {uploading ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" />올리는 중 {uploading}</> : '사진 고르기'}
           <input type="file" accept="image/*" multiple className="sr-only" onChange={(event) => { void upload(Array.from(event.target.files ?? [])); event.target.value = '' }} />
@@ -180,12 +192,17 @@ export function ReferenceLibrary({ initialItems, canDraw }: { initialItems: Refe
 function ReferenceCard({ item, canDraw, onTags, onRemove, onUsed }: {
   item: ReferencePhotoView
   canDraw: boolean
-  onTags: (id: string, tags: { gender?: ReferenceGender | null; kind?: ReferenceKind }) => void
+  onTags: (id: string, tags: { gender?: ReferenceGender | null; kind?: ReferenceKind; note?: string | null }) => void
   onRemove: (id: string) => void
   onUsed: (items: ReferencePhotoView[]) => void
 }) {
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [noteDraft, setNoteDraft] = useState(item.note ?? '')
+  const saveNote = () => {
+    const next = noteDraft.trim()
+    if (next !== (item.note ?? '')) onTags(item.id, { note: next || null })
+  }
 
   async function createAccount() {
     if (!window.confirm('이 사진으로 새 운영 계정을 만들까요? 계정은 검토 탭에 들어가고, 프사를 그리는 데 몇 분 걸려요.')) return
@@ -247,7 +264,17 @@ function ReferenceCard({ item, canDraw, onTags, onRemove, onUsed }: {
             ))}
           </div>
         ) : null}
-        {item.summary ? <p className="line-clamp-2 text-[11px] leading-4 text-slate-400">{item.summary}</p> : null}
+        <input
+          type="text"
+          value={noteDraft}
+          onChange={(event) => setNoteDraft(event.target.value.slice(0, 200))}
+          onBlur={saveNote}
+          onKeyDown={(event) => { if (event.key === 'Enter') (event.target as HTMLInputElement).blur() }}
+          placeholder="한 줄 설명"
+          aria-label="한 줄 설명"
+          className="min-h-8 w-full rounded-lg border border-slate-200 px-2 text-base text-slate-800 outline-none focus:border-slate-400 sm:text-xs"
+        />
+        {item.summary ? <p className="line-clamp-2 text-[11px] leading-4 text-slate-400">AI: {item.summary}</p> : null}
         {item.usedByAccount ? (
           <Link href={adminProfileHref(item.usedByAccount.userId, '/admin/operators/references')} className="block truncate text-xs font-semibold text-sky-700">
             {item.usedByAccount.name ?? `@${item.usedByAccount.handle}`} @{item.usedByAccount.handle}

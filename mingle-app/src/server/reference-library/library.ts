@@ -32,6 +32,8 @@ export type ReferencePhoto = {
   kind: ReferenceKind | null
   /** One line on what the photo shows (from the automatic look at upload). */
   summary: string | null
+  /** Staff's own one-line note on the photo; goes into the drawing prompt. */
+  note: string | null
   createdAt: string
   usedBy: ReferenceUse | null
 }
@@ -65,6 +67,7 @@ function parseItems(value: unknown): ReferencePhoto[] {
       gender: parseGender(row.gender),
       kind: parseKind(row.kind),
       summary: typeof row.summary === 'string' ? row.summary : null,
+      note: typeof row.note === 'string' && row.note.trim() ? row.note : null,
       createdAt: typeof row.createdAt === 'string' ? row.createdAt : new Date(0).toISOString(),
       usedBy: used && typeof used.userId === 'string' && (used.kind === 'avatar' || used.kind === 'post')
         ? { userId: used.userId, kind: used.kind, at: typeof used.at === 'string' ? used.at : new Date(0).toISOString() }
@@ -101,7 +104,7 @@ async function updateLibrary<T>(change: (items: ReferencePhoto[]) => { items: Re
 }
 
 /** Stores one uploaded photo (re-encoded, at most 1600 px) and adds it to the library. */
-export async function addReferencePhoto(bytes: Buffer, tags: { gender: ReferenceGender | null; kind: ReferenceKind | null; summary?: string | null }): Promise<ReferencePhoto> {
+export async function addReferencePhoto(bytes: Buffer, tags: { gender: ReferenceGender | null; kind: ReferenceKind | null; summary?: string | null; note?: string | null }): Promise<ReferencePhoto> {
   const { data, info } = await sharp(bytes, { limitInputPixels: 80_000_000 })
     .rotate()
     .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
@@ -112,19 +115,32 @@ export async function addReferencePhoto(bytes: Buffer, tags: { gender: Reference
   await putPostImage(objectKey, data)
   const photo: ReferencePhoto = {
     id, objectKey, width: info.width ?? null, height: info.height ?? null,
-    gender: tags.kind === 'thing' ? null : tags.gender, kind: tags.kind, summary: tags.summary ?? null,
+    gender: tags.kind === 'thing' ? null : tags.gender, kind: tags.kind, summary: tags.summary ?? null, note: normalizeReferenceNote(tags.note),
     createdAt: new Date().toISOString(), usedBy: null,
   }
   await updateLibrary((items) => ({ items: [photo, ...items], result: null }))
   return photo
 }
 
-export async function updateReferenceTags(id: string, tags: { gender?: ReferenceGender | null; kind?: ReferenceKind }): Promise<boolean> {
+export const REFERENCE_NOTE_MAX_LENGTH = 200
+
+export function normalizeReferenceNote(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const note = value.replace(/\s+/g, ' ').trim().slice(0, REFERENCE_NOTE_MAX_LENGTH)
+  return note || null
+}
+
+export async function updateReferenceTags(id: string, tags: { gender?: ReferenceGender | null; kind?: ReferenceKind; note?: string | null }): Promise<boolean> {
   return updateLibrary((items) => {
     const found = items.some((item) => item.id === id)
     return {
       items: items.map((item) => (item.id === id
-        ? { ...item, ...(tags.kind ? { kind: tags.kind } : {}), ...(tags.gender !== undefined ? { gender: tags.gender } : {}) }
+        ? {
+          ...item,
+          ...(tags.kind ? { kind: tags.kind } : {}),
+          ...(tags.gender !== undefined ? { gender: tags.gender } : {}),
+          ...(tags.note !== undefined ? { note: normalizeReferenceNote(tags.note) } : {}),
+        }
         : item)),
       result: found,
     }
@@ -197,9 +213,13 @@ const NO_INTERFACE_LINE = 'If the attached photo is a screenshot of an app or a 
  * `poster` = the attachment is two photos side by side, the reference LEFT and
  * the poster RIGHT, whose face the new photo keeps.
  */
-export function referenceRecreateLines(input: { kind: ReferenceKind; look: string | null; poster?: boolean; fit?: string | null }): string[] {
+export function referenceRecreateLines(input: { kind: ReferenceKind; look: string | null; poster?: boolean; fit?: string | null; note?: string | null }): string[] {
   const fit = input.fit?.trim()
-  const fitLine = fit ? [`What the photo is for (change details so it fits, keeping the shot): ${fit}`] : []
+  const note = input.note?.trim()
+  const fitLine = [
+    ...(note ? [`Staff note about the reference photo, to follow: ${note}`] : []),
+    ...(fit ? [`What the photo is for (change details so it fits, keeping the shot): ${fit}`] : []),
+  ]
   if (input.kind === 'thing') {
     return [
       'Recreate the attached photo as a new phone photo, as if the same person took another photo of the same kind of thing.',

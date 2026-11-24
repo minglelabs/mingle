@@ -18,3 +18,9 @@ describe('reference photo classification', () => {
     expect(paired).toMatch(/must NOT be the face of the person in the LEFT photo/)
   })
 })
+
+describe('reference note', () => {
+  it('puts staff note into the prompt', () => {
+    expect(referenceRecreateLines({ kind: 'thing', look: null, note: '라멘 말고 우동으로' }).join('\n')).toMatch(/Staff note about the reference photo, to follow: 라멘 말고 우동으로/)
+  })
+})
