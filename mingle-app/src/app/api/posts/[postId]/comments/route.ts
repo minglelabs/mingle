@@ -5,7 +5,7 @@ import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
 import { visibleSinglePostWhere } from '@/server/posts/post-visibility'
 import { visibleCommentsWhere } from '@/server/posts/comment-visibility'
-import { createComment } from '@/server/posts/comment-service'
+import { createComment, settleNewCommentTranslations } from '@/server/posts/comment-service'
 import { createPostNotification } from '@/server/notifications/create-post-notification'
 import { detectSourceLanguageVerdict } from '@/server/translation/detect-source-language'
 import {
@@ -314,38 +314,20 @@ export async function POST(request: NextRequest, context: Ctx) {
   const pId = typeof parentId === 'string' && parentId.trim() ? parentId.trim() : null
   const rUserId = typeof replyToUserId === 'string' && replyToUserId.trim() ? replyToUserId.trim() : null
 
-  // Server detection is authoritative; the client language is only a fallback
-  // hint. Detect, then translate the default languages (minus source) and let
-  // them settle BEFORE the comment is committed (settle-then-commit) so the
-  // comment and its translations become visible together.
-  // A photo-only comment has no body to detect or translate.
-  const verdict = hasText ? await detectSourceLanguageVerdict({ text, clientHint: lang }) : null
-  const detected = verdict?.language ?? null
-  // A mixed body is translated into its own language too.
-  const mixed = Boolean(detected) && verdict?.mixed === true
-  const settledRows =
-    detected && detected.trim().length > 0
-      ? (
-          await translateCommentBodySettled({
-            sourceText: text,
-            sourceLanguage: detected,
-            targetLanguages: resolveDefaultPostTranslationLanguages(detected, null, mixed),
-            sourceLanguagesMixed: mixed,
-          })
-        ).map((r) => ({ language: r.language, status: r.status, text: r.text }))
-      : []
-
+  // The comment is committed right away, without a language: detecting it and
+  // translating it are LLM calls that made posting feel stuck. Both run after
+  // the response (see below); other viewers get the translations once they
+  // land, and the author sees them the next time the sheet loads.
   let comment
   try {
     comment = await createComment({
       postId,
       authorId: userId,
       sourceText: text,
-      sourceLanguage: detected,
-      sourceLanguagesMixed: mixed,
+      sourceLanguage: null,
+      sourceLanguagesMixed: false,
       parentId: pId,
       replyToUserId: rUserId,
-      translationRows: settledRows,
       image,
     })
   } catch (err: unknown) {
@@ -362,6 +344,35 @@ export async function POST(request: NextRequest, context: Ctx) {
     markPostViewedQuietly(userId, postId),
     prisma.user.findUnique({ where: { id: userId }, select: USER_IDENTITY_SELECT }),
   ])
+
+  // Server detection is authoritative; the client language is only a fallback
+  // hint. A photo-only comment has no body to detect or translate.
+  if (hasText) {
+    const commentId = comment.id
+    after(async () => {
+      try {
+        const verdict = await detectSourceLanguageVerdict({ text, clientHint: lang })
+        const detected = verdict.language?.trim() ?? ''
+        if (!detected) return
+        // A mixed body is translated into its own language too.
+        const mixed = verdict.mixed === true
+        const rows = await translateCommentBodySettled({
+          sourceText: text,
+          sourceLanguage: detected,
+          targetLanguages: resolveDefaultPostTranslationLanguages(detected, null, mixed),
+          sourceLanguagesMixed: mixed,
+        })
+        await settleNewCommentTranslations({
+          commentId,
+          sourceLanguage: detected,
+          sourceLanguagesMixed: mixed,
+          translationRows: rows.map((r) => ({ language: r.language, status: r.status, text: r.text })),
+        })
+      } catch (error) {
+        console.warn('[comments] late translation failed', { commentId, error: String(error) })
+      }
+    })
+  }
 
   // Notify the right recipient. A reply notifies the person being replied to,
   // which createComment derives from server state (never the client's

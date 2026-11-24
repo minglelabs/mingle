@@ -13,7 +13,9 @@ const {
   mockTranslateCommentBodySettled,
   mockResolveDefaultPostTranslationLanguages,
   mockCreatePostNotification,
+  mockSettleNewCommentTranslations,
 } = vi.hoisted(() => ({
+  mockSettleNewCommentTranslations: vi.fn(),
   mockGetServerSession: vi.fn(),
   mockPostFindFirst: vi.fn(),
   mockCommentFindMany: vi.fn(),
@@ -46,6 +48,7 @@ vi.mock('@/server/feed/post-view', () => ({ markPostViewedQuietly: mockMarkPostV
 vi.mock('@/server/posts/comment-service', () => ({
   createComment: mockCreateComment,
   deleteComment: mockDeleteComment,
+  settleNewCommentTranslations: mockSettleNewCommentTranslations,
 }))
 vi.mock('@/server/notifications/create-post-notification', () => ({
   createPostNotification: mockCreatePostNotification,
@@ -437,7 +440,28 @@ describe('POST /api/posts/{postId}/comments', () => {
     expect(body.author).toMatchObject({ id: 'user-1', name: 'Royce', image: 'https://cdn/new.jpg' })
   })
 
-  it('creates comment successfully with server-detected language + settled translations', async () => {
+  it('commits the comment without waiting on detection or translation', async () => {
+    mockCreateComment.mockResolvedValue({
+      id: 'c1', postId: 'post-1', parentId: null,
+      replyToUserId: null, bodyVersion: 1, createdAt: new Date(),
+    })
+    // Detection never settles: the response must not wait on it.
+    mockDetectSourceLanguage.mockReturnValue(new Promise(() => {}))
+
+    const res = await POST(
+      makeRequest({ sourceText: 'Nice post!', sourceLanguage: 'en' }),
+      makeCtx('post-1'),
+    )
+    expect(res.status).toBe(201)
+    expect((await res.json()).id).toBe('c1')
+    expect(mockCreateComment).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceText: 'Nice post!', sourceLanguage: null }),
+    )
+    expect(mockCreateComment.mock.calls[0][0].translationRows).toBeUndefined()
+    expect(mockSettleNewCommentTranslations).not.toHaveBeenCalled()
+  })
+
+  it('detects and translates after the response, then settles them on the comment', async () => {
     mockCreateComment.mockResolvedValue({
       id: 'c1', postId: 'post-1', parentId: null,
       replyToUserId: null, bodyVersion: 1, createdAt: new Date(),
@@ -448,19 +472,18 @@ describe('POST /api/posts/{postId}/comments', () => {
       makeCtx('post-1'),
     )
     expect(res.status).toBe(201)
-    const body = await res.json()
-    expect(body.id).toBe('c1')
-    // Server detection is authoritative and passed to createComment.
+    await vi.waitFor(() => expect(mockSettleNewCommentTranslations).toHaveBeenCalled())
+    // Server detection is authoritative; the client language is a hint.
     expect(mockDetectSourceLanguage).toHaveBeenCalledWith({ text: 'Nice post!', clientHint: 'en' })
-    expect(mockCreateComment).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sourceLanguage: 'en',
-        translationRows: [
-          { language: 'ja', status: 'ready', text: 'いいね' },
-          { language: 'ko', status: 'ready', text: '좋아요' },
-        ],
-      }),
-    )
+    expect(mockSettleNewCommentTranslations).toHaveBeenCalledWith({
+      commentId: 'c1',
+      sourceLanguage: 'en',
+      sourceLanguagesMixed: false,
+      translationRows: [
+        { language: 'ja', status: 'ready', text: 'いいね' },
+        { language: 'ko', status: 'ready', text: '좋아요' },
+      ],
+    })
   })
 
   it('rejects a photo key the server did not issue to this user', async () => {
@@ -484,8 +507,10 @@ describe('POST /api/posts/{postId}/comments', () => {
       makeCtx('post-1'),
     )
     expect(res.status).toBe(201)
+    await new Promise((resolve) => setTimeout(resolve, 0))
     expect(mockDetectSourceLanguage).not.toHaveBeenCalled()
     expect(mockTranslateCommentBodySettled).not.toHaveBeenCalled()
+    expect(mockSettleNewCommentTranslations).not.toHaveBeenCalled()
     expect(mockCreateComment).toHaveBeenCalledWith(
       expect.objectContaining({ sourceText: '', image: { objectKey: key, width: 800, height: 600 } }),
     )
