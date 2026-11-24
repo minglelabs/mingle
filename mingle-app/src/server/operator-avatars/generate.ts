@@ -4,7 +4,7 @@ import { ageOn } from '@/server/operator-auto-reply/generate'
 import { setOperatorAvatarFromBytes } from '@/server/operators/operator-avatar'
 import { storeAvatarCandidate } from '@/server/operators/avatar-candidate'
 import { chatgptPoolImage, chatgptPoolKey } from '@/server/chatgpt-pool/client'
-import { AVATAR_SPEC_VERSION, describeAccountLook, pickAvatarSpec, seededRandom, type AvatarPersona, type AvatarSpec } from './taxonomy'
+import { AVATAR_SPEC_VERSION, describeAccountFace, describeAccountLook, pickAvatarSpec, seededRandom, type AvatarPersona, type AvatarSpec } from './taxonomy'
 import { referenceRecreateLines, type ReferenceKind } from '@/server/reference-library/library'
 import type { ReferenceAttributes } from '@/server/reference-library/classify'
 import { referenceDirectionLines, referencePersonaLine } from '@/server/reference-library/direction'
@@ -268,9 +268,9 @@ export async function generateOperatorAvatar(
         labelKo: `레퍼런스 사진 · ${{ face: '1명 얼굴', person: '1명 얼굴 없음', group: '여러 명', thing: '사람 없음' }[library.kind]}`,
         attributes: { source: 'reference_library', referenceKind: library.kind },
         prompt: [
-          ...(library.kind === 'face' ? [`Subject: ${look}.`] : []),
+          // Hair stays as in the reference: only the face and visible body become the persona's.
           ...referenceRecreateLines({
-            kind: library.kind, look, note: library.note,
+            kind: library.kind, look: describeAccountFace(persona, seededRandom(`${userId}:look`)), note: library.note,
             direction: referenceDirectionLines(library.attributes), persona: referencePersonaLine(persona),
           }),
           'Vertical 3:4 image, one single photo. No watermarks, logos, borders or frames.',

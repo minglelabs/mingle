@@ -2,7 +2,7 @@ import sharp from 'sharp'
 import { prisma } from '@/lib/prisma'
 import { loadAvatarPersona, requestAvatarImage, type AvatarReference } from '@/server/operator-avatars/generate'
 import { lensForShot, phonePhotoRealism } from '@/server/operator-avatars/photo-realism'
-import { describeAccountLook, pickAnimeStyle, seededRandom, type AvatarSpec } from '@/server/operator-avatars/taxonomy'
+import { describeAccountFace, describeAccountLook, pickAnimeStyle, seededRandom, type AvatarSpec } from '@/server/operator-avatars/taxonomy'
 import { newPostImageKey } from '@/server/posts/post-image-keys'
 import { getPostImage, putPostImage } from '@/server/posts/post-image-storage'
 import { decodePostPhoto, type PostPhotoKind } from './post-photo'
@@ -10,7 +10,7 @@ import { pairImages, stripImages } from './pair-images'
 import { pickPersonVariety, pickPoseVariety } from './post-person-variety'
 import { faceStickerLine } from './face-stickers'
 import { contrastLines, describeReferenceForContrast } from './reference-contrast'
-import { referenceDirectionLines, referencePersonaLine, referenceSeasonClashes, referenceSeasonsToAvoid } from '@/server/reference-library/direction'
+import { referenceDirectionLines, referencePersonaFit, referencePersonaLine, referenceSeasonClashes, referenceSeasonsToAvoid } from '@/server/reference-library/direction'
 import { markReferenceImage, claimReferencePhoto, listReferencePhotos, loadReferenceBytes, referenceKindOf, referenceRecreateLines, releaseReferencePhoto, type ReferenceGender, type ReferenceKind, type ReferencePhoto } from '@/server/reference-library/library'
 
 /** Most group photos hide the friends' faces under stickers; some friends are fine being seen. */
@@ -404,7 +404,12 @@ async function libraryPostFilter(operatorUserId: string, description: string, op
   const avoid = referenceSeasonsToAvoid(persona.country)
   return {
     brief, persona, spec,
-    claim: { kinds, gender: kinds.includes('thing') ? null : gender, skip: (item: ReferencePhoto) => referenceSeasonClashes(item.attributes, avoid) },
+    claim: {
+      kinds, gender: kinds.includes('thing') ? null : gender,
+      // Never a photo of another age or look than the persona (a 20-year-old's pose on a 50-year-old).
+      skip: (item: ReferencePhoto) => referenceSeasonClashes(item.attributes, avoid) || referencePersonaFit(item.attributes, persona, referenceKindOf(item)) === 'mismatch',
+      prefer: (item: ReferencePhoto) => referencePersonaFit(item.attributes, persona, referenceKindOf(item)) === 'match',
+    },
   }
 }
 
@@ -427,14 +432,15 @@ async function libraryPostRequest(
 ): Promise<{ request: { prompt: string; reference: AvatarReference }; referenceId: string } | null> {
   const filter = await libraryPostFilter(operatorUserId, description, options)
   if (!filter) return null
-  const { brief, persona, spec } = filter
+  const { brief, persona } = filter
   const photo = await claimReferencePhoto({ userId: operatorUserId, kind: 'post', ...filter.claim }).catch(() => null)
   if (!photo) return null
   try {
     const kind = referenceKindOf(photo)
     const shot = await loadReferenceBytes(photo)
     const poster = (kind === 'face' || kind === 'group') && base.reference ? base.reference : null
-    const look = specSubject(spec) ?? describeAccountLook(persona, seededRandom(`${operatorUserId}:look`))
+    // Hair stays as in the reference: only the face and visible body become the persona's.
+    const look = describeAccountFace(persona, seededRandom(`${operatorUserId}:look`))
     const place = brief.place ?? await reservePostPlace(operatorUserId)
     const prompt = [
       ...referenceRecreateLines({

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { referenceDirectionLines, referencePersonaLine, referenceSeasonClashes, referenceSeasonsToAvoid } from './direction'
+import { referenceAgeRange, referenceCountries, referenceDirectionLines, referencePersonaFit, referencePersonaLine, referenceSeasonClashes, referenceSeasonsToAvoid } from './direction'
 import { referenceRecreateLines } from './library'
 
 describe('referenceDirectionLines', () => {
@@ -22,13 +22,29 @@ describe('referenceDirectionLines', () => {
 })
 
 describe('referenceRecreateLines with a persona', () => {
-  it('keeps the direction and takes the style and place from the persona', () => {
+  it('changes only the face and visible body, keeping everything else', () => {
     const persona = referencePersonaLine({ gender: 'female', name: null, age: 27, country: 'KR', countryName: 'South Korea', city: 'Busan', bio: '빵 좋아함' })
     const text = referenceRecreateLines({ kind: 'face', look: 'a woman', persona, direction: ['Direction of the reference shot, to reproduce exactly:', '- Shot: a selfie.'] }).join('\n')
     expect(text).toContain('27 years old, a woman, living in Busan, South Korea')
-    expect(text).toContain('in their own style')
-    expect(text).not.toContain('the hairstyle, the outfit and accessories, the place')
+    expect(text).toMatch(/change only the person's face, and the skin tone and build/)
+    expect(text).toMatch(/hairstyle and hair color, the clothes/)
     expect(text).toContain('- Shot: a selfie.')
+  })
+})
+
+describe('referencePersonaFit', () => {
+  const twenties = { people: [{ age: 'early_20s' as const, ancestry: 'east_asian' as const }] }
+  it('keeps a young East Asian photo from a 50-year-old or a Brazilian persona', () => {
+    expect(referencePersonaFit(twenties, { age: 22, country: 'KR' }, 'face')).toBe('match')
+    expect(referencePersonaFit(twenties, { age: 52, country: 'KR' }, 'face')).toBe('mismatch')
+    expect(referencePersonaFit(twenties, { age: 23, country: 'BR' }, 'face')).toBe('mismatch')
+    expect(referencePersonaFit(null, { age: 52, country: 'KR' }, 'face')).toBe('unknown')
+    expect(referencePersonaFit(twenties, { age: 52, country: 'BR' }, 'thing')).toBe('match')
+  })
+
+  it('gives a new account the photo person\'s age range and countries', () => {
+    expect(referenceAgeRange({ people: [{ age: '40s' }] })).toEqual({ min: 40, max: 49 })
+    expect(referenceCountries(twenties)).toEqual(['KR', 'JP', 'TW', 'CN'])
   })
 })
 

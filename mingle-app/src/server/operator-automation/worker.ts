@@ -5,6 +5,7 @@ import { generateOperatorAvatar, type AvatarGenerationResult } from '@/server/op
 import { createOperatorAccount, type CreatedOperatorAccount } from '@/server/operators/create-operator'
 import { generatePersonaDrafts } from '@/server/operators/persona-draft'
 import { mostUnderrepresentedCountry } from '@/server/operators/seed-plan'
+import { referenceAgeRange, referenceCountries } from '@/server/reference-library/direction'
 import { generateReservePosts, isKoreaCountry, pickReserveTopics, reservePosterProfile } from '@/server/operator-post-reserve/generate'
 import { drawReservePostImage } from '@/server/operator-post-reserve/post-image'
 import { loadExistingReserveTexts, loadReservePersona } from '@/server/operator-post-reserve/worker'
@@ -118,7 +119,6 @@ export async function createNextSeedAccount(
   const total = rows.reduce((sum, row) => sum + row._count._all, 0)
   if (options.totalTarget != null && total >= options.totalTarget) return { done: false, reason: 'target_reached' }
   const byCountry = new Map(rows.flatMap((row) => (row.personaCountry ? [[row.personaCountry, row._count._all] as const] : [])))
-  const country = mostUnderrepresentedCountry(byCountry)
 
   // 레퍼런스 짤 저장소: while unused photos are left, each new account's profile photo is drawn from one.
   const drawsHere = options.inReview === true && canDrawImagesHere()
@@ -126,9 +126,15 @@ export async function createNextSeedAccount(
     ? await claimReferencePhoto({ userId: 'pending', kind: 'avatar', id: options.referenceId ?? null }).catch(() => null)
     : null
   if (options.referenceId && !reference) return { done: false, reason: 'reference_unavailable' }
+  // A profile photo from the library: the persona is made to suit its person (about the
+  // same age, a country of the same look), since only the face is changed (staff, 2026-11-25).
+  const referenceKind = reference ? referenceKindOf(reference) : null
+  const suits = reference && referenceKind !== 'thing' ? reference.attributes : null
+  const country = mostUnderrepresentedCountry(byCountry, referenceCountries(suits))
+  const ages = referenceAgeRange(suits)
   try {
     const { drafts } = await generatePersonaDrafts({
-      count: 1, countries: [country], ageMin: ACCOUNT_AGE_MIN, ageMax: ACCOUNT_AGE_MAX,
+      count: 1, countries: [country], ageMin: ages?.min ?? ACCOUNT_AGE_MIN, ageMax: ages?.max ?? ACCOUNT_AGE_MAX,
       genderMix: reference?.gender ?? 'balanced',
     })
     if (!drafts[0]) {

@@ -43,12 +43,15 @@ export function parseSeedCount(raw: string): number {
  * The country furthest below its share of the plan, given how many accounts
  * each country has now. Ties go to the larger planned share.
  */
-export function mostUnderrepresentedCountry(currentByCountry: ReadonlyMap<string, number>): string {
+export function mostUnderrepresentedCountry(currentByCountry: ReadonlyMap<string, number>, allowed?: readonly string[] | null): string {
   const planTotal = Object.values(DEFAULT_SEED_PLAN).reduce((sum, count) => sum + count, 0)
   const currentTotal = [...currentByCountry.values()].reduce((sum, count) => sum + count, 0)
   let best = 'KR'
   let bestDeficit = Number.NEGATIVE_INFINITY
-  for (const [code, planned] of Object.entries(DEFAULT_SEED_PLAN)) {
+  const plan = Object.entries(DEFAULT_SEED_PLAN).filter(([code]) => !allowed?.length || allowed.includes(code))
+  // Only countries the caller allows (e.g. ones a reference photo's person suits).
+  if (plan.length && allowed?.length) best = plan[0][0]
+  for (const [code, planned] of plan.length ? plan : Object.entries(DEFAULT_SEED_PLAN)) {
     // Expected count if one more account were added, minus what exists.
     const deficit = (planned / planTotal) * (currentTotal + 1) - (currentByCountry.get(code) ?? 0)
     if (deficit > bestDeficit + 1e-9 || (Math.abs(deficit - bestDeficit) <= 1e-9 && planned > (DEFAULT_SEED_PLAN[best] ?? 0))) {

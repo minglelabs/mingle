@@ -1061,6 +1061,17 @@ export function describeAccountLook(persona: AvatarPersona, random: Random): str
   return describePerson(persona, { face: true, body: true, hair: true }, take, random, attributes)
 }
 
+/** The account's face and build without hair, for a reference photo whose hair stays as it is. */
+export function describeAccountFace(persona: AvatarPersona, random: Random): string {
+  const attributes: Record<string, string> = {}
+  const take: Picker = (axis, options) => {
+    const option = pick(options, random)
+    attributes[axis] = option[0]
+    return option[2]
+  }
+  return describePerson(persona, { face: true, body: true, hair: false }, take, random, attributes)
+}
+
 export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.random): AvatarSpec {
   const category = pickCategory(persona, random)
   const subtype = pickSubtype(category, persona, random)

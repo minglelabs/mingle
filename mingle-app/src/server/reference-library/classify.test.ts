@@ -11,11 +11,12 @@ describe('reference photo classification', () => {
   })
 
   it('writes the prompt for each kind', () => {
-    expect(referenceRecreateLines({ kind: 'thing', look: null, fit: 'late-night ramen' }).join('\n')).toMatch(/same kind of thing[\s\S]*late-night ramen/)
+    expect(referenceRecreateLines({ kind: 'thing', look: null }).join('\n')).toMatch(/same photo taken again/)
     expect(referenceRecreateLines({ kind: 'person', look: 'a woman in her 20s' }).join('\n')).toMatch(/Never show a face/)
     const paired = referenceRecreateLines({ kind: 'face', look: 'x', poster: true }).join('\n')
     expect(paired).toMatch(/LEFT[\s\S]*RIGHT/)
-    expect(paired).toMatch(/must NOT be the face of the person in the LEFT photo/)
+    expect(paired).toMatch(/Give the person in the LEFT photo the poster's face/)
+    expect(paired).toMatch(/Keep everything else exactly as in the LEFT photo/)
   })
 })
 
@@ -36,8 +37,8 @@ describe('group photos', () => {
   it('reads a group answer without a gender and writes the group prompt', () => {
     expect(parseClassification('{"kind":"group","gender":"female","summary":"three friends at a bar"}')).toEqual({ kind: 'group', gender: null, summary: 'three friends at a bar', attributes: null })
     const lines = referenceRecreateLines({ kind: 'group', look: 'a man in his 20s', poster: true }).join('\n')
-    expect(lines).toMatch(/different group of friends/)
-    expect(lines).toMatch(/RIGHT photo is one of the people/)
+    expect(lines).toMatch(/change only the faces/)
+    expect(lines).toMatch(/poster's face from the RIGHT photo/)
   })
 })
 

@@ -1,4 +1,3 @@
-import { REFERENCE_SEASON_OUTFIT_LINE } from './direction'
 import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import sharp from 'sharp'
@@ -202,6 +201,8 @@ export async function claimReferencePhoto(args: {
   id?: string | null
   /** Skip photos that should not be used now (e.g. the wrong season, direction.ts). */
   skip?: (item: ReferencePhoto) => boolean
+  /** Among the rest, take one of these first (e.g. a photo that suits the persona, direction.ts). */
+  prefer?: (item: ReferencePhoto) => boolean
 }): Promise<ReferencePhoto | null> {
   // Photos whose use never went out are free again before picking.
   if (!args.id) await releaseAbandonedReferences()
@@ -214,7 +215,9 @@ export async function claimReferencePhoto(args: {
           && (!args.gender || !item.gender || !referenceKindHasGender(item.kind) || item.gender === args.gender))
     const candidates = items.filter(fits)
     // Prefer a photo tagged with the gender asked for over an untagged one.
-    const pick = (args.gender ? candidates.filter((item) => item.gender === args.gender).at(-1) : null) ?? candidates.at(-1) ?? null
+    const preferred = args.prefer ? candidates.filter(args.prefer) : []
+    const pool = preferred.length ? preferred : candidates
+    const pick = (args.gender ? pool.filter((item) => item.gender === args.gender).at(-1) : null) ?? pool.at(-1) ?? null
     if (!pick) return { items, result: null }
     const usedBy: ReferenceUse = { userId: args.userId, kind: args.kind, at: new Date().toISOString() }
     const claimed = { ...pick, usedBy }
@@ -295,87 +298,84 @@ export async function loadReferenceBytes(photo: Pick<ReferencePhoto, 'objectKey'
   return { bytes: Buffer.from(await getPostImage(photo.objectKey)), mimeType: 'image/jpeg' }
 }
 
-const SNAPSHOT_LINE = 'It must look like a real, unedited snapshot from an ordinary person\'s phone, not a photoshoot. Everyone in the image is an adult.'
 const NO_INTERFACE_LINE = 'If the attached photo is a screenshot of an app or a video (top bar, buttons, usernames, likes, captions, timers), draw only the photo itself, edge to edge, with none of that interface. No writing, stickers or emoji added on top.'
 
 /**
- * The prompt lines that recreate a library photo for an account, by the
- * photo's kind: the shot stays (composition, angle, light, mood), the person
- * is the account's own and never the one in the photo; a thing photo becomes
- * another photo of the same kind of subject, not a copy.
+ * The prompt lines that turn a library photo into this account's photo
+ * (staff, 2026-11-25): the photo stays almost exactly as it is, and only the
+ * face changes, plus the skin and build of whatever body shows, so the person
+ * becomes the account's persona. Clothes, hair, pose, hands, objects, place,
+ * framing, light, colors, blur and grain all stay. A thing photo stays the
+ * same shot with only small incidental differences. The library only gives a
+ * photo to a persona of about the same age and look (direction.ts), so the
+ * pose and style still suit them.
  * `poster` = the attachment is two photos side by side, the reference LEFT and
- * the poster RIGHT, whose face the new photo keeps.
+ * the poster RIGHT, whose face the new photo takes.
  */
 export function referenceRecreateLines(input: {
   kind: ReferenceKind
   look: string | null
   poster?: boolean
+  /** Kept for callers; the photo is no longer changed to fit the post. */
   fit?: string | null
   note?: string | null
-  /** The shot's analyzed direction (direction.ts), reproduced exactly. */
+  /** The shot's analyzed direction (direction.ts), all of it kept. */
   direction?: readonly string[]
-  /** Who the account is (direction.ts): the person and the life the photo shows. */
+  /** Who the account is (direction.ts): whose face and body the person gets. */
   persona?: string | null
 }): string[] {
-  const fit = input.fit?.trim()
   const note = input.note?.trim()
   const persona = input.persona?.trim()
-  const fitLine = [
+  const source = input.poster ? 'the LEFT photo' : 'the attached photo'
+  const extra = [
     ...(input.direction ?? []),
-    ...(input.kind === 'thing' ? [] : [REFERENCE_SEASON_OUTFIT_LINE]),
-    ...(persona ? [persona] : []),
     ...(note ? [`Staff note about the reference photo, to follow: ${note}`] : []),
-    ...(fit ? [`What the photo is for (change details so it fits, keeping the shot): ${fit}`] : []),
   ]
-  const ownLife = persona
-    ? 'Everything that says who they are comes from the persona, not from the reference: hairstyle, outfit and accessories in their own style, and the place recast as the same kind of place in their own life and city.'
-    : null
+  const keep = `Keep everything else exactly as in ${source}, as if it were the same photo: the hairstyle and hair color, the clothes and accessories, the pose, gesture and hands, every object, the place and background, the framing and crop, the camera angle and distance, the light, the colors, and any blur, grain or other flaw.`
+  const finish = [
+    'The result must look like an ordinary, unedited phone photo with no sign of editing. Everyone in it is an adult.',
+    NO_INTERFACE_LINE,
+  ]
+  if (input.kind === 'thing') {
+    return [
+      `Recreate ${source} as the same photo taken again a moment later: the same subject, arrangement, framing, camera angle, light, colors and mood.`,
+      'Only small incidental details differ (a slightly different angle of a cup, crumbs, a reflection, a background object moved), so it is not a pixel copy. Change nothing else.',
+      ...extra,
+      'No new people. If hands or people far away show, keep them as they are, with no face that can be made out.',
+      ...finish,
+    ]
+  }
   if (input.kind === 'group') {
     const posterLines = input.poster
       ? [
-          'The attached image is two photos side by side. LEFT: the shot to recreate. RIGHT: the poster, the person this account belongs to.',
-          'The poster from the RIGHT photo is one of the people in the new photo (the most central or nearest one): the same eye shape, nose, mouth, jawline, skin tone and apparent ethnicity. Take nothing else from the RIGHT photo. Draw one single photo, never two side by side.',
+          'The attached image is two photos side by side. LEFT: the photo to edit. RIGHT: the poster, the person this account belongs to.',
+          'Give the most central or nearest person in the LEFT photo the poster\'s face from the RIGHT photo: the same eye shape, nose, mouth, jawline, skin tone and apparent ethnicity. Take nothing else from the RIGHT photo. Output one single photo, never two side by side.',
         ]
-      : input.look ? [`One of the people (the most central or nearest one): ${input.look}.`] : []
-    const source = input.poster ? 'the LEFT photo' : 'the attached photo'
+      : [`The most central or nearest person becomes this account's person: ${input.look ?? 'an ordinary adult'}.`]
     return [
-      `Recreate ${source} as a new phone photo of a different group of friends, as many people as in it.`,
+      `Edit ${source}: change only the faces of the people in it.`,
       ...posterLines,
-      `Keep from ${source}: the shot's direction (composition, camera angle and distance, shake, focus and exposure), how the people stand or sit and what they do, the light and the mood.${persona ? ' Outfits and the place fit the persona and their friends.' : ' Also the kind of outfits and the place.'}`,
-      ...fitLine,
-      `Nobody's face may resemble anyone in ${source}: everyone gets a new, ordinary everyday face, so nobody could be recognized. Faces that do not show in ${source} stay hidden.`,
-      NO_INTERFACE_LINE,
-      SNAPSHOT_LINE,
-    ]
-  }
-  if (input.kind === 'thing') {
-    return [
-      'Recreate the attached photo as a new phone photo, as if the same person took another photo of the same kind of thing.',
-      'Keep the kind of subject and the shot\'s direction: composition, camera angle and distance, shake, focus and exposure, the light, the colors and the mood. It is not a copy: change the details (another dish or arrangement, another spot, other small objects) so the two photos are clearly different, and so they fit the persona\'s own life.',
-      ...fitLine,
-      'No people in it, unless the attached photo shows some; then only hands, backs or people far away, with no face that can be made out.',
-      NO_INTERFACE_LINE,
-      SNAPSHOT_LINE,
+      ...(persona ? [persona] : []),
+      `Every other face becomes a new, ordinary everyday face of the same apparent age and look, so nobody in ${source} could be recognized. Faces that do not show stay hidden.`,
+      keep,
+      ...extra,
+      ...finish,
     ]
   }
   const who = input.poster
     ? [
-        'The attached image is two photos side by side. LEFT: the shot to recreate. RIGHT: the poster, the person this account belongs to.',
-        'The person in the new photo is the poster from the RIGHT photo: the same eye shape, nose, mouth, jawline, skin tone and apparent ethnicity. Take nothing else from the RIGHT photo (no background, clothes, pose or light). Draw one single photo, never two side by side.',
+        'The attached image is two photos side by side. LEFT: the photo to edit. RIGHT: the poster, the person this account belongs to.',
+        'Give the person in the LEFT photo the poster\'s face from the RIGHT photo: the same eye shape, nose, mouth, jawline, skin tone and apparent ethnicity. Take nothing else from the RIGHT photo (no hair, clothes, background or light). Output one single photo, never two side by side.',
       ]
-    : [`The person in the new photo: ${input.look ?? 'an ordinary adult'}.`]
-  const source = input.poster ? 'the LEFT photo' : 'the attached photo'
+    : [`The person becomes this account's person: ${input.look ?? 'an ordinary adult'}.`]
   return [
-    `Recreate ${source} as a new phone photo of a different person.`,
-    ...who,
-    ...(ownLife
-      ? [`Keep from ${source}: the shot's direction (who took it, composition, camera angle and distance, shake, focus and exposure), the pose, gesture, expression and gaze, the light and the mood.`, ownLife]
-      : [`Keep from ${source}: the composition and camera angle, the pose and gesture, the hairstyle, the outfit and accessories, the place and background, the light and the mood.`]),
-    ...fitLine,
     input.kind === 'person'
-      ? `The face does not show, exactly as in ${source} (turned away, from behind, covered, cropped out or in shadow). Never show a face.`
-      : `The face must NOT be the face of the person in ${source}: it must not resemble them, so nobody could recognize them.${input.poster ? '' : ' Give the person a new, ordinary everyday face of their own; nobody looks like a celebrity or a model.'}`,
-    NO_INTERFACE_LINE,
-    SNAPSHOT_LINE,
+      ? `Edit ${source}: the face does not show in it and must stay hidden exactly as it is (turned away, from behind, covered, cropped out or in shadow). Never show a face. Change only the skin tone and build of the body parts that show, to fit this account's person.`
+      : `Edit ${source}: change only the person's face, and the skin tone and build of the body parts that show (neck, hands, arms, legs), to fit this account's person. The face must not resemble the person in ${source}, so nobody could recognize them.`,
+    ...who,
+    ...(persona ? [persona] : []),
+    keep,
+    ...extra,
+    ...finish,
   ]
 }
