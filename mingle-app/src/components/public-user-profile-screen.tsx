@@ -178,6 +178,7 @@ function ProfileAvatar({
   crop,
   country,
   size = 88,
+  faceVerified = false,
   onClick,
 }: {
   image: string | null;
@@ -185,6 +186,8 @@ function ProfileAvatar({
   crop?: ProfileImageCropInput;
   country: string | null;
   size?: number;
+  /** Passed the selfie check: a check at the top right (owner, 2026-11-25). */
+  faceVerified?: boolean;
   onClick?: () => void;
 }) {
   // Remember WHICH url failed, so a changed photo is tried again.
@@ -215,6 +218,15 @@ function ProfileAvatar({
         )}
       </div>
       <ProfileNationalityBadge country={country} size={size} />
+      {faceVerified ? (
+        <span
+          data-qa="profile-avatar-face-verified"
+          className="absolute right-0 top-0 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-emerald-500 text-white shadow"
+          aria-hidden="true"
+        >
+          <Check size={14} strokeWidth={3.2} />
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -651,6 +663,7 @@ export default function PublicUserProfileScreen({
                 x: profile.imageCropX,
                 y: profile.imageCropY,
               }}
+              country={nationalityCountry}
               language={languageOption?.code}
               name={name}
               nameBadge={repeatedNameBadge}
@@ -670,6 +683,7 @@ export default function PublicUserProfileScreen({
                     image={profile.image}
                     label={nameLabel}
                     country={nationalityCountry}
+                    faceVerified={profile.faceVerified === true}
                     crop={{
                       scale: profile.imageCropScale,
                       x: profile.imageCropX,

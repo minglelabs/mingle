@@ -84,8 +84,6 @@ import {
 } from "@/lib/profile-image-crop";
 import {
   MAX_STT_LANGUAGE_SELECTION,
-  STT_LANGUAGE_OPTIONS,
-  canonicalizeSttLanguageCode,
   deriveDefaultConversationLanguages,
   getSttLanguageDisplayName,
   sanitizeSttLanguageSelection,
@@ -120,8 +118,11 @@ import { getCoinCopy } from "@/i18n/coin-copy";
 import { isCoinBillingActive, openCoinStore, useCoinWallet } from "@/lib/coin-wallet-client";
 import { resolveContactSyncCopy } from "@/i18n/contact-sync-copy";
 import { openContactSync } from "@/lib/native-contacts";
+import PhoneVerifySheet from "@/components/contacts/phone-verify-sheet";
+import { resolvePhoneFriendsCopy } from "@/i18n/phone-friends-copy";
+import { resolvePhoneGateCopy } from "@/i18n/phone-gate-copy";
 import StaffAdminEntry from "@/components/staff-admin-entry";
-import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, Contact, EyeOff, Headphones, Languages, Loader2, LogOut, Menu, MessageCircle, Plus, ShieldCheck, Siren, SquarePen, Ticket, Trash2, UserRound, UserRoundX, X } from "lucide-react";
+import { Archive, BarChart3, Bell, Check, Smartphone, ChevronLeft, ChevronRight, Contact, EyeOff, Headphones, Languages, Loader2, LogOut, Menu, MessageCircle, Plus, ShieldCheck, Siren, SquarePen, Ticket, Trash2, UserRound, UserRoundX, X } from "lucide-react";
 import { resolveSelfieVerifyCopy } from "@/i18n/selfie-verify-copy";
 import { resolveProfileLockedNote } from "@/i18n/profile-locked-copy";
 import { resolveProfileHeightCopy } from "@/i18n/profile-height-copy";
@@ -310,17 +311,6 @@ function isNativeAppRuntimeSignalPresent(): boolean {
     || isNativeUiBridgeEnabledFromSearch(window.location.search || "");
 }
 
-const LANGUAGE_OPTIONS: ReadonlyArray<{ locale: SttLanguageCode; label: string; flag: string }> =
-  STT_LANGUAGE_OPTIONS.map(({ code, englishName, flag }) => ({
-    locale: code,
-    label: englishName,
-    flag,
-  }));
-
-function getNationalityOption(value: string | null | undefined) {
-  const normalized = typeof value === "string" ? canonicalizeSttLanguageCode(value) : "";
-  return LANGUAGE_OPTIONS.find((option) => option.locale === normalized) ?? null;
-}
 
 function ProfileAvatar({
   alt,
@@ -413,6 +403,28 @@ function ProfileSettingsPanel({
   open: boolean;
   sessionStatus: SessionStatus;
 }) {
+  // 전화번호 인증 from the menu (owner, 2026-11-25): the number on the account,
+  // read when the menu opens; the sheet offers +82 only until worldwide SMS exists.
+  const [phoneState, setPhoneState] = useState<{ phoneE164: string | null; available: boolean; worldwide: boolean } | null>(null);
+  const [phoneSheetOpen, setPhoneSheetOpen] = useState(false);
+  useEffect(() => {
+    if (!open || sessionStatus !== "authenticated") return;
+    let cancelled = false;
+    void Promise.all([
+      fetch(buildClientApiPath("/phone"), { cache: "no-store" }).then((response) => (response.ok ? response.json() : null)).catch(() => null),
+      fetch(buildClientApiPath("/phone/sign-in"), { cache: "no-store" }).then((response) => (response.ok ? response.json() : null)).catch(() => null),
+    ]).then(([phone, signIn]) => {
+      if (cancelled || !phone) return;
+      setPhoneState({
+        phoneE164: typeof phone.phoneE164 === "string" ? phone.phoneE164 : null,
+        available: phone.available !== false,
+        worldwide: signIn?.worldwide === true,
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, sessionStatus]);
   const coinWalletState = useCoinWallet().wallet;
   const coinBillingActive = isCoinBillingActive(coinWalletState);
   const coinWallet = coinWalletState ?? { balance: 0 };
@@ -1136,12 +1148,41 @@ function ProfileSettingsPanel({
                 />
               </div>
             ) : null}
+            {phoneState?.available ? (
+              <button
+                type="button"
+                data-qa="open-phone-verify"
+                onClick={() => setPhoneSheetOpen(true)}
+                className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[14px] font-semibold text-slate-700 transition active:bg-gray-50"
+              >
+                <Smartphone size={17} strokeWidth={2.1} aria-hidden="true" />
+                {resolvePhoneGateCopy(locale).start}
+                {phoneState.phoneE164 ? (
+                  <span className="flex items-center gap-0.5 text-[13px] font-semibold text-emerald-600">
+                    <Check size={14} strokeWidth={3} aria-hidden="true" />
+                    {phoneState.phoneE164.replace(/\d(?=\d{4})/g, "•")}
+                  </span>
+                ) : null}
+              </button>
+            ) : null}
+            {phoneSheetOpen ? (
+              <PhoneVerifySheet
+                copy={resolvePhoneFriendsCopy(locale)}
+                locale={locale}
+                koreaOnly={!phoneState?.worldwide}
+                onClose={() => setPhoneSheetOpen(false)}
+                onVerified={(phoneE164) => {
+                  setPhoneSheetOpen(false);
+                  setPhoneState((current) => (current ? { ...current, phoneE164 } : current));
+                }}
+              />
+            ) : null}
             <button
               type="button"
               data-qa="open-sign-in-methods"
               onClick={() => setIsSignInMethodsOpen(true)}
               disabled={sessionStatus !== "authenticated"}
-              className="mt-8 flex w-full items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-3 text-[14px] font-semibold text-slate-700 transition active:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-3 flex w-full items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-3 text-[14px] font-semibold text-slate-700 transition active:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {resolveSignInMethodsCopy(locale).title}
             </button>
@@ -2014,14 +2055,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     ),
     [profile.nationality, profile.primaryLanguages],
   );
-  const nationality = getNationalityOption(profile.nationality || primaryLanguages[0] || null)?.locale ?? null;
-  const nationalityFlag = getNationalityOption(nationality)?.flag;
   const nationalityCountry = resolveNationalityCountry(profile.nationalityCountry, primaryLanguages);
-  const nationalityName = nationality
-    ? getSttLanguageDisplayName(nationality, locale)
-      ?? getNationalityOption(nationality)?.label
-      ?? nationality
-    : null;
   const signOutCallbackUrl = buildNativeAwareTabPath(`/${locale}`, searchParams, {
     skipConversationRestore: true,
     tabRoot: true,
@@ -2625,14 +2659,12 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           x: profile.imageCropX,
           y: profile.imageCropY,
         }}
-        flag={nationalityFlag}
+        country={nationalityCountry}
         name={name}
         handle={profile.handle}
         bio={bio}
         bioUserId={sessionUserId}
         locale={locale}
-        languageLabel={dictionary.profile.primaryLanguagesLabel ?? dictionary.profile.nationalityLabel ?? "Primary language"}
-        languageName={nationalityName}
         closeLabel={dictionary.profile.settingsCloseLabel ?? dictionary.profile.profileShareBackLabel ?? "Close"}
         onClose={() => setShowProfileImagePreview(false)}
       />
