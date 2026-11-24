@@ -199,6 +199,41 @@ export async function createComment(args: CreateCommentArgs) {
   })
 }
 
+/**
+ * Language + translations of a just-created comment, settled after the
+ * comment was already committed (the author does not wait on the LLM). Written
+ * only while the body is still the first version: an edit in the meantime
+ * detects and translates its own body, so this late result is dropped.
+ * Returns false when nothing was written.
+ */
+export async function settleNewCommentTranslations(args: {
+  commentId: string
+  sourceLanguage: string
+  sourceLanguagesMixed: boolean
+  translationRows: Array<{ language: string; status: string; text: string | null }>
+}): Promise<boolean> {
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.postComment.updateMany({
+      where: { id: args.commentId, bodyVersion: 1, deletedAt: null },
+      data: { sourceLanguage: args.sourceLanguage, sourceLanguagesMixed: args.sourceLanguagesMixed },
+    })
+    if (updated.count === 0) return false
+    if (args.translationRows.length > 0) {
+      await tx.postCommentTranslation.createMany({
+        data: args.translationRows.map((r) => ({
+          commentId: args.commentId,
+          bodyVersion: 1,
+          language: r.language,
+          status: r.status,
+          text: r.text,
+        })),
+        skipDuplicates: true,
+      })
+    }
+    return true
+  })
+}
+
 // ─── Update ──────────────────────────────────────────────────────────────────
 
 /**
