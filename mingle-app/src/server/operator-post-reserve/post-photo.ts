@@ -61,6 +61,10 @@ const SETUPS: Record<Exclude<PostPhotoKind, 'scene'>, readonly string[]> = {
     'their hands holding food, a book, a ticket or a shopping bag, sleeves and part of the outfit in frame',
     'a friend took it: the poster turned away, or the face hidden behind a hand, a cap brim or hair',
     'sitting by a window or on a bench, cropped at the chin, the place around them in focus',
+    // Staff 2026-11-24: hands holding up a little find of the day over the place, shot from above.
+    'their hand holding up something small they just found or got (a fallen ginkgo or maple leaf, a flower, a ticket, a snack, a ring), seen from above with the ground or the table of the place below, a sleeve and nails in frame',
+    // Faces never show here, so it sits with the faceless photos rather than the group ones.
+    'only the hands of the poster and a friend, each holding up the same kind of thing side by side (ginkgo leaves, ice creams, drinks, matching keychains, rings), seen from above with the street or the table below; no faces in frame, two different sleeves and nails',
   ],
   self_back: [
     'a friend took it from behind: the poster walks down a street or an alley ahead of the camera',
