@@ -324,7 +324,7 @@ export async function generateReservePosts(args: {
     timeoutMs: CALL_TIMEOUT_MS,
   })
 
-  return collectGeneratedPosts(items, slots, args.topics, seen)
+  return collectGeneratedPosts(items, slots, args.topics, seen, args.persona.language)
 }
 
 /**
@@ -407,11 +407,40 @@ export async function rewriteReservePostText(args: {
   return null
 }
 
+/** Letters that mark a language's own script; languages written in Latin letters have none. */
+const SCRIPTS: Record<string, RegExp> = {
+  ko: /\p{Script=Hangul}/u,
+  ja: /[\p{Script=Hiragana}\p{Script=Katakana}]/u,
+  zh: /\p{Script=Han}/u,
+  ru: /\p{Script=Cyrillic}/u, kk: /\p{Script=Cyrillic}/u, uk: /\p{Script=Cyrillic}/u,
+  ar: /\p{Script=Arabic}/u, fa: /\p{Script=Arabic}/u,
+  th: /\p{Script=Thai}/u, hi: /\p{Script=Devanagari}/u,
+}
+const LATIN = /\p{Script=Latin}/u
+
+function writtenIn(text: string, language: string): boolean {
+  const base = (canonicalizeSttLanguageCode(language) || language).split('-')[0]
+  return (SCRIPTS[base] ?? LATIN).test(text)
+}
+
+/**
+ * The language a post is really in. The model now and then writes a learner
+ * slot in the person's own language anyway; it was stored as the slot's
+ * language (a Japanese post marked "한국어로 씀", with no translation offered,
+ * staff 2026-11-24). A post without a single letter of the slot's script is
+ * taken to be in the person's own language when it is written in that one.
+ */
+export function languageOfPost(text: string, planned: string, own: string): string {
+  if (planned === own || writtenIn(text, planned)) return planned
+  return writtenIn(text, own) ? own : planned
+}
+
 function collectGeneratedPosts(
   items: Array<{ slot?: unknown; text?: unknown; photo?: unknown }>,
   slots: Array<{ language: string; photo: ReturnType<typeof pickPostPhoto> | null; photoPlace: string | null }>,
   topics: string[],
   seen: Set<string>,
+  ownLanguage: string,
 ): GeneratedReservePost[] {
   const result: GeneratedReservePost[] = []
   const usedSlots = new Set<number>()
@@ -426,7 +455,7 @@ function collectGeneratedPosts(
     usedSlots.add(slot)
     const plan = slots[slot - 1].photo
     const photo = plan && typeof item.photo === 'string' ? item.photo.replace(/\s+/g, ' ').trim().slice(0, IMAGE_PROMPT_MAX_CHARS) : ''
-    result.push({ topic: topics[slot - 1], text, language: slots[slot - 1].language, imagePrompt: plan && photo ? encodePostPhoto(plan.kind, photo, slots[slot - 1].photoPlace) : null })
+    result.push({ topic: topics[slot - 1], text, language: languageOfPost(text, slots[slot - 1].language, ownLanguage), imagePrompt: plan && photo ? encodePostPhoto(plan.kind, photo, slots[slot - 1].photoPlace) : null })
   }
   return result
 }
