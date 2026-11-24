@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAdminApi } from '@/server/admin/guard'
-import { editOperatorPostText, setOperatorPostHidden } from '@/server/operator-post-edit/edit'
+import { deleteOperatorPost, editOperatorPostText, setOperatorPostHidden } from '@/server/operator-post-edit/edit'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -24,5 +24,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ postI
   const result = typeof fields.hidden === 'boolean'
     ? await setOperatorPostHidden(auth.ctx, postId, fields.hidden)
     : await editOperatorPostText(auth.ctx, postId, fields.text)
+  return NextResponse.json(result.ok ? { ok: true } : { error: result.error }, { status: result.ok ? 200 : result.status, headers: { 'cache-control': 'no-store' } })
+}
+
+/** DELETE /admin/api/posts/[postId] — deletes an operator's post for good (other posts are refused). */
+export async function DELETE(_request: Request, context: { params: Promise<{ postId: string }> }) {
+  const auth = await requireAdminApi()
+  if (!auth.ok) return auth.response
+  const { postId } = await context.params
+  const result = await deleteOperatorPost(auth.ctx, postId)
   return NextResponse.json(result.ok ? { ok: true } : { error: result.error }, { status: result.ok ? 200 : result.status, headers: { 'cache-control': 'no-store' } })
 }

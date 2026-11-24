@@ -156,3 +156,26 @@ export async function setOperatorPostHidden(ctx: AdminContext, postId: string, h
   })
   return { ok: true, ...(reserveId ? { reserveId } : {}) }
 }
+
+/**
+ * Deletes an operator's published post for good (staff, 2026-11-24), the way
+ * its author deletes it from the app (`isDeleted` + `deletedAt`): gone from
+ * every feed, profile and search. A copy of it still waiting in review (from
+ * an earlier 내리고 검토로) is cancelled too, so it never comes back.
+ */
+export async function deleteOperatorPost(ctx: AdminContext, postId: string): Promise<OperatorPostEditResult> {
+  const post = await operatorPost(postId)
+  if (!post) return { ok: false, error: 'not_found', status: 404 }
+  const [, cancelled] = await prisma.$transaction([
+    prisma.post.update({ where: { id: post.id }, data: { isDeleted: true, deletedAt: new Date() } }),
+    prisma.operatorPostReserve.updateMany({ where: { postId: post.id, state: 'review' }, data: { state: 'cancelled', releaseAt: null } }),
+  ])
+  await writeAdminAudit(ctx, {
+    action: 'operator_post.delete',
+    operatorUserId: post.authorId,
+    targetType: 'post',
+    targetId: post.id,
+    metadata: { cancelledReviewCopies: cancelled.count },
+  })
+  return { ok: true }
+}
