@@ -16,6 +16,7 @@ import { OperatorPostEditor } from '../../../feed/_components/operator-post-edit
 import { PostTakedownButton } from '../../../feed/_components/post-takedown-button'
 import { PublishedPostText } from './published-post-text'
 import { ProfileShareButton } from './profile-share-button'
+import { ApproveAccountButton } from './approve-account-button'
 import { ensureReferralCode } from '@/server/referral'
 import { resolveDefaultInviteMessageLocale } from '@/i18n/invite-ticket-copy'
 import { InlinePostComments } from '../../../activity/_components/inline-post-comments'
@@ -184,7 +185,10 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
           <p className="mt-3 text-base font-bold text-slate-900">{user.name ?? '(이름 없음)'}</p>
           <p className="text-sm text-slate-500">@{user.handle}{facts.length ? ` · ${facts.join(' · ')}` : ''}</p>
           {(operator && reviewState !== 'approved') || user.isDeleted ? (
-            <p className="mt-2 inline-block rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">{user.isDeleted ? '삭제된 계정' : REVIEW_STATE[reviewState] ?? reviewState}</p>
+            <div className="mt-2 flex flex-wrap items-center">
+              <p className="inline-block rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">{user.isDeleted ? '삭제된 계정' : REVIEW_STATE[reviewState] ?? reviewState}</p>
+              {operator && !user.isDeleted && reviewState === 'pending' ? <ApproveAccountButton userId={user.id} /> : null}
+            </div>
           ) : null}
           {user.bio ? <StaffBio userId={user.id} bio={user.bio} sourceLanguage={primaryLanguages[0] ?? null} className="mt-2" /> : null}
           <ProfileLanguageLevels primaryLanguages={primaryLanguages} interestLanguages={interestLanguages} locale="ko" className="mt-3" />
