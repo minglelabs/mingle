@@ -64,11 +64,12 @@ export const AVATAR_CATEGORIES: ReadonlyArray<{ key: AvatarCategory; ko: string;
   { key: 'body', ko: '몸 위주', weight: 10 },
   { key: 'part', ko: '손·발·부분', weight: 2 },
   { key: 'group', ko: '여러 명', weight: 6 },
-  { key: 'object', ko: '사물', weight: 5 },
+  // Staff 2026-11-24: more scenery, solid-color and fan (a singer or actor they like) pictures, a little less anime.
+  { key: 'object', ko: '사물', weight: 7 },
   { key: 'animal', ko: '동물', weight: 4 },
-  { key: 'scenery', ko: '풍경·장소', weight: 2 },
+  { key: 'scenery', ko: '풍경·장소', weight: 9 },
   // Staff like 2D profile pictures (2026-11): about one in five accounts gets an anime-style drawing.
-  { key: 'other', ko: '그림·글자', weight: 45 },
+  { key: 'other', ko: '그림·글자', weight: 40 },
 ]
 
 /** East Asian profiles hide the face more; Western and Latin American ones show it more. */
@@ -202,6 +203,9 @@ export const AVATAR_SUBTYPES: Record<AvatarCategory, readonly Subtype[]> = {
     sub('single_flower', '꽃 한 송이', 1.5, 'one flower up close (a rose, a tulip or a white peony)'),
     sub('mascot', '마스코트 조형물', 1, 'a big cute mascot statue or costumed character in front of a shop or at a tourist spot, photographed on the street'),
     sub('rain_window', '비 오는 창문', 1.5, 'raindrops on a window with blurred city lights behind'),
+    // A fan's picture of a singer or actor they like. Never a real person's face: the image model
+    // cannot draw one, and it must not, so the performer stays too small, blurred or turned to recognize.
+    sub('fan_goods', '연예인 굿즈', 20, 'a fan\'s things on a desk or held in a hand: a K-pop-style album, a lightstick and a photocard of a performer, the photocard\'s picture small, glare-covered or turned so no face can be made out'),
   ],
   animal: [
     sub('dog', '강아지', 5, 'a pet dog'),
@@ -222,14 +226,16 @@ export const AVATAR_SUBTYPES: Record<AvatarCategory, readonly Subtype[]> = {
     sub('plane_window', '비행기 창밖', 1.5, 'the view out of an airplane window over clouds'),
     sub('alley', '골목', 2, 'a quiet street or alley typical of the persona\'s city'),
     sub('landmark', '여행지', 1.5, 'a famous kind of landmark photographed like a tourist would'),
+    sub('fan_concert', '콘서트·팬캠', 10, 'a concert seen from the crowd on a phone: a big lit stage far away, the performers tiny, blurred and unrecognizable under the stage lights, raised lightsticks glowing in the dark foreground'),
   ],
   other: [
-    sub('anime_icon', '애니풍 그림', 30, 'an anime-style drawing'),
+    sub('anime_icon', '애니풍 그림', 21, 'an anime-style drawing'),
     sub('sticker_char', '캐릭터 스티커', 2.5, 'a cute, simple cartoon animal or blob character in the style of a messenger-app sticker, on a plain white background, with two or three hand-drawn words in a speech bubble in the everyday language of {country}'),
     sub('lettering', '글자 이미지', 1, 'a short word or a name in loose hand-lettered script on a soft pastel background'),
     sub('doodle', '낙서풍 자화상', 2, 'a simple hand-drawn doodle self-portrait on paper, in an original style'),
     sub('watercolor', '수채화', 1, 'a small amateur watercolor painting of a landscape'),
     sub('emoji_plain', '단색 배경', 0.5, 'a plain pastel background with one small simple shape in the center'),
+    sub('solid_color', '단색', 4, 'one flat solid color filling the whole square and nothing else: black, white, grey, beige, navy or a soft pastel'),
   ],
 }
 
@@ -998,7 +1004,7 @@ export function pickAnimeStyle(random: Random): string {
 }
 
 /** Pictures made in an app, not photographed: the phone-photo lines would turn them into photos. */
-const DIGITAL_SUBTYPES = new Set(['anime_icon', 'sticker_char', 'lettering', 'emoji_plain'])
+const DIGITAL_SUBTYPES = new Set(['anime_icon', 'sticker_char', 'lettering', 'emoji_plain', 'solid_color'])
 /** Pictures whose subject is a few words. */
 // Handwriting photos were dropped: drawn writing breaks up and looks fake (staff, 2026-10).
 const LETTER_SUBTYPES = new Set(['sticker_char', 'lettering'])
