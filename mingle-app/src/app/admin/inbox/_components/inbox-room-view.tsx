@@ -12,7 +12,7 @@ import {
   type ChangeEvent,
   type FormEvent,
 } from 'react'
-import { ArrowDown, ChevronLeft, Loader2, SendHorizontal, Trash2 } from 'lucide-react'
+import { ArrowDown, ChevronLeft, Loader2, MoreVertical, SendHorizontal, Trash2 } from 'lucide-react'
 import ChatBubble from '@/components/LivePhoneDemo/ChatBubble'
 import {
   ConversationImageSrcProvider,
@@ -46,6 +46,7 @@ import {
 } from '../_lib/room-timeline'
 import { MessageReadReceiptsStaticProvider } from '@/components/LivePhoneDemo/MessageReadReceipts'
 import { InboxAvatar, KoreanViewSwitch } from './inbox-ui'
+import { InboxModerationSheet } from './inbox-moderation-sheet'
 import { useAdminInboxRealtime } from './use-admin-inbox-realtime'
 import { useStaffKoreanView } from './use-staff-korean-view'
 import { useVisualViewportBox } from './use-visual-viewport-box'
@@ -624,6 +625,27 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
     dispatchAdminInboxUpdated()
     return true
   }, [conversationId, refresh])
+  const [moderationOpen, setModerationOpen] = useState(false)
+  const moderate = useCallback(async (body: Record<string, unknown>) => {
+    try {
+      const response = await fetch(`/admin/inbox/api/rooms/${encodeURIComponent(conversationId)}/moderate`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...body, as: operatorId }),
+      })
+      if (response.status === 401) { goToLogin(); return { ok: false } }
+      if (!response.ok) return { ok: false }
+      const payload = await response.json() as { status?: string }
+      if (body.action !== 'report') {
+        await refresh().catch(() => {})
+        dispatchAdminInboxUpdated()
+      }
+      return { ok: true, status: payload.status }
+    } catch {
+      return { ok: false }
+    }
+  }, [conversationId, operatorId, refresh])
   const operatorName = inboxPersonLabel(operator)
   const personaLanguageName = inboxLanguageName(operator.personaLanguage)
   const unavailable = roomGone
@@ -669,7 +691,26 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
           </p>
         </div>
         <KoreanViewSwitch enabled={korean} onChange={toggleKorean} />
+        {room.counterparts.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => setModerationOpen(true)}
+            aria-label="차단·신고"
+            className="flex h-11 w-9 shrink-0 items-center justify-center rounded-full text-slate-600 active:bg-slate-100"
+          >
+            <MoreVertical size={20} aria-hidden="true" />
+          </button>
+        ) : null}
       </header>
+      {moderationOpen ? (
+        <InboxModerationSheet
+          counterparts={room.counterparts}
+          blockedIds={room.blockedByOperator ?? []}
+          operatorName={operatorName}
+          onModerate={moderate}
+          onClose={() => setModerationOpen(false)}
+        />
+      ) : null}
 
       {room.operators.length > 1 ? (
         <nav aria-label="답장할 운영 계정" className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-slate-200 bg-white px-3 py-1">
