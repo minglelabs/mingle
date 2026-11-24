@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ADMIN_TABS, formatAdminTabBadge, normalizeAdminTabBadge, resolveActiveAdminTab } from "./admin-tabs";
 
 describe("admin tabs", () => {
-  it("lists 인박스 · 알림 · 검토 · 피드 · 계정 · 레퍼런스 · 더보기 in order", () => {
+  it("lists 인박스 · 알림 · 검토 · 피드 · 계정 · 레퍼런스 · 신고 · 피드백 · 대시보드 · 더보기 in order", () => {
     expect(ADMIN_TABS.map((tab) => [tab.label, tab.href])).toEqual([
       ["인박스", "/admin/inbox"],
       ["알림", "/admin/activity"],
@@ -10,6 +10,9 @@ describe("admin tabs", () => {
       ["피드", "/admin/feed"],
       ["계정", "/admin/operators"],
       ["레퍼런스", "/admin/operators/references"],
+      ["신고", "/admin/reports"],
+      ["피드백", "/admin"],
+      ["대시보드", "/admin/dashboard"],
       ["더보기", "/admin/more"],
     ]);
   });
@@ -26,9 +29,10 @@ describe("admin tabs", () => {
     ["/admin/feed", "feed"],
     ["/admin/posts", "more"],
     ["/admin/more", "more"],
-    ["/admin", "more"],
-    ["/admin/reports", "more"],
-    ["/admin/dashboard", "more"],
+    ["/admin", "feedback"],
+    ["/admin/reports", "reports"],
+    ["/admin/reports/r1", "reports"],
+    ["/admin/dashboard", "dashboard"],
     ["/admin/conversations", "more"],
     ["/admin/settings/notifications", "more"],
     ["/admin/inboxes", "more"],
