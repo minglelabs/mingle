@@ -35,12 +35,12 @@ import { USER_IDENTITY_SELECT } from '@/server/identity/user-identity-select'
 import { AUTHOR_LANGUAGE_SELECT } from '@/server/posts/feed-post-serializer'
 import { applyStarterOrder, loadStarterFeed, starterSegmentFor, starterSegmentOfUser, type StarterSegment } from './starter-feed'
 import {
-  type FeedCandidate,
   type FeedCursor,
   decodeCursor,
   encodeCursor,
-  rankFeed,
+  rankByRealEngagement,
 } from './feed-ranking'
+import { loadRealEngagement, realEngagementScore } from './real-engagement'
 
 const DEFAULT_LIMIT = 10
 const MAX_LIMIT = 50
@@ -143,54 +143,13 @@ async function rankSnapshot(
     : []
   const viewed = new Set(viewedRows.map((r) => r.postId))
 
-  const followRows = viewerId
-    ? await prisma.userFollow.findMany({
-        where: { followerId: viewerId, createdAt: { lt: snapshotAt } },
-        select: { followingId: true },
-      })
-    : []
-  const followedAuthorIds = new Set(followRows.map((r) => r.followingId))
-
-  // Unique commenters per post, excluding the post author, as of the snapshot.
-  const comments = await prisma.postComment.findMany({
-    where: {
-      postId: { in: postIds },
-      createdAt: { lt: snapshotAt },
-      OR: [{ isDeleted: null }, { isDeleted: false }],
-    },
-    select: { postId: true, authorId: true },
-  })
-
-  // likeCount is live; subtract likes added after the snapshot.
-  const lateLikes = await prisma.postLike.findMany({
-    where: { postId: { in: postIds }, createdAt: { gte: snapshotAt } },
-    select: { postId: true },
-  })
-  const lateLikeCount = new Map<string, number>()
-  for (const l of lateLikes) lateLikeCount.set(l.postId, (lateLikeCount.get(l.postId) ?? 0) + 1)
-
+  // After the starter posts: real people's follows, profile visits, likes and comments decide the order.
+  const engagement = await loadRealEngagement(postIds, snapshotAt)
   const authorById = new Map(posts.map((p) => [p.id, p.authorId]))
-  const commenterMap = new Map<string, Set<string>>()
-  for (const c of comments) {
-    if (c.authorId === authorById.get(c.postId)) continue
-    let set = commenterMap.get(c.postId)
-    if (!set) {
-      set = new Set()
-      commenterMap.set(c.postId, set)
-    }
-    set.add(c.authorId)
-  }
-
-  const candidates: FeedCandidate[] = posts.map((p) => ({
-    id: p.id,
-    authorId: p.authorId,
-    publishedAt: p.publishedAt,
-    likeCount: Math.max(0, p.likeCount - (lateLikeCount.get(p.id) ?? 0)),
-    uniqueCommenterIds: commenterMap.get(p.id) ?? new Set(),
-    viewed: viewed.has(p.id),
-  }))
-
-  const ranked = rankFeed(candidates, followedAuthorIds, snapshotAt, { avoidFirstAuthorId })
+  const ranked = rankByRealEngagement(
+    posts.map((p) => ({ id: p.id, authorId: p.authorId, publishedAt: p.publishedAt, viewed: viewed.has(p.id), score: realEngagementScore(engagement.get(p.id)) })),
+    { avoidFirstAuthorId },
+  )
   const starter = await loadStarterFeed()
   const ids = starter ? applyStarterOrder(ranked, starter[segment], viewed) : ranked
   return { ids, authorById, viewed }
