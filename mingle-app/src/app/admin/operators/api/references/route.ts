@@ -3,7 +3,11 @@ import { requireAdminApi } from '@/server/admin/guard'
 import { writeAdminAudit } from '@/server/admin/audit'
 import { classifyReferencePhoto, referenceAutoTagEnabled } from '@/server/reference-library/classify'
 import { addReferencePhoto, isReferenceKind, REFERENCE_MAX_BYTES, REFERENCE_TYPES, referenceKindHasGender, type ReferenceGender, type ReferenceKind } from '@/server/reference-library/library'
+import { readableImageBytes } from '@/server/reference-library/decode'
 import { listReferencePhotoViews } from '@/server/reference-library/view'
+import sharp from 'sharp'
+
+type UploadFailure = 'unsupported_type' | 'too_large' | 'decode_failed' | 'store_failed'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -42,11 +46,23 @@ export async function POST(request: Request) {
   const files = form.getAll('file').filter((value): value is File => value instanceof File && value.size > 0)
   if (files.length === 0) return json({ error: 'file_required' }, 400)
   let added = 0
-  let rejected = 0
+  const failures: Array<{ name: string; reason: UploadFailure }> = []
   for (const file of files.slice(0, 50)) {
-    if (!(REFERENCE_TYPES as readonly string[]).includes(file.type) || file.size > REFERENCE_MAX_BYTES) { rejected += 1; continue }
+    const name = file.name || '사진'
+    const typeOk = (REFERENCE_TYPES as readonly string[]).includes(file.type) || (!file.type && /\.(jpe?g|png|webp|heic|heif)$/i.test(name))
+    if (!typeOk) { failures.push({ name, reason: 'unsupported_type' }); continue }
+    if (file.size > REFERENCE_MAX_BYTES) { failures.push({ name, reason: 'too_large' }); continue }
+    let bytes: Buffer
     try {
-      const bytes = Buffer.from(await file.arrayBuffer())
+      // iPhone HEIC photos are turned into JPEG first: the image library here cannot read them.
+      bytes = await readableImageBytes(Buffer.from(await file.arrayBuffer()), file.type, name)
+      await sharp(bytes, { limitInputPixels: 80_000_000 }).metadata()
+    } catch (error) {
+      console.warn('[reference-library] decode_failed', { type: file.type || 'none', size: file.size, error: error instanceof Error ? error.message.slice(0, 120) : 'unknown' })
+      failures.push({ name, reason: 'decode_failed' })
+      continue
+    }
+    try {
       const look = autoTag && (fixedKind === undefined || fixedGender === undefined) ? await classifyReferencePhoto(bytes) : null
       const kind = fixedKind ?? look?.kind ?? null
       await addReferencePhoto(bytes, {
@@ -57,10 +73,10 @@ export async function POST(request: Request) {
       })
       added += 1
     } catch (error) {
-      console.warn('[reference-library] add_failed', { error: error instanceof Error ? error.name : 'unknown' })
-      rejected += 1
+      console.warn('[reference-library] add_failed', { type: file.type || 'none', size: file.size, error: error instanceof Error ? error.message.slice(0, 120) : 'unknown' })
+      failures.push({ name, reason: 'store_failed' })
     }
   }
   if (added) await writeAdminAudit(auth.ctx, { action: 'reference.add', targetType: 'reference_library', metadata: { added, kind: fixedKind ?? 'auto', gender: fixedGender === undefined ? 'auto' : fixedGender } })
-  return json({ added, rejected, items: await listReferencePhotoViews() }, added ? 201 : 400)
+  return json({ added, rejected: failures.length, failures, items: await listReferencePhotoViews() }, added ? 201 : 400)
 }

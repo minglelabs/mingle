@@ -6,6 +6,8 @@ const appRoot = dirname(fileURLToPath(import.meta.url));
 /** @type {import("next").NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // heic-convert (libheif-js) loads its decoder at run time: keep it out of the server bundle.
+  serverExternalPackages: ["heic-convert", "heic-decode", "libheif-js"],
   devIndicators: false,
   outputFileTracingRoot: appRoot,
   // The Railway image ships only the traced standalone server, not the full

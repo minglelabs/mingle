@@ -18,6 +18,12 @@ type Filter = 'unused' | 'used' | 'all'
 const PEOPLE_LABEL: Record<People, string> = { none: '사람 없음', one: '1명', many: '2명 이상' }
 const GENDER_LABEL: Record<GenderChoice, string> = { female: '여', male: '남', unknown: '모름' }
 const KIND_LABEL: Record<ReferenceKind, string> = { thing: '사람 없음', face: '1명 · 얼굴 보임', person: '1명 · 얼굴 안 보임', group: '2명 이상' }
+const FAILURE_LABEL: Record<string, string> = {
+  unsupported_type: '사진 파일이 아님',
+  too_large: '15MB 넘음',
+  decode_failed: '읽을 수 없는 사진',
+  store_failed: '저장 실패',
+}
 const KIND_ORDER: readonly ReferenceKind[] = ['thing', 'face', 'person', 'group']
 
 function peopleOf(kind: ReferenceKind): People {
@@ -82,6 +88,7 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag }: { initialIt
     const choice = choiceRef.current
     let added = 0
     let rejected = 0
+    const failed: string[] = []
     // A few at a time, so a big drop does not hit the request size limit.
     for (let index = 0; index < images.length; index += 5) {
       const batch = images.slice(index, index + 5)
@@ -97,9 +104,11 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag }: { initialIt
       if (choice.note.trim()) form.set('note', choice.note.trim())
       try {
         const response = await fetch('/admin/operators/api/references', { method: 'POST', body: form })
-        const body = await response.json().catch(() => ({})) as { added?: number; rejected?: number; items?: ReferencePhotoView[] }
+        const body = await response.json().catch(() => ({})) as { added?: number; rejected?: number; failures?: Array<{ name: string; reason: string }>; items?: ReferencePhotoView[] }
         added += body.added ?? 0
         rejected += body.rejected ?? (response.ok ? 0 : batch.length)
+        for (const failure of body.failures ?? []) failed.push(`${failure.name} (${FAILURE_LABEL[failure.reason] ?? '실패'})`)
+        if (!response.ok && !body.failures) failed.push(...batch.map((file) => `${file.name} (${response.status === 413 ? '파일이 너무 큼' : '올리지 못함'})`))
         if (body.items) setItems(body.items)
       } catch {
         rejected += batch.length
@@ -107,7 +116,7 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag }: { initialIt
         setUploading((count) => count - batch.length)
       }
     }
-    setStatus(`${added}장 추가${rejected ? ` · ${rejected}장 실패` : ''}`)
+    setStatus(`${added}장 추가${rejected ? ` · ${rejected}장 실패: ${failed.join(', ')}` : ''}`)
     if (added) setNote('')
   }, [])
 
@@ -343,7 +352,12 @@ function ReferenceEditor({ item, canDraw, onSave, onRemove, onItems, onClose }: 
         </div>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={reviewImageUrl(item.objectKey)} alt="" className="mx-auto max-h-[42dvh] w-auto max-w-full rounded-xl bg-slate-100 object-contain" />
-        {item.summary ? <p className="mt-2 text-xs text-slate-400">AI: {item.summary}</p> : null}
+        {item.summary ? (
+          <details className="mt-2 text-xs text-slate-500">
+            <summary className="cursor-pointer font-semibold text-slate-600">AI 묘사 보기</summary>
+            <p className="mt-1 whitespace-pre-wrap leading-5">{item.summary}</p>
+          </details>
+        ) : null}
         {item.usedBy ? (
           <p className="mt-2 text-xs font-semibold text-slate-600">
             {item.usedBy.kind === 'avatar' ? '프사에 씀' : '글 사진에 씀'}
