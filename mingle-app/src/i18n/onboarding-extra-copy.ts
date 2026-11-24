@@ -31,7 +31,7 @@ export type OnboardingExtraCopy = {
 const COPY: Record<PrimaryUiLocale, OnboardingExtraCopy> = {
   ko: {
     photoLabel: "프로필 사진", photoTitle: "프로필 사진을 올려 주세요", photoDescription: "얼굴이 잘 보이는 사진이면 친구가 훨씬 많이 생겨요.", photoPick: "사진 고르기", photoChange: "다른 사진으로 바꾸기", photoSkip: "나중에 할게요", photoFailed: "사진을 불러오지 못했어요. 다른 사진을 골라 주세요.",
-    voiceLabel: "목소리 대화를 권장해요", voiceTitle: "해시챗에서는 키보드 대신\n말로 쓰고 말로 대화해요", voiceDescription: "메시지는 말하면 받아 적혀서 써지고, 상대 언어로 바로 번역돼요. 보이스룸에서는 목소리로 바로 이야기해요.", micTitle: "마이크 권한", micDescription: "말하면 받아 적어 메시지를 써 주고, 보이스룸에서 이야기할 때 써요.", micAllow: "마이크 허용하고 계속", micGranted: "마이크가 켜졌어요", micDenied: "설정에서 언제든 켤 수 있어요", nationalityLabel: "국적", nationalityTitle: "어느 나라 사람이에요?", nationalityDescription: "프로필 사진에 국기로 보여요. 쓰는 언어와는 따로예요.", nationalitySearch: "나라 검색", faceCheck: "얼굴 인증하기", faceVerified: "얼굴 인증 완료",
+    voiceLabel: "목소리 대화를 권장해요", voiceTitle: "해시챗에서는 키보드 대신\n말로 쓰고 말로 대화해요", voiceDescription: "메시지를 말로 하면 글자로 받아 적어 주고, 상대 언어로 바로 번역돼요. 보이스룸에서는 목소리로 바로 이야기해요.", micTitle: "마이크 권한", micDescription: "말하면 받아 적어 메시지를 써 주고, 보이스룸에서 이야기할 때 써요.", micAllow: "마이크 허용하고 계속", micGranted: "마이크가 켜졌어요", micDenied: "설정에서 언제든 켤 수 있어요", nationalityLabel: "국적", nationalityTitle: "어느 나라 사람이에요?", nationalityDescription: "프로필 사진에 국기로 보여요. 쓰는 언어와는 따로예요.", nationalitySearch: "나라 검색", faceCheck: "얼굴 인증하기", faceVerified: "얼굴 인증 완료",
   },
   en: {
     photoLabel: "Profile photo", photoTitle: "Add a profile photo", photoDescription: "A photo where your face is clear brings far more friends.", photoPick: "Choose a photo", photoChange: "Choose another photo", photoSkip: "I'll do it later", photoFailed: "Couldn't open that photo. Please choose another.",
