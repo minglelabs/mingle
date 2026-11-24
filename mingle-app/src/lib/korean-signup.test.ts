@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { FIRST_RUN_ONBOARDING_STEPS, INVITE_ONBOARDING_STEPS } from '@/components/LivePhoneDemo/LanguageOnboardingModal'
 import { PRIMARY_UI_LOCALES } from '@/i18n/mingle-locales'
 import { resolveContactSyncCopy } from '@/i18n/contact-sync-copy'
-import { MAJOR_NATIONALITY_CODES, NATIONALITY_COUNTRY_CODES } from '@/lib/nationality'
+import { MAJOR_NATIONALITY_CODES, NATIONALITY_COUNTRY_CODES, supportedLanguageNationalityCodes } from '@/lib/nationality'
 import { resolvePhoneSignInCopy } from '@/i18n/phone-sign-in-copy'
 import { isKoreanAppLocale, resolveIsKorean } from '@/lib/korean-signup'
 import { isPhoneRequiredFor } from '@/server/app-access'
@@ -23,10 +23,10 @@ describe('Korean sign-up: asked, phone first, then the contact sync', () => {
     ])
     expect(INVITE_ONBOARDING_STEPS.slice(0, 4)).toEqual(['language', 'nationality', 'korea-visit', 'interest-language'])
     expect(INVITE_ONBOARDING_STEPS).not.toContain('discovery-source')
-    expect(MAJOR_NATIONALITY_CODES[0]).toBe('KR')
-    expect(MAJOR_NATIONALITY_CODES).toHaveLength(11)
-    expect(new Set(MAJOR_NATIONALITY_CODES).size).toBe(11)
-    for (const code of MAJOR_NATIONALITY_CODES) expect(NATIONALITY_COUNTRY_CODES).toContain(code)
+    // Five on one screen, then the app languages' countries, then the rest.
+    expect(MAJOR_NATIONALITY_CODES).toEqual(['KR', 'JP', 'CN', 'TW', 'US'])
+    expect(supportedLanguageNationalityCodes(PRIMARY_UI_LOCALES)).toEqual(['FR', 'DE', 'ES', 'PT', 'IT', 'RU', 'SA', 'IN', 'TH', 'VN'])
+    for (const code of supportedLanguageNationalityCodes(PRIMARY_UI_LOCALES)) expect(NATIONALITY_COUNTRY_CODES).toContain(code)
   })
 
   it('goes by the answer, and by the Korean app language only without one', () => {

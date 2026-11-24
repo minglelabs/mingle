@@ -2,7 +2,8 @@
 
 import dynamic from "next/dynamic";
 import { readKoreanAnswer, readNationalityAnswer, writeKoreanAnswer, writeNationalityAnswer, type KoreanAnswer } from "@/lib/korean-signup";
-import { MAJOR_NATIONALITY_CODES, NATIONALITY_COUNTRY_CODES, countryFlagEmoji, getCountryDisplayName } from "@/lib/nationality";
+import { MAJOR_NATIONALITY_CODES, NATIONALITY_COUNTRY_CODES, countryFlagEmoji, getCountryDisplayName, supportedLanguageNationalityCodes } from "@/lib/nationality";
+import { PRIMARY_UI_LOCALES } from "@/i18n/mingle-locales";
 import { resolveKoreaVisitCopy } from "@/i18n/korea-visit-copy";
 import {
   fromIsoDay,
@@ -236,22 +237,24 @@ export default function LanguageOnboardingModal({
   const koreaVisitCopy = useMemo(() => resolveKoreaVisitCopy(language), [language]);
   const extraCopy = useMemo(() => resolveOnboardingExtraCopy(language), [language]);
   const countryNameLocale = resolveUiLocaleForLanguage(language);
-  // Korea and the top visitor countries first, then every other country A–Z;
-  // a search looks through both.
+  // Five on top, then the countries of the app's languages, then every other
+  // country A–Z; a search looks through all three.
   const nationalityRows = useMemo(() => {
     const collator = new Intl.Collator(countryNameLocale);
     const toRow = (code: string) => ({ code, name: getCountryDisplayName(code, countryNameLocale) });
     const major = MAJOR_NATIONALITY_CODES.map(toRow);
-    const majorSet = new Set(MAJOR_NATIONALITY_CODES);
+    const languageCountries = supportedLanguageNationalityCodes(PRIMARY_UI_LOCALES);
+    const more = languageCountries.map(toRow);
+    const listed = new Set([...MAJOR_NATIONALITY_CODES, ...languageCountries]);
     const rest = NATIONALITY_COUNTRY_CODES
-      .filter((code) => !majorSet.has(code))
+      .filter((code) => !listed.has(code))
       .map(toRow)
       .sort((a, b) => collator.compare(a.name, b.name));
     const needle = nationalityQuery.trim().toLocaleLowerCase(countryNameLocale);
     const matches = (row: { code: string; name: string }) => (
       !needle || row.name.toLocaleLowerCase(countryNameLocale).includes(needle) || row.code.toLowerCase() === needle
     );
-    return { major: major.filter(matches), rest: rest.filter(matches) };
+    return { major: major.filter(matches), more: more.filter(matches), rest: rest.filter(matches) };
   }, [countryNameLocale, nationalityQuery]);
   const koreaVisitSummary = useMemo(() => {
     if (!koreaVisit.start) return koreaVisitCopy.pickStart;
@@ -1020,13 +1023,17 @@ export default function LanguageOnboardingModal({
             style={{ paddingBottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))" }}
           >
             <div className="space-y-2 py-3" role="radiogroup" aria-labelledby={titleId}>
-              {nationalityRows.major.length + nationalityRows.rest.length === 0 ? (
+              {nationalityRows.major.length + nationalityRows.more.length + nationalityRows.rest.length === 0 ? (
                 <p className="py-10 text-center text-sm text-slate-500">{copy.noResultsLabel}</p>
               ) : null}
               {nationalityRows.major.length > 0 && !nationalityQuery.trim() ? (
                 <p className="px-1 pt-1 text-[0.78rem] font-bold text-slate-500">{extraCopy.nationalityMajor}</p>
               ) : null}
               {nationalityRows.major.map(renderNationalityRow)}
+              {nationalityRows.more.length > 0 && !nationalityQuery.trim() ? (
+                <p className="px-1 pt-4 text-[0.78rem] font-bold text-slate-500">{extraCopy.nationalityMore}</p>
+              ) : null}
+              {nationalityRows.more.map(renderNationalityRow)}
               {nationalityRows.rest.length > 0 && !nationalityQuery.trim() ? (
                 <p className="px-1 pt-4 text-[0.78rem] font-bold text-slate-500">{extraCopy.nationalityAll}</p>
               ) : null}
