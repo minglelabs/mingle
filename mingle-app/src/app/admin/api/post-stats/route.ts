@@ -37,6 +37,8 @@ export async function GET(request: Request) {
   const stats = await loadOperatorPostStats({
     postIds: ids,
     authorId: access.scope === 'own' ? access.operatorUserId : null,
+    // Staff see every post's stats, real users' too; an operator account only its own.
+    anyAuthor: access.scope === 'all',
   })
   return json({ stats: Object.fromEntries(stats) })
 }
