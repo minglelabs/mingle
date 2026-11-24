@@ -476,60 +476,74 @@ function ReviewActions({
   )
 }
 
+/** Languages staff can read any post or bio in, besides its own (staff 2026-11-24: Korean posts too). */
+const STAFF_TARGETS = [STAFF_LANGUAGE, 'en', 'ja', 'zh', 'es']
+
+/** The chips after 원문: Korean first, the account's own language, then the usual ones; never the text's own. */
+function staffTargets(sourceLanguage: string | null, ownLanguage?: string | null): string[] {
+  const base = (code: string | null | undefined) => (code ?? '').split('-')[0]
+  const source = base(sourceLanguage)
+  const list = [STAFF_LANGUAGE, ...(ownLanguage ? [ownLanguage] : []), ...STAFF_TARGETS]
+  return list.filter((code, index) => base(code) !== source && list.findIndex((other) => base(other) === base(code)) === index)
+}
+
 /**
- * The app's flag chips for staff: 원문 and Korean, translated on first tap
- * (a post by `{ id }`, an account's bio by `{ kind: 'profile', id }`).
+ * The app's flag chips for staff: 원문 and the languages above, each
+ * translated on first tap (a post by `{ id }`, an account's bio by
+ * `{ kind: 'profile', id }`).
  */
 function useStaffTranslation(target: { id: string; kind?: 'profile' }, text: string, onError: (message: string | null) => void) {
   const [chip, setChip] = useState(ORIGINAL_CHIP)
-  const [korean, setKorean] = useState<{ text: string; source: string } | null>(null)
-  const [translating, setTranslating] = useState(false)
-  const koreanText = korean?.source === text ? korean.text : null
+  const [translated, setTranslated] = useState<{ source: string; byLanguage: Record<string, string> }>({ source: text, byLanguage: {} })
+  const [translating, setTranslating] = useState<string | null>(null)
+  const byLanguage = translated.source === text ? translated.byLanguage : {}
 
   async function select(language: string) {
-    if (language !== STAFF_LANGUAGE || koreanText) {
+    if (language === ORIGINAL_CHIP || byLanguage[language]) {
       setChip(language)
       return
     }
-    setTranslating(true)
+    setTranslating(language)
     onError(null)
     try {
       const response = await fetch('/admin/operators/api/review/translate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(target),
+        body: JSON.stringify({ ...target, language }),
       })
       const payload = await response.json().catch(() => ({})) as { text?: unknown }
       if (!response.ok || typeof payload.text !== 'string') throw new Error('translate_failed')
-      setKorean({ text: payload.text, source: text })
-      setChip(STAFF_LANGUAGE)
+      const result = payload.text
+      setTranslated((current) => ({ source: text, byLanguage: { ...(current.source === text ? current.byLanguage : {}), [language]: result } }))
+      setChip(language)
     } catch {
       onError('번역하지 못했어요. 다시 눌러 주세요.')
     } finally {
-      setTranslating(false)
+      setTranslating(null)
     }
   }
 
+  const shown = chip !== ORIGINAL_CHIP ? byLanguage[chip] : undefined
   return {
-    shownText: chip === STAFF_LANGUAGE && koreanText ? koreanText : text,
-    selected: koreanText ? chip : ORIGINAL_CHIP,
+    shownText: shown ?? text,
+    selected: shown ? chip : ORIGINAL_CHIP,
     translating,
     select,
   }
 }
 
-function StaffTranslationChips({ sourceLanguage, translation }: {
+function StaffTranslationChips({ sourceLanguage, ownLanguage, translation }: {
   sourceLanguage: string | null
+  ownLanguage?: string | null
   translation: ReturnType<typeof useStaffTranslation>
 }) {
-  if (sourceLanguage === STAFF_LANGUAGE) return null
   return (
     <div className="-ml-1 mt-1">
       <PostLanguageChips
         sourceLanguage={sourceLanguage}
-        languages={[STAFF_LANGUAGE]}
+        languages={staffTargets(sourceLanguage, ownLanguage)}
         selected={translation.selected}
-        loadingLanguage={translation.translating ? STAFF_LANGUAGE : null}
+        loadingLanguage={translation.translating}
         locale="ko"
         originalLabel="원문"
         onSelect={(language) => void translation.select(language)}
@@ -898,7 +912,7 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
       ) : (
         <>
           <p className="whitespace-pre-wrap break-words text-[15px] leading-6 text-slate-900">{translation.shownText}</p>
-          <StaffTranslationChips sourceLanguage={sourceLanguage} translation={translation} />
+          <StaffTranslationChips sourceLanguage={sourceLanguage} ownLanguage={author.languages[0] ?? null} translation={translation} />
         </>
       )}
       {editingPhotos ? (
