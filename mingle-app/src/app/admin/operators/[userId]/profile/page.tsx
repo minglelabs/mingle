@@ -1,3 +1,4 @@
+import { StaffToggleButton } from './staff-toggle-button'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -104,6 +105,8 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
   // Like a real person's share screen, the shared link carries the account's own invite code (made on first share).
   const shareInviteCode = user.isOperator ? await ensureReferralCode(user.id).catch(() => user.referralCode) : user.referralCode
   const operator = user.isOperator
+  // 운영진: a real user on the staff list (알림 설정), toggled from here.
+  const isStaff = !operator && Boolean(await prisma.adminNotifyTarget.findUnique({ where: { userId: user.id }, select: { userId: true } }))
   const tab: Tab = operator && query.tab === 'review' ? 'review' : 'published'
 
   const [publishedCount, reviewCount, published, queue] = await Promise.all([
@@ -168,7 +171,10 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
               <Link href={withBack(`/admin/operators/${encodeURIComponent(user.id)}?from=review`, href({}))} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-700">프로필 편집</Link>
             </div>
           ) : (
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">실제 유저</span>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">실제 유저</span>
+              <StaffToggleButton userId={user.id} handle={user.handle} initialStaff={isStaff} />
+            </div>
           )}
         </div>
 
