@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseClassification } from './classify'
+import { parseClassification, referenceAutoTagEnabled } from './classify'
 import { referenceRecreateLines } from './library'
 
 describe('reference photo classification', () => {
@@ -22,5 +22,12 @@ describe('reference photo classification', () => {
 describe('reference note', () => {
   it('puts staff note into the prompt', () => {
     expect(referenceRecreateLines({ kind: 'thing', look: null, note: '라멘 말고 우동으로' }).join('\n')).toMatch(/Staff note about the reference photo, to follow: 라멘 말고 우동으로/)
+  })
+})
+
+describe('automatic tagging window', () => {
+  it('runs through 2026-12-12 KST only', () => {
+    expect(referenceAutoTagEnabled(new Date('2026-12-12T23:59:59+09:00'))).toBe(true)
+    expect(referenceAutoTagEnabled(new Date('2026-12-13T00:00:00+09:00'))).toBe(false)
   })
 })

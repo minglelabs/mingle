@@ -19,6 +19,16 @@ const INSTRUCTIONS = [
   'Answer with JSON only: {"kind": "...", "gender": "female"|"male"|null, "summary": "..."}',
 ].join('\n')
 
+/**
+ * The automatic look runs only through 2026-12-12 (KST); after that staff tag
+ * every photo themselves on upload (staff, 2026-11-24).
+ */
+export const REFERENCE_AUTO_TAG_UNTIL_MS = Date.parse('2026-12-13T00:00:00+09:00')
+
+export function referenceAutoTagEnabled(now: Date = new Date()): boolean {
+  return now.getTime() < REFERENCE_AUTO_TAG_UNTIL_MS
+}
+
 export type ReferenceClassification = { kind: ReferenceKind; gender: ReferenceGender | null; summary: string | null }
 
 export function parseClassification(text: string): ReferenceClassification | null {
