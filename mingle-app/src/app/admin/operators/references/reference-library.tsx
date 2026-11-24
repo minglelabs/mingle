@@ -419,8 +419,8 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag, openPhotoId }
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={reviewImageUrl(item.objectKey)} alt="" loading="lazy" className="h-full w-full object-cover" />
                   {item.usedBy ? (
-                    <span className="absolute left-1.5 top-1.5 rounded-full bg-black/70 px-2 py-0.5 text-[11px] font-semibold text-white">
-                      {item.usedBy.kind === 'avatar' ? '프사에 씀' : '글에 씀'}
+                    <span className={`absolute left-1.5 top-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold text-white ${item.useStatus === 'published' ? 'bg-emerald-600/90' : 'bg-black/70'}`}>
+                      {item.usedBy.kind === 'avatar' ? '프사' : '글'} · {item.useStatus === 'published' ? '게시됨' : '게시 전'}
                     </span>
                   ) : null}
                   {selecting ? (
@@ -574,7 +574,7 @@ function ReferenceEditor({ item, canDraw, autoTag, onSave, onRemove, onItems, on
         </details>
         {item.usedBy ? (
           <p className="mt-2 text-xs font-semibold text-slate-600">
-            {item.usedBy.kind === 'avatar' ? '프사에 씀' : '글 사진에 씀'}
+            {item.usedBy.kind === 'avatar' ? '프사에 씀' : '글 사진에 씀'} · {item.useStatus === 'published' ? '게시됨' : '아직 게시 전 (검수 중·예약)'}
             {item.usedByAccount ? (
               <> · <Link href={adminProfileHref(item.usedByAccount.userId, '/admin/operators/references')} className="text-sky-700">{item.usedByAccount.name ?? `@${item.usedByAccount.handle}`} @{item.usedByAccount.handle}</Link></>
             ) : null}
