@@ -23,6 +23,16 @@ export const NATIONALITY_COUNTRY_CODES: readonly string[] = ISO_COUNTRY_CODES;
  * (`supportedLanguageNationalityCodes`), then every other country A–Z.
  */
 export const MAJOR_NATIONALITY_CODES: readonly string[] = ["KR", "JP", "CN", "TW", "US"];
+
+/**
+ * The top 20 countries visitors to Korea come from (Korea Tourism Organization
+ * arrivals, 2024), most first. Those not in the first block open the second
+ * one, ahead of the app languages' countries (owner, 2026-11-25).
+ */
+export const TOP_VISITOR_NATIONALITY_CODES: readonly string[] = [
+  "CN", "JP", "TW", "US", "HK", "VN", "PH", "TH", "SG", "ID",
+  "MY", "RU", "AU", "CA", "MN", "IN", "DE", "GB", "FR", "KZ",
+];
 const COUNTRY_CODE_SET = new Set(ISO_COUNTRY_CODES);
 
 export function normalizeNationalityCountry(value: unknown): string | null {
@@ -60,10 +70,16 @@ export function defaultNationalityForLanguage(language: string | null | undefine
   return LANGUAGE_DEFAULT_COUNTRY[tag] ?? LANGUAGE_DEFAULT_COUNTRY[tag.split("-")[0]] ?? null;
 }
 
-/** The country of each app language (fr → FR, vi → VN), in the languages' order, without repeats or the first block. */
+/** The second block: the top visitor countries, then the country of each app language (fr → FR), without repeats or the first block. */
 export function supportedLanguageNationalityCodes(uiLocales: readonly string[]): string[] {
   const seen = new Set(MAJOR_NATIONALITY_CODES);
   const codes: string[] = [];
+  for (const code of TOP_VISITOR_NATIONALITY_CODES) {
+    if (!seen.has(code)) {
+      seen.add(code);
+      codes.push(code);
+    }
+  }
   for (const locale of uiLocales) {
     const code = defaultNationalityForLanguage(locale);
     if (code && !seen.has(code)) {

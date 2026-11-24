@@ -25,7 +25,10 @@ describe('Korean sign-up: asked, phone first, then the contact sync', () => {
     expect(INVITE_ONBOARDING_STEPS).not.toContain('discovery-source')
     // Five on one screen, then the app languages' countries, then the rest.
     expect(MAJOR_NATIONALITY_CODES).toEqual(['KR', 'JP', 'CN', 'TW', 'US'])
-    expect(supportedLanguageNationalityCodes(PRIMARY_UI_LOCALES)).toEqual(['FR', 'DE', 'ES', 'PT', 'IT', 'RU', 'SA', 'IN', 'TH', 'VN'])
+    expect(supportedLanguageNationalityCodes(PRIMARY_UI_LOCALES)).toEqual([
+      'HK', 'VN', 'PH', 'TH', 'SG', 'ID', 'MY', 'RU', 'AU', 'CA', 'MN', 'IN', 'DE', 'GB', 'FR', 'KZ',
+      'ES', 'PT', 'IT', 'SA',
+    ])
     for (const code of supportedLanguageNationalityCodes(PRIMARY_UI_LOCALES)) expect(NATIONALITY_COUNTRY_CODES).toContain(code)
   })
 
