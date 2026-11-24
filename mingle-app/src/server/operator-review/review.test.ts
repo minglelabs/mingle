@@ -193,7 +193,7 @@ describe('where this server can draw (the ChatGPT pool)', () => {
     expect(done.data.text).toBeUndefined()
   })
 
-  it('redraws only the photo with the text and the photo it replaces', async () => {
+  it('redraws only the photo with the text, never attaching the photo it replaces', async () => {
     mocks.canDraw.mockReturnValue(true)
     const withPhoto = { ...REVIEW_POST, imagePrompt: '[self] a selfie', imageObjectKey: 'posts/op1/old.jpg' }
     mocks.reserveFindUnique
@@ -208,7 +208,7 @@ describe('where this server can draw (the ChatGPT pool)', () => {
     expect(description).toBe('[self] a selfie\nStaff feedback on the previous photo, to follow: 배경 밝게')
     expect(staff).toBeUndefined()
     expect(context.postText).toBe('old text')
-    expect(context.previousPhoto.bytes.toString()).toBe('old-photo')
+    expect(context.previousPhoto).toBeUndefined()
     expect(mocks.generatePosts).not.toHaveBeenCalled()
     expect(mocks.reserveUpdateMany.mock.calls[1][0].data).toMatchObject({ imageObjectKey: 'posts/op1/new.jpg' })
   })
