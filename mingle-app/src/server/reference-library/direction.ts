@@ -122,7 +122,7 @@ export function referencePersonaLine(persona: AvatarPersona | null | undefined):
   ])
   const bio = persona.bio ? `their profile says: "${persona.bio.replace(/\s+/g, ' ').slice(0, 200)}"` : null
   const line = join([who, bio])
-  return line ? `This account's persona (the person in the new photo, and whose life it shows): ${line}.` : null
+  return line ? `This account's person (whose face and body the photo gets): ${line}.` : null
 }
 
 const SOUTHERN = new Set(['AU', 'NZ', 'AR', 'CL', 'UY', 'PY', 'ZA', 'BR'])
@@ -150,5 +150,55 @@ export function referenceSeasonClashes(attributes: ReferenceAttributes | null | 
   return avoid.includes('winter') && attributes.weather === 'snow'
 }
 
-/** Clothes must fit the shot's own season and weather. */
-export const REFERENCE_SEASON_OUTFIT_LINE = 'Clothes fit the season, weather and temperature the photo shows: no short sleeves or shorts in snow or cold, no heavy coat on a hot day.'
+/**
+ * Who a library photo suits (staff, 2026-11-25): a pose, outfit and style of
+ * a twenty-year-old look wrong on a fifty-year-old, so a photo goes only to a
+ * persona of about the age and look of its main person.
+ */
+const AGE_RANGE: Record<string, readonly [number, number]> = {
+  teens: [20, 21], early_20s: [20, 24], late_20s: [25, 29], '30s': [30, 39], '40s': [40, 49], '50s_plus': [50, 60],
+}
+
+/** Persona countries whose people a photo of this apparent ancestry suits. */
+export const ANCESTRY_COUNTRIES: Record<string, readonly string[]> = {
+  east_asian: ['KR', 'JP', 'TW', 'CN'],
+  southeast_asian: ['VN', 'TH', 'ID', 'PH', 'MY', 'SG'],
+  south_asian: ['IN'],
+  white: ['US', 'CA', 'GB', 'AU', 'FR', 'DE', 'ES', 'IT', 'RU', 'AR'],
+  black: ['US', 'CA', 'GB', 'FR', 'BR'],
+  latino: ['BR', 'MX', 'AR', 'ES', 'US'],
+  middle_eastern: ['TR', 'SA', 'AE'],
+  mixed: ['US', 'CA', 'GB', 'AU', 'BR', 'MX', 'KZ', 'UZ', 'RU'],
+}
+
+/** The age range of a persona the photo's main person suits; null when the photo does not say. */
+export function referenceAgeRange(attributes: ReferenceAttributes | null | undefined): { min: number; max: number } | null {
+  const age = attributes?.people?.[0]?.age
+  const range = age ? AGE_RANGE[age] : undefined
+  return range ? { min: range[0], max: range[1] } : null
+}
+
+/** Persona countries the photo's main person suits; null when the photo does not say. */
+export function referenceCountries(attributes: ReferenceAttributes | null | undefined): readonly string[] | null {
+  const ancestry = attributes?.people?.[0]?.ancestry
+  return ancestry ? ANCESTRY_COUNTRIES[ancestry] ?? null : null
+}
+
+/**
+ * How well a photo with a person suits a persona: `match` (age within three
+ * years of the photo's range and a fitting country), `unknown` (the photo
+ * does not say), or `mismatch`. Photos without a person always `match`.
+ */
+export function referencePersonaFit(
+  attributes: ReferenceAttributes | null | undefined,
+  persona: { age: number | null; country: string | null },
+  kind: string | null,
+): 'match' | 'unknown' | 'mismatch' {
+  if (kind === 'thing') return 'match'
+  const range = referenceAgeRange(attributes)
+  const countries = referenceCountries(attributes)
+  if (!range && !countries) return 'unknown'
+  if (range && persona.age != null && (persona.age < range.min - 3 || persona.age > range.max + 3)) return 'mismatch'
+  if (countries && persona.country && !countries.includes(persona.country.toUpperCase())) return 'mismatch'
+  return range && countries && persona.age != null && persona.country ? 'match' : 'unknown'
+}
