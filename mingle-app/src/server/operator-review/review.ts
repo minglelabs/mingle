@@ -1,3 +1,4 @@
+import { listReferencePhotos } from '@/server/reference-library/library'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { zipInterestLanguages, type InterestLanguage } from '@/lib/interest-languages'
@@ -212,7 +213,10 @@ export type ReviewAuthor = {
 /** One card of the review timeline: a new account (at sign-up) or a post (at creation). `pinned`: staff moved it up. */
 export type ReviewItem =
   | { kind: 'profile'; key: string; at: string; pinned: boolean; profile: ReviewProfile }
-  | { kind: 'post'; key: string; at: string; pinned: boolean; fromReference: boolean; post: ReviewPost; author: ReviewAuthor }
+  | { kind: 'post'; key: string; at: string; pinned: boolean; fromReference: boolean; reference: ReviewReference | null; post: ReviewPost; author: ReviewAuthor }
+
+/** The reference-library photo a post photo was drawn from, for staff to compare. */
+export type ReviewReference = { id: string; objectKey: string }
 
 export type ReviewQueue = {
   items: ReviewItem[]
@@ -370,6 +374,13 @@ export async function listReviewQueue(options: { cursor?: string; now?: Date; us
   ])
   const usersById = new Map(users.map((user) => [user.id, user]))
   const postsById = new Map(posts.map((post) => [post.id, post]))
+  // The library photo behind each reference-drawn post photo on this page.
+  const referenceByImage = new Map<string, ReviewReference>()
+  if (page.some((row) => row.kind === 'post' && Number(row.ref) === 0)) {
+    for (const photo of await listReferencePhotos().catch(() => [])) {
+      if (photo.usedBy?.imageKey) referenceByImage.set(photo.usedBy.imageKey, { id: photo.id, objectKey: photo.objectKey })
+    }
+  }
 
   const items: ReviewItem[] = []
   for (const row of page) {
@@ -405,6 +416,7 @@ export async function listReviewQueue(options: { cursor?: string; now?: Date; us
       const author = post.operatorUser
       items.push({
         kind: 'post', key, at, pinned: row.rank !== UNRANKED, fromReference: row.ref === 0,
+        reference: post.imageObjectKey ? referenceByImage.get(post.imageObjectKey) ?? null : null,
         post: toReviewPost(post),
         author: {
           userId: author.id, name: author.name, handle: author.handle, image: author.image, primaryLanguages: author.primaryLanguages,
