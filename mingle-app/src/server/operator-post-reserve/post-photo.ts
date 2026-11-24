@@ -42,12 +42,19 @@ const SETUPS: Record<Exclude<PostPhotoKind, 'scene'>, readonly string[]> = {
     'a front-camera selfie in a shop, a mall or a bookstore, shelves and lights behind',
     'a front-camera selfie in a car or a taxi back seat, the seatbelt across the shoulder',
     'a front-camera selfie after getting ready to go out, standing in the hallway or by the door',
+    // Staff 2026-11-23: the most real-looking photo so far was a plain car selfie. A small,
+    // simple place close behind the poster, with one ordinary light, looks real far more often.
+    'a close front-camera selfie in the driver\'s or passenger seat of a parked car, daylight from the side window, only the seat, the belt and the door behind',
+    'a close front-camera selfie at a bus or train window seat, the seat back and the window right behind',
+    'a close front-camera selfie at their desk, a plain wall or a shelf right behind',
+    'a close front-camera selfie on the sofa or the bed against a plain wall, room light only',
+    'a close front-camera selfie in an elevator or a stairwell, plain walls right behind',
   ],
+  // Staff 2026-11-24: far too many top-down shots of the poster's own feet and legs; none now.
   self_faceless: [
-    'shot looking down at their own outfit and shoes, the phone held high, the face out of frame above',
     'a mirror selfie where the phone covers the face, the full outfit visible',
     'shoulders down, sitting at a café holding a drink, the face cut off by the top of the frame',
-    'their legs and shoes on a street, stairs or a crosswalk',
+    'a friend took it from a few steps away: the poster from the shoulders down, standing at a counter, a railing or a shop window, the place around them',
     'their hands holding food, a book, a ticket or a shopping bag, sleeves and part of the outfit in frame',
     'a friend took it: the poster turned away, or the face hidden behind a hand, a cap brim or hair',
     'sitting by a window or on a bench, cropped at the chin, the place around them in focus',
