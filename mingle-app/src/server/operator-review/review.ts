@@ -7,7 +7,7 @@ import type { AdminContext } from '@/server/admin/guard'
 import { ageOn } from '@/server/operator-auto-reply/generate'
 import { canDrawImagesHere, generateOperatorAvatar, planOperatorAvatar, type AvatarReference } from '@/server/operator-avatars/generate'
 import { generateReservePosts, isKoreaCountry, pickReserveTopics, reservePosterProfile, rewriteReservePostText } from '@/server/operator-post-reserve/generate'
-import { drawReservePostImage, type RedrawContext } from '@/server/operator-post-reserve/post-image'
+import { drawReservePostImage, libraryHasPhotoForPost, type RedrawContext } from '@/server/operator-post-reserve/post-image'
 import { MAX_RESERVE_EXTRA_IMAGES, reserveExtraImages, type ReserveExtraImage } from '@/server/operator-post-reserve/extra-images'
 import { decodePostPhoto } from '@/server/operator-post-reserve/post-photo'
 import { pickScheduledPublishAt } from '@/server/operator-post-reserve/schedule'
@@ -68,9 +68,9 @@ async function releaseProfileIfCutOff(userId: string): Promise<boolean> {
  * puts the row back in review with the photo, or marked failed so the draw
  * button stays. Never throws.
  */
-async function drawPostPhotoInBackground(reserveId: string, operatorUserId: string, description: string, onDrawn: () => Promise<unknown>, onFailed: () => Promise<unknown>, staffReference?: AvatarReference, context?: RedrawContext): Promise<void> {
+async function drawPostPhotoInBackground(reserveId: string, operatorUserId: string, description: string, onDrawn: () => Promise<unknown>, onFailed: () => Promise<unknown>, staffReference?: AvatarReference, context?: RedrawContext, drawOptions?: { fromLibrary?: boolean }): Promise<void> {
   try {
-    const image = await drawReservePostImage(operatorUserId, description, staffReference, context)
+    const image = await drawReservePostImage(operatorUserId, description, staffReference, context, drawOptions)
     await prisma.operatorPostReserve.updateMany({
       where: { id: reserveId, state: 'regenerating' },
       data: image
@@ -144,10 +144,11 @@ const MAX_FEEDBACK_LENGTH = 1000
 
 /** `draw`: have the post's photo drawn by hand (in ChatGPT) without changing the text. */
 /** `redraw_photo`: draw the photo again (text untouched), with the text, persona and the photo it replaces. */
-export type ReviewAction = 'publish' | 'delete' | 'regenerate' | 'draw' | 'redraw_photo'
+/** `redraw_reference`: the same, drawn from an unused reference-library photo that fits the post. */
+export type ReviewAction = 'publish' | 'delete' | 'regenerate' | 'draw' | 'redraw_photo' | 'redraw_reference'
 
 export function parseReviewAction(value: unknown): ReviewAction | null {
-  return value === 'publish' || value === 'delete' || value === 'regenerate' || value === 'draw' || value === 'redraw_photo' ? value : null
+  return value === 'publish' || value === 'delete' || value === 'regenerate' || value === 'draw' || value === 'redraw_photo' || value === 'redraw_reference' ? value : null
 }
 
 export function normalizeReviewFeedback(value: unknown): string | null {
@@ -543,7 +544,7 @@ export async function reviewOperatorProfile(
 
 export type PostReviewResult =
   | { ok: true; state: 'published' | 'deleted' | 'review'; postId?: string | null; post?: ReviewPost }
-  | { ok: false; error: 'not_found' | 'profile_pending' | 'photo_pending' | 'busy' | 'publish_failed' | 'regenerate_failed' | 'draw_failed' }
+  | { ok: false; error: 'not_found' | 'profile_pending' | 'photo_pending' | 'busy' | 'publish_failed' | 'regenerate_failed' | 'draw_failed' | 'no_reference' }
 
 /** 게시 / 삭제 / 재제작 for a post waiting for review. */
 export async function reviewOperatorPost(
@@ -586,12 +587,15 @@ export async function reviewOperatorPost(
     return { ok: true, state: 'deleted' }
   }
 
-  if (action === 'redraw_photo') {
+  if (action === 'redraw_photo' || action === 'redraw_reference') {
     // Only where this server draws (the pool): the old photo stays until the new one is in.
     if (!canDrawImagesHere()) return { ok: false, error: 'draw_failed' }
     if (!row.imagePrompt && !row.imageObjectKey) return { ok: false, error: 'not_found' }
+    const fromLibrary = action === 'redraw_reference'
     const brief = row.imagePrompt ?? '[self] A casual everyday photo of the poster that fits the post.'
     const description = feedback ? `${brief}\nStaff feedback on the previous photo, to follow: ${feedback}` : brief
+    // Said right away when the library has nothing that fits this post (kind, gender, season).
+    if (fromLibrary && !(await libraryHasPhotoForPost(row.operatorUserId, description))) return { ok: false, error: 'no_reference' }
     // The photo being replaced is never attached: fed back in redraw after redraw, photos
     // broke up and turned strange (staff 2026-11-24). The brief, the feedback and the post's text are enough.
     runningHere.add(postJob(reserveId))
@@ -611,8 +615,8 @@ export async function reviewOperatorPost(
     }
     void drawPostPhotoInBackground(
       reserveId, row.operatorUserId, description,
-      () => audit('redraw_photo', { photo: true }), () => audit('redraw_photo', { photo: false }),
-      options.reference, { postText: row.text },
+      () => audit('redraw_photo', { photo: true, fromLibrary }), () => audit('redraw_photo', { photo: false, fromLibrary }),
+      fromLibrary ? undefined : options.reference, { postText: row.text }, { fromLibrary },
     )
     const drawing = await prisma.operatorPostReserve.findUnique({ where: { id: reserveId }, select: POST_SELECT })
     return { ok: true, state: 'review', post: toReviewPost(drawing ?? { ...row, state: 'regenerating', error: PHOTO_DRAWING }) }

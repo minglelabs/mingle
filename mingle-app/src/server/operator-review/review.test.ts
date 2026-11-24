@@ -31,7 +31,7 @@ vi.mock('@/lib/prisma', () => ({
 }))
 vi.mock('@/server/admin/audit', () => ({ writeAdminAudit: mocks.audit }))
 vi.mock('@/server/operator-avatars/generate', () => ({ planOperatorAvatar: mocks.generateAvatar, canDrawImagesHere: mocks.canDraw, generateOperatorAvatar: mocks.drawAvatar }))
-vi.mock('@/server/operator-post-reserve/post-image', () => ({ drawReservePostImage: mocks.drawImage }))
+vi.mock('@/server/operator-post-reserve/post-image', () => ({ drawReservePostImage: mocks.drawImage, libraryHasPhotoForPost: vi.fn(async () => true) }))
 vi.mock('@/server/posts/post-image-storage', () => ({ getPostImage: vi.fn(async () => Buffer.from('old-photo')) }))
 vi.mock('@/server/operator-post-reserve/generate', () => ({
   generateReservePosts: mocks.generatePosts,
@@ -207,7 +207,7 @@ describe('where this server can draw (the ChatGPT pool)', () => {
     expect(result).toMatchObject({ ok: true, state: 'review', post: { photoDrawing: true } })
     expect(mocks.reserveUpdateMany.mock.calls[0][0]).toMatchObject({ where: { id: 'r1', state: 'review' }, data: { state: 'regenerating', error: 'photo_drawing' } })
     await vi.waitFor(() => expect(mocks.reserveUpdateMany).toHaveBeenCalledTimes(2))
-    expect(mocks.drawImage).toHaveBeenCalledWith('op1', '[self] a selfie\nStaff feedback on this photo, to follow: 웃는 얼굴로', undefined, undefined)
+    expect(mocks.drawImage).toHaveBeenCalledWith('op1', '[self] a selfie\nStaff feedback on this photo, to follow: 웃는 얼굴로', undefined, undefined, undefined)
     expect(mocks.generatePosts).not.toHaveBeenCalled()
     const done = mocks.reserveUpdateMany.mock.calls[1][0]
     expect(done.data).toMatchObject({ state: 'review', imageObjectKey: 'posts/op1/a.jpg', error: null })

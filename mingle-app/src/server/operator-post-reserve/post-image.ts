@@ -11,7 +11,7 @@ import { pickPersonVariety, pickPoseVariety } from './post-person-variety'
 import { faceStickerLine } from './face-stickers'
 import { contrastLines, describeReferenceForContrast } from './reference-contrast'
 import { referenceDirectionLines, referencePersonaLine, referenceSeasonClashes, referenceSeasonsToAvoid } from '@/server/reference-library/direction'
-import { markReferenceImage, claimReferencePhoto, loadReferenceBytes, referenceKindOf, referenceRecreateLines, releaseReferencePhoto, type ReferenceKind } from '@/server/reference-library/library'
+import { markReferenceImage, claimReferencePhoto, listReferencePhotos, loadReferenceBytes, referenceKindOf, referenceRecreateLines, releaseReferencePhoto, type ReferenceGender, type ReferenceKind, type ReferencePhoto } from '@/server/reference-library/library'
 
 /** Most group photos hide the friends' faces under stickers; some friends are fine being seen. */
 const FRIEND_STICKER_SHARE = 0.85
@@ -386,14 +386,12 @@ const LIBRARY_KINDS_BY_POST: Partial<Record<PostPhotoKind, readonly ReferenceKin
  * not fit (anime account, friends photo, profile-photo intro) or the library
  * has nothing left, and the photo is drawn the usual way.
  */
-async function libraryPostRequest(
-  operatorUserId: string,
-  description: string,
-  base: { prompt: string; reference: AvatarReference | null },
-): Promise<{ request: { prompt: string; reference: AvatarReference }; referenceId: string } | null> {
+/** Which library photos may be used for this post brief of the account; null when none may. */
+async function libraryPostFilter(operatorUserId: string, description: string, options: { staff?: boolean } = {}) {
   const brief = decodePostPhoto(description)
   const kinds = LIBRARY_KINDS_BY_POST[brief.kind]
-  if (!kinds || brief.profilePhoto) return null
+  // Staff asking for a library redraw may use it on a profile-photo intro too.
+  if (!kinds || (brief.profilePhoto && !options.staff)) return null
   const [persona, user] = await Promise.all([
     loadAvatarPersona(operatorUserId),
     prisma.user.findUnique({ where: { id: operatorUserId }, select: { operatorAccount: { select: { avatarSpec: true } } } }),
@@ -401,13 +399,36 @@ async function libraryPostRequest(
   if (!persona) return null
   const spec = user?.operatorAccount?.avatarSpec as Partial<AvatarSpec> | null | undefined
   if (isAnimeSpec(spec)) return null
-  const gender = persona.gender === 'female' || persona.gender === 'male' ? persona.gender : null
+  const gender: ReferenceGender | null = persona.gender === 'female' || persona.gender === 'male' ? persona.gender : null
   // Never a photo of the opposite season to now where the persona lives (the post goes up within days).
   const avoid = referenceSeasonsToAvoid(persona.country)
-  const photo = await claimReferencePhoto({
-    userId: operatorUserId, kind: 'post', kinds, gender: kinds.includes('thing') ? null : gender,
-    skip: (item) => referenceSeasonClashes(item.attributes, avoid),
-  }).catch(() => null)
+  return {
+    brief, persona, spec,
+    claim: { kinds, gender: kinds.includes('thing') ? null : gender, skip: (item: ReferencePhoto) => referenceSeasonClashes(item.attributes, avoid) },
+  }
+}
+
+/** Whether a 레퍼런스로 재제작 of this post would find a library photo (checked before the drawing starts). */
+export async function libraryHasPhotoForPost(operatorUserId: string, description: string): Promise<boolean> {
+  const filter = await libraryPostFilter(operatorUserId, description, { staff: true })
+  if (!filter) return false
+  const { kinds, gender, skip } = filter.claim
+  return (await listReferencePhotos()).some((item) => !item.usedBy
+    && kinds.includes(referenceKindOf(item))
+    && (!gender || !item.gender || item.gender === gender)
+    && !skip(item))
+}
+
+async function libraryPostRequest(
+  operatorUserId: string,
+  description: string,
+  base: { prompt: string; reference: AvatarReference | null },
+  options: { staff?: boolean } = {},
+): Promise<{ request: { prompt: string; reference: AvatarReference }; referenceId: string } | null> {
+  const filter = await libraryPostFilter(operatorUserId, description, options)
+  if (!filter) return null
+  const { brief, persona, spec } = filter
+  const photo = await claimReferencePhoto({ userId: operatorUserId, kind: 'post', ...filter.claim }).catch(() => null)
   if (!photo) return null
   try {
     const kind = referenceKindOf(photo)
@@ -431,16 +452,26 @@ async function libraryPostRequest(
   }
 }
 
-export async function drawReservePostImage(operatorUserId: string, description: string, staffReference?: AvatarReference, context?: RedrawContext): Promise<ReservePostImage | null> {
+export async function drawReservePostImage(
+  operatorUserId: string,
+  description: string,
+  staffReference?: AvatarReference,
+  context?: RedrawContext,
+  /** `fromLibrary`: staff asked for a redraw from a reference-library photo; fails when none fits. */
+  options: { fromLibrary?: boolean } = {},
+): Promise<ReservePostImage | null> {
   try {
     // A redo always draws a new photo.
-    if (!staffReference && !context && decodePostPhoto(description).profilePhoto) {
+    if (!options.fromLibrary && !staffReference && !context && decodePostPhoto(description).profilePhoto) {
       const profile = await profilePhotoForPost(operatorUserId)
       if (profile) return profile
     }
     const base = await reservePostImageRequest(operatorUserId, description)
     // A fresh drawing (not a staff redo) comes from the reference library while it has a fitting photo.
-    const library = !staffReference && !context ? await libraryPostRequest(operatorUserId, description, base) : null
+    const library = options.fromLibrary
+      ? await libraryPostRequest(operatorUserId, description, base, { staff: true })
+      : !staffReference && !context ? await libraryPostRequest(operatorUserId, description, base) : null
+    if (options.fromLibrary && !library) return null
     const request = library
       ? library.request
       : context
