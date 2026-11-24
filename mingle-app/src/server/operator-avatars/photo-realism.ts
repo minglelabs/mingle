@@ -383,13 +383,41 @@ export function pickPhotoVariation(random: Random, scene: string, people: boolea
 /** A workplace: checked before the other places, since a work desk would otherwise read as home. */
 const WORKPLACE = /\b(office|workplace|at work|work desk|meeting room|conference room|co-?working|coworkers?|colleagues?|design studio|photo studio|recording studio|lab|laboratory|clinic|hospital|ward|classroom|academy|hagwon|warehouse|overtime|shift|behind the counter)\b/i
 
+/**
+ * Kinds of place a light line can name. A line naming one goes only to a
+ * photo of that same kind of place: the image model drew the place along with
+ * the light, so a café selfie got the steel exhaust hoods of "a Korean
+ * barbecue place" (staff, 2026-11-23). Lines that name no such place
+ * (weather, a window, a lamp) go anywhere in their pool. More specific kinds
+ * come first.
+ */
+const LIGHT_VENUES: readonly RegExp[] = [
+  'study café', 'pc café|pc bang', 'book café', 'bubble tea', 'dessert café', 'brunch',
+  'café|cafe|coffee shop|coffee machine',
+  'barbecue|bbq', 'tent bar|pojangmacha', 'wine bar', 'basement bar|neon signs', 'pub|brewery|beer', 'karaoke|noraebang',
+  'convenience store', 'bakery', 'food court', 'noodle|ramen', 'sushi', 'snack bar|bunsik', 'cafeteria', 'restaurant',
+  'hotel', 'kitchen', 'bathroom|vanity', 'balcony', 'dorm', 'studio flat', 'hallway|front door|entrance', 'traditional room|paper-screen', 'living room|tv', 'dining table', 'candles?',
+  'subway', 'bus', 'train', 'airplane|plane', 'taxi', 'airport',
+  'department store|mall', 'fitting room', 'bookstore', 'library', 'climbing gym', 'gym', 'bowling', 'gallery', 'elevator|lift', 'photo booth', 'cinema',
+  'drugstore', 'sauna', 'hair salon|beauty salon|salon', 'shopping arcade', 'arcade|game centre', 'glasshouse|greenhouse', 'aquarium', 'flower shop',
+  'stairwell|stairs', 'cosmetics', 'record shop', 'pottery', 'market hall', 'lobby', 'laundromat', 'car',
+  'office|cubicle|meeting room|co-working|coworking|pantry', 'hospital|clinic', 'lab', 'classroom|academy|hagwon', 'shop counter', 'photo studio', 'recording studio', 'warehouse', 'design studio|architecture studio',
+  'beach', 'mountain|trail', 'park', 'rooftop', 'market|festival', 'stadium|plaza', 'crosswalk',
+].map((words) => new RegExp(`(?<!\\p{L})(${words})(?!\\p{L})`, 'iu'))
+
+/** Whether a light line fits the photo's own place (see LIGHT_VENUES). */
+export function lightFitsScene(light: string, scene: string): boolean {
+  const venue = LIGHT_VENUES.find((pattern) => pattern.test(light))
+  return !venue || venue.test(scene)
+}
+
 /** The time and light line for a post photo, from its kind of place, or null when the description already says when it was taken. */
 export function pickPhotoTime(random: Random, scene: string): string | null {
   if (STATED_TIME.test(scene)) return null
-  if (WORKPLACE.test(scene)) return PHOTO_LIGHTS.work[Math.floor(random() * PHOTO_LIGHTS.work.length)]
   const kind = sceneKindOf(scene)
-  const pool = PHOTO_LIGHTS[kind === 'nature' || kind === 'street' ? 'outdoor' : kind]
-  return pool[Math.floor(random() * pool.length)]
+  const all = WORKPLACE.test(scene) ? PHOTO_LIGHTS.work : PHOTO_LIGHTS[kind === 'nature' || kind === 'street' ? 'outdoor' : kind]
+  const pool = all.filter((light) => lightFitsScene(light, scene))
+  return pool.length ? pool[Math.floor(random() * pool.length)] : null
 }
 
 /**
