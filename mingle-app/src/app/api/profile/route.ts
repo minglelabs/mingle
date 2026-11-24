@@ -424,10 +424,12 @@ export async function PATCH(request: NextRequest) {
   // Gender and birth date are set once and then locked (owner decision
   // 2026-11-19): a request may fill an empty one, or repeat the stored value,
   // but never change or clear it.
+  // Height too (owner, 2026-11-25).
   const touchesLockedFields = Object.prototype.hasOwnProperty.call(body, "birthDate")
-    || Object.prototype.hasOwnProperty.call(body, "gender");
+    || Object.prototype.hasOwnProperty.call(body, "gender")
+    || Object.prototype.hasOwnProperty.call(body, "heightCm");
   const lockedFields = touchesLockedFields
-    ? await prisma.user.findUnique({ where: { id: userId }, select: { gender: true, birthDate: true } })
+    ? await prisma.user.findUnique({ where: { id: userId }, select: { gender: true, birthDate: true, heightCm: true } })
     : null;
 
   if (Object.prototype.hasOwnProperty.call(body, "birthDate")) {
@@ -475,15 +477,22 @@ export async function PATCH(request: NextRequest) {
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "heightCm")) {
-    // Typed by the user, in cm; null clears it. Not locked.
+    // In cm. Set once, then locked like the birth date (owner, 2026-11-25):
+    // an empty one may be filled, the stored one repeated, never changed or cleared.
+    const storedHeightCm = lockedFields?.heightCm ?? null;
     if (body.heightCm === null) {
-      data.heightCm = null;
+      if (storedHeightCm !== null) {
+        return NextResponse.json({ error: "height_locked" }, { status: 409 });
+      }
     } else {
       const heightCm = normalizeHeightCm(body.heightCm);
       if (heightCm === null) {
         return NextResponse.json({ error: "invalid_height" }, { status: 400 });
       }
-      data.heightCm = heightCm;
+      if (storedHeightCm !== null && storedHeightCm !== heightCm) {
+        return NextResponse.json({ error: "height_locked" }, { status: 409 });
+      }
+      if (storedHeightCm === null) data.heightCm = heightCm;
     }
   }
 

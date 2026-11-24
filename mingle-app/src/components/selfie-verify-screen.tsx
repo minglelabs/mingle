@@ -1,14 +1,18 @@
 "use client";
 
-import { Check, ChevronLeft, ChevronRight, Loader2, ShieldCheck, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Check, ChevronLeft, ChevronRight, Loader2, ShieldCheck } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent as ReactTouchEvent } from "react";
+import { registerNativeEdgeSwipeSuppression } from "@/components/slide-surface";
+import { isLeftEdgeSwipeBack, isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
 import { resolveSelfieVerifyCopy, type SelfieVerifyCopy } from "@/i18n/selfie-verify-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { resolveFirstMessageGateCopy } from "@/i18n/first-message-gate-copy";
 import { uploadProfilePhotoWithFaceCheck } from "@/lib/profile-photo-upload";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
 import {
+  GAUGE_SMOOTHING,
   advanceLiveness,
+  smoothGaugePosition,
   initialLivenessState,
   isSameFace,
   MIN_PHOTO_FACE_WIDTH,
@@ -329,7 +333,8 @@ export default function SelfieVerifyScreen({
         state = next.state;
         setHint(next.hint);
         setStep(state.step);
-        if (face) setGauge(turnGaugePosition(face.rotation?.angle?.yaw ?? null));
+        // Eased toward the head's position, so the dot glides instead of jumping (owner, 2026-11-25).
+        if (face) setGauge((current) => smoothGaugePosition(current, turnGaugePosition(face.rotation?.angle?.yaw ?? null), GAUGE_SMOOTHING));
         if (state.step === "done") {
           await finishWith(human, state);
           return;
@@ -343,6 +348,31 @@ export default function SelfieVerifyScreen({
     stopCamera();
     onClose();
   }, [onClose, stopCamera]);
+
+  // No Start to tap (owner, 2026-11-25): the head turns begin as soon as the
+  // screen opens (or a photo was just added). A retry after a failure is a tap.
+  const autoStartedRef = useRef(false);
+  useEffect(() => {
+    if (phase !== "intro" || autoStartedRef.current) return;
+    autoStartedRef.current = true;
+    const timer = window.setTimeout(() => void start(), 0);
+    return () => window.clearTimeout(timer);
+  }, [phase, start]);
+
+  // A page like the others: a left-edge swipe goes back (closes it), and the
+  // app shell's own back gesture is held off while it is open.
+  useEffect(() => registerNativeEdgeSwipeSuppression(), []);
+  const edgeSwipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const handleTouchStart = useCallback((event: ReactTouchEvent<HTMLElement>) => {
+    const touch = event.touches.length === 1 ? event.touches[0] : null;
+    edgeSwipeStartRef.current = touch && isLeftEdgeSwipeStart(touch.clientX) ? { x: touch.clientX, y: touch.clientY } : null;
+  }, []);
+  const handleTouchEnd = useCallback((event: ReactTouchEvent<HTMLElement>) => {
+    const startPoint = edgeSwipeStartRef.current;
+    edgeSwipeStartRef.current = null;
+    const touch = event.changedTouches[0];
+    if (startPoint && touch && isLeftEdgeSwipeBack(startPoint, { x: touch.clientX, y: touch.clientY }, window.innerWidth)) close();
+  }, [close]);
 
   // No usable profile photo: add one right here (checked for a face on the phone), then start.
   const handlePhotoPicked = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -376,12 +406,22 @@ export default function SelfieVerifyScreen({
       aria-label={copy.title}
       className="fixed inset-0 z-[240] flex flex-col bg-white text-gray-950"
       style={{ paddingTop: "env(safe-area-inset-top, 0px)", paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 20px)" }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={() => { edgeSwipeStartRef.current = null; }}
     >
-      <div className="flex items-center justify-between px-3 py-2">
-        <span className="pl-2 text-[1rem] font-bold">{copy.title}</span>
-        <button type="button" aria-label={copy.close} onClick={close} className="flex h-10 w-10 items-center justify-center rounded-full active:bg-gray-100">
-          <X size={22} strokeWidth={2.2} />
+      {/* The same header as the onboarding screens: back on the left. */}
+      <div className="relative flex h-12 items-center justify-center px-3">
+        <button
+          type="button"
+          data-qa="selfie-verify-back"
+          aria-label={copy.close}
+          onClick={close}
+          className="absolute left-2 flex h-10 w-10 items-center justify-center rounded-full text-slate-700 active:bg-gray-100"
+        >
+          <ChevronLeft size={26} strokeWidth={2.2} />
         </button>
+        <span className="text-[1rem] font-bold">{copy.title}</span>
       </div>
 
       <div className="relative mx-auto mt-2 aspect-square w-[min(84vw,360px)] overflow-hidden rounded-full bg-gray-100">
@@ -577,7 +617,7 @@ function TurnGauge({ step, position }: { step: LivenessStep; position: number })
       {/* Where the head is now. */}
       <div
         data-qa="selfie-verify-gauge-dot"
-        className={`absolute top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-lg transition-[left] duration-150 ${reached ? "bg-emerald-500" : "bg-[#F97316]"}`}
+        className={`absolute top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-lg transition-[left] duration-300 ease-out ${reached ? "bg-emerald-500" : "bg-[#F97316]"}`}
         style={{ left: toPercent(position) }}
       />
     </div>

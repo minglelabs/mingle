@@ -1840,12 +1840,19 @@ function ProfileEditPanel({
 
               <div className="block" data-qa="profile-edit-height">
                 <span className="mb-2 block text-[13px] font-semibold text-gray-600">{heightCopy.label}</span>
-                {/* A wheel like the birth date: no keyboard to cover Save. Men must give a height; others may pick "—". */}
-                <ProfileHeightWheel
-                  value={gender === "male" && heightValue === NO_HEIGHT ? DEFAULT_HEIGHT_CM : heightValue}
-                  onChange={setHeightValue}
-                  optional={gender !== "male"}
-                />
+                {/* A wheel like the birth date: no keyboard to cover Save. Men must give a height; others may pick "—".
+                    Set once, then locked (owner, 2026-11-25; the server refuses a change). */}
+                {normalizeHeightCm(initialHeightCm) !== null ? (
+                  <p data-qa="profile-edit-height-locked" className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[15px] text-gray-500">
+                    {normalizeHeightCm(initialHeightCm)} cm
+                  </p>
+                ) : (
+                  <ProfileHeightWheel
+                    value={gender === "male" && heightValue === NO_HEIGHT ? DEFAULT_HEIGHT_CM : heightValue}
+                    onChange={setHeightValue}
+                    optional={gender !== "male"}
+                  />
+                )}
                 <span className="mt-2 block text-[12px] leading-relaxed text-gray-400">{heightCopy.hint}</span>
               </div>
 

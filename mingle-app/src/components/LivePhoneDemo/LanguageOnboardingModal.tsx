@@ -7,10 +7,15 @@ import { PRIMARY_UI_LOCALES } from "@/i18n/mingle-locales";
 import { resolveKoreaVisitCopy } from "@/i18n/korea-visit-copy";
 import {
   fromIsoDay,
+  KOREA_VISIT_AGO_OPTIONS,
   koreaVisitEventProperties,
+  pickKoreaVisitDay,
   toIsoDay,
   writeKoreaVisitAnswer,
+  type KoreaVisitAgo,
   type KoreaVisitAnswer,
+  type KoreaVisitField,
+  type KoreaVisitPlan,
   type KoreaVisitRange,
 } from "@/lib/korea-visit";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
@@ -125,9 +130,11 @@ interface LanguageOnboardingModalProps {
   onConfirm: (payload: LanguageOnboardingConfirmPayload) => void | Promise<void>;
 }
 
-export type OnboardingStep = "language" | "bio" | "nationality" | "korea-visit" | "interest-language" | "profile-photo" | "voice-intro" | "usage-purpose" | "discovery-source" | "gender" | "birth-date" | "height";
+export type OnboardingStep = "language" | "bio" | "nationality" | "korea-trip-plan" | "korea-visit" | "korea-visit-past" | "interest-language" | "profile-photo" | "voice-intro" | "usage-purpose" | "discovery-source" | "gender" | "birth-date" | "height";
 
-// "korea-visit": only after "no, not Korean" (owner, 2026-11-23; see @/lib/korea-visit).
+// The Korea trip, for someone not Korean (see @/lib/korea-visit): first
+// "korea-trip-plan" (planned / not yet / was there recently), then the
+// calendar ("korea-visit") or how long ago ("korea-visit-past").
 // "interest-language": asked up front (owner, 2026-11-23), not later on the feed;
 // someone who is not Korean starts with Korean checked.
 // One pass before sign-in (owner, 2026-11-24): everything a profile needs is
@@ -137,7 +144,7 @@ export type OnboardingStep = "language" | "bio" | "nationality" | "korea-visit" 
 // picked at once, Korea and the ten biggest visitor countries on top; picking
 // Korea is the old "yes", anything else the old "no".
 export const FIRST_RUN_ONBOARDING_STEPS: readonly OnboardingStep[] = [
-  "language", "nationality", "korea-visit", "interest-language",
+  "language", "nationality", "korea-trip-plan", "korea-visit", "korea-visit-past", "interest-language",
   "gender", "height", "birth-date", "profile-photo", "bio", "discovery-source", "voice-intro",
 ];
 // Sign-up needs a face-verified photo (no "later"), and men also a
@@ -166,6 +173,9 @@ export default function LanguageOnboardingModal({
   const [gender, setGender] = useState<ProfileGender | null>(null);
   const [koreanAnswer, setKoreanAnswer] = useState<KoreanAnswer | null>(() => readKoreanAnswer());
   const [koreaVisit, setKoreaVisit] = useState<KoreaVisitRange>({ start: null, end: null });
+  const [tripPlan, setTripPlan] = useState<KoreaVisitPlan | null>(null);
+  const [tripField, setTripField] = useState<KoreaVisitField>("start");
+  const [visitedAgo, setVisitedAgo] = useState<KoreaVisitAgo | null>(null);
   // 국적 for someone who is not Korean; the avatar flag (2026-11-24), apart from languages.
   const [nationality, setNationality] = useState<string | null>(() => (
     readNationalityAnswer() ?? (readKoreanAnswer() === "yes" ? "KR" : null)
@@ -194,13 +204,16 @@ export default function LanguageOnboardingModal({
   const [bio, setBio] = useState(() => readPendingBio() ?? "");
   // Height is asked of men only: when the gender is asked in this same run the
   // step appears once "male" is picked; asked alone, the caller already knows.
-  const steps = useMemo(
-    () => baseSteps.filter((entry) => (
-      ((entry !== "height" && entry !== "bio") || gender === "male" || !baseSteps.includes("gender"))
-      && (entry !== "korea-visit" || koreanAnswer === "no")
-    )),
-    [baseSteps, gender, koreanAnswer],
-  );
+  const stepsFor = useCallback((
+    nextGender: ProfileGender | null,
+    nextPlan: KoreaVisitPlan | null,
+  ) => baseSteps.filter((entry) => (
+    ((entry !== "height" && entry !== "bio") || nextGender === "male" || !baseSteps.includes("gender"))
+    && (!entry.startsWith("korea-") || koreanAnswer === "no")
+    && (entry !== "korea-visit" || nextPlan === "planned")
+    && (entry !== "korea-visit-past" || nextPlan === "visited")
+  )), [baseSteps, koreanAnswer]);
+  const steps = useMemo(() => stepsFor(gender, tripPlan), [gender, stepsFor, tripPlan]);
   // Mounted only while onboarding is on screen: no native ad banner at any
   // step, whatever zone the screen underneath asked for.
   useNativeBannerSuppression();
@@ -256,14 +269,10 @@ export default function LanguageOnboardingModal({
     );
     return { major: major.filter(matches), more: more.filter(matches), rest: rest.filter(matches) };
   }, [countryNameLocale, nationalityQuery]);
-  const koreaVisitSummary = useMemo(() => {
-    if (!koreaVisit.start) return koreaVisitCopy.pickStart;
-    if (!koreaVisit.end) return koreaVisitCopy.pickEnd;
-    const format = new Intl.DateTimeFormat(resolveUiLocaleForLanguage(language), { year: "numeric", month: "short", day: "numeric" });
-    return koreaVisit.start === koreaVisit.end
-      ? format.format(fromIsoDay(koreaVisit.start))
-      : format.formatRange(fromIsoDay(koreaVisit.start), fromIsoDay(koreaVisit.end));
-  }, [koreaVisit, koreaVisitCopy, language]);
+  const formatTripDay = useCallback(
+    (day: string) => new Intl.DateTimeFormat(resolveUiLocaleForLanguage(language), { month: "short", day: "numeric", weekday: "short" }).format(fromIsoDay(day)),
+    [language],
+  );
   const discoveryOptions = useMemo(() => {
     const optionsByCode = new Map(discoveryCopy.options.map((option) => [option.code, option]));
     return discoveryOptionCodes
@@ -329,17 +338,17 @@ export default function LanguageOnboardingModal({
     () => partitionLanguageSelectorItemsByPriority(filteredItems),
     [filteredItems],
   );
-  // The 관심 언어 list leaves out the language just chosen as the user's own.
   const ownLanguageCode = canonicalizeSttLanguageCode(language);
   const ownLanguageItem = useMemo(
     () => languageItems.find((item) => canonicalizeSttLanguageCode(item.code) === ownLanguageCode) ?? null,
     [languageItems, ownLanguageCode],
   );
+  // The own language can be picked too (owner, 2026-11-25): a Korean may want
+  // to meet people who speak Korean.
   const interestItems = useMemo(() => {
-    const visibleItems = filterLanguageSelectorItems(languageItems, interestQuery)
-      .filter((item) => canonicalizeSttLanguageCode(item.code) !== ownLanguageCode);
+    const visibleItems = filterLanguageSelectorItems(languageItems, interestQuery);
     return partitionLanguageSelectorItemsByPriority(sortByBrowseOrder(visibleItems));
-  }, [interestQuery, languageItems, ownLanguageCode, sortByBrowseOrder]);
+  }, [interestQuery, languageItems, sortByBrowseOrder]);
 
   const handleStepBack = useCallback(() => {
     if (isConfirming) return;
@@ -434,7 +443,10 @@ export default function LanguageOnboardingModal({
   const isStepAnswered = (target: OnboardingStep): boolean => (
     target === "language" ? true
       : target === "nationality" ? Boolean(nationality)
-      : target === "korea-visit" ? Boolean(koreaVisit.start && koreaVisit.end)
+      : target === "korea-trip-plan" ? tripPlan !== null
+      // The arrival alone is enough: the departure may not be known yet.
+      : target === "korea-visit" ? Boolean(koreaVisit.start)
+      : target === "korea-visit-past" ? visitedAgo !== null
       : target === "profile-photo" ? Boolean(photoDataUrl) && faceVerified
       : target === "bio" ? bioLength(bio) >= BIO_MIN_LENGTH
       : target === "voice-intro" ? true
@@ -479,21 +491,38 @@ export default function LanguageOnboardingModal({
     captureMingleClientEvent("mingle_korea_visit", koreaVisitEventProperties(answer, toIsoDay(new Date())));
   };
 
-  // "Not decided yet": no dates, straight on (or finish on the last screen).
-  const handleKoreaVisitSkip = () => {
-    if (isConfirming) return;
-    recordKoreaVisit({ kind: "undecided" });
-    setKoreaVisit({ start: null, end: null });
-    skipCurrentStep();
+  // One tap answers and moves on, like the gender (the footer button stays).
+  const advanceAfterTap = (from: OnboardingStep, nextSteps: readonly OnboardingStep[]) => {
+    clearGenderAdvance();
+    const next = nextSteps[nextSteps.indexOf(from) + 1];
+    if (!next) return;
+    genderAdvanceTimerRef.current = window.setTimeout(() => {
+      genderAdvanceTimerRef.current = null;
+      goToStep(next);
+    }, GENDER_AUTO_ADVANCE_MS);
   };
 
-  const skipCurrentStep = () => {
-    setSkippedSteps((current) => (current.includes(step) ? current : [...current, step]));
-    if (isLastStep) {
-      void handleFinalConfirm(step);
-      return;
-    }
-    goToStep(steps[stepIndex + 1]);
+  const handleTripPlanSelect = (plan: KoreaVisitPlan) => {
+    if (isConfirming) return;
+    setTripPlan(plan);
+    if (plan === "undecided") recordKoreaVisit({ kind: "undecided" });
+    if (plan === "planned") setTripField(koreaVisit.start ? "end" : "start");
+    if (isLastStep && plan === "undecided") return;
+    advanceAfterTap("korea-trip-plan", stepsFor(gender, plan));
+  };
+
+  const handleVisitedAgoSelect = (ago: KoreaVisitAgo) => {
+    if (isConfirming) return;
+    setVisitedAgo(ago);
+    recordKoreaVisit({ kind: "visited", ago });
+    if (isLastStep) return;
+    advanceAfterTap("korea-visit-past", steps);
+  };
+
+  const handleTripDayPick = (day: string) => {
+    const picked = pickKoreaVisitDay(koreaVisit, day, tripField);
+    setKoreaVisit(picked.range);
+    setTripField(picked.field);
   };
 
   const handlePhotoPicked = async (file: File | undefined) => {
@@ -537,11 +566,8 @@ export default function LanguageOnboardingModal({
   // The footer button: on to the next screen, or finish on the last one.
   const handleStepNext = () => {
     if (isConfirming || !isStepAnswered(step)) return;
-    if (step === "korea-visit" && koreaVisit.start && koreaVisit.end) {
+    if (step === "korea-visit" && koreaVisit.start) {
       recordKoreaVisit({ kind: "dates", start: koreaVisit.start, end: koreaVisit.end });
-    }
-    if (step === "language" && interestCode && canonicalizeSttLanguageCode(interestCode) === ownLanguageCode) {
-      setInterestCode(null);
     }
     if (step === "gender") clearGenderAdvance();
     if (isLastStep) {
@@ -569,10 +595,7 @@ export default function LanguageOnboardingModal({
     clearGenderAdvance();
     // The last screen waits for the footer button instead of finishing on a tap.
     if (isLastStep) return;
-    const nextSteps = baseSteps.filter((entry) => (
-      ((entry !== "height" && entry !== "bio") || nextGender === "male" || !baseSteps.includes("gender"))
-      && (entry !== "korea-visit" || koreanAnswer === "no")
-    ));
+    const nextSteps = stepsFor(nextGender, tripPlan);
     const next = nextSteps[nextSteps.indexOf("gender") + 1];
     if (!next) return;
     genderAdvanceTimerRef.current = window.setTimeout(() => {
@@ -823,24 +846,51 @@ export default function LanguageOnboardingModal({
                 />
               </div>
             </div>
-          ) : step === "korea-visit" ? (
-            <div className="space-y-1.5 px-6 pb-3 pt-0 text-center">
-              <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
-                {koreaVisitCopy.label}
-              </p>
+          ) : step === "korea-trip-plan" ? (
+            <div className="px-6 pb-4 pt-0 text-center">
               <h2 id={titleId} className="text-[1.6rem] font-extrabold leading-tight tracking-[-0.02em] text-slate-950">
+                {koreaVisitCopy.planQuestion}
+              </h2>
+            </div>
+          ) : step === "korea-visit-past" ? (
+            <div className="px-6 pb-4 pt-0 text-center">
+              <h2 id={titleId} className="text-[1.6rem] font-extrabold leading-tight tracking-[-0.02em] text-slate-950">
+                {koreaVisitCopy.visitedTitle}
+              </h2>
+            </div>
+          ) : step === "korea-visit" ? (
+            <div className="space-y-3 px-5 pb-3 pt-0">
+              <h2 id={titleId} className="text-center text-[1.5rem] font-extrabold leading-tight tracking-[-0.02em] text-slate-950">
                 {koreaVisitCopy.title}
               </h2>
-              <p className="text-[0.92rem] leading-snug text-slate-500">{koreaVisitCopy.description}</p>
-              <button
-                type="button"
-                data-qa="korea-visit-skip"
-                disabled={isConfirming}
-                onClick={handleKoreaVisitSkip}
-                className="pt-0.5 text-[0.85rem] font-medium text-slate-500 underline underline-offset-4"
-              >
-                {koreaVisitCopy.skip}
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                {(["start", "end"] as const).map((field) => {
+                  const value = koreaVisit[field];
+                  const locked = field === "end" && !koreaVisit.start;
+                  const active = tripField === field && !locked;
+                  return (
+                    <button
+                      key={field}
+                      type="button"
+                      data-qa={`korea-visit-field-${field}`}
+                      aria-pressed={active}
+                      disabled={isConfirming || locked}
+                      onClick={() => setTripField(field)}
+                      className={`flex flex-col items-start rounded-2xl border-2 px-3.5 py-2.5 text-left transition disabled:opacity-40 ${
+                        active ? "border-amber-500 bg-amber-50" : "border-[#e6dfd2] bg-white"
+                      }`}
+                    >
+                      <span className={`flex items-center gap-1 text-[0.8rem] font-bold ${value ? "text-emerald-600" : "text-slate-500"}`}>
+                        {value ? <Check size={14} strokeWidth={3} aria-hidden /> : null}
+                        {field === "start" ? koreaVisitCopy.arrive : koreaVisitCopy.leave}
+                      </span>
+                      <span className={`mt-0.5 text-[1.02rem] font-bold ${value ? "text-slate-950" : "text-slate-300"}`}>
+                        {value ? formatTripDay(value) : "—"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           ) : step === "profile-photo" ? (
             <div className="space-y-2 px-6 pb-4 pt-0 text-center">
@@ -1045,9 +1095,45 @@ export default function LanguageOnboardingModal({
             <KoreaVisitCalendar
               locale={resolveUiLocaleForLanguage(language)}
               value={koreaVisit}
-              onChange={setKoreaVisit}
+              onPickDay={handleTripDayPick}
               disabled={isConfirming}
             />
+          </div>
+        ) : step === "korea-trip-plan" || step === "korea-visit-past" ? (
+          <div
+            className="flex flex-1 flex-col justify-center overflow-y-auto px-6 py-4"
+            style={{ paddingBottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))" }}
+          >
+            <div className="mx-auto flex w-full max-w-sm flex-col gap-3" role="radiogroup" aria-labelledby={titleId}>
+              {(step === "korea-trip-plan"
+                ? (["planned", "undecided", "visited"] as const).map((plan) => ({
+                  key: plan,
+                  label: koreaVisitCopy[plan],
+                  selected: tripPlan === plan,
+                  onSelect: () => handleTripPlanSelect(plan),
+                }))
+                : KOREA_VISIT_AGO_OPTIONS.map((ago) => ({
+                  key: ago,
+                  label: koreaVisitCopy.ago[ago],
+                  selected: visitedAgo === ago,
+                  onSelect: () => handleVisitedAgoSelect(ago),
+                }))
+              ).map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  role="radio"
+                  aria-checked={option.selected}
+                  data-qa={`korea-visit-option-${option.key}`}
+                  disabled={isConfirming}
+                  onClick={option.onSelect}
+                  className={`flex h-[3.75rem] w-full items-center justify-center gap-2 rounded-[20px] border-2 text-[1.08rem] font-bold transition active:scale-[0.99] ${option.selected ? "border-amber-500 bg-amber-50 text-slate-950" : "border-[#e6dfd2] bg-white text-slate-700"}`}
+                >
+                  {option.label}
+                  {option.selected ? <Check size={20} strokeWidth={3} className="text-amber-600" aria-hidden /> : null}
+                </button>
+              ))}
+            </div>
           </div>
         ) : step === "profile-photo" ? (
           <div
@@ -1329,10 +1415,6 @@ export default function LanguageOnboardingModal({
         >
           {step === "language" ? (
             <p className="pb-3 text-center text-[0.78rem] text-slate-500">{copy.laterHintLabel}</p>
-          ) : step === "korea-visit" ? (
-            <p data-qa="korea-visit-summary" className={`pb-3 text-center text-[0.95rem] ${koreaVisit.end ? "font-bold text-slate-900" : "text-slate-500"}`}>
-              {koreaVisitSummary}
-            </p>
           ) : null}
           <button
             type="button"

@@ -109,6 +109,18 @@ export function isSameFace(similarity: number): boolean {
 export const TURN_GAUGE_RANGE = YAW_TURN * 1.5
 export const TURN_GAUGE_TARGET = YAW_TURN / TURN_GAUGE_RANGE
 
+/** How much of the new head position each frame takes (the rest stays): lower = calmer dot. */
+export const GAUGE_SMOOTHING = 0.3
+/** The farthest the dot moves in one frame (a fraction of the half-bar). */
+export const GAUGE_MAX_STEP = 0.12
+
+/** Eases the gauge dot toward `target`, at most GAUGE_MAX_STEP a frame (owner, 2026-11-25: it jumped). */
+export function smoothGaugePosition(current: number, target: number, smoothing = GAUGE_SMOOTHING): number {
+  const eased = current + (target - current) * smoothing
+  const step = Math.max(-GAUGE_MAX_STEP, Math.min(GAUGE_MAX_STEP, eased - current))
+  return current + step
+}
+
 export function turnGaugePosition(yaw: number | null): number {
   if (yaw === null || !Number.isFinite(yaw)) return 0
   return Math.max(-1, Math.min(1, yaw / TURN_GAUGE_RANGE))

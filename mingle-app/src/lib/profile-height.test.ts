@@ -36,7 +36,7 @@ describe('profile height', () => {
   it('is wired: the step only for men, saved by the gate, shown on profiles', () => {
     const modal = read('../components/LivePhoneDemo/LanguageOnboardingModal.tsx')
     // Height and the self-introduction (2026-11-25): men only.
-    expect(modal).toContain('(entry !== "height" && entry !== "bio") || gender === "male" || !baseSteps.includes("gender")')
+    expect(modal).toContain('((entry !== "height" && entry !== "bio") || nextGender === "male" || !baseSteps.includes("gender"))')
     expect(read('../components/profile-basics-gate.tsx')).toContain('body.heightCm = payload.heightCm')
     expect(read('../app/api/profile/route.ts')).toContain('error: "invalid_height"')
     expect(read('../components/profile-gender-age-badge.tsx')).toContain('data-qa="profile-height"')

@@ -18,10 +18,10 @@ describe('Korean sign-up: asked, phone first, then the contact sync', () => {
     // Owner, 2026-11-25: the country is picked at once instead of "Are you Korean?".
     // "korea-visit" shows only for a country other than Korea (the modal filters it).
     expect(FIRST_RUN_ONBOARDING_STEPS).toEqual([
-      'language', 'nationality', 'korea-visit', 'interest-language',
+      'language', 'nationality', 'korea-trip-plan', 'korea-visit', 'korea-visit-past', 'interest-language',
       'gender', 'height', 'birth-date', 'profile-photo', 'bio', 'discovery-source', 'voice-intro',
     ])
-    expect(INVITE_ONBOARDING_STEPS.slice(0, 4)).toEqual(['language', 'nationality', 'korea-visit', 'interest-language'])
+    expect(INVITE_ONBOARDING_STEPS.slice(0, 6)).toEqual(['language', 'nationality', 'korea-trip-plan', 'korea-visit', 'korea-visit-past', 'interest-language'])
     expect(INVITE_ONBOARDING_STEPS).not.toContain('discovery-source')
     // Five on one screen, then the app languages' countries, then the rest.
     expect(MAJOR_NATIONALITY_CODES).toEqual(['KR', 'JP', 'CN', 'TW', 'US'])

@@ -5,7 +5,6 @@ import {
   KOREA_VISIT_MONTHS_AHEAD,
   KOREA_VISIT_MONTHS_BACK,
   monthGrid,
-  pickKoreaVisitDay,
   toIsoDay,
   type IsoDay,
   type KoreaVisitRange,
@@ -14,7 +13,8 @@ import {
 type Props = {
   locale: string;
   value: KoreaVisitRange;
-  onChange: (range: KoreaVisitRange) => void;
+  /** A day was tapped; the caller decides which field it fills (@/lib/korea-visit). */
+  onPickDay: (day: IsoDay) => void;
   disabled?: boolean;
 };
 
@@ -22,7 +22,7 @@ type Props = {
  * Months stacked top to bottom, one month at a time snapping to the middle;
  * the months above and below peek in, dimmed. Opens on this month.
  */
-export default function KoreaVisitCalendar({ locale, value, onChange, disabled }: Props) {
+export default function KoreaVisitCalendar({ locale, value, onPickDay, disabled }: Props) {
   const today = useMemo(() => toIsoDay(new Date()), []);
   const months = useMemo(() => {
     const now = new Date();
@@ -81,9 +81,10 @@ export default function KoreaVisitCalendar({ locale, value, onChange, disabled }
   }, []);
 
   const { start, end } = value;
+  // Only a trip ahead is picked: the days before today are greyed out.
   const tap = (day: IsoDay) => {
-    if (disabled) return;
-    onChange(pickKoreaVisitDay(value, day));
+    if (disabled || day < today) return;
+    onPickDay(day);
   };
 
   return (
@@ -127,7 +128,7 @@ export default function KoreaVisitCalendar({ locale, value, onChange, disabled }
                     <button
                       key={day}
                       type="button"
-                      disabled={disabled}
+                      disabled={disabled || day < today}
                       onClick={() => tap(day)}
                       aria-pressed={isEdge || inRange}
                       data-qa={`korea-visit-day-${day}`}
@@ -142,7 +143,7 @@ export default function KoreaVisitCalendar({ locale, value, onChange, disabled }
                             : day === today
                               ? "font-bold text-amber-600 ring-2 ring-amber-400"
                               : day < today
-                                ? "text-slate-400"
+                                ? "text-slate-300"
                                 : "text-slate-800"
                         }`}
                       >
