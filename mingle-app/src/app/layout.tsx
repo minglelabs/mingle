@@ -9,6 +9,7 @@ import AppLocalePreferenceSync from "@/components/app-locale-preference-sync";
 import CoinHost from "@/components/coins/coin-host";
 import ContactSyncHost from "@/components/contacts/contact-sync-host";
 import ProfileBasicsGate from "@/components/profile-basics-gate";
+import PendingProfileSync from "@/components/pending-profile-sync";
 import FirstMessageGate from "@/components/first-message-gate";
 import KeyboardInsetVar from "@/components/keyboard-inset-var";
 import PushPermissionPrompt from "@/components/push-permission-prompt";
@@ -136,6 +137,7 @@ export default async function RootLayout({
                 <CoinHost />
                 <ContactSyncHost />
                 <ProfileBasicsGate />
+                <PendingProfileSync />
                 <FirstMessageGate />
                 <KeyboardInsetVar />
                 <PushPermissionPrompt />

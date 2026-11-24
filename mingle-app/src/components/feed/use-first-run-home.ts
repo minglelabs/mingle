@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { hasConfirmedLanguageOnboarding } from "@/components/LivePhoneDemo/language-onboarding.storage";
 import { conversationsHref } from "@/lib/posting-feed-guard";
+import { homeHref } from "@/lib/home-routes";
 import { isFirstSpeakPending, shouldOpenConversationsInsteadOfFeed, speakTrialNeedsSessionCheck } from "@/lib/first-run";
 import { readLastSignInMethod } from "@/lib/last-sign-in-method";
 import { isSpeakTrialDone } from "@/lib/speak-trial";
@@ -33,7 +34,8 @@ function isNativeAppRuntime(): boolean {
  * the posting guard, so the first paint matches the server render; the caller
  * shows blank chrome while "checking" and after "conversations".
  */
-export function useFirstRunHome(locale: string): FirstRunHomeStatus {
+export function useFirstRunHome(locale: string, options: { launchHome?: boolean } = {}): FirstRunHomeStatus {
+  const launchHome = options.launchHome === true;
   const router = useRouter();
   const { status: sessionStatus } = useSession();
   const [status, setStatus] = useState<FirstRunHomeStatus>(() => (launchJudged ? "feed" : "checking"));
@@ -69,7 +71,13 @@ export function useFirstRunHome(locale: string): FirstRunHomeStatus {
         speakTrialDue: mayOweSpeakTrial && sessionStatus === "unauthenticated",
       });
       if (!moveToConversations) {
-        // The feed is the home tab again (2026-11-23): the launch stays here.
+        // Home is the voice rooms tab (2026-11-24). The app shell still opens
+        // the feed on launch, so the launch moves on to home; a post link stays.
+        if (launchHome && base.isNativeApp && !base.hasPostTarget) {
+          setStatus("conversations");
+          router.replace(`${homeHref(locale)}${window.location.search}`);
+          return;
+        }
         setStatus("feed");
         return;
       }
@@ -79,7 +87,7 @@ export function useFirstRunHome(locale: string): FirstRunHomeStatus {
     return () => {
       cancelled = true;
     };
-  }, [locale, router, sessionStatus]);
+  }, [launchHome, locale, router, sessionStatus]);
 
   return status;
 }

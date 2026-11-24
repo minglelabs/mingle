@@ -1,7 +1,7 @@
 "use client";
 
 import type { AppDictionary } from "@/i18n/types";
-import { Compass, Home, MessageCircle, Mic, UserCircle } from "lucide-react";
+import { Compass, GalleryVerticalEnd, MessageCircle, Mic, UserCircle } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -16,7 +16,6 @@ import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
 import { feedHref as buildFeedHref } from "@/lib/feed-routes";
 import { exploreHref as buildExploreHref } from "@/lib/home-routes";
-import { resolveHomeCopy } from "@/i18n/home-copy";
 import { voiceRoomsCopy } from "@/i18n/voice-rooms-copy";
 import {
   buildNativeAwareTabPath as buildNativeAwareTabPathInternal,
@@ -129,7 +128,7 @@ export default function BottomTabBar({
   // cards nor the posting feature (a pre-2.2.0 app). `null` means "not
   // resolved yet" — the first paint matches the server render, and the tab
   // collapses to the other three once a client is known to be unsupported.
-  const showHomeTab = postingFeedSupported !== false;
+  const showFeedTab = postingFeedSupported !== false;
   const [loadedUnreadConversationMessageCount, setLoadedUnreadConversationMessageCount] = useState(0);
   const pathname = usePathname() || "";
   const router = useRouter();
@@ -141,9 +140,9 @@ export default function BottomTabBar({
   const connectPath = `/${locale}/connect`;
   const mypagePath = `/${locale}/mypage`;
   const voicePath = `/${locale}/voice`;
-  // Home is the post feed again; the explore tab opens the people cards and
-  // also lights up for the search screen behind them (2026-11-23).
-  const homePath = buildFeedHref(locale);
+  // Tabs (owner, 2026-11-24): voice rooms are home and come first, then the
+  // feed, explore (people cards; also lit for the search behind them), chats, my.
+  const feedPath = buildFeedHref(locale);
   const explorePath = buildExploreHref(locale);
   const conversationsHref = buildNativeAwareTabPath(conversationsPath, searchParams, {
     // Returning from another top-level tab is an intentional request for the
@@ -155,14 +154,13 @@ export default function BottomTabBar({
   const connectHref = buildNativeAwareTabPath(explorePath, searchParams, { tabRoot: true });
   const mypageHref = buildNativeAwareTabPath(mypagePath, searchParams, { tabRoot: true });
   const voiceHref = buildNativeAwareTabPath(voicePath, searchParams, { tabRoot: true });
-  const homeTabHref = buildNativeAwareTabPath(homePath, searchParams, { tabRoot: true });
+  const feedTabHref = buildNativeAwareTabPath(feedPath, searchParams, { tabRoot: true });
   // A screen can highlight a tab without living under its route (the post
   // viewer opened from My page): tapping that tab must still go to it.
   const isOnTabRoute = (path: string) => pathname === path || pathname.startsWith(`${path}/`);
-  const isHomeActive = activeRoute === "home"
-    || activeRoute === "feed"
-    || pathname === homePath
-    || pathname.startsWith(`${homePath}/`);
+  const isFeedActive = activeRoute === "feed"
+    || pathname === feedPath
+    || pathname.startsWith(`${feedPath}/`);
   const isConversationsActive = activeRoute === "conversations"
     || pathname === conversationsPath
     || pathname.startsWith(`${conversationsPath}/`);
@@ -172,6 +170,7 @@ export default function BottomTabBar({
     || pathname === connectPath
     || pathname.startsWith(`${connectPath}/`);
   const isVoiceActive = activeRoute === "voice"
+    || activeRoute === "home"
     || pathname === voicePath
     || pathname.startsWith(`${voicePath}/`);
   const isMypageActive = activeRoute === "mypage"
@@ -263,7 +262,7 @@ export default function BottomTabBar({
   useEffect(() => {
     const inactiveTabHrefs = [
       // Only once the client is known to serve it; an unsupported app hides the tab.
-      postingFeedSupported !== true || isHomeActive ? null : homeTabHref,
+      postingFeedSupported !== true || isFeedActive ? null : feedTabHref,
       isConversationsActive ? null : conversationsHref,
       isConnectActive ? null : connectHref,
       isVoiceActive ? null : voiceHref,
@@ -310,10 +309,10 @@ export default function BottomTabBar({
   }, [
     connectHref,
     conversationsHref,
-    homeTabHref,
+    feedTabHref,
     isConnectActive,
     isConversationsActive,
-    isHomeActive,
+    isFeedActive,
     isMypageActive,
     isVoiceActive,
     mypageHref,
@@ -352,27 +351,73 @@ export default function BottomTabBar({
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
       }}
     >
-      {showHomeTab ? (
+      <button
+        type="button"
+        data-qa="tab-voice"
+        onClick={() => {
+          if (isOnTabRoute(voicePath)) return;
+          markTopLevelTabSwitch();
+          router.replace(voiceHref);
+        }}
+        className="flex flex-1 items-center justify-center transition active:opacity-60"
+        aria-label={voiceRoomsCopy(locale).tabLabel}
+        aria-current={isVoiceActive ? "page" : undefined}
+      >
+        <Mic
+          size={26}
+          fill={isVoiceActive ? activeColor : "none"}
+          stroke={isVoiceActive ? activeColor : inactiveColor}
+          strokeWidth={isVoiceActive ? activeStroke - 0.4 : 1.9}
+          aria-hidden="true"
+        />
+      </button>
+      {showFeedTab ? (
         <button
           type="button"
           onClick={() => {
-            if (isOnTabRoute(homePath)) return;
+            if (isOnTabRoute(feedPath)) return;
             markTopLevelTabSwitch();
-            router.replace(homeTabHref);
+            router.replace(feedTabHref);
           }}
           className="flex flex-1 items-center justify-center transition active:opacity-60"
-          aria-label={resolveHomeCopy(locale).tabLabel}
-          aria-current={isHomeActive ? "page" : undefined}
+          data-qa="tab-feed"
+          aria-label={dictionary.titles.feed}
+          aria-current={isFeedActive ? "page" : undefined}
         >
-          <Home
+          <GalleryVerticalEnd
             size={26}
-            fill={isHomeActive ? activeColor : "none"}
-            stroke={isHomeActive ? activeColor : inactiveColor}
-            strokeWidth={1.9}
+            fill={isFeedActive ? activeColor : "none"}
+            stroke={isFeedActive ? activeColor : inactiveColor}
+            strokeWidth={isFeedActive ? activeStroke - 0.4 : 1.9}
             aria-hidden="true"
           />
         </button>
       ) : null}
+      <button
+        type="button"
+        onClick={() => {
+          if (isOnTabRoute(explorePath)) return;
+          markTopLevelTabSwitch();
+          router.replace(connectHref);
+        }}
+        className="flex flex-1 items-center justify-center transition active:opacity-60"
+        aria-label={dictionary.titles.connect}
+        aria-current={isConnectActive ? "page" : undefined}
+      >
+        {isConnectActive ? (
+          // Selected: a filled disc with the needle cut out in the opposite ink, so it
+          // stands out on the one-ink glass bar the way the filled Home and Chats icons do.
+          <svg width={26} height={26} viewBox="0 0 24 24" aria-hidden="true" data-qa="tab-explore-active">
+            <circle cx="12" cy="12" r="10" fill={activeColor} stroke={activeColor} strokeWidth={activeStroke - 0.6} />
+            <path
+              d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"
+              fill={glass ? (glyphTone === "dark" ? "#ffffff" : "#0f172a") : "#ffffff"}
+            />
+          </svg>
+        ) : (
+          <Compass size={26} stroke={inactiveColor} strokeWidth={1.9} aria-hidden="true" />
+        )}
+      </button>
       <button
         type="button"
         onClick={() => {
@@ -403,51 +448,6 @@ export default function BottomTabBar({
             </span>
           ) : null}
         </span>
-      </button>
-      <button
-        type="button"
-        onClick={() => {
-          if (isOnTabRoute(explorePath)) return;
-          markTopLevelTabSwitch();
-          router.replace(connectHref);
-        }}
-        className="flex flex-1 items-center justify-center transition active:opacity-60"
-        aria-label={dictionary.titles.connect}
-        aria-current={isConnectActive ? "page" : undefined}
-      >
-        {isConnectActive ? (
-          // Selected: a filled disc with the needle cut out in the opposite ink, so it
-          // stands out on the one-ink glass bar the way the filled Home and Chats icons do.
-          <svg width={26} height={26} viewBox="0 0 24 24" aria-hidden="true" data-qa="tab-explore-active">
-            <circle cx="12" cy="12" r="10" fill={activeColor} stroke={activeColor} strokeWidth={activeStroke - 0.6} />
-            <path
-              d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"
-              fill={glass ? (glyphTone === "dark" ? "#ffffff" : "#0f172a") : "#ffffff"}
-            />
-          </svg>
-        ) : (
-          <Compass size={26} stroke={inactiveColor} strokeWidth={1.9} aria-hidden="true" />
-        )}
-      </button>
-      <button
-        type="button"
-        data-qa="tab-voice"
-        onClick={() => {
-          if (isOnTabRoute(voicePath)) return;
-          markTopLevelTabSwitch();
-          router.replace(voiceHref);
-        }}
-        className="flex flex-1 items-center justify-center transition active:opacity-60"
-        aria-label={voiceRoomsCopy(locale).tabLabel}
-        aria-current={isVoiceActive ? "page" : undefined}
-      >
-        <Mic
-          size={26}
-          fill={isVoiceActive ? activeColor : "none"}
-          stroke={isVoiceActive ? activeColor : inactiveColor}
-          strokeWidth={isVoiceActive ? activeStroke - 0.4 : 1.9}
-          aria-hidden="true"
-        />
       </button>
       <button
         type="button"

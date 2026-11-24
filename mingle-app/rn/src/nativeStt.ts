@@ -1,4 +1,4 @@
-import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
+import { NativeEventEmitter, NativeModules, Platform, PermissionsAndroid } from 'react-native';
 
 // What a session transcribes: the microphone, or the sound other apps play on
 // this device (Android playback capture; needs a screen-capture consent).
@@ -68,6 +68,8 @@ type NativeSttModuleType = {
   // Absent on builds before Soniox v6 agent text input.
   sendAgentText?: (text: string, endOfSegment: boolean) => void;
   getMicrophonePermissionStatus(): Promise<NativeSttMicrophonePermissionStatus>;
+  // iOS builds from 2.6.0: asks for the microphone without starting a session.
+  requestMicrophonePermission?: () => Promise<NativeSttMicrophonePermissionStatus>;
   getStatus?: () => Promise<NativeSttStatus>;
   // iOS only: the broadcast extension and its App Group are in this build.
   deviceAudioCaptureSupported?: boolean;
@@ -173,6 +175,31 @@ export async function getNativeSttMicrophonePermissionStatus(): Promise<NativeSt
     return { permission: 'unknown', platform: Platform.OS };
   }
   return nativeModule.getMicrophonePermissionStatus();
+}
+
+/**
+ * Asks for the microphone alone. iOS needs a build with
+ * `requestMicrophonePermission`; Android uses the system prompt directly.
+ * Resolves "unavailable" when this build cannot ask on its own (the speak
+ * trial asks instead, as before).
+ */
+/** Whether this build can ask for the microphone without starting a session. */
+export function isNativeMicPermissionRequestAvailable(): boolean {
+  return Platform.OS === 'android' || typeof nativeModule?.requestMicrophonePermission === 'function';
+}
+
+export async function requestNativeSttMicrophonePermission(): Promise<NativeSttMicrophonePermissionStatus> {
+  if (Platform.OS === 'android') {
+    const result = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+    const permission = result === PermissionsAndroid.RESULTS.GRANTED
+      ? 'granted'
+      : result === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN ? 'blocked' : 'denied';
+    return { permission, platform: 'android' };
+  }
+  if (!nativeModule?.requestMicrophonePermission) {
+    return { permission: 'unavailable', platform: Platform.OS };
+  }
+  return nativeModule.requestMicrophonePermission();
 }
 
 export async function getNativeSttStatus(): Promise<NativeSttStatus> {

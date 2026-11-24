@@ -13,7 +13,10 @@ import {
 } from "@/lib/korea-visit";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
 import KoreaVisitCalendar from "@/components/onboarding/korea-visit-calendar";
-import { Check, ChevronLeft, Loader2, Search, X } from "lucide-react";
+import { resolveOnboardingExtraCopy } from "@/i18n/onboarding-extra-copy";
+import { canAskMicPermission, requestMicPermission, type MicPermissionResult } from "@/lib/mic-permission";
+import { readPendingPhoto, squarePhotoDataUrl, writePendingHeight, writePendingPhoto } from "@/lib/pending-profile-extras";
+import { Camera, Check, ChevronLeft, Loader2, Mic, Search, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
 import { registerNativeEdgeSwipeSuppression } from "@/components/slide-surface";
@@ -105,14 +108,23 @@ interface LanguageOnboardingModalProps {
   onConfirm: (payload: LanguageOnboardingConfirmPayload) => void | Promise<void>;
 }
 
-export type OnboardingStep = "language" | "korean" | "korea-visit" | "interest-language" | "usage-purpose" | "discovery-source" | "gender" | "birth-date" | "height";
+export type OnboardingStep = "language" | "korean" | "korea-visit" | "interest-language" | "profile-photo" | "voice-intro" | "usage-purpose" | "discovery-source" | "gender" | "birth-date" | "height";
 
 // "korean": asked on its own, since many Koreans pick English (owner, 2026-11-21; see @/lib/korean-signup).
 // "korea-visit": only after "no, not Korean" (owner, 2026-11-23; see @/lib/korea-visit).
 // "interest-language": asked up front (owner, 2026-11-23), not later on the feed;
 // someone who is not Korean starts with Korean checked.
-export const FIRST_RUN_ONBOARDING_STEPS: readonly OnboardingStep[] = ["language", "korean", "korea-visit", "interest-language"];
-export const INVITE_ONBOARDING_STEPS: readonly OnboardingStep[] = ["language", "korean", "korea-visit", "interest-language", "birth-date"];
+// One pass before sign-in (owner, 2026-11-24): everything a profile needs is
+// asked here, then the microphone ("HashChat is spoken"), then sign-in. Gender,
+// height (men), birth date and the photo used to be asked later, one at a time.
+export const FIRST_RUN_ONBOARDING_STEPS: readonly OnboardingStep[] = [
+  "language", "korean", "korea-visit", "interest-language",
+  "gender", "height", "birth-date", "profile-photo", "discovery-source", "voice-intro",
+];
+// An invite already says where they came from (a friend).
+export const INVITE_ONBOARDING_STEPS: readonly OnboardingStep[] = FIRST_RUN_ONBOARDING_STEPS.filter(
+  (entry) => entry !== "discovery-source",
+);
 
 // Long enough to see the tapped gender light up before the next screen slides in.
 const GENDER_AUTO_ADVANCE_MS = 220;
@@ -133,6 +145,14 @@ export default function LanguageOnboardingModal({
   const [gender, setGender] = useState<ProfileGender | null>(null);
   const [koreanAnswer, setKoreanAnswer] = useState<KoreanAnswer | null>(() => readKoreanAnswer());
   const [koreaVisit, setKoreaVisit] = useState<KoreaVisitRange>({ start: null, end: null });
+  // Steps passed with "later" (the trip, the photo): finishing does not wait for them.
+  const [skippedSteps, setSkippedSteps] = useState<readonly OnboardingStep[]>([]);
+  const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(() => readPendingPhoto());
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const [micResult, setMicResult] = useState<MicPermissionResult | null>(null);
+  const [micAsking, setMicAsking] = useState(false);
   // A wheel like the birth date, starting at a typical height (no keyboard).
   const [heightCm, setHeightCm] = useState<number>(DEFAULT_HEIGHT_CM);
   // Height is asked of men only: when the gender is asked in this same run the
@@ -179,6 +199,7 @@ export default function LanguageOnboardingModal({
   const heightCopy = useMemo(() => resolveProfileHeightCopy(language), [language]);
   const koreanCopy = useMemo(() => resolveKoreanCheckCopy(language), [language]);
   const koreaVisitCopy = useMemo(() => resolveKoreaVisitCopy(language), [language]);
+  const extraCopy = useMemo(() => resolveOnboardingExtraCopy(language), [language]);
   const koreaVisitSummary = useMemo(() => {
     if (!koreaVisit.start) return koreaVisitCopy.pickStart;
     if (!koreaVisit.end) return koreaVisitCopy.pickEnd;
@@ -332,6 +353,8 @@ export default function LanguageOnboardingModal({
     target === "language" ? true
       : target === "korean" ? koreanAnswer !== null
       : target === "korea-visit" ? Boolean(koreaVisit.start && koreaVisit.end)
+      : target === "profile-photo" ? Boolean(photoDataUrl)
+      : target === "voice-intro" ? true
       : target === "interest-language" ? Boolean(interestCode)
       : target === "usage-purpose" ? Boolean(usagePurpose)
       : target === "discovery-source" ? Boolean(discoverySource)
@@ -340,9 +363,12 @@ export default function LanguageOnboardingModal({
         : birthDatePicked && isEligibleAge
   );
 
-  const handleFinalConfirm = async (koreaVisitSkipped = false) => {
-    if (isConfirming || !steps.every((entry) => (entry === "korea-visit" && koreaVisitSkipped) || isStepAnswered(entry))) return;
+  const handleFinalConfirm = async (justSkipped: OnboardingStep | null = null) => {
+    const passed = (entry: OnboardingStep) => entry === justSkipped || skippedSteps.includes(entry) || isStepAnswered(entry);
+    if (isConfirming || !steps.every(passed)) return;
     const asked = (target: OnboardingStep) => steps.includes(target);
+    // Kept on the device until the account exists (PendingProfileSync saves it).
+    if (asked("voice-intro")) writePendingHeight(asked("height") ? heightCm : null);
     setIsConfirming(true);
     try {
       await onConfirm({
@@ -374,8 +400,48 @@ export default function LanguageOnboardingModal({
     if (isConfirming) return;
     recordKoreaVisit({ kind: "undecided" });
     setKoreaVisit({ start: null, end: null });
+    skipCurrentStep();
+  };
+
+  const skipCurrentStep = () => {
+    setSkippedSteps((current) => (current.includes(step) ? current : [...current, step]));
     if (isLastStep) {
-      void handleFinalConfirm(true);
+      void handleFinalConfirm(step);
+      return;
+    }
+    goToStep(steps[stepIndex + 1]);
+  };
+
+  const handlePhotoPicked = async (file: File | undefined) => {
+    if (!file) return;
+    setPhotoBusy(true);
+    setPhotoError(false);
+    try {
+      const dataUrl = await squarePhotoDataUrl(file);
+      writePendingPhoto(dataUrl);
+      setPhotoDataUrl(dataUrl);
+      setSkippedSteps((current) => current.filter((entry) => entry !== "profile-photo"));
+      captureMingleClientEvent("mingle_onboarding_photo", { result: "picked" });
+    } catch {
+      setPhotoError(true);
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
+  // "HashChat is spoken": asks for the microphone here, then goes on whatever
+  // the answer (the speak trial asks again if it was refused).
+  const handleVoiceIntroNext = async () => {
+    if (isConfirming || micAsking) return;
+    if (canAskMicPermission() && micResult !== "granted") {
+      setMicAsking(true);
+      const result = await requestMicPermission();
+      setMicAsking(false);
+      setMicResult(result);
+      captureMingleClientEvent("mingle_onboarding_mic", { result });
+    }
+    if (isLastStep) {
+      void handleFinalConfirm();
       return;
     }
     goToStep(steps[stepIndex + 1]);
@@ -416,9 +482,15 @@ export default function LanguageOnboardingModal({
     clearGenderAdvance();
     // The last screen waits for the footer button instead of finishing on a tap.
     if (isLastStep) return;
+    const nextSteps = baseSteps.filter((entry) => (
+      (entry !== "height" || nextGender === "male" || !baseSteps.includes("gender"))
+      && (entry !== "korea-visit" || koreanAnswer === "no")
+    ));
+    const next = nextSteps[nextSteps.indexOf("gender") + 1];
+    if (!next) return;
     genderAdvanceTimerRef.current = window.setTimeout(() => {
       genderAdvanceTimerRef.current = null;
-      setStep(steps[stepIndex + 1]);
+      goToStep(next);
     }, GENDER_AUTO_ADVANCE_MS);
   };
 
@@ -666,6 +738,35 @@ export default function LanguageOnboardingModal({
                 {koreaVisitCopy.skip}
               </button>
             </div>
+          ) : step === "profile-photo" ? (
+            <div className="space-y-2 px-6 pb-4 pt-0 text-center">
+              <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
+                {extraCopy.photoLabel}
+              </p>
+              <h2 id={titleId} className="text-[1.6rem] font-extrabold leading-tight tracking-[-0.02em] text-slate-950">
+                {extraCopy.photoTitle}
+              </h2>
+              <p className="text-[0.92rem] leading-snug text-slate-500">{extraCopy.photoDescription}</p>
+              <button
+                type="button"
+                data-qa="onboarding-photo-skip"
+                disabled={isConfirming}
+                onClick={skipCurrentStep}
+                className="pt-0.5 text-[0.85rem] font-medium text-slate-500 underline underline-offset-4"
+              >
+                {extraCopy.photoSkip}
+              </button>
+            </div>
+          ) : step === "voice-intro" ? (
+            <div className="space-y-3 px-6 pb-4 pt-2 text-left">
+              <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
+                {extraCopy.voiceLabel}
+              </p>
+              <h2 id={titleId} className="whitespace-pre-line text-[1.75rem] font-extrabold leading-[1.25] tracking-[-0.03em] text-slate-950">
+                {extraCopy.voiceTitle}
+              </h2>
+              <p className="text-[0.98rem] leading-relaxed text-slate-500">{extraCopy.voiceDescription}</p>
+            </div>
           ) : step === "gender" ? (
             <div className="space-y-2 px-6 pb-4 pt-0 text-center">
               <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
@@ -850,6 +951,77 @@ export default function LanguageOnboardingModal({
               disabled={isConfirming}
             />
           </div>
+        ) : step === "profile-photo" ? (
+          <div
+            className="flex flex-1 flex-col items-center justify-center gap-5 overflow-y-auto px-6 py-4"
+            style={{ paddingBottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))" }}
+          >
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/*"
+              className="hidden"
+              onChange={(event) => {
+                void handlePhotoPicked(event.target.files?.[0]);
+                event.target.value = "";
+              }}
+            />
+            <button
+              type="button"
+              data-qa="onboarding-photo-pick"
+              disabled={isConfirming || photoBusy}
+              onClick={() => photoInputRef.current?.click()}
+              className="relative flex h-48 w-48 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-amber-300 bg-amber-50 text-amber-500 transition active:scale-[0.98]"
+              aria-label={photoDataUrl ? extraCopy.photoChange : extraCopy.photoPick}
+            >
+              {photoDataUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- a local data URL, not a remote image
+                <img src={photoDataUrl} alt="" className="h-full w-full object-cover" />
+              ) : photoBusy ? (
+                <Loader2 size={36} className="animate-spin" aria-hidden />
+              ) : (
+                <Camera size={52} strokeWidth={1.8} aria-hidden />
+              )}
+            </button>
+            <button
+              type="button"
+              disabled={isConfirming || photoBusy}
+              onClick={() => photoInputRef.current?.click()}
+              className="rounded-full border border-[#e6dfd2] bg-white px-5 py-2.5 text-[0.95rem] font-semibold text-slate-800 shadow-[0_8px_24px_rgba(15,23,42,0.05)]"
+            >
+              {photoDataUrl ? extraCopy.photoChange : extraCopy.photoPick}
+            </button>
+            {photoError ? <p className="text-center text-[0.85rem] text-rose-600">{extraCopy.photoFailed}</p> : null}
+          </div>
+        ) : step === "voice-intro" ? (
+          <div
+            className="flex flex-1 flex-col justify-between overflow-y-auto px-6 py-4"
+            style={{ paddingBottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))" }}
+          >
+            <div className="flex flex-1 items-center justify-center" aria-hidden>
+              <div className="relative flex h-40 w-40 items-center justify-center">
+                <span className="absolute inset-0 animate-ping rounded-full bg-amber-200/60 [animation-duration:2.4s]" />
+                <span className="absolute inset-4 rounded-full bg-amber-200/70" />
+                <span className="relative flex h-24 w-24 items-center justify-center rounded-full bg-amber-400 text-white shadow-[0_16px_32px_rgba(245,158,11,0.35)]">
+                  <Mic size={44} strokeWidth={2.2} />
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 rounded-[24px] bg-amber-50 px-4 py-4" data-qa="onboarding-mic-card">
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-amber-400 text-white">
+                <Mic size={26} strokeWidth={2.4} aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[1.05rem] font-bold text-slate-950">{extraCopy.micTitle}</span>
+                <span className="mt-0.5 block text-[0.86rem] leading-snug text-slate-500">
+                  {micResult === "granted" ? extraCopy.micGranted : micResult === "denied" || micResult === "blocked" ? extraCopy.micDenied : extraCopy.micDescription}
+                </span>
+              </span>
+              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${micResult === "granted" ? "border-amber-500 bg-amber-500 text-white" : "border-slate-300 bg-white text-transparent"}`}>
+                <Check size={16} strokeWidth={3.2} aria-hidden />
+              </span>
+            </div>
+          </div>
         ) : step === "gender" ? (
           <div
             className="flex flex-1 flex-col justify-center overflow-y-auto px-6 py-4"
@@ -1010,13 +1182,18 @@ export default function LanguageOnboardingModal({
           ) : null}
           <button
             type="button"
-            onClick={handleStepNext}
-            disabled={isConfirming || !isStepAnswered(step)}
-            aria-busy={isConfirming}
+            onClick={step === "voice-intro" ? () => void handleVoiceIntroNext() : handleStepNext}
+            data-qa="onboarding-next"
+            disabled={isConfirming || micAsking || !isStepAnswered(step)}
+            aria-busy={isConfirming || micAsking}
             className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none"
           >
-            {isConfirming ? <Loader2 size={16} className="animate-spin" aria-hidden /> : null}
-            {isLastStep && (step === "language" || step === "korean" || step === "korea-visit" || step === "interest-language") ? copy.confirmButtonLabel : signupCopy.continueAction}
+            {isConfirming || micAsking ? <Loader2 size={16} className="animate-spin" aria-hidden /> : null}
+            {step === "voice-intro" && canAskMicPermission() && micResult !== "granted"
+              ? extraCopy.micAllow
+              : isLastStep && (step === "language" || step === "korean" || step === "korea-visit" || step === "interest-language" || step === "voice-intro")
+                ? copy.confirmButtonLabel
+                : signupCopy.continueAction}
           </button>
         </footer>
       </div>

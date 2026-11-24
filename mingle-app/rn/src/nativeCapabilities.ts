@@ -21,6 +21,10 @@
  * microphone instead (`earphoneMicrophone` on `native_stt_start`,
  * `native_stt_set_earphone_microphone`); absent or false means the web does
  * not ask.
+ * `micPermissionRequest` is true when the shell asks for the microphone alone
+ * (`native_mic_permission_request`, answered on the STT channel as
+ * `{ type: 'permission', requestId }`); absent or false means only starting a
+ * transcription asks.
  * `deviceId` with `deviceKind` is the value that tells the server two
  * installs are the same phone (one account per person): a random id kept in
  * the iOS keychain ('keychain') or Android's ANDROID_ID ('android_id'). Both
@@ -37,6 +41,7 @@ export type NativeShellCapabilities = {
   contacts: boolean;
   faceCheck: boolean;
   earphoneMicrophoneChoice: boolean;
+  micPermissionRequest: boolean;
   deviceId?: string;
   deviceKind?: NativeDeviceKind;
 };
@@ -66,6 +71,7 @@ export function buildNativeShellCapabilities(options: {
   contacts?: boolean;
   faceCheck?: boolean;
   earphoneMicrophoneChoice?: boolean;
+  micPermissionRequest?: boolean;
   deviceId?: string | null;
   deviceKind?: string | null;
 }): NativeShellCapabilities {
@@ -80,6 +86,7 @@ export function buildNativeShellCapabilities(options: {
     contacts: options.contacts === true,
     faceCheck: options.faceCheck === true,
     earphoneMicrophoneChoice: options.earphoneMicrophoneChoice === true,
+    micPermissionRequest: options.micPermissionRequest === true,
     ...(device ?? {}),
   };
 }

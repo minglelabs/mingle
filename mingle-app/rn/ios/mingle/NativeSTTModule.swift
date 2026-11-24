@@ -2668,6 +2668,25 @@ class NativeSTTModule: RCTEventEmitter {
         ])
     }
 
+    /// Asks for the microphone alone (no session): the first-run "HashChat is
+    /// spoken" screen asks before sign-in, and the speak trial then just starts.
+    @objc(requestMicrophonePermission:rejecter:)
+    func requestMicrophonePermission(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter _: @escaping RCTPromiseRejectBlock
+    ) {
+        let audioSession = AVAudioSession.sharedInstance()
+        guard audioSession.recordPermission == .undetermined else {
+            resolve(["permission": resolveMicrophonePermissionStatus(), "platform": "ios"])
+            return
+        }
+        audioSession.requestRecordPermission { [weak self] _ in
+            DispatchQueue.main.async {
+                resolve(["permission": self?.resolveMicrophonePermissionStatus() ?? "unknown", "platform": "ios"])
+            }
+        }
+    }
+
     @objc(stop:resolver:rejecter:)
     func stop(
         _ options: NSDictionary?,

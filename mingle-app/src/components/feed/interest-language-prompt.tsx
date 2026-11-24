@@ -7,10 +7,7 @@ import { buildClientApiPath } from "@/lib/api-contract";
 import type { InterestLanguage } from "@/lib/interest-languages";
 import { canonicalizeSttLanguageCode } from "@/lib/stt-languages";
 import { isFirstSpeakPending } from "@/lib/first-run";
-import {
-  clearPendingInterestLanguages,
-  readPendingInterestLanguages,
-} from "@/components/LivePhoneDemo/live-phone-demo.preferences";
+import { readPendingInterestLanguages } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
 import {
   INTEREST_PROMPT_DELAY_MS,
   interestPromptStorageKey,
@@ -47,29 +44,9 @@ export default function InterestLanguagePrompt({ viewerId, locale }: { viewerId:
   useEffect(() => {
     if (!viewerId) return;
     const controller = new AbortController();
-    // Picked in the first-run onboarding before there was an account: saved
-    // here (the feed is where a new account lands), never asked again.
-    const pending = readPendingInterestLanguages();
-    if (pending.length > 0) {
-      void (async () => {
-        try {
-          const response = await fetch(buildClientApiPath("/profile"), { cache: "no-store", signal: controller.signal });
-          if (!response.ok) return;
-          const profile = await response.json() as { interestLanguages?: unknown };
-          const saved = Array.isArray(profile.interestLanguages) && profile.interestLanguages.length > 0;
-          const patched = saved || (await fetch(buildClientApiPath("/profile"), {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ interestLanguages: pending }),
-            signal: controller.signal,
-          })).ok;
-          if (patched) clearPendingInterestLanguages();
-        } catch {
-          // Offline or aborted: saved on the next visit (or by the chat list).
-        }
-      })();
-      return () => controller.abort();
-    }
+    // Picked in the first-run onboarding before there was an account:
+    // PendingProfileSync saves it, so it is never asked again here.
+    if (readPendingInterestLanguages().length > 0) return;
     if (!shouldShowInterestPrompt(readRecord(viewerId), Date.now(), { firstSpeakPending: isFirstSpeakPending() })) return;
     const timer = window.setTimeout(async () => {
       try {

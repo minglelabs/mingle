@@ -21,7 +21,7 @@ export default async function FeedPage({ params }: FeedPageProps) {
 
   return (
     <PostingFeedRouteGuard locale={locale}>
-      <FirstRunHomeGuard locale={locale}>
+      <FirstRunHomeGuard locale={locale} launchHome>
       <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden">
         {/* The feed is full-bleed; it renders the glass tab bar over its bottom. */}
         <div className="min-h-0 flex-1">
@@ -30,7 +30,7 @@ export default async function FeedPage({ params }: FeedPageProps) {
             dictionary={dictionary}
             appleOAuthEnabled={isAppleOAuthConfigured()}
             googleOAuthEnabled={isGoogleOAuthConfigured()}
-            tabBar={<BottomTabBar activeRoute="home" dictionary={dictionary} locale={locale} variant="glass" />}
+            tabBar={<BottomTabBar activeRoute="feed" dictionary={dictionary} locale={locale} variant="glass" />}
           />
         </div>
         <HomeFeedLayer locale={locale} />

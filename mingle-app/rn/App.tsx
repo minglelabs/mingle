@@ -23,6 +23,8 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import {
   addNativeSttListener,
   getNativeSttMicrophonePermissionStatus,
+  requestNativeSttMicrophonePermission,
+  isNativeMicPermissionRequestAvailable,
   getNativeSttStatus,
   isNativeDeviceAudioCaptureAvailable,
   isNativeEarphoneMicrophoneChoiceAvailable,
@@ -912,6 +914,10 @@ type NativeLocationCommand = {
   };
 };
 
+// The first-run "HashChat is spoken" screen asks for the microphone alone.
+// Answered on the STT channel as { type: 'permission', requestId }.
+type NativeMicPermissionCommand = { type: 'native_mic_permission_request'; payload?: { requestId?: string } };
+
 // Contact sync (see src/nativeContacts.ts).
 type NativeContactsCommand =
   | { type: 'native_contacts_check' | 'native_contacts_request'; payload?: { requestId?: string } }
@@ -1094,6 +1100,7 @@ type WebViewCommand =
   | NativeAudioRouteRequestCommand
   | NativeOpenAppSettingsCommand
   | NativeLocationCommand
+  | NativeMicPermissionCommand
   | NativeContactsCommand
   | NativeAuthStartCommand
   | NativeAuthAckCommand
@@ -1133,7 +1140,7 @@ type NativeSttEvent =
     }
   | { type: 'message'; raw: string; conversationId?: string; sessionId?: string; queueId?: string }
   | { type: 'error'; message: string; code?: string; platform?: string; conversationId?: string; sessionId?: string }
-  | { type: 'permission'; permission: string; platform?: string }
+  | { type: 'permission'; permission: string; platform?: string; requestId?: string }
   | NativeShellCapabilities
   | { type: 'close'; reason: string; conversationId?: string; sessionId?: string };
 
@@ -3900,6 +3907,21 @@ function AppInner(): React.JSX.Element {
     }
   }, [emitToWeb, nativeAvailable]);
 
+  const handleNativeMicPermissionRequest = useCallback(async (requestId?: string) => {
+    let payload: { permission: string; platform?: string };
+    try {
+      payload = await requestNativeSttMicrophonePermission();
+    } catch {
+      payload = { permission: 'unavailable', platform: Platform.OS };
+    }
+    emitToWeb({
+      type: 'permission',
+      permission: payload.permission,
+      platform: payload.platform || Platform.OS,
+      ...(requestId ? { requestId } : {}),
+    });
+  }, [emitToWeb]);
+
   useEffect(() => {
     if (Platform.OS !== 'ios' || !nativeAvailable) return;
 
@@ -4679,6 +4701,11 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (parsed.type === 'native_mic_permission_request') {
+      void handleNativeMicPermissionRequest(parsed.payload?.requestId);
+      return;
+    }
+
     if (parsed.type === 'native_contacts_check') {
       void getNativeContactsBridge().check(parsed.payload?.requestId);
       return;
@@ -5123,6 +5150,7 @@ function AppInner(): React.JSX.Element {
   }, [
     clearAuthDispatchRetryTimer,
     emitQaAudioInjectionToWeb,
+    handleNativeMicPermissionRequest,
     emitTtsToWeb,
     handleDebugWebViewRemount,
     hideLastScreenSnapshot,
@@ -5568,6 +5596,7 @@ function AppInner(): React.JSX.Element {
       contacts: isNativeContactsAvailable(),
       faceCheck: typeof (NativeModules as { NativeQrImageModule?: NativeQrImageModule }).NativeQrImageModule?.detectFaces === 'function',
       earphoneMicrophoneChoice: nativeEarphoneMicrophoneChoiceAvailable,
+      micPermissionRequest: isNativeMicPermissionRequestAvailable(),
       deviceId: NATIVE_RUNTIME_CONFIG.deviceId,
       deviceKind: NATIVE_RUNTIME_CONFIG.deviceKind,
     }));

@@ -116,6 +116,7 @@ describe('capabilities message (contract A.1)', () => {
       contacts: false,
       faceCheck: false,
       earphoneMicrophoneChoice: false,
+      micPermissionRequest: false,
     });
     expect(buildNativeShellCapabilities({ audioRoute: false })).toEqual({
       type: 'capabilities',
@@ -127,6 +128,7 @@ describe('capabilities message (contract A.1)', () => {
       contacts: false,
       faceCheck: false,
       earphoneMicrophoneChoice: false,
+      micPermissionRequest: false,
     });
   });
 
@@ -141,6 +143,7 @@ describe('capabilities message (contract A.1)', () => {
       contacts: false,
       faceCheck: false,
       earphoneMicrophoneChoice: false,
+      micPermissionRequest: false,
     });
   });
 
@@ -155,6 +158,7 @@ describe('capabilities message (contract A.1)', () => {
       contacts: false,
       faceCheck: false,
       earphoneMicrophoneChoice: false,
+      micPermissionRequest: false,
     });
   });
 

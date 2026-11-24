@@ -16,8 +16,9 @@ type PostingFeedRouteGuardProps = {
  * to the conversation list (see `useFirstRunHome`), and the feed is not
  * rendered meanwhile, so nothing of it flashes and no feed request fires.
  */
-export function FirstRunHomeGuard({ locale, children, placeholderClassName = "bg-slate-100" }: PostingFeedRouteGuardProps) {
-  const status = useFirstRunHome(locale);
+/** `launchHome`: on the feed, an app launch moves on to the home tab (voice rooms). */
+export function FirstRunHomeGuard({ locale, children, placeholderClassName = "bg-slate-100", launchHome = false }: PostingFeedRouteGuardProps & { launchHome?: boolean }) {
+  const status = useFirstRunHome(locale, { launchHome });
 
   if (status !== "feed") {
     return <div aria-hidden className={`h-full w-full ${placeholderClassName}`} />;

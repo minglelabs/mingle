@@ -37,6 +37,8 @@ export type MingleClientEvent =
   // The phone number screen, step by step (sign-in and verification), see phone-verify-sheet.
   | "mingle_phone_auth"
   | "mingle_korea_visit"
+  | "mingle_onboarding_mic"
+  | "mingle_onboarding_photo"
   // Posting-feed events; names and allowed properties live in `@/lib/feed-analytics`.
   | FeedEventName;
 
