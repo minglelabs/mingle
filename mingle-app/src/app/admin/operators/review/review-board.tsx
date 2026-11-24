@@ -3,6 +3,8 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import { OPERATOR_POST_STAT_KEYS, conversionRate, formatConversionRate, formatStatCount, type OperatorPostStats } from '@/lib/operator-post-stats'
+import { OPERATOR_POST_STAT_LABELS, OperatorPostStatsRow } from '../../_components/operator-post-stats-row'
 import { InfiniteMore } from '../../_components/infinite-more'
 import { loadMoreReview } from './actions'
 import { CalendarClock, Clock, ImageIcon, ImagePlus, Loader2, MessageSquarePlus, Pencil, Pin, PinOff, RefreshCw, Send, Sparkles, Trash2, X } from 'lucide-react'
@@ -696,6 +698,26 @@ export function StaffBio({ userId, bio, sourceLanguage, className = '' }: { user
   )
 }
 
+/** 이전 게시 성과 on the photo of a post that was up before (조회, then each count with its share of the views). */
+function PastStatsOverlay({ stats }: { stats: OperatorPostStats }) {
+  return (
+    <div className="pointer-events-none absolute inset-x-2 bottom-2 z-[1] rounded-xl bg-black/65 px-3 py-2 text-white backdrop-blur">
+      <p className="text-[11px] font-semibold text-white/70">이전 게시 성과</p>
+      <dl className="mt-0.5 grid grid-cols-6 gap-1 text-center">
+        {OPERATOR_POST_STAT_KEYS.map((key) => (
+          <div key={key} className="min-w-0">
+            <dt className="truncate text-[10px] text-white/70">{OPERATOR_POST_STAT_LABELS[key]}</dt>
+            <dd className="text-sm font-bold leading-5">
+              {formatStatCount(stats[key])}
+              {key === 'views' ? null : <span className="block text-[10px] font-medium text-white/70">{formatConversionRate(conversionRate(stats[key], stats.views))}</span>}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  )
+}
+
 /**
  * On a post's photo: 사진 재제작 redraws only the photo right away (the text,
  * the persona and this photo go along); the speech-bubble button opens a
@@ -837,12 +859,14 @@ export function ReviewPhotos({ photos }: { photos: Array<{ objectKey: string; wi
   )
 }
 
-function PostCard({ post: initial, at, pinned, fromReference, reference, author, profileApproved, onDone }: {
+function PostCard({ post: initial, at, pinned, fromReference, reference, pastStats, author, profileApproved, onDone }: {
   post: ReviewPost
   at: string
   pinned: boolean
   fromReference?: boolean
   reference?: ReviewReference | null
+  /** What the post did while it was up, for a post taken down back into review. */
+  pastStats?: OperatorPostStats | null
   author: { userId: string; name: string | null; handle: string; image: string | null; languages: string[]; interestLanguages: InterestLanguage[] }
   profileApproved: boolean
   onDone: () => void
@@ -978,6 +1002,8 @@ function PostCard({ post: initial, at, pinned, fromReference, reference, author,
         <PinButton kind="post" id={post.id} pinned={pinned} />
       </div>
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
+        {pastStats ? <AdminChip tone="accent">예전에 게시됐던 글</AdminChip> : null}
+        {pastStats && !post.imageObjectKey ? <OperatorPostStatsRow stats={pastStats} className="w-full" /> : null}
         {fromReference && !reference ? <AdminChip tone="accent">레퍼런스 짤로 그림</AdminChip> : null}
         {reference && post.imageObjectKey ? (
           // The library photo this one was drawn from: tap to open it in the library.
@@ -1088,11 +1114,12 @@ function PostCard({ post: initial, at, pinned, fromReference, reference, author,
       ) : post.imageObjectKey ? (
         <div className="relative">
           <ReviewPhotos photos={photos} />
+          {pastStats && !post.photoDrawing ? <PastStatsOverlay stats={pastStats} /> : null}
           {reference && !post.photoDrawing ? (
             // The library photo this one was drawn from, on the photo itself: tap to open it in the library.
             <Link
               href={`/admin/operators/references?photo=${encodeURIComponent(reference.id)}`}
-              className="absolute bottom-2 left-2 z-[1] flex items-end gap-1.5 rounded-xl bg-black/60 p-1.5 pr-2.5 text-xs font-semibold text-white backdrop-blur active:bg-black/75"
+              className={`absolute ${pastStats ? 'bottom-[4.5rem]' : 'bottom-2'} left-2 z-[1] flex items-end gap-1.5 rounded-xl bg-black/60 p-1.5 pr-2.5 text-xs font-semibold text-white backdrop-blur active:bg-black/75`}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={reviewImageUrl(reference.objectKey)} alt="레퍼런스 원본" className="h-20 w-[3.75rem] rounded-lg object-cover ring-1 ring-white/60" />
@@ -1331,6 +1358,7 @@ export function ReviewBoard({ items: initial, more }: {
             pinned={item.pinned}
             fromReference={item.fromReference}
             reference={item.reference}
+            pastStats={item.pastStats}
             author={{ userId, name: item.author.name, handle: item.author.handle, image: images[userId] ?? item.author.image, languages: item.author.primaryLanguages, interestLanguages: item.author.interestLanguages }}
             profileApproved={approved.has(userId)}
             onDone={() => remove((other) => other.key === item.key)}
