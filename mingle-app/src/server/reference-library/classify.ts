@@ -38,6 +38,10 @@ export const REFERENCE_AXES = {
   lighting: ['daylight', 'window', 'golden', 'fluorescent', 'warm_lamp', 'night', 'neon', 'overcast', 'screen', 'flash', 'side_sun', 'backlit_shade'],
   filter: ['none', 'bw', 'warm', 'cool', 'faded', 'vivid', 'film'],
   quality: ['new_phone', 'old_phone', 'front_cam', 'camera', 'film'],
+  sharpness: ['sharp', 'slight_shake', 'motion_blur', 'out_of_focus'],
+  focus: ['all_sharp', 'subject_only', 'missed'],
+  exposure: ['dark', 'normal', 'bright', 'blown_out'],
+  grain: ['clean', 'slight_noise', 'heavy_noise'],
 } as const
 
 export const REFERENCE_PERSON_AXES = {
@@ -66,6 +70,10 @@ export type ReferenceAttributes = AxisValue<typeof REFERENCE_AXES> & {
   /** Panels of a strip or collage (1 for a single photo). */
   panels?: number
   place?: string
+  /** The feel of the shot in a few words. */
+  mood?: string
+  /** Small flaws of the shot (a finger at the edge, a crooked horizon, lens flare, a smudged mirror). */
+  flaws?: string
   textOrInterface?: boolean
   people?: ReferencePersonAttributes[]
 }
@@ -80,6 +88,9 @@ const INSTRUCTIONS = [
   ...Object.entries(REFERENCE_AXES).map(([key, values]) => `  ${key}: ${values.join(' | ')}`),
   '  peopleCount, appearances, panels: integers',
   '  place: a few words (e.g. "cafe window seat", "subway car", "beach at Haeundae")',
+  '  sharpness / focus / exposure / grain: look closely, these flaws matter (hand shake, motion blur, missed focus, dark or blown-out exposure, noise)',
+  '  mood: a few words on the feel of the shot',
+  '  flaws: a few words on any other imperfections (a finger at the edge, a crooked horizon, lens flare, a smudged mirror, a half-closed eye), or leave it out',
   '  textOrInterface: true when writing, stickers or an app interface show in the photo',
   '  people: one object per distinct person, the most prominent first, at most 4, each with:',
   ...Object.entries(REFERENCE_PERSON_AXES).map(([key, values]) => `    ${key}: ${values.join(' | ')}`),
@@ -140,6 +151,8 @@ export function parseReferenceAttributes(raw: unknown): ReferenceAttributes | nu
     appearances: count(value.appearances, 200),
     panels: count(value.panels, 24),
     place: shortText(value.place),
+    mood: shortText(value.mood),
+    flaws: shortText(value.flaws),
     textOrInterface: typeof value.textOrInterface === 'boolean' ? value.textOrInterface : undefined,
     people: people?.length ? people : undefined,
   }) as ReferenceAttributes

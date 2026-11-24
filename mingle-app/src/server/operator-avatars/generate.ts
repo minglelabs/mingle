@@ -6,6 +6,8 @@ import { storeAvatarCandidate } from '@/server/operators/avatar-candidate'
 import { chatgptPoolImage, chatgptPoolKey } from '@/server/chatgpt-pool/client'
 import { AVATAR_SPEC_VERSION, describeAccountLook, pickAvatarSpec, seededRandom, type AvatarPersona, type AvatarSpec } from './taxonomy'
 import { referenceRecreateLines, type ReferenceKind } from '@/server/reference-library/library'
+import type { ReferenceAttributes } from '@/server/reference-library/classify'
+import { referenceDirectionLines, referencePersonaLine } from '@/server/reference-library/direction'
 
 /**
  * AI profile photos for operator accounts: pick a photo spec from the
@@ -245,7 +247,7 @@ export async function generateOperatorAvatar(
   options: {
     nonce?: string; now?: Date; fetchImpl?: typeof fetch; feedback?: string | null; reference?: AvatarReference
     /** A photo from the reference library: the photo is that shot redrawn (a person with this account's own face; a thing as another photo of its kind). */
-    libraryReference?: { reference: AvatarReference; kind: ReferenceKind; note?: string | null }
+    libraryReference?: { reference: AvatarReference; kind: ReferenceKind; note?: string | null; attributes?: ReferenceAttributes | null }
     /** A live account: the photo waits for staff review instead of replacing the current one (avatar-candidate.ts). */
     candidate?: boolean
   } = {},
@@ -267,7 +269,10 @@ export async function generateOperatorAvatar(
         attributes: { source: 'reference_library', referenceKind: library.kind },
         prompt: [
           ...(library.kind === 'face' ? [`Subject: ${look}.`] : []),
-          ...referenceRecreateLines({ kind: library.kind, look, note: library.note }),
+          ...referenceRecreateLines({
+            kind: library.kind, look, note: library.note,
+            direction: referenceDirectionLines(library.attributes), persona: referencePersonaLine(persona),
+          }),
           'Vertical 3:4 image, one single photo. No watermarks, logos, borders or frames.',
         ].join('\n'),
       }
