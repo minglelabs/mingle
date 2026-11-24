@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
-import { Loader2, RefreshCw, Trash2, UserPlus, X } from 'lucide-react'
+import { Check, Loader2, RefreshCw, Trash2, UserPlus, X } from 'lucide-react'
 import type { ReferenceGender, ReferenceKind } from '@/server/reference-library/library'
 import type { ReferencePhotoView } from '@/server/reference-library/view'
 import { adminProfileHref } from '../../_lib/profile-href'
@@ -25,7 +25,7 @@ const GENDER_LABEL: Record<GenderChoice, string> = { female: '여', male: '남',
 const KIND_LABEL: Record<ReferenceKind, string> = { thing: '사람 없음', face: '1명 · 얼굴 보임', person: '1명 · 얼굴 안 보임', group: '2명 이상' }
 const FAILURE_LABEL: Record<string, string> = {
   unsupported_type: '사진 파일이 아님',
-  too_large: '15MB 넘음',
+  too_large: '30MB 넘음',
   decode_failed: '읽을 수 없는 사진',
   store_failed: '저장 실패',
 }
@@ -42,6 +42,31 @@ function kindFrom(people: People, faceShown: boolean): ReferenceKind {
 function isImage(file: File): boolean {
   // An iPhone HEIC photo can come with no type: go by the name then.
   return file.type.startsWith('image/') || (!file.type && /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name))
+}
+
+/**
+ * A big photo is shrunk in the browser before it goes up (the server keeps
+ * 1600px anyway), so uploads are quick and stay far under the request limit.
+ * Anything the browser cannot draw (HEIC outside Safari) goes up as it is.
+ */
+const SHRINK_OVER_BYTES = 3 * 1024 * 1024
+const SHRINK_MAX_SIDE = 2560
+async function shrinkForUpload(file: File): Promise<File> {
+  if (file.size <= SHRINK_OVER_BYTES || typeof createImageBitmap !== 'function') return file
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
+    const scale = Math.min(1, SHRINK_MAX_SIDE / Math.max(bitmap.width, bitmap.height))
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.round(bitmap.width * scale)
+    canvas.height = Math.round(bitmap.height * scale)
+    canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    bitmap.close()
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9))
+    if (!blob || blob.size >= file.size) return file
+    return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' })
+  } catch {
+    return file
+  }
 }
 
 function Choice<T extends string>({ options, value, onChange, label }: { options: readonly T[]; value: T; onChange: (value: T) => void; label: (value: T) => string }) {
@@ -108,7 +133,7 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag }: { initialIt
           let error: string | null = null
           try {
             const form = new FormData()
-            form.append('file', job.file)
+            form.append('file', await shrinkForUpload(job.file))
             for (const [key, value] of Object.entries(job.form)) form.set(key, value)
             const response = await fetch('/admin/operators/api/references', { method: 'POST', body: form })
             const body = await response.json().catch(() => ({})) as { added?: number; failures?: Array<{ reason: string }>; error?: string; items?: ReferencePhotoView[] }
@@ -211,11 +236,23 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag }: { initialIt
     return true
   }, [])
 
-  // 전체 AI 다시 분석: one photo at a time through the per-photo endpoint, so progress shows and nothing times out.
+  // 선택한 사진 AI 다시 분석: one photo at a time through the per-photo endpoint, so progress shows and nothing times out.
+  const [selecting, setSelecting] = useState(false)
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
+  const toggleSelected = useCallback((id: string) => {
+    setSelected((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+  const stopSelecting = useCallback(() => { setSelecting(false); setSelected(new Set()) }, [])
   const [reanalysis, setReanalysis] = useState<{ done: number; total: number; failed: number; differs: number } | null>(null)
-  const reanalyzeAll = useCallback(async () => {
-    const targets = items.map((item) => ({ id: item.id, kind: item.kind ?? 'face' }))
-    if (!targets.length || !window.confirm(`사진 ${targets.length}장을 AI로 다시 분석할까요? 설명과 판별만 바뀌고, 사람 수·얼굴·성별은 그대로예요.`)) return
+  const reanalyzeSelected = useCallback(async () => {
+    const targets = items.filter((item) => selected.has(item.id)).map((item) => ({ id: item.id, kind: item.kind ?? 'face' }))
+    if (!targets.length || !window.confirm(`선택한 사진 ${targets.length}장을 AI로 다시 분석할까요? 설명과 판별만 바뀌고, 사람 수·얼굴·성별은 그대로예요.`)) return
+    stopSelecting()
     let failed = 0
     let differs = 0
     setReanalysis({ done: 0, total: targets.length, failed, differs })
@@ -231,7 +268,7 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag }: { initialIt
       }
       setReanalysis({ done: index + 1, total: targets.length, failed, differs })
     }
-  }, [items])
+  }, [items, selected, stopSelecting])
   const reanalyzing = reanalysis !== null && reanalysis.done < reanalysis.total
 
   const unused = items.filter((item) => !item.usedBy).length
@@ -327,17 +364,34 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag }: { initialIt
           </button>
         ))}
         {autoTag && items.length ? (
-          <button
-            type="button"
-            onClick={() => void reanalyzeAll()}
-            disabled={reanalyzing}
-            className="ml-auto inline-flex min-h-9 items-center gap-1.5 rounded-full bg-white px-3 font-semibold text-slate-700 ring-1 ring-slate-200 disabled:opacity-60"
-          >
-            {reanalyzing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
-            {reanalyzing ? `분석 중 ${reanalysis.done}/${reanalysis.total}` : '전체 AI 다시 분석'}
-          </button>
+          reanalyzing ? (
+            <span className="ml-auto inline-flex min-h-9 items-center gap-1.5 rounded-full bg-white px-3 font-semibold text-slate-500 ring-1 ring-slate-200">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />분석 중 {reanalysis.done}/{reanalysis.total}
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
+              className={`ml-auto inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 font-semibold ${selecting ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 ring-1 ring-slate-200'}`}
+            >
+              {selecting ? '선택 취소' : <><RefreshCw className="h-4 w-4" aria-hidden="true" />골라서 AI 다시 분석</>}
+            </button>
+          )
         ) : null}
       </div>
+      {selecting ? (
+        <div className="sticky top-2 z-10 mt-2 flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm text-white shadow-lg">
+          <span className="flex-1">{selected.size ? `${selected.size}장 선택함` : '다시 분석할 사진을 눌러 고르세요'}</span>
+          <button
+            type="button"
+            onClick={() => void reanalyzeSelected()}
+            disabled={!selected.size}
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-sky-500 px-3 font-semibold text-white disabled:opacity-40"
+          >
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />선택한 사진 AI 다시 분석
+          </button>
+        </div>
+      ) : null}
       {reanalysis && !reanalyzing ? (
         <p role="status" className="mt-2 text-xs font-semibold text-slate-700">
           {reanalysis.total - reanalysis.failed}장 다시 분석함{reanalysis.failed ? ` · ${reanalysis.failed}장 실패` : ''}
@@ -355,13 +409,23 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag }: { initialIt
         <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {shown.map((item) => (
             <li key={item.id}>
-              <button type="button" onClick={() => setEditingId(item.id)} className="block w-full overflow-hidden rounded-xl border border-slate-200 bg-white text-left active:opacity-80">
+              <button
+                type="button"
+                onClick={() => (selecting ? toggleSelected(item.id) : setEditingId(item.id))}
+                aria-pressed={selecting ? selected.has(item.id) : undefined}
+                className={`block w-full overflow-hidden rounded-xl border bg-white text-left active:opacity-80 ${selecting && selected.has(item.id) ? 'border-sky-500 ring-2 ring-sky-500' : 'border-slate-200'}`}
+              >
                 <span className="relative block aspect-[3/4] bg-slate-100">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={reviewImageUrl(item.objectKey)} alt="" loading="lazy" className="h-full w-full object-cover" />
                   {item.usedBy ? (
                     <span className="absolute left-1.5 top-1.5 rounded-full bg-black/70 px-2 py-0.5 text-[11px] font-semibold text-white">
                       {item.usedBy.kind === 'avatar' ? '프사에 씀' : '글에 씀'}
+                    </span>
+                  ) : null}
+                  {selecting ? (
+                    <span className={`absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-white ${selected.has(item.id) ? 'bg-sky-500 text-white' : 'bg-black/30'}`}>
+                      {selected.has(item.id) ? <Check className="h-4 w-4" aria-hidden="true" /> : null}
                     </span>
                   ) : null}
                 </span>
