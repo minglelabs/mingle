@@ -1,4 +1,4 @@
-// Pure gesture math for swipe-down-to-dismiss on the full-screen photo viewer.
+// Pure gesture math for swipe-to-dismiss (down or up) on the full-screen photo viewer.
 // The component wiring stays thin: it feeds pointer deltas/velocity in here and
 // renders the returned transform, and asks this module whether a release should
 // dismiss. Keeping the decisions pure makes them unit-testable without a DOM.
@@ -39,9 +39,6 @@ export const PROGRESS_REFERENCE_PX = 320
 /** Smallest scale the photo shrinks to at full drag progress. */
 export const MIN_DRAG_SCALE = 0.85
 
-/** Resistance applied to upward drags so they visibly do not dismiss. */
-export const UPWARD_RESISTANCE = 0.35
-
 export type DragAxis = 'vertical' | 'horizontal'
 
 export interface DragDelta {
@@ -67,40 +64,31 @@ export function resolveDragAxis(
 }
 
 /**
- * True only for a downward vertical gesture past the slop — the one case that
- * may dismiss. Upward and horizontal gestures return false.
+ * True for a vertical gesture past the slop, down or up — the cases that may
+ * dismiss. Horizontal gestures return false.
  */
 export function isDismissibleDrag(
   delta: DragDelta,
   slop: number = DIRECTION_SLOP_PX,
 ): boolean {
-  return resolveDragAxis(delta, slop) === 'vertical' && delta.dy > 0
+  return resolveDragAxis(delta, slop) === 'vertical' && delta.dy !== 0
+}
+
+/** The vertical offset applied to the photo: it follows the finger 1:1, down or up. */
+export function offsetForDrag(dy: number): number {
+  return dy
 }
 
 /**
- * The vertical offset actually applied to the photo. Downward drags follow the
- * finger 1:1; upward drags still move the photo up but only by a resisted
- * fraction of the finger travel (UPWARD_RESISTANCE), so the viewer clearly does
- * not lift away on an up-swipe.
- */
-export function offsetForDrag(
-  dy: number,
-  resistance: number = UPWARD_RESISTANCE,
-): number {
-  if (dy >= 0) return dy
-  return dy * resistance
-}
-
-/**
- * Drag progress in [0, 1] mapped from the applied downward offset. Upward or
- * zero offset is 0 progress.
+ * Drag progress in [0, 1] mapped from how far the photo moved, in either
+ * direction. Zero offset is 0 progress.
  */
 export function dragProgress(
   offsetY: number,
   reference: number = PROGRESS_REFERENCE_PX,
 ): number {
-  if (offsetY <= 0 || reference <= 0) return 0
-  return Math.min(1, offsetY / reference)
+  if (offsetY === 0 || reference <= 0) return 0
+  return Math.min(1, Math.abs(offsetY) / reference)
 }
 
 /** Backdrop opacity for a given progress, fading from 1 down to MIN_BACKDROP_OPACITY. */
@@ -184,7 +172,7 @@ export function effectiveVelocity(
 }
 
 export interface DismissDecisionInput {
-  /** Applied downward offset in px at release (see offsetForDrag). */
+  /** Applied offset in px at release, down positive, up negative (see offsetForDrag). */
   offsetY: number
   /** Windowed vertical velocity in px/ms at release (down is positive); see
    *  windowVelocity and effectiveVelocity. */
@@ -198,11 +186,11 @@ export interface DismissDecisionInput {
 }
 
 /**
- * Whether releasing the drag should dismiss the viewer. Dismiss when the drag
- * passed the distance threshold (the smaller of a fraction of the viewer height
- * and the absolute cap) OR when it was a fast downward flick that also travelled
- * at least `flickMinDistance`. Anything else
- * (including any upward motion) springs back. Callers should pass a
+ * Whether releasing the drag should dismiss the viewer. Dismiss when the drag,
+ * down or up, passed the distance threshold (the smaller of a fraction of the
+ * viewer height and the absolute cap) OR when it was a fast flick in the same
+ * direction that also travelled at least `flickMinDistance`. Anything else
+ * springs back. Callers should pass a
  * stale-guarded velocity (see effectiveVelocity) so a hold is not a flick.
  */
 export function shouldDismissOnRelease({
@@ -214,9 +202,11 @@ export function shouldDismissOnRelease({
   velocityThreshold = DISMISS_VELOCITY_PX_PER_MS,
   flickMinDistance = FLICK_MIN_DISTANCE_PX,
 }: DismissDecisionInput): boolean {
-  if (offsetY <= 0) return false
+  if (offsetY === 0) return false
+  const direction = Math.sign(offsetY)
+  const distance = Math.abs(offsetY)
   const fractionThreshold = viewportHeight > 0 ? viewportHeight * distanceFraction : Infinity
   const distanceThreshold = Math.min(fractionThreshold, distanceMax)
-  if (offsetY >= distanceThreshold) return true
-  return offsetY >= flickMinDistance && velocityY >= velocityThreshold
+  if (distance >= distanceThreshold) return true
+  return distance >= flickMinDistance && velocityY * direction >= velocityThreshold
 }

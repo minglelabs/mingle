@@ -19,7 +19,7 @@ type NaturalSize = { src: string; width: number; height: number };
 /**
  * Full-screen image viewer. Preserves the original aspect ratio (contain-fit)
  * on a dark backdrop, never cropped. Pinch (or trackpad pinch / double tap)
- * zooms up to 4x and a zoomed photo pans; at base zoom a swipe down drags the
+ * zooms up to 4x and a zoomed photo pans; at base zoom a swipe down or up drags the
  * photo away and closes the viewer, with the backdrop fading as it goes. The
  * gestures are the chat photo viewer's (ZoomableConversationImage). While open
  * the feed behind must not scroll (the shell blocks it), and closing returns to
