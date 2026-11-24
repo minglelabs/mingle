@@ -7,6 +7,7 @@ import { Loader2, Trash2, UserPlus, X } from 'lucide-react'
 import type { ReferenceGender, ReferenceKind } from '@/server/reference-library/library'
 import type { ReferencePhotoView } from '@/server/reference-library/view'
 import { adminProfileHref } from '../../_lib/profile-href'
+import { UploadQueueOverlay, type QueueItem } from './upload-queue-overlay'
 import { reviewImageUrl } from '../review/review-image-url'
 
 /** How the page asks about a photo: how many people first, then (for one person) face and gender. */
@@ -35,7 +36,8 @@ function kindFrom(people: People, faceShown: boolean): ReferenceKind {
 }
 
 function isImage(file: File): boolean {
-  return file.type.startsWith('image/')
+  // An iPhone HEIC photo can come with no type: go by the name then.
+  return file.type.startsWith('image/') || (!file.type && /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name))
 }
 
 function Choice<T extends string>({ options, value, onChange, label }: { options: readonly T[]; value: T; onChange: (value: T) => void; label: (value: T) => string }) {
@@ -72,53 +74,101 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag }: { initialIt
   const [faceShown, setFaceShown] = useState(true)
   const [gender, setGender] = useState<GenderChoice>('unknown')
   const [note, setNote] = useState('')
-  const [uploading, setUploading] = useState(0)
   const [dragging, setDragging] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [filter, setFilter] = useState<Filter>('unused')
   const [editingId, setEditingId] = useState<string | null>(null)
   const choiceRef = useRef({ people, faceShown, gender, note })
-  choiceRef.current = { people, faceShown, gender, note }
+  useEffect(() => { choiceRef.current = { people, faceShown, gender, note } }, [people, faceShown, gender, note])
 
-  const upload = useCallback(async (files: File[]) => {
+  // 업로드 대기열: photos go up one at a time in the order added; more can be added any time.
+  // Each keeps the tags chosen when it was added.
+  const [queue, setQueue] = useState<QueueItem[]>([])
+  const jobsRef = useRef(new Map<string, { file: File; form: Record<string, string> }>())
+  const runningRef = useRef(false)
+
+  const waitingRef = useRef<string[]>([])
+
+  /** Uploads waiting photos one by one until none is left; a second call while it runs does nothing. */
+  const pump = useCallback(async () => {
+    if (runningRef.current) return
+    runningRef.current = true
+    try {
+      for (let id = waitingRef.current.shift(); id; id = waitingRef.current.shift()) {
+        const job = jobsRef.current.get(id)
+        if (!job) continue
+        const current = id
+        setQueue((list) => list.map((item) => (item.id === current ? { ...item, status: 'uploading' } : item)))
+        let error: string | null = null
+        try {
+          const form = new FormData()
+          form.append('file', job.file)
+          for (const [key, value] of Object.entries(job.form)) form.set(key, value)
+          const response = await fetch('/admin/operators/api/references', { method: 'POST', body: form })
+          const body = await response.json().catch(() => ({})) as { added?: number; failures?: Array<{ reason: string }>; error?: string; items?: ReferencePhotoView[] }
+          if (body.items) setItems(body.items)
+          if (!response.ok || !body.added) {
+            error = FAILURE_LABEL[body.failures?.[0]?.reason ?? body.error ?? ''] ?? (response.status === 413 ? '파일이 너무 큼' : '올리지 못함')
+          }
+        } catch {
+          error = '연결이 끊겼어요'
+        }
+        if (!error) jobsRef.current.delete(current)
+        setQueue((list) => list.map((item) => (item.id === current ? { ...item, status: error ? 'failed' : 'done', error } : item)))
+      }
+    } finally {
+      runningRef.current = false
+    }
+  }, [])
+
+  const upload = useCallback((files: File[]) => {
     const images = files.filter(isImage)
     if (images.length === 0) return
     setStatus(null)
-    setUploading((count) => count + images.length)
     const choice = choiceRef.current
-    let added = 0
-    let rejected = 0
-    const failed: string[] = []
-    // A few at a time, so a big drop does not hit the request size limit.
-    for (let index = 0; index < images.length; index += 5) {
-      const batch = images.slice(index, index + 5)
-      const form = new FormData()
-      for (const file of batch) form.append('file', file)
-      if (choice.people === 'auto') {
-        form.set('kind', 'auto')
-        form.set('gender', 'auto')
-      } else {
-        form.set('kind', kindFrom(choice.people, choice.faceShown))
-        form.set('gender', choice.people === 'one' && choice.gender !== 'unknown' ? choice.gender : 'none')
+    const form: Record<string, string> = choice.people === 'auto'
+      ? { kind: 'auto', gender: 'auto' }
+      : { kind: kindFrom(choice.people, choice.faceShown), gender: choice.people === 'one' && choice.gender !== 'unknown' ? choice.gender : 'none' }
+    if (choice.note.trim()) form.note = choice.note.trim()
+    const added = images.map((file): QueueItem => {
+      const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+      jobsRef.current.set(id, { file, form })
+      waitingRef.current.push(id)
+      return { id, name: file.name || '사진', previewUrl: URL.createObjectURL(file), status: 'waiting', error: null }
+    })
+    setQueue((current) => [...current, ...added])
+    setNote('')
+    void pump()
+  }, [pump])
+
+  const retryUpload = useCallback((id: string) => {
+    if (!jobsRef.current.has(id)) return
+    waitingRef.current.push(id)
+    setQueue((current) => current.map((item) => (item.id === id ? { ...item, status: 'waiting', error: null } : item)))
+    void pump()
+  }, [pump])
+
+  const clearQueue = useCallback(() => {
+    setQueue((current) => {
+      const keep = current.filter((item) => item.status === 'waiting' || item.status === 'uploading')
+      for (const item of current) {
+        if (keep.includes(item)) continue
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
+        jobsRef.current.delete(item.id)
       }
-      if (choice.note.trim()) form.set('note', choice.note.trim())
-      try {
-        const response = await fetch('/admin/operators/api/references', { method: 'POST', body: form })
-        const body = await response.json().catch(() => ({})) as { added?: number; rejected?: number; failures?: Array<{ name: string; reason: string }>; items?: ReferencePhotoView[] }
-        added += body.added ?? 0
-        rejected += body.rejected ?? (response.ok ? 0 : batch.length)
-        for (const failure of body.failures ?? []) failed.push(`${failure.name} (${FAILURE_LABEL[failure.reason] ?? '실패'})`)
-        if (!response.ok && !body.failures) failed.push(...batch.map((file) => `${file.name} (${response.status === 413 ? '파일이 너무 큼' : '올리지 못함'})`))
-        if (body.items) setItems(body.items)
-      } catch {
-        rejected += batch.length
-      } finally {
-        setUploading((count) => count - batch.length)
-      }
-    }
-    setStatus(`${added}장 추가${rejected ? ` · ${rejected}장 실패: ${failed.join(', ')}` : ''}`)
-    if (added) setNote('')
+      return keep
+    })
   }, [])
+
+  const uploading = queue.filter((item) => item.status === 'waiting' || item.status === 'uploading').length
+
+  // Leaving the page mid-upload would drop the rest of the queue.
+  useEffect(() => {
+    if (!uploading) return
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault() }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [uploading])
 
   useEffect(() => {
     function onPaste(event: ClipboardEvent) {
@@ -128,7 +178,7 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag }: { initialIt
       const files = Array.from(event.clipboardData?.files ?? []).filter(isImage)
       if (!files.length) return
       event.preventDefault()
-      void upload(files)
+      upload(files)
     }
     document.addEventListener('paste', onPaste)
     return () => document.removeEventListener('paste', onPaste)
@@ -169,7 +219,7 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag }: { initialIt
           if (!event.dataTransfer.files.length) return
           event.preventDefault()
           setDragging(false)
-          void upload(Array.from(event.dataTransfer.files))
+          upload(Array.from(event.dataTransfer.files))
         }}
       >
         <div className="flex flex-col gap-2.5">
@@ -199,8 +249,8 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag }: { initialIt
             className="w-full rounded-xl border border-slate-200 px-3 py-2 text-base text-slate-900 outline-none focus:border-slate-400 sm:text-sm"
           />
           <label className="inline-flex min-h-11 cursor-pointer items-center justify-center self-center rounded-xl bg-sky-600 px-4 text-sm font-semibold text-white active:bg-sky-700">
-            {uploading ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" />올리는 중 {uploading}</> : '사진 고르기'}
-            <input type="file" accept="image/*" multiple className="sr-only" onChange={(event) => { void upload(Array.from(event.target.files ?? [])); event.target.value = '' }} />
+            {uploading ? `사진 더 고르기 (남은 ${uploading}장)` : '사진 고르기'}
+            <input type="file" accept="image/*" multiple className="sr-only" onChange={(event) => { upload(Array.from(event.target.files ?? [])); event.target.value = '' }} />
           </label>
           <p className="text-center text-xs text-slate-500">
             여러 장을 끌어다 놓거나 ⌘V로 붙여넣어도 됩니다. {people === 'auto' ? 'AI가 사진마다 사람 수·얼굴·성별을 붙여요(12월 12일까지). ' : ''}올린 뒤 사진을 눌러 고칠 수 있어요.
@@ -259,6 +309,8 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag }: { initialIt
           ))}
         </ul>
       )}
+
+      <UploadQueueOverlay items={queue} onRetry={retryUpload} onClear={clearQueue} />
 
       {editing ? (
         <ReferenceEditor
