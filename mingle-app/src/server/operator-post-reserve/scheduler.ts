@@ -6,6 +6,7 @@
  * as separate instances.
  */
 import { runOperatorPostReserve } from './worker'
+import { followForNewOperators } from '@/server/operators/operator-follows'
 
 export const POST_RESERVE_TICK_MS = 60_000
 /** First run after boot: soon, but after the server is warm. */
@@ -34,6 +35,13 @@ export function runOperatorPostReserveWorker(): Promise<void> {
       if (summary.released + summary.releaseFailed + summary.scheduled + summary.generated > 0) console.info('[operator-post-reserve] run', summary)
     } catch (error) {
       console.error('[operator-post-reserve] run_failed', { error: error instanceof Error ? error.name : 'unknown' })
+    }
+    // New live operator accounts follow and get followed by the others (operator-follows.ts).
+    try {
+      const followed = await followForNewOperators()
+      if (followed > 0) console.info('[operator-follows] new accounts', { followed })
+    } catch (error) {
+      console.error('[operator-follows] run_failed', { error: error instanceof Error ? error.name : 'unknown' })
     } finally {
       state.running = null
     }
