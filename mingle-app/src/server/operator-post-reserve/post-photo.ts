@@ -22,6 +22,25 @@ export const POST_PHOTO_KINDS: ReadonlyArray<{ key: PostPhotoKind; weight: numbe
   { key: 'scene', weight: 34 },
 ]
 
+/**
+ * Photos of the poster taken from far away, the face small in the frame
+ * (staff, 2026-11-25: nearly every face photo came out at the same close
+ * distance). A self photo is one of these about two times in five.
+ */
+export const FAR_SELF_SHARE = 0.4
+const FAR_SELF_SETUPS: readonly string[] = [
+  'a friend took it from across the street: the poster stands on the far sidewalk, full body and small in the frame, shop fronts, signs and passing people around them',
+  'a friend took it from far back in a park or a riverside path: the poster small in the middle of the wide view, trees, the path and the sky filling most of the frame',
+  'a friend took it from the other end of a plaza, a pier or a bridge, the poster small and full body, the place huge around them, zoomed in a little so the background looks compressed',
+  'a friend took it from far away at a beach or a lake: the poster a small figure at the water\'s edge, the horizon across the frame',
+  'a friend took it from the bottom of a long staircase or a slope: the poster small near the top, the steps leading up to them',
+  'a friend took it from across a wide street crossing or an alley, the poster full body waiting or walking, cars, signs and wires around',
+  'a friend took it from far across a café, a station hall or a mall atrium: the poster small at a table or by a pillar, the whole room in view',
+  'a friend took it from far away at a viewpoint or a rooftop: the poster small at the railing, the city or the view spread out around them',
+  'a friend took it from a distance in a market street or a festival crowd: the poster full body in the middle, stalls, lanterns and people around',
+  'a friend took it from far back on a campus lawn or in a plaza: the poster sitting or standing small in the frame, buildings behind',
+]
+
 /** Setups for each kind with the poster in it, written as briefs for the post generator. */
 const SETUPS: Record<Exclude<PostPhotoKind, 'scene'>, readonly string[]> = {
   self: [
@@ -119,7 +138,8 @@ export type PostPhotoPlan = { kind: PostPhotoKind; setup: string | null }
 export function pickPostPhoto(random: Random): PostPhotoPlan {
   const kind = pickWeighted(POST_PHOTO_KINDS, random).key
   if (kind === 'scene') return { kind, setup: SCENE_SETUPS[Math.floor(random() * SCENE_SETUPS.length)] }
-  const setups = SETUPS[kind]
+  // Two in five photos of the poster are taken from far away (FAR_SELF_SHARE).
+  const setups = kind === 'self' && random() < FAR_SELF_SHARE ? FAR_SELF_SETUPS : SETUPS[kind]
   return { kind, setup: setups[Math.floor(random() * setups.length)] }
 }
 
