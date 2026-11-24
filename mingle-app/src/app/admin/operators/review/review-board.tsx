@@ -40,7 +40,7 @@ const ERROR_COPY: Record<string, string> = {
   publish_failed: '게시하지 못했어요. 다시 눌러 주세요.',
   regenerate_failed: '다시 만들지 못했어요. 다시 눌러 주세요.',
   draw_failed: '사진을 그리지 못했어요. 다시 눌러 주세요.',
-  no_reference: '이 글에 맞는 안 쓴 레퍼런스 짤이 없어요(종류·성별·계절). 레퍼런스 탭에 더 올려 주세요.',
+  no_reference: '이 글에 맞는 안 쓴 레퍼런스 짤이 없어요. 레퍼런스 탭에 올려 주세요.',
   invalid_image: '사진을 읽지 못했어요. 다른 파일로 해 주세요.',
   file_too_large: '사진이 너무 커요(15MB까지).',
   invalid_photos: '사진 목록이 올바르지 않아요. 새로고침 후 다시 해 주세요.',
@@ -444,7 +444,12 @@ async function sendReview(kind: 'profile' | 'post', id: string, action: Action, 
   }
   const response = await fetch('/admin/operators/api/review', init)
   const payload = await response.json().catch(() => ({})) as Record<string, unknown>
-  if (!response.ok) throw new Error(typeof payload.error === 'string' ? payload.error : 'request_failed')
+  if (!response.ok) {
+    const failure = new Error(typeof payload.error === 'string' ? payload.error : 'request_failed') as Error & { detail?: string }
+    // e.g. what kind of reference photo a 레퍼런스로 재제작 needs.
+    if (typeof payload.detail === 'string') failure.detail = payload.detail
+    throw failure
+  }
   return payload
 }
 
@@ -977,7 +982,8 @@ function PostCard({ post: initial, at, pinned, fromReference, reference, pastSta
       if ((action === 'regenerate' || action === 'draw' || action === 'redraw_photo' || action === 'redraw_reference') && result.post) setPost(result.post as ReviewPost)
       else onDone()
     } catch (caught) {
-      setError(ERROR_COPY[(caught as Error).message] ?? '요청하지 못했어요.')
+      const detail = (caught as Error & { detail?: string }).detail
+      setError(`${ERROR_COPY[(caught as Error).message] ?? '요청하지 못했어요.'}${detail ? ` ${detail}` : ''}`)
     } finally {
       setBusy(null)
     }

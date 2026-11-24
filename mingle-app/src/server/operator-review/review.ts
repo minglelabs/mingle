@@ -10,7 +10,7 @@ import type { AdminContext } from '@/server/admin/guard'
 import { ageOn } from '@/server/operator-auto-reply/generate'
 import { canDrawImagesHere, generateOperatorAvatar, planOperatorAvatar, type AvatarReference } from '@/server/operator-avatars/generate'
 import { generateReservePosts, isKoreaCountry, pickReserveTopics, reservePosterProfile, rewriteReservePostText } from '@/server/operator-post-reserve/generate'
-import { drawReservePostImage, libraryHasPhotoForPost, type RedrawContext } from '@/server/operator-post-reserve/post-image'
+import { drawReservePostImage, libraryPhotoForPost, type RedrawContext } from '@/server/operator-post-reserve/post-image'
 import { MAX_RESERVE_EXTRA_IMAGES, reserveExtraImages, type ReserveExtraImage } from '@/server/operator-post-reserve/extra-images'
 import { decodePostPhoto } from '@/server/operator-post-reserve/post-photo'
 import { pickScheduledPublishAt } from '@/server/operator-post-reserve/schedule'
@@ -566,7 +566,7 @@ export async function reviewOperatorProfile(
 
 export type PostReviewResult =
   | { ok: true; state: 'published' | 'deleted' | 'review'; postId?: string | null; post?: ReviewPost }
-  | { ok: false; error: 'not_found' | 'profile_pending' | 'photo_pending' | 'busy' | 'publish_failed' | 'regenerate_failed' | 'draw_failed' | 'no_reference' }
+  | { ok: false; error: 'not_found' | 'profile_pending' | 'photo_pending' | 'busy' | 'publish_failed' | 'regenerate_failed' | 'draw_failed' | 'no_reference'; detail?: string }
 
 /** 게시 / 삭제 / 재제작 for a post waiting for review. */
 export async function reviewOperatorPost(
@@ -617,7 +617,10 @@ export async function reviewOperatorPost(
     const brief = row.imagePrompt ?? '[self] A casual everyday photo of the poster that fits the post.'
     const description = feedback ? `${brief}\nStaff feedback on the previous photo, to follow: ${feedback}` : brief
     // Said right away when the library has nothing that fits this post (kind, gender, season).
-    if (fromLibrary && !(await libraryHasPhotoForPost(row.operatorUserId, description))) return { ok: false, error: 'no_reference' }
+    if (fromLibrary) {
+      const library = await libraryPhotoForPost(row.operatorUserId, description)
+      if (!library.available) return { ok: false, error: 'no_reference', detail: library.need }
+    }
     // The photo being replaced is never attached: fed back in redraw after redraw, photos
     // broke up and turned strange (staff 2026-11-24). The brief, the feedback and the post's text are enough.
     runningHere.add(postJob(reserveId))
