@@ -390,11 +390,12 @@ const SKIN_FEATURES: readonly Option[] = [
  * typical (90), and one mild trait such as slightly wide-set eyes kept 95
  * while easing the typical look (see STRIKING for where it settled).
  */
-// Staff (2026-11-12): more good-looking accounts; half are now striking.
+// Staff (2026-11-12): more good-looking accounts; half were striking. Staff (2026-11-24): striking
+// faces all came out the idol face, and an everyday pretty East Asian face was rare; now 30 %.
 const ATTRACTIVENESS: readonly Option[] = [
-  ['ordinary', 12, 'an ordinary-looking person'],
-  ['pleasant', 38, 'a likable, pretty face'],
-  ['striking', 50, ''],
+  ['ordinary', 15, 'an ordinary-looking person'],
+  ['pleasant', 55, 'a likable, pretty face'],
+  ['striking', 30, ''],
 ]
 
 /**
