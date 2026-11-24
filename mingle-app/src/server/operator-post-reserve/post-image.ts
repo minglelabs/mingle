@@ -218,7 +218,8 @@ export async function reservePostPerson(operatorUserId: string, style: PostImage
   if (!reference) {
     const selfie = await prisma.operatorPostReserve.findFirst({
       where: { operatorUserId, state: 'published', imagePrompt: { startsWith: '[self]' }, postId: { not: null } },
-      orderBy: { updatedAt: 'desc' },
+      // The first one, always the same: taking the latest fed each drawn photo into the next and the face drifted (staff 2026-11-24).
+      orderBy: { updatedAt: 'asc' },
       select: { postId: true },
     })
     const post = selfie?.postId ? await prisma.post.findUnique({ where: { id: selfie.postId }, select: { imageObjectKey: true } }) : null

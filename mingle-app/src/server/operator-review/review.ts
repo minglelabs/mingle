@@ -8,7 +8,6 @@ import { ageOn } from '@/server/operator-auto-reply/generate'
 import { canDrawImagesHere, generateOperatorAvatar, planOperatorAvatar, type AvatarReference } from '@/server/operator-avatars/generate'
 import { generateReservePosts, isKoreaCountry, pickReserveTopics, reservePosterProfile, rewriteReservePostText } from '@/server/operator-post-reserve/generate'
 import { drawReservePostImage, type RedrawContext } from '@/server/operator-post-reserve/post-image'
-import { getPostImage } from '@/server/posts/post-image-storage'
 import { MAX_RESERVE_EXTRA_IMAGES, reserveExtraImages, type ReserveExtraImage } from '@/server/operator-post-reserve/extra-images'
 import { decodePostPhoto } from '@/server/operator-post-reserve/post-photo'
 import { loadExistingReserveTexts, loadReservePersona, PHOTO_REQUESTED, publishReservePostNow } from '@/server/operator-post-reserve/worker'
@@ -528,9 +527,8 @@ export async function reviewOperatorPost(
     if (!row.imagePrompt && !row.imageObjectKey) return { ok: false, error: 'not_found' }
     const brief = row.imagePrompt ?? '[self] A casual everyday photo of the poster that fits the post.'
     const description = feedback ? `${brief}\nStaff feedback on the previous photo, to follow: ${feedback}` : brief
-    const previousPhoto = row.imageObjectKey
-      ? await getPostImage(row.imageObjectKey).then((bytes) => ({ bytes: Buffer.from(bytes), mimeType: 'image/jpeg' }), () => null)
-      : null
+    // The photo being replaced is never attached: fed back in redraw after redraw, photos
+    // broke up and turned strange (staff 2026-11-24). The brief, the feedback and the post's text are enough.
     runningHere.add(postJob(reserveId))
     let claimed: { count: number }
     try {
@@ -549,7 +547,7 @@ export async function reviewOperatorPost(
     void drawPostPhotoInBackground(
       reserveId, row.operatorUserId, description,
       () => audit('redraw_photo', { photo: true }), () => audit('redraw_photo', { photo: false }),
-      options.reference, { postText: row.text, previousPhoto },
+      options.reference, { postText: row.text },
     )
     const drawing = await prisma.operatorPostReserve.findUnique({ where: { id: reserveId }, select: POST_SELECT })
     return { ok: true, state: 'review', post: toReviewPost(drawing ?? { ...row, state: 'regenerating', error: PHOTO_DRAWING }) }
