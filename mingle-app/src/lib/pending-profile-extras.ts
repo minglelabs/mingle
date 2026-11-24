@@ -6,6 +6,8 @@
  */
 const HEIGHT_KEY = "mingle.pending.heightCm.v1";
 const PHOTO_KEY = "mingle.pending.profilePhoto.v1";
+// The selfie check passed against the pending photo (its similarity score).
+const FACE_KEY = "mingle.pending.faceSimilarity.v1";
 
 function storage(): Storage | null {
   try {
@@ -62,8 +64,27 @@ export function readPendingPhoto(): string | null {
   }
 }
 
+export function writePendingFaceSimilarity(similarity: number | null): void {
+  try {
+    if (similarity === null) storage()?.removeItem(FACE_KEY);
+    else storage()?.setItem(FACE_KEY, String(similarity));
+  } catch {
+    // The check can be done again from My page.
+  }
+}
+
+export function readPendingFaceSimilarity(): number | null {
+  try {
+    const value = Number(storage()?.getItem(FACE_KEY));
+    return Number.isFinite(value) && value > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 export function clearPendingPhoto(): void {
   try {
+    storage()?.removeItem(FACE_KEY);
     storage()?.removeItem(PHOTO_KEY);
   } catch {
     // Harmless: uploaded again on the next visit.

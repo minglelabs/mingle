@@ -16,10 +16,20 @@ import { captureMingleClientEvent } from "@/lib/posthog-client";
 import KoreaVisitCalendar from "@/components/onboarding/korea-visit-calendar";
 import { resolveOnboardingExtraCopy } from "@/i18n/onboarding-extra-copy";
 import { canAskMicPermission, requestMicPermission, type MicPermissionResult } from "@/lib/mic-permission";
-import { readPendingPhoto, squarePhotoDataUrl, writePendingHeight, writePendingPhoto } from "@/lib/pending-profile-extras";
+import {
+  readPendingFaceSimilarity,
+  readPendingPhoto,
+  squarePhotoDataUrl,
+  writePendingFaceSimilarity,
+  writePendingHeight,
+  writePendingPhoto,
+} from "@/lib/pending-profile-extras";
+
+// The camera and face models load only when the check opens.
+const SelfieVerifyScreen = lazy(() => import("@/components/selfie-verify-screen"));
 import { Camera, Check, ChevronLeft, Loader2, Mic, Search, X } from "lucide-react";
 import { createPortal } from "react-dom";
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
+import { Suspense, lazy, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
 import { registerNativeEdgeSwipeSuppression } from "@/components/slide-surface";
 import { isLeftEdgeSwipeBack, isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
 import {
@@ -158,6 +168,9 @@ export default function LanguageOnboardingModal({
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoError, setPhotoError] = useState(false);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
+  // The selfie check opens right after a photo is picked (owner, 2026-11-24).
+  const [selfieOpen, setSelfieOpen] = useState(false);
+  const [faceVerified, setFaceVerified] = useState(() => readPendingFaceSimilarity() !== null);
   const [micResult, setMicResult] = useState<MicPermissionResult | null>(null);
   const [micAsking, setMicAsking] = useState(false);
   // A wheel like the birth date, starting at a typical height (no keyboard).
@@ -443,7 +456,10 @@ export default function LanguageOnboardingModal({
     try {
       const dataUrl = await squarePhotoDataUrl(file);
       writePendingPhoto(dataUrl);
+      writePendingFaceSimilarity(null);
+      setFaceVerified(false);
       setPhotoDataUrl(dataUrl);
+      setSelfieOpen(true);
       setSkippedSteps((current) => current.filter((entry) => entry !== "profile-photo"));
       captureMingleClientEvent("mingle_onboarding_photo", { result: "picked" });
     } catch {
@@ -1088,7 +1104,41 @@ export default function LanguageOnboardingModal({
             >
               {photoDataUrl ? extraCopy.photoChange : extraCopy.photoPick}
             </button>
+            {photoDataUrl ? (
+              faceVerified ? (
+                <p data-qa="onboarding-face-verified" className="flex items-center gap-1.5 text-[0.9rem] font-semibold text-emerald-600">
+                  <Check size={16} strokeWidth={3} aria-hidden />
+                  {extraCopy.faceVerified}
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  data-qa="onboarding-face-check"
+                  disabled={isConfirming}
+                  onClick={() => setSelfieOpen(true)}
+                  className="text-[0.9rem] font-semibold text-amber-600 underline underline-offset-4"
+                >
+                  {extraCopy.faceCheck}
+                </button>
+              )
+            ) : null}
             {photoError ? <p className="text-center text-[0.85rem] text-rose-600">{extraCopy.photoFailed}</p> : null}
+            {selfieOpen && photoDataUrl ? (
+              <Suspense fallback={null}>
+                <SelfieVerifyScreen
+                  locale={language}
+                  hasPhoto
+                  localPhoto={photoDataUrl}
+                  onLocalMatch={(similarity) => {
+                    writePendingFaceSimilarity(similarity);
+                    setFaceVerified(true);
+                    captureMingleClientEvent("mingle_onboarding_photo", { result: "face_verified" });
+                  }}
+                  onVerified={() => undefined}
+                  onClose={() => setSelfieOpen(false)}
+                />
+              </Suspense>
+            ) : null}
           </div>
         ) : step === "voice-intro" ? (
           <div

@@ -17,6 +17,7 @@ import {
   clearPendingHeight,
   clearPendingPhoto,
   dataUrlToFile,
+  readPendingFaceSimilarity,
   readPendingHeight,
   readPendingPhoto,
 } from "@/lib/pending-profile-extras";
@@ -101,7 +102,17 @@ export default function PendingProfileSync() {
           const form = new FormData();
           form.append("file", await dataUrlToFile(photo, "profile.jpg"));
           const uploaded = await fetch(buildClientApiPath("/profile/image"), { method: "POST", body: form }).catch(() => null);
-          if (uploaded?.ok) clearPendingPhoto();
+          if (!uploaded?.ok) return;
+          // The selfie check passed against this photo during onboarding.
+          const similarity = readPendingFaceSimilarity();
+          if (similarity !== null) {
+            await fetch(buildClientApiPath("/profile/face-verification"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ similarity }),
+            }).catch(() => null);
+          }
+          clearPendingPhoto();
         }
       } catch {
         // Offline: tried again on the next page load.

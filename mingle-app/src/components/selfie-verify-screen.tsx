@@ -93,8 +93,11 @@ function hintText(copy: SelfieVerifyCopy, hint: LivenessHint): string {
  * a mirrored face, so both are compared. "small" when the face is too small
  * to compare reliably.
  */
-async function profilePhotoEmbeddings(human: HumanInstance): Promise<number[][] | "small" | null> {
-  const response = await fetch(buildClientApiPath("/profile/image/face-check"), { cache: "no-store" });
+async function profilePhotoEmbeddings(human: HumanInstance, localPhoto?: string | null): Promise<number[][] | "small" | null> {
+  // Before sign-in (onboarding) the photo is still on the phone.
+  const response = localPhoto
+    ? await fetch(localPhoto)
+    : await fetch(buildClientApiPath("/profile/image/face-check"), { cache: "no-store" });
   if (!response.ok) return null;
   const bitmap = await createImageBitmap(await response.blob());
   try {
@@ -135,6 +138,8 @@ export default function SelfieVerifyScreen({
   onClose,
   onVerified,
   onPhotoUploaded,
+  localPhoto = null,
+  onLocalMatch,
 }: {
   locale: string;
   /** Whether the account has a profile photo with a face to compare with. */
@@ -143,6 +148,13 @@ export default function SelfieVerifyScreen({
   onVerified: () => void;
   /** A new profile photo was added from this screen (the "add a photo first" step). */
   onPhotoUploaded?: (image: string | null) => void;
+  /**
+   * Onboarding, before sign-in (2026-11-24): compare with this photo (a data
+   * URL) instead of the account's, and hand the score back instead of saving
+   * it; it is sent once the account exists (PendingProfileSync).
+   */
+  localPhoto?: string | null;
+  onLocalMatch?: (similarity: number) => void;
 }) {
   const copy = useMemo(() => resolveSelfieVerifyCopy(locale), [locale]);
   // The photo row's words are shared with the first-message setup sheet.
@@ -217,10 +229,11 @@ export default function SelfieVerifyScreen({
     // Stop the detection loop; the camera stays on behind the result, for a retry.
     runRef.current += 1;
     try {
-      const photo = await profilePhotoEmbeddings(human);
+      const photo = await profilePhotoEmbeddings(human, localPhoto);
       if (photo === null || photo === "small") {
         // No face in the profile photo, or too small to compare: ask for a clearer one.
-        setPhase(photo === "small" ? "mismatch" : "need_photo");
+        // Before sign-in the photo is picked again on the onboarding screen.
+        setPhase(photo === "small" || localPhoto ? "mismatch" : "need_photo");
         return;
       }
       const centerEmbedding = state.centerEmbedding;
@@ -234,6 +247,13 @@ export default function SelfieVerifyScreen({
       captureMingleClientEvent("mingle_selfie_verify", { step: "compared", similarity: Math.round(similarity * 100) / 100 });
       if (!isSameFace(similarity)) {
         setPhase("mismatch");
+        return;
+      }
+      if (localPhoto) {
+        onLocalMatch?.(similarity);
+        stopCamera();
+        setPhase("passed");
+        onVerified();
         return;
       }
       const response = await fetch(buildClientApiPath("/profile/face-verification"), {
@@ -251,7 +271,7 @@ export default function SelfieVerifyScreen({
     } catch {
       setPhase("failed");
     }
-  }, [onVerified, stopCamera]);
+  }, [localPhoto, onLocalMatch, onVerified, stopCamera]);
 
   const start = useCallback(async () => {
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
