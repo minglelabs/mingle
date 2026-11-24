@@ -82,6 +82,27 @@ const SETUPS: Record<Exclude<PostPhotoKind, 'scene'>, readonly string[]> = {
   ],
 }
 
+/**
+ * How a photo without the poster is framed (staff 2026-11-24: a samgyeopsal
+ * table shot from the seat, grill, side dishes and drinks all in frame, is the
+ * kind of photo people really post). Each scene photo gets one; the post
+ * generator fills in what it shows.
+ */
+export const SCENE_SETUPS: readonly string[] = [
+  'the whole table from where they sit, at a slant: the main dish (a grill, a pot, a big plate) in the middle and the side dishes, sauces, lettuce or bread, drinks in glasses and someone\'s phone around it, a corner cut off by the frame',
+  'one dish or drink close up from above, filling most of the frame, a bit of the table and a hand or chopsticks at the edge',
+  'a drink or a snack held up in one hand against the place behind it',
+  'food on the grill or in the pot while it cooks, steam rising, tongs or a ladle in frame',
+  'a shop, café or restaurant front or sign from across the street, people passing',
+  'the view from where they stand or sit: a street, a park, a river or rooftops, a railing or a window frame in the foreground',
+  'a corner of their room or desk with the things on it as they are',
+  'a pet or a street cat close up, at its eye level',
+  'something small that caught their eye up close: a flower, a sign, a toy, a cake, a piece of street art',
+  'the inside of a subway car, a bus or a train from their seat, a little empty',
+  'a shelf, a market stall or a menu board full of things, from a step back',
+  'the sky or the weather over the street: clouds, rain on the window, snow on cars',
+]
+
 function pickWeighted<T extends { weight: number }>(options: readonly T[], random: Random): T {
   const total = options.reduce((sum, option) => sum + option.weight, 0)
   let roll = random() * total
@@ -97,7 +118,7 @@ export type PostPhotoPlan = { kind: PostPhotoKind; setup: string | null }
 /** The kind of photo for one post, and for photos with the poster in them, its setup. */
 export function pickPostPhoto(random: Random): PostPhotoPlan {
   const kind = pickWeighted(POST_PHOTO_KINDS, random).key
-  if (kind === 'scene') return { kind, setup: null }
+  if (kind === 'scene') return { kind, setup: SCENE_SETUPS[Math.floor(random() * SCENE_SETUPS.length)] }
   const setups = SETUPS[kind]
   return { kind, setup: setups[Math.floor(random() * setups.length)] }
 }

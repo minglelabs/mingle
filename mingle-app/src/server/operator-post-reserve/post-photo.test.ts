@@ -25,3 +25,15 @@ describe('post photo kinds', () => {
     expect(decodePostPhoto(encodePostPhoto('self', '(the profile photo) a clear photo of them smiling'))).toEqual({ kind: 'self', description: 'a clear photo of them smiling', place: null, profilePhoto: true, photoBooth: false })
   })
 })
+
+describe('scene photos', () => {
+  it('each get a framing, the table spread among them', async () => {
+    const { pickPostPhoto, SCENE_SETUPS } = await import('./post-photo')
+    expect(SCENE_SETUPS.some((setup) => setup.includes('the whole table from where they sit'))).toBe(true)
+    let seed = 5
+    const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+    const scenes = Array.from({ length: 500 }, () => pickPostPhoto(random)).filter((plan) => plan.kind === 'scene')
+    expect(scenes.length).toBeGreaterThan(50)
+    for (const plan of scenes) expect(SCENE_SETUPS).toContain(plan.setup)
+  })
+})
