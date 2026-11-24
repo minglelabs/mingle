@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { CalendarClock, Clock, ImageIcon, ImagePlus, Loader2, MessageSquarePlus, Pencil, Pin, PinOff, RefreshCw, Send, Sparkles, Trash2, X } from 'lucide-react'
 import type { ReviewItem, ReviewPost, ReviewProfile } from '@/server/operator-review/review'
@@ -76,8 +76,10 @@ function PhotoEditor({ postId, language, initial, onSaved, onCancel }: {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function add(files: FileList | null) {
-    const picked = Array.from(files ?? []).slice(0, MAX_POST_PHOTOS - photos.length)
+  const [dragging, setDragging] = useState(false)
+
+  async function add(files: FileList | File[] | null) {
+    const picked = Array.from(files ?? []).filter((file) => file.type.startsWith('image/')).slice(0, MAX_POST_PHOTOS - photos.length)
     if (!picked.length) return
     setError(null)
     setUploading((count) => count + picked.length)
@@ -97,6 +99,24 @@ function PhotoEditor({ postId, language, initial, onSaved, onCancel }: {
       }
     }
   }
+
+  // ⌘V anywhere on the page adds a copied photo while this editor is open
+  // (a paste into a text box, e.g. the feedback note, stays there).
+  const addRef = useRef(add)
+  addRef.current = add
+  useEffect(() => {
+    if (drawing) return
+    function onPaste(event: ClipboardEvent) {
+      const target = event.target as HTMLElement | null
+      if (target?.closest('textarea, input, [contenteditable="true"]')) return
+      const file = pastedImage(event.clipboardData)
+      if (!file) return
+      event.preventDefault()
+      void addRef.current([file])
+    }
+    document.addEventListener('paste', onPaste)
+    return () => document.removeEventListener('paste', onPaste)
+  }, [drawing])
 
   function move(index: number, by: -1 | 1) {
     setPhotos((current) => {
@@ -130,7 +150,24 @@ function PhotoEditor({ postId, language, initial, onSaved, onCancel }: {
 
   const buttonClass = 'flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-sm font-bold text-white disabled:opacity-30'
   return (
-    <div className="mt-2 rounded-xl border border-sky-200 bg-sky-50/50 p-2">
+    <div
+      className={`mt-2 rounded-xl border p-2 ${dragging ? 'border-sky-500 bg-sky-100 ring-2 ring-sky-300' : 'border-sky-200 bg-sky-50/50'}`}
+      onDragOver={(event) => {
+        if (!Array.from(event.dataTransfer.types).includes('Files')) return
+        event.preventDefault()
+        event.dataTransfer.dropEffect = 'copy'
+        setDragging(true)
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false)
+      }}
+      onDrop={(event) => {
+        if (!event.dataTransfer.files.length) return
+        event.preventDefault()
+        setDragging(false)
+        void add(event.dataTransfer.files)
+      }}
+    >
       <div className="grid grid-cols-3 gap-2">
         {photos.map((photo, index) => (
           <div key={photo.objectKey} className="relative aspect-square overflow-hidden rounded-lg bg-slate-100">
@@ -148,6 +185,7 @@ function PhotoEditor({ postId, language, initial, onSaved, onCancel }: {
           <label className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white text-xs font-semibold text-slate-500">
             <span className="text-2xl leading-none">+</span>
             <span className="mt-1">{uploading ? `올리는 중 ${uploading}` : '사진 추가'}</span>
+            {uploading ? null : <span className="mt-0.5 hidden text-[10px] font-normal text-slate-400 sm:block">⌘V · 끌어다 놓기</span>}
             <input type="file" accept="image/*" multiple className="sr-only" onChange={(event) => { void add(event.target.files); event.target.value = '' }} />
           </label>
         ) : null}
