@@ -10,7 +10,7 @@ import { pairImages, stripImages } from './pair-images'
 import { pickPersonVariety, pickPoseVariety } from './post-person-variety'
 import { faceStickerLine } from './face-stickers'
 import { contrastLines, describeReferenceForContrast } from './reference-contrast'
-import { referenceDirectionLines, referencePersonaLine } from '@/server/reference-library/direction'
+import { referenceDirectionLines, referencePersonaLine, referenceSeasonClashes, referenceSeasonsToAvoid } from '@/server/reference-library/direction'
 import { claimReferencePhoto, loadReferenceBytes, referenceKindOf, referenceRecreateLines, releaseReferencePhoto, type ReferenceKind } from '@/server/reference-library/library'
 
 /** Most group photos hide the friends' faces under stickers; some friends are fine being seen. */
@@ -402,7 +402,12 @@ async function libraryPostRequest(
   const spec = user?.operatorAccount?.avatarSpec as Partial<AvatarSpec> | null | undefined
   if (isAnimeSpec(spec)) return null
   const gender = persona.gender === 'female' || persona.gender === 'male' ? persona.gender : null
-  const photo = await claimReferencePhoto({ userId: operatorUserId, kind: 'post', kinds, gender: kinds.includes('thing') ? null : gender }).catch(() => null)
+  // Never a photo of the opposite season to now where the persona lives (the post goes up within days).
+  const avoid = referenceSeasonsToAvoid(persona.country)
+  const photo = await claimReferencePhoto({
+    userId: operatorUserId, kind: 'post', kinds, gender: kinds.includes('thing') ? null : gender,
+    skip: (item) => referenceSeasonClashes(item.attributes, avoid),
+  }).catch(() => null)
   if (!photo) return null
   try {
     const kind = referenceKindOf(photo)

@@ -1,3 +1,4 @@
+import { REFERENCE_SEASON_OUTFIT_LINE } from './direction'
 import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import sharp from 'sharp'
@@ -195,9 +196,12 @@ export async function claimReferencePhoto(args: {
   /** Only photos of these kinds (any kind when absent). */
   kinds?: readonly ReferenceKind[]
   id?: string | null
+  /** Skip photos that should not be used now (e.g. the wrong season, direction.ts). */
+  skip?: (item: ReferencePhoto) => boolean
 }): Promise<ReferencePhoto | null> {
   return updateLibrary((items) => {
     const fits = (item: ReferencePhoto) => !item.usedBy
+      && !(args.skip && !args.id && args.skip(item))
       && (args.id
         ? item.id === args.id
         : (!args.kinds || args.kinds.includes(referenceKindOf(item)))
@@ -256,6 +260,7 @@ export function referenceRecreateLines(input: {
   const persona = input.persona?.trim()
   const fitLine = [
     ...(input.direction ?? []),
+    ...(input.kind === 'thing' ? [] : [REFERENCE_SEASON_OUTFIT_LINE]),
     ...(persona ? [persona] : []),
     ...(note ? [`Staff note about the reference photo, to follow: ${note}`] : []),
     ...(fit ? [`What the photo is for (change details so it fits, keeping the shot): ${fit}`] : []),
