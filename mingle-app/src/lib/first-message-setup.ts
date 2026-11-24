@@ -8,7 +8,7 @@
  * The sheet itself is `FirstMessageGate`, mounted once in the root layout.
  * With no gate mounted the action is dropped, since the server would refuse it.
  */
-export type FirstMessageNeed = 'phone' | 'face_photo' | 'face_check'
+export type FirstMessageNeed = 'phone' | 'face_photo' | 'face_verify' | 'face_check'
 
 type FirstMessageSetupHandler = (needs: FirstMessageNeed[]) => Promise<boolean>
 
@@ -30,6 +30,6 @@ export function parseFirstMessageSetupNeeds(status: number, body: unknown): Firs
   if (status !== 403 || typeof body !== 'object' || body === null) return null
   const record = body as Record<string, unknown>
   if (record.error !== 'first_message_setup' || !Array.isArray(record.needs)) return null
-  const needs = record.needs.filter((need): need is FirstMessageNeed => need === 'phone' || need === 'face_photo' || need === 'face_check')
+  const needs = record.needs.filter((need): need is FirstMessageNeed => need === 'phone' || need === 'face_photo' || need === 'face_verify' || need === 'face_check')
   return needs.length > 0 ? needs : null
 }

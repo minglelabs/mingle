@@ -14,6 +14,7 @@ const verified: FirstMessageGateUser = {
   phoneVerifiedAt: new Date('2026-11-01T00:00:00Z'),
   image: 'https://images.example.com/profiles/u/1.jpg',
   imageFaceCheck: 'face',
+  faceVerifiedAt: new Date('2026-11-02T00:00:00Z'),
 }
 const env = {} as unknown as NodeJS.ProcessEnv
 const world = { worldwide: true, korea: true }
@@ -22,7 +23,7 @@ const none = { worldwide: false, korea: false }
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
 
 describe('first message gate: what an account still needs', () => {
-  it('needs nothing with a verified number and a photo with a face', () => {
+  it('needs nothing with a verified number and a face-verified photo', () => {
     expect(resolveFirstMessageNeeds(verified, { env, reach: world })).toEqual([])
   })
 
@@ -51,9 +52,17 @@ describe('first message gate: what an account still needs', () => {
     expect(resolveFirstMessageNeeds({ ...verified, imageFaceCheck: 'no_face' }, { env, reach: world })).toEqual(['face_photo'])
   })
 
-  it('checks a photo that was never checked, and lets an unchecked upload through', () => {
-    expect(resolveFirstMessageNeeds({ ...verified, imageFaceCheck: null }, { env, reach: world })).toEqual(['face_check'])
-    expect(resolveFirstMessageNeeds({ ...verified, imageFaceCheck: 'unchecked' }, { env, reach: world })).toEqual([])
+  it('asks for the selfie check when the photo was never verified, however it was checked', () => {
+    for (const imageFaceCheck of ['face', 'unchecked', null]) {
+      expect(resolveFirstMessageNeeds({ ...verified, imageFaceCheck, faceVerifiedAt: null }, { env, reach: world })).toEqual(['face_verify'])
+    }
+    expect(resolveFirstMessageNeeds({ ...verified, imageFaceCheck: null }, { env, reach: world })).toEqual([])
+  })
+
+  it('asks no photo of someone writing to people who follow them; the number is still asked', () => {
+    const bare = { ...verified, phoneE164: null, phoneVerifiedAt: null, image: null, faceVerifiedAt: null }
+    expect(resolveFirstMessageNeeds(bare, { env, reach: world, followedByTargets: true })).toEqual(['phone'])
+    expect(resolveFirstMessageNeeds({ ...verified, faceVerifiedAt: null }, { env, reach: world, followedByTargets: true })).toEqual([])
   })
 
   it('asks for both at once, number first', () => {
@@ -81,7 +90,7 @@ describe('first message gate: what an account still needs', () => {
 
 describe('first message gate: the app side', () => {
   it('reads the refusal only for first_message_setup with known needs', () => {
-    expect(parseFirstMessageSetupNeeds(403, { error: 'first_message_setup', needs: ['phone', 'face_photo', 'x'] })).toEqual(['phone', 'face_photo'])
+    expect(parseFirstMessageSetupNeeds(403, { error: 'first_message_setup', needs: ['phone', 'face_photo', 'face_verify', 'x'] })).toEqual(['phone', 'face_photo', 'face_verify'])
     expect(parseFirstMessageSetupNeeds(403, { error: 'target_user_blocked' })).toBeNull()
     expect(parseFirstMessageSetupNeeds(429, { error: 'first_message_setup', needs: ['phone'] })).toBeNull()
     expect(parseFirstMessageSetupNeeds(403, { error: 'first_message_setup', needs: [] })).toBeNull()
@@ -113,7 +122,7 @@ describe('first message gate: the app side', () => {
   it('is wired: the direct room asks, the profile message answers, the layout mounts the sheet', () => {
     const controller = read('./api/controllers/shared/conversations-controller.ts')
     const direct = controller.slice(controller.indexOf('export async function postDirectConversationResponse'))
-    expect(direct).toContain('readFirstMessageNeeds(resolvedUser.userId)')
+    expect(direct).toContain('readFirstMessageNeeds(resolvedUser.userId, [targetUserId])')
     expect(direct).toContain('error: "first_message_setup", needs')
     // Only for a first room: inside the no-existing-room branch, before the daily limit.
     expect(direct.indexOf('if (!existingRoom)')).toBeLessThan(direct.indexOf('readFirstMessageNeeds'))

@@ -1,55 +1,32 @@
 "use client";
 
-import { Camera, Check, Loader2, ShieldCheck, Smartphone, X } from "lucide-react";
+import { Check, ScanFace, ShieldCheck, Smartphone, X } from "lucide-react";
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
-import { useSession } from "next-auth/react";
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PhoneVerifySheet from "@/components/contacts/phone-verify-sheet";
 import { resolveFirstMessageGateCopy } from "@/i18n/first-message-gate-copy";
 import { resolvePhoneFriendsCopy } from "@/i18n/phone-friends-copy";
 import { DEFAULT_LOCALE, isSupportedLocale } from "@/i18n";
-import { buildClientApiPath } from "@/lib/api-contract";
 import { registerFirstMessageSetupHandler, type FirstMessageNeed } from "@/lib/first-message-setup";
-import { checkPhotoForFace, type FaceCheckResult } from "@/lib/native-face-check";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
-import { uploadProfilePhotoWithFaceCheck } from "@/lib/profile-photo-upload";
 import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
 
 type PendingRequest = { needs: FirstMessageNeed[]; resolve: (ok: boolean) => void };
-type PhotoState = "idle" | "checking" | "uploading" | "no_face" | "failed";
 
-async function postFaceCheck(result: FaceCheckResult): Promise<void> {
-  try {
-    await fetch(buildClientApiPath("/profile/image/face-check"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ result }),
-    });
-  } catch {
-    // The server asks again next time.
-  }
-}
+// The selfie check loads the face library: only when it is opened, never on the server.
+const SelfieVerifyScreen = dynamic(() => import("@/components/selfie-verify-screen"), { ssr: false });
 
-/** Checks the photo the account already has (never checked before) on the phone. */
-async function checkCurrentPhoto(): Promise<FaceCheckResult | null> {
-  try {
-    const response = await fetch(buildClientApiPath("/profile/image/face-check"), { cache: "no-store" });
-    if (!response.ok) return null;
-    return await checkPhotoForFace(await response.blob());
-  } catch {
-    return null;
-  }
-}
+const PHOTO_NEEDS: readonly FirstMessageNeed[] = ["face_photo", "face_verify", "face_check"];
 
 /**
  * The sheet shown when a first room with someone new is refused with
  * `first_message_setup` (see @/lib/first-message-setup): verify the phone
- * number, and have a profile photo with a face in it, checked on the phone.
+ * number, and pass the selfie check against the profile photo (adding one
+ * first when there is none). Not asked when the person follows you.
  */
 export default function FirstMessageGate() {
   const pathname = usePathname();
-  const { data: session } = useSession();
-  const userId = typeof session?.user?.id === "string" ? session.user.id : "";
   const pathLocale = pathname?.split("/")[1] ?? "";
   const locale = isSupportedLocale(pathLocale) ? pathLocale : DEFAULT_LOCALE;
   const copy = useMemo(() => resolveFirstMessageGateCopy(locale), [locale]);
@@ -58,9 +35,8 @@ export default function FirstMessageGate() {
   const [request, setRequest] = useState<PendingRequest | null>(null);
   const requestRef = useRef<PendingRequest | null>(null);
   const [needs, setNeeds] = useState<FirstMessageNeed[]>([]);
-  const [photoState, setPhotoState] = useState<PhotoState>("idle");
   const [phoneSheetOpen, setPhoneSheetOpen] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [selfieOpen, setSelfieOpen] = useState(false);
   useNativeBannerSuppression(request !== null);
 
   useEffect(() => registerFirstMessageSetupHandler((nextNeeds) => new Promise<boolean>((resolve) => {
@@ -73,36 +49,9 @@ export default function FirstMessageGate() {
     requestRef.current = next;
     setRequest(next);
     setNeeds(nextNeeds);
-    setPhotoState("idle");
+    setSelfieOpen(false);
     captureMingleClientEvent("mingle_first_message_gate", { step: "shown", needs: nextNeeds.join(",") });
   })), []);
-
-  // A photo that was never checked: check it on the phone before asking for a new one.
-  const needsCurrentCheck = request !== null && needs.includes("face_check");
-  useEffect(() => {
-    if (!needsCurrentCheck) return;
-    let cancelled = false;
-    const timer = window.setTimeout(() => {
-      setPhotoState("checking");
-      void checkCurrentPhoto().then(async (result) => {
-        if (cancelled) return;
-        if (result === "face" || result === "unchecked") {
-          await postFaceCheck(result);
-          setNeeds((current) => current.filter((need) => need !== "face_check"));
-          setPhotoState("idle");
-          return;
-        }
-        if (result === "no_face") await postFaceCheck("no_face");
-        // No face, or the photo could not be read: ask for a photo.
-        setNeeds((current) => [...current.filter((need) => need !== "face_check" && need !== "face_photo"), "face_photo"]);
-        setPhotoState(result === "no_face" ? "no_face" : "idle");
-      });
-    }, 0);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [needsCurrentCheck]);
 
   const finish = useCallback((ok: boolean) => {
     const current = requestRef.current;
@@ -110,6 +59,7 @@ export default function FirstMessageGate() {
     current?.resolve(ok);
     setRequest(null);
     setPhoneSheetOpen(false);
+    setSelfieOpen(false);
     captureMingleClientEvent("mingle_first_message_gate", { step: ok ? "completed" : "closed" });
   }, []);
 
@@ -118,31 +68,18 @@ export default function FirstMessageGate() {
     setNeeds((current) => current.filter((need) => need !== "phone"));
   }, []);
 
-  const handlePhotoPicked = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    setPhotoState("checking");
-    const result = await uploadProfilePhotoWithFaceCheck(file, userId);
-    if (result.status === "no_face") {
-      setPhotoState("no_face");
-      return;
-    }
-    if (result.status === "failed") {
-      setPhotoState("failed");
-      return;
-    }
-    setNeeds((current) => current.filter((need) => need !== "face_photo" && need !== "face_check"));
-    setPhotoState("idle");
-  }, [userId]);
+  const handleFaceVerified = useCallback(() => {
+    setSelfieOpen(false);
+    setNeeds((current) => current.filter((need) => !PHOTO_NEEDS.includes(need)));
+    captureMingleClientEvent("mingle_first_message_gate", { step: "face_verified" });
+  }, []);
 
   if (!request) return null;
 
   const phoneNeeded = needs.includes("phone");
-  const photoNeeded = needs.includes("face_photo") || needs.includes("face_check");
+  const photoNeeded = needs.some((need) => PHOTO_NEEDS.includes(need));
   const showPhoneRow = request.needs.includes("phone");
-  const showPhotoRow = request.needs.includes("face_photo") || request.needs.includes("face_check");
-  const photoBusy = photoState === "checking" || photoState === "uploading";
+  const showPhotoRow = request.needs.some((need) => PHOTO_NEEDS.includes(need));
   const allDone = needs.length === 0;
 
   return (
@@ -197,47 +134,26 @@ export default function FirstMessageGate() {
           ) : null}
 
           {showPhotoRow ? (
-            <div data-qa="first-message-gate-photo" className="rounded-2xl border border-gray-200 px-4 py-3.5">
-              <div className="flex items-center gap-3">
-                <Camera size={22} strokeWidth={2} className="shrink-0 text-gray-700" aria-hidden />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[0.95rem] font-semibold text-gray-900">{copy.photoRow}</span>
-                  {photoNeeded && !photoBusy ? (
-                    <span className="mt-0.5 block text-[0.8rem] text-gray-500">{copy.photoHint}</span>
-                  ) : null}
+            <div data-qa="first-message-gate-photo" className="flex items-center gap-3 rounded-2xl border border-gray-200 px-4 py-3.5">
+              <ScanFace size={22} strokeWidth={2} className="shrink-0 text-gray-700" aria-hidden />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[0.95rem] font-semibold text-gray-900">{copy.verifyRow}</span>
+                {photoNeeded ? <span className="mt-0.5 block text-[0.8rem] leading-snug text-gray-500">{copy.verifyHint}</span> : null}
+              </span>
+              {photoNeeded ? (
+                <button
+                  type="button"
+                  data-qa="first-message-gate-photo-action"
+                  onClick={() => setSelfieOpen(true)}
+                  className="shrink-0 rounded-full bg-gray-950 px-4 py-2 text-[0.85rem] font-bold text-white active:scale-[0.97]"
+                >
+                  {copy.verifyAction}
+                </button>
+              ) : (
+                <span className="flex shrink-0 items-center gap-1 text-[0.85rem] font-bold text-emerald-600">
+                  <Check size={16} strokeWidth={3} aria-hidden />{copy.done}
                 </span>
-                {photoBusy ? (
-                  <Loader2 size={20} strokeWidth={2.4} className="shrink-0 animate-spin text-gray-500" aria-label={copy.photoChecking} />
-                ) : photoNeeded ? (
-                  <button
-                    type="button"
-                    data-qa="first-message-gate-photo-action"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={needs.includes("face_check")}
-                    className="shrink-0 rounded-full bg-gray-950 px-4 py-2 text-[0.85rem] font-bold text-white active:scale-[0.97] disabled:opacity-40"
-                  >
-                    {copy.photoAction}
-                  </button>
-                ) : (
-                  <span className="flex shrink-0 items-center gap-1 text-[0.85rem] font-bold text-emerald-600">
-                    <Check size={16} strokeWidth={3} aria-hidden />{copy.done}
-                  </span>
-                )}
-              </div>
-              {photoState === "checking" ? (
-                <p className="mt-2 text-[0.8rem] text-gray-500">{copy.photoChecking}</p>
-              ) : photoState === "no_face" ? (
-                <p data-qa="first-message-gate-no-face" className="mt-2 text-[0.82rem] font-medium text-rose-600">{copy.photoNoFace}</p>
-              ) : photoState === "failed" ? (
-                <p className="mt-2 text-[0.82rem] font-medium text-rose-600">{copy.photoFailed}</p>
-              ) : null}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="hidden"
-                onChange={(event) => void handlePhotoPicked(event)}
-              />
+              )}
             </div>
           ) : null}
         </div>
@@ -254,6 +170,15 @@ export default function FirstMessageGate() {
           {copy.continueLabel}
         </button>
       </div>
+
+      {selfieOpen ? (
+        <SelfieVerifyScreen
+          locale={locale}
+          hasPhoto={!needs.includes("face_photo")}
+          onClose={() => setSelfieOpen(false)}
+          onVerified={handleFaceVerified}
+        />
+      ) : null}
 
       {phoneSheetOpen ? (
         <PhoneVerifySheet

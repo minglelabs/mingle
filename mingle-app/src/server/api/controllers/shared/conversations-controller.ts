@@ -318,8 +318,8 @@ export async function postDirectConversationResponse(request: NextRequest) {
       otherUserIds: [targetUserId],
     });
     if (!existingRoom) {
-      // Phone number and a photo with a face first (see @/server/first-message-gate).
-      const needs = await readFirstMessageNeeds(resolvedUser.userId);
+      // Phone number and a face-verified photo first, unless they follow you (see @/server/first-message-gate).
+      const needs = await readFirstMessageNeeds(resolvedUser.userId, [targetUserId]);
       if (needs.length > 0) {
         return NextResponse.json({ error: "first_message_setup", needs }, { status: 403 });
       }
