@@ -4,7 +4,8 @@ import { ageOn } from '@/server/operator-auto-reply/generate'
 import { setOperatorAvatarFromBytes } from '@/server/operators/operator-avatar'
 import { storeAvatarCandidate } from '@/server/operators/avatar-candidate'
 import { chatgptPoolImage, chatgptPoolKey } from '@/server/chatgpt-pool/client'
-import { pickAvatarSpec, seededRandom, type AvatarPersona, type AvatarSpec } from './taxonomy'
+import { AVATAR_SPEC_VERSION, describeAccountLook, pickAvatarSpec, seededRandom, type AvatarPersona, type AvatarSpec } from './taxonomy'
+import { referenceRecreateLines } from '@/server/reference-library/library'
 
 /**
  * AI profile photos for operator accounts: pick a photo spec from the
@@ -243,6 +244,8 @@ export async function generateOperatorAvatar(
   userId: string,
   options: {
     nonce?: string; now?: Date; fetchImpl?: typeof fetch; feedback?: string | null; reference?: AvatarReference
+    /** A photo from the reference library: the photo is that shot redrawn with this person's own face. */
+    libraryReference?: AvatarReference
     /** A live account: the photo waits for staff review instead of replacing the current one (avatar-candidate.ts). */
     candidate?: boolean
   } = {},
@@ -252,14 +255,24 @@ export async function generateOperatorAvatar(
     const persona = await loadAvatarPersona(userId, now)
     if (!persona) return { ok: false, error: 'not_operator' }
 
-    const spec = pickAvatarSpec(persona, seededRandom(`${userId}:${options.nonce ?? now.getTime()}`))
+    const look = describeAccountLook(persona, seededRandom(`${userId}:look`))
+    const spec: AvatarSpec = options.libraryReference
+      ? {
+        version: AVATAR_SPEC_VERSION,
+        category: 'face',
+        subtype: 'reference',
+        labelKo: '레퍼런스 사진',
+        attributes: { source: 'reference_library' },
+        prompt: [`Subject: ${look}.`, ...referenceRecreateLines(look), 'Vertical 3:4 image, one single photo. No watermarks, logos, borders or frames.'].join('\n'),
+      }
+      : pickAvatarSpec(persona, seededRandom(`${userId}:${options.nonce ?? now.getTime()}`))
     const feedback = options.feedback?.trim()
-    const prompt = [
+    const prompt = options.libraryReference ? spec.prompt : [
       spec.prompt,
       ...(feedback ? [`Staff feedback on the previous photo of this person, to follow: ${feedback}`] : []),
       ...(options.reference ? ['The attached photo is a reference staff added to their feedback: use it the way the feedback says (pose, framing, outfit, place, light, mood or style). The face of anyone in it must not be copied: the person keeps the look described above.'] : []),
     ].join('\n')
-    const image = await requestAvatarImage(prompt, { fetchImpl: options.fetchImpl, reference: options.reference })
+    const image = await requestAvatarImage(prompt, { fetchImpl: options.fetchImpl, reference: options.libraryReference ?? options.reference })
     if (!image.ok) return image
 
     if (options.candidate) {

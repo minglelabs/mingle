@@ -10,6 +10,7 @@ import { pairImages, stripImages } from './pair-images'
 import { pickPersonVariety, pickPoseVariety } from './post-person-variety'
 import { faceStickerLine } from './face-stickers'
 import { contrastLines, describeReferenceForContrast } from './reference-contrast'
+import { claimReferencePhoto, loadReferenceBytes, referenceRecreateLines, releaseReferencePhoto } from '@/server/reference-library/library'
 
 /** Most group photos hide the friends' faces under stickers; some friends are fine being seen. */
 const FRIEND_STICKER_SHARE = 0.85
@@ -331,6 +332,45 @@ async function profilePhotoForPost(operatorUserId: string): Promise<ReservePostI
   return photo ? storeReservePostImage(operatorUserId, photo.bytes) : null
 }
 
+/**
+ * The request for an account's first selfie drawn from a reference-library
+ * photo: only for a selfie-type photo of a real-photo account whose profile
+ * photo hides the face and that has posted no selfie yet. Null otherwise, or
+ * when the library has no photo left for the account's gender.
+ */
+async function libraryFirstSelfie(operatorUserId: string, description: string): Promise<{ request: { prompt: string; reference: AvatarReference }; referenceId: string } | null> {
+  const brief = decodePostPhoto(description)
+  if (brief.kind !== 'self' || brief.profilePhoto) return null
+  const [persona, user, selfie] = await Promise.all([
+    loadAvatarPersona(operatorUserId),
+    prisma.user.findUnique({ where: { id: operatorUserId }, select: { operatorAccount: { select: { avatarSpec: true } } } }),
+    prisma.operatorPostReserve.findFirst({
+      where: { operatorUserId, state: 'published', imagePrompt: { startsWith: '[self]' }, postId: { not: null } },
+      select: { id: true },
+    }),
+  ])
+  if (!persona || selfie) return null
+  const spec = user?.operatorAccount?.avatarSpec as Partial<AvatarSpec> | null | undefined
+  if (isAnimeSpec(spec) || specSubject(spec)) return null
+  const photo = await claimReferencePhoto({ userId: operatorUserId, kind: 'post', gender: persona.gender === 'female' || persona.gender === 'male' ? persona.gender : null }).catch(() => null)
+  if (!photo) return null
+  try {
+    const reference = await loadReferenceBytes(photo)
+    const look = describeAccountLook(persona, seededRandom(`${operatorUserId}:look`))
+    const place = brief.place ?? await reservePostPlace(operatorUserId)
+    const prompt = [
+      ...referenceRecreateLines(look),
+      ...(brief.description.trim() ? [`What the post is about (fit the moment to it where the shot allows): ${brief.description.trim()}`] : []),
+      ...(place ? [`It was taken around ${place}.`] : []),
+      'Vertical 3:4 image, one single photo (never two side by side). No watermarks, logos, borders or frames.',
+    ].join('\n')
+    return { request: { prompt, reference }, referenceId: photo.id }
+  } catch {
+    await releaseReferencePhoto(photo.id).catch(() => {})
+    return null
+  }
+}
+
 export async function drawReservePostImage(operatorUserId: string, description: string, staffReference?: AvatarReference, context?: RedrawContext): Promise<ReservePostImage | null> {
   try {
     // A redo always draws a new photo.
@@ -339,11 +379,17 @@ export async function drawReservePostImage(operatorUserId: string, description: 
       if (profile) return profile
     }
     const base = await reservePostImageRequest(operatorUserId, description)
-    const request = context
-      ? await withRedrawContext(base, { ...context, staffReference })
-      : staffReference ? await withStaffReference(base, staffReference) : base
+    // No face to keep yet (the profile hides it, no selfie posted): the first selfie is drawn
+    // from a reference-library photo, and that selfie fixes the face for the ones after it.
+    const library = !staffReference && !context && !base.reference ? await libraryFirstSelfie(operatorUserId, description) : null
+    const request = library
+      ? library.request
+      : context
+        ? await withRedrawContext(base, { ...context, staffReference })
+        : staffReference ? await withStaffReference(base, staffReference) : base
     const drawn = await requestAvatarImage(request.prompt, { reference: request.reference ?? undefined })
     if (!drawn.ok) {
+      if (library) await releaseReferencePhoto(library.referenceId).catch(() => {})
       console.warn('[operator-post-reserve] image_failed', { operatorUserId, error: drawn.error, detail: drawn.detail })
       return null
     }
