@@ -6,7 +6,7 @@ import { loadStarterFeed } from '@/server/feed/starter-feed'
 import { visiblePostWhere } from '@/server/posts/post-visibility'
 import { OperatorsMain } from '../operators/_components/operator-ui'
 import { FeedMore } from './feed-more'
-import { LATEST_VIEW, loadFeedChunk, resolveFeedView, STARTER_VIEWS } from './feed-chunk'
+import { LATEST_VIEW, loadFeedChunk, OLDEST_VIEW, resolveFeedView, STARTER_VIEWS } from './feed-chunk'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,7 +32,7 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
     select: { id: true, name: true, handle: true },
   })
   const view = await resolveFeedView(as)
-  const { viewer, starterView, latest } = view
+  const { viewer, starterView, latest, oldest } = view
   const starter = starterView ? await loadStarterFeed() : null
   // Numbered as readers see them: a listed post that was taken down, deleted or
   // made private is skipped by the feed, so it gets no number and is named apart.
@@ -57,7 +57,7 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
   return (
     <OperatorsMain>
       <h1 className="text-xl font-bold text-slate-900">피드 미리보기</h1>
-      <p className="mt-1 text-sm text-slate-500">최신 글은 추천과 상관없이 올라간 시각 순서(최신 먼저)입니다. 나머지는 앱 홈 피드와 같은 추천 순서입니다. 보기만 하며 조회 기록은 남지 않습니다. 신규 한국인·외국인은 막 가입한 유저가 보는 순서이고, 번호는 정해 둔 첫 피드 순서입니다. 운영 계정 글의 반응 숫자는 실사용자만 센 것이고, %는 조회 대비입니다.</p>
+      <p className="mt-1 text-sm text-slate-500">최신 글·오래된 글은 추천과 상관없이 올라간 시각 순서(최신 먼저 / 오래된 것 먼저)입니다. 나머지는 앱 홈 피드와 같은 추천 순서입니다. 보기만 하며 조회 기록은 남지 않습니다. 신규 한국인·외국인은 막 가입한 유저가 보는 순서이고, 번호는 정해 둔 첫 피드 순서입니다. 운영 계정 글의 반응 숫자는 실사용자만 센 것이고, %는 조회 대비입니다.</p>
 
       <nav className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto overflow-y-hidden overscroll-x-contain px-4 pb-1" aria-label="누구의 피드로 볼지">
         <Link
@@ -68,9 +68,15 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
         </Link>
         <Link
           href={query({ as: LATEST_VIEW })}
-          className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium ${latest ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}
+          className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium ${latest && !oldest ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}
         >
           최신 글
+        </Link>
+        <Link
+          href={query({ as: OLDEST_VIEW })}
+          className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium ${oldest ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}
+        >
+          오래된 글
         </Link>
         {STARTER_VIEWS.map((view) => (
           <Link
