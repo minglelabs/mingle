@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAdminApi } from '@/server/admin/guard'
-import { deleteOperatorPost, editOperatorPostText, setOperatorPostHidden } from '@/server/operator-post-edit/edit'
+import { deleteOperatorPost, editOperatorPostText, editOperatorPostTime, setOperatorPostHidden } from '@/server/operator-post-edit/edit'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -20,9 +20,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ postI
   } catch {
     body = null
   }
-  const fields = body && typeof body === 'object' ? body as { text?: unknown; hidden?: unknown } : {}
+  const fields = body && typeof body === 'object' ? body as { text?: unknown; hidden?: unknown; publishedAt?: unknown } : {}
   const result = typeof fields.hidden === 'boolean'
     ? await setOperatorPostHidden(auth.ctx, postId, fields.hidden)
+    : fields.publishedAt !== undefined
+    ? await editOperatorPostTime(auth.ctx, postId, fields.publishedAt)
     : await editOperatorPostText(auth.ctx, postId, fields.text)
   return NextResponse.json(result.ok ? { ok: true } : { error: result.error }, { status: result.ok ? 200 : result.status, headers: { 'cache-control': 'no-store' } })
 }

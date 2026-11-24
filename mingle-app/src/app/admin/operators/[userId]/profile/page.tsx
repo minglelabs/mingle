@@ -259,7 +259,7 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
                   {post.moderationHiddenAt ? (
                     <div className="mt-3"><PostTakedownButton postId={post.id} hidden /></div>
                   ) : operator ? (
-                    <OperatorPostEditor key={`${post.id}:${post.bodyVersion}`} postId={post.id} text={post.sourceText} hasPhoto={Boolean(post.imageObjectKey)} />
+                    <OperatorPostEditor key={`${post.id}:${post.bodyVersion}`} postId={post.id} text={post.sourceText} hasPhoto={Boolean(post.imageObjectKey)} publishedAt={post.publishedAt?.toISOString() ?? null} />
                   ) : null}
                 </article>
               ))}
