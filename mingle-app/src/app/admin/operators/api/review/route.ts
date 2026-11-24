@@ -23,6 +23,7 @@ const ERROR_STATUS: Record<string, number> = {
   publish_failed: 502,
   regenerate_failed: 502,
   draw_failed: 502,
+  no_reference: 409,
   invalid_image: 400,
 }
 

@@ -18,7 +18,7 @@ import { buildLanguageOptions, koreanLanguageName } from '../_lib/options'
 import { reviewImageUrl } from './review-image-url'
 import { pastedImage } from '../_lib/pasted-image'
 
-type Action = 'publish' | 'delete' | 'regenerate' | 'draw' | 'redraw_photo'
+type Action = 'publish' | 'delete' | 'regenerate' | 'draw' | 'redraw_photo' | 'redraw_reference'
 
 const STAFF_LANGUAGE = 'ko'
 
@@ -34,6 +34,7 @@ const ERROR_COPY: Record<string, string> = {
   publish_failed: '게시하지 못했어요. 다시 눌러 주세요.',
   regenerate_failed: '다시 만들지 못했어요. 다시 눌러 주세요.',
   draw_failed: '사진을 그리지 못했어요. 다시 눌러 주세요.',
+  no_reference: '이 글에 맞는 안 쓴 레퍼런스 짤이 없어요(종류·성별·계절). 레퍼런스 탭에 더 올려 주세요.',
   invalid_image: '사진을 읽지 못했어요. 다른 파일로 해 주세요.',
   file_too_large: '사진이 너무 커요(15MB까지).',
   invalid_photos: '사진 목록이 올바르지 않아요. 새로고침 후 다시 해 주세요.',
@@ -698,7 +699,13 @@ export function StaffBio({ userId, bio, sourceLanguage, className = '' }: { user
  * the persona and this photo go along); the speech-bubble button opens a
  * feedback box (text, and a pasted or picked photo) sent with the redo.
  */
-function PhotoRedoOverlay({ drawing, disabled, onRedo }: { drawing: boolean; disabled: boolean; onRedo: (feedback: string, image: File | null) => void }) {
+function PhotoRedoOverlay({ drawing, disabled, onRedo, onRedoFromReference }: {
+  drawing: boolean
+  disabled: boolean
+  onRedo: (feedback: string, image: File | null) => void
+  /** 레퍼런스로: redraw from an unused reference-library photo (its direction, this account's persona). */
+  onRedoFromReference?: () => void
+}) {
   const [open, setOpen] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [image, setImage] = useState<File | null>(null)
@@ -720,6 +727,16 @@ function PhotoRedoOverlay({ drawing, disabled, onRedo }: { drawing: boolean; dis
   }
   return (
     <>
+      {onRedoFromReference ? (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onRedoFromReference}
+          className="absolute left-2 top-2 inline-flex h-9 items-center gap-1 rounded-full bg-black/60 px-3 text-xs font-semibold text-white backdrop-blur active:bg-black/75 disabled:opacity-50"
+        >
+          <ImagePlus className="h-3.5 w-3.5" aria-hidden="true" />레퍼런스로 재제작
+        </button>
+      ) : null}
       <div className="absolute right-2 top-2 flex gap-1.5">
         <button
           type="button"
@@ -924,7 +941,7 @@ function PostCard({ post: initial, at, pinned, fromReference, author, profileApp
     setError(null)
     try {
       const result = await sendReview('post', post.id, action, feedback, image)
-      if ((action === 'regenerate' || action === 'draw' || action === 'redraw_photo') && result.post) setPost(result.post as ReviewPost)
+      if ((action === 'regenerate' || action === 'draw' || action === 'redraw_photo' || action === 'redraw_reference') && result.post) setPost(result.post as ReviewPost)
       else onDone()
     } catch (caught) {
       setError(ERROR_COPY[(caught as Error).message] ?? '요청하지 못했어요.')
@@ -1061,6 +1078,7 @@ function PostCard({ post: initial, at, pinned, fromReference, author, profileApp
             drawing={post.photoDrawing}
             disabled={busy !== null || working || Boolean(post.scheduledAt)}
             onRedo={(feedback, image) => void handle('redraw_photo', feedback, image)}
+            onRedoFromReference={() => void handle('redraw_reference', '')}
           />
         </div>
       ) : post.photoDescription ? (
