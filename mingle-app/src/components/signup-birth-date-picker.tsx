@@ -59,9 +59,15 @@ export function WheelColumn({
     });
   }, [selectedIndex]);
 
+  // Follows a value set from outside (first paint, another column clamping
+  // the day). A value the wheel itself settled on is already under the band,
+  // so it is not scrolled again: doing so mid-flick made the wheel jump.
   useEffect(() => {
+    const element = scrollRef.current;
+    if (!element) return;
+    if (Math.abs(element.scrollTop - selectedIndex * WHEEL_ITEM_HEIGHT_PX) < WHEEL_ITEM_HEIGHT_PX / 2) return;
     scrollToSelected();
-  }, [scrollToSelected]);
+  }, [scrollToSelected, selectedIndex]);
 
   useEffect(() => () => {
     if (scrollEndTimerRef.current) clearTimeout(scrollEndTimerRef.current);
@@ -95,6 +101,9 @@ export function WheelColumn({
           onTouchStart={() => { userScrollingRef.current = true; }}
           onWheel={() => { userScrollingRef.current = true; }}
           onScroll={() => {
+            // Settles once the flick has stopped; CSS snapping already lines the
+            // row up, so nothing is scrolled here (it used to scroll back to the
+            // previous value, fighting the snap: the shaking on the height wheel).
             if (scrollEndTimerRef.current) clearTimeout(scrollEndTimerRef.current);
             scrollEndTimerRef.current = setTimeout(() => {
               syncSelectedValue();
@@ -102,8 +111,7 @@ export function WheelColumn({
                 userScrollingRef.current = false;
                 onPicked?.();
               }
-              scrollToSelected("smooth");
-            }, 90);
+            }, 140);
           }}
           className="relative z-20 h-[216px] snap-y snap-mandatory overflow-y-auto overscroll-contain px-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           style={{ WebkitOverflowScrolling: "touch" }}
