@@ -1,8 +1,10 @@
 'use client'
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import { InfiniteMore } from '../../_components/infinite-more'
+import { loadMoreReview } from './actions'
 import { CalendarClock, Clock, ImageIcon, ImagePlus, Loader2, MessageSquarePlus, Pencil, Pin, PinOff, RefreshCw, Send, Sparkles, Trash2, X } from 'lucide-react'
 import type { ReviewItem, ReviewPost, ReviewProfile, ReviewReference } from '@/server/operator-review/review'
 import { AdminButton, AdminCard, AdminChip, adminTextareaClassName } from '../../_components/ui'
@@ -1270,11 +1272,30 @@ function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDelete
  * updates every post of that account on the page: 게시 unlocks them, 삭제
  * removes them, and a redrawn photo shows on their author rows.
  */
-export function ReviewBoard({ items: initial }: { items: ReviewItem[] }) {
+export function ReviewBoard({ items: initial, more }: {
+  items: ReviewItem[]
+  /** The next page, appended below as staff scroll (no page change). */
+  more?: { cursor: string | null; kind?: ReviewItem['kind'] | null; userId?: string | null }
+}) {
   const [items, setItems] = useState(initial)
   const [approved, setApproved] = useState(
     () => new Set(initial.flatMap((item) => (item.kind === 'post' && item.author.profileState === 'approved' ? [item.author.userId] : []))),
   )
+  const moreKind = more?.kind ?? null
+  const moreUser = more?.userId ?? null
+  const loadMore = useCallback(async (cursor: string) => {
+    const next = await loadMoreReview({ cursor, kind: moreKind, userId: moreUser })
+    setItems((current) => {
+      const seen = new Set(current.map((item) => item.key))
+      return [...current, ...next.items.filter((item) => !seen.has(item.key))]
+    })
+    setApproved((current) => {
+      const updated = new Set(current)
+      for (const item of next.items) if (item.kind === 'post' && item.author.profileState === 'approved') updated.add(item.author.userId)
+      return updated
+    })
+    return { value: null, nextCursor: next.nextCursor }
+  }, [moreKind, moreUser])
   const [images, setImages] = useState<Record<string, string>>({})
 
   const remove = (predicate: (item: ReviewItem) => boolean) => setItems((current) => current.filter((item) => !predicate(item)))
@@ -1316,6 +1337,11 @@ export function ReviewBoard({ items: initial }: { items: ReviewItem[] }) {
           />
         )
       })}
+      {more ? (
+        <div className="px-4 sm:px-0">
+          <InfiniteMore initialCursor={more.cursor} load={loadMore} render={() => null} label="다음 글 보기" />
+        </div>
+      ) : null}
     </div>
   )
 }

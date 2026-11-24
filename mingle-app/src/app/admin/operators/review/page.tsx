@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { requireAdmin } from '@/server/admin/guard'
-import { listReviewQueue, REVIEW_ITEMS_PER_PAGE } from '@/server/operator-review/review'
+import { listReviewQueue } from '@/server/operator-review/review'
 import { AdminEmptyState, AdminFilterLink, AdminPage, AdminPageHeader } from '../../_components/ui'
 import { ReviewBoard } from './review-board'
 import { parseReviewTab, reviewTabHref, reviewTabKind } from './review-tab'
@@ -48,17 +47,11 @@ export default async function OperatorReviewPage({ searchParams }: ReviewPagePro
         />
       ) : (
         <>
-          <ReviewBoard key={`${tab}:${cursor}:${queue.items.map((item) => item.key).join(',')}`} items={queue.items} />
-          {queue.nextCursor ? (
-            <div className="mx-auto mt-6 w-full max-w-[440px]">
-              <Link
-                href={reviewTabHref(tab, queue.nextCursor)}
-                className="block rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm font-semibold text-sky-700"
-              >
-                다음 {REVIEW_ITEMS_PER_PAGE}개
-              </Link>
-            </div>
-          ) : null}
+          <ReviewBoard
+            key={`${tab}:${cursor}:${queue.items.map((item) => item.key).join(',')}`}
+            items={queue.items}
+            more={{ cursor: queue.nextCursor, kind: reviewTabKind(tab) }}
+          />
         </>
       )}
     </AdminPage>
