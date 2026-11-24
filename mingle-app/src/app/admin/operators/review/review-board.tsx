@@ -4,7 +4,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { CalendarClock, Clock, ImageIcon, ImagePlus, Loader2, MessageSquarePlus, Pencil, Pin, PinOff, RefreshCw, Send, Sparkles, Trash2, X } from 'lucide-react'
-import type { ReviewItem, ReviewPost, ReviewProfile } from '@/server/operator-review/review'
+import type { ReviewItem, ReviewPost, ReviewProfile, ReviewReference } from '@/server/operator-review/review'
 import { AdminButton, AdminCard, AdminChip, adminTextareaClassName } from '../../_components/ui'
 import LanguageFlag from '@/components/language-flag'
 import ProfileLanguageLevels, { CompactLanguageLevels } from '@/components/profile-language-levels'
@@ -835,11 +835,12 @@ export function ReviewPhotos({ photos }: { photos: Array<{ objectKey: string; wi
   )
 }
 
-function PostCard({ post: initial, at, pinned, fromReference, author, profileApproved, onDone }: {
+function PostCard({ post: initial, at, pinned, fromReference, reference, author, profileApproved, onDone }: {
   post: ReviewPost
   at: string
   pinned: boolean
   fromReference?: boolean
+  reference?: ReviewReference | null
   author: { userId: string; name: string | null; handle: string; image: string | null; languages: string[]; interestLanguages: InterestLanguage[] }
   profileApproved: boolean
   onDone: () => void
@@ -975,7 +976,18 @@ function PostCard({ post: initial, at, pinned, fromReference, author, profileApp
         <PinButton kind="post" id={post.id} pinned={pinned} />
       </div>
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
-        {fromReference ? <AdminChip tone="accent">레퍼런스 짤로 그림</AdminChip> : null}
+        {fromReference && !reference ? <AdminChip tone="accent">레퍼런스 짤로 그림</AdminChip> : null}
+        {reference && post.imageObjectKey ? (
+          // The library photo this one was drawn from: tap to open it in the library.
+          <Link
+            href={`/admin/operators/references?photo=${encodeURIComponent(reference.id)}`}
+            className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 py-0.5 pl-0.5 pr-2.5 text-xs font-semibold text-sky-700 ring-1 ring-sky-200 active:bg-sky-100"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={reviewImageUrl(reference.objectKey)} alt="" className="h-7 w-7 rounded-full object-cover" />
+            레퍼런스 짤 보기
+          </Link>
+        ) : null}
         {post.language ? <AdminChip tone="accent">{koreanLanguageName(post.language)}로 씀</AdminChip> : null}
         {post.topic ? <AdminChip>{post.topic}</AdminChip> : null}
         {post.photoKind ? <AdminChip tone="warning">사진: {PHOTO_KIND[post.photoKind] ?? post.photoKind}</AdminChip> : null}
@@ -1286,6 +1298,7 @@ export function ReviewBoard({ items: initial }: { items: ReviewItem[] }) {
             at={item.at}
             pinned={item.pinned}
             fromReference={item.fromReference}
+            reference={item.reference}
             author={{ userId, name: item.author.name, handle: item.author.handle, image: images[userId] ?? item.author.image, languages: item.author.primaryLanguages, interestLanguages: item.author.interestLanguages }}
             profileApproved={approved.has(userId)}
             onDone={() => remove((other) => other.key === item.key)}

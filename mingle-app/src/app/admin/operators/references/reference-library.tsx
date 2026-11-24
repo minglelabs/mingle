@@ -96,7 +96,7 @@ function Row({ title, children }: { title: string; children: ReactNode }) {
   )
 }
 
-export function ReferenceLibrary({ initialItems, canDraw, autoTag }: { initialItems: ReferencePhotoView[]; canDraw: boolean; autoTag: boolean }) {
+export function ReferenceLibrary({ initialItems, canDraw, autoTag, openPhotoId }: { initialItems: ReferencePhotoView[]; canDraw: boolean; autoTag: boolean; openPhotoId?: string | null }) {
   const [items, setItems] = useState(initialItems)
   // Through 2026-12-12 the AI can tag uploads ("자동"); after that staff pick for every upload.
   const [people, setPeople] = useState<People | 'auto'>(autoTag ? 'auto' : 'one')
@@ -105,8 +105,8 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag }: { initialIt
   const [note, setNote] = useState('')
   const [dragging, setDragging] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
-  const [filter, setFilter] = useState<Filter>('unused')
-  const [editingId, setEditingId] = useState<string | null>(null)
+  const [filter, setFilter] = useState<Filter>(openPhotoId ? 'all' : 'unused')
+  const [editingId, setEditingId] = useState<string | null>(openPhotoId ?? null)
   const choiceRef = useRef({ people, faceShown, gender, note })
   useEffect(() => { choiceRef.current = { people, faceShown, gender, note } }, [people, faceShown, gender, note])
 
