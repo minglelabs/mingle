@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { referenceDirectionLines, referencePersonaLine } from './direction'
+import { referenceDirectionLines, referencePersonaLine, referenceSeasonClashes, referenceSeasonsToAvoid } from './direction'
 import { referenceRecreateLines } from './library'
 
 describe('referenceDirectionLines', () => {
@@ -29,5 +29,21 @@ describe('referenceRecreateLines with a persona', () => {
     expect(text).toContain('in their own style')
     expect(text).not.toContain('the hairstyle, the outfit and accessories, the place')
     expect(text).toContain('- Shot: a selfie.')
+  })
+})
+
+describe('referenceSeasonsToAvoid', () => {
+  it('skips summer photos in a northern November and winter ones in the south', () => {
+    const november = new Date('2026-11-24T12:00:00Z')
+    expect(referenceSeasonsToAvoid('KR', november)).toEqual(['summer'])
+    expect(referenceSeasonsToAvoid('AU', november)).toEqual(['winter'])
+    expect(referenceSeasonsToAvoid('TH', november)).toEqual(['winter'])
+  })
+
+  it('treats snow as winter and untagged photos as fitting', () => {
+    expect(referenceSeasonClashes({ weather: 'snow' }, ['winter'])).toBe(true)
+    expect(referenceSeasonClashes({ season: 'summer' }, ['summer'])).toBe(true)
+    expect(referenceSeasonClashes({ season: 'unknown' }, ['summer'])).toBe(false)
+    expect(referenceSeasonClashes(null, ['summer'])).toBe(false)
   })
 })

@@ -124,3 +124,31 @@ export function referencePersonaLine(persona: AvatarPersona | null | undefined):
   const line = join([who, bio])
   return line ? `This account's persona (the person in the new photo, and whose life it shows): ${line}.` : null
 }
+
+const SOUTHERN = new Set(['AU', 'NZ', 'AR', 'CL', 'UY', 'PY', 'ZA', 'BR'])
+const TROPICAL = new Set(['TH', 'VN', 'PH', 'ID', 'MY', 'SG', 'KH', 'LA', 'MM', 'IN', 'LK', 'BD', 'MX', 'CO', 'EC', 'PE', 'VE', 'NG', 'KE', 'GH', 'AE', 'SA', 'QA', 'EG'])
+
+/**
+ * Seasons a post photo must not show now where the persona lives, so a
+ * summer outfit never lands in December (staff, 2026-11-24). Tropical places
+ * skip winter photos all year; elsewhere the opposite half of the year is out.
+ */
+export function referenceSeasonsToAvoid(country: string | null | undefined, now: Date = new Date()): string[] {
+  const code = country?.toUpperCase() ?? null
+  if (code && TROPICAL.has(code)) return ['winter']
+  const month = now.getUTCMonth() + 1
+  const north = month >= 4 && month <= 9 ? 'warm' : 'cold'
+  const half = code && SOUTHERN.has(code) ? (north === 'warm' ? 'cold' : 'warm') : north
+  return half === 'warm' ? ['winter'] : ['summer']
+}
+
+/** Whether a library photo's season (or snow) is one of those to avoid; untagged photos always fit. */
+export function referenceSeasonClashes(attributes: ReferenceAttributes | null | undefined, avoid: readonly string[]): boolean {
+  if (!attributes || !avoid.length) return false
+  const season = attributes.season === 'unknown' ? undefined : attributes.season
+  if (season && avoid.includes(season)) return true
+  return avoid.includes('winter') && attributes.weather === 'snow'
+}
+
+/** Clothes must fit the shot's own season and weather. */
+export const REFERENCE_SEASON_OUTFIT_LINE = 'Clothes fit the season, weather and temperature the photo shows: no short sleeves or shorts in snow or cold, no heavy coat on a hot day.'
