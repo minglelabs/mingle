@@ -58,7 +58,7 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
-// Live swipe-down-to-dismiss drag, tracked separately from pan/pinch. Only ever
+// Live swipe-to-dismiss drag (down or up), tracked separately from pan/pinch. Only ever
 // engaged for a single pointer at base zoom; the gesture math lives in
 // ./swipe-to-dismiss.logic.
 type DismissDrag = {
@@ -120,7 +120,7 @@ export function ZoomableConversationImage({ src, alt, width, height, onError, on
   // True while any pointer is down; with `settling` it scopes will-change so
   // zoomed text re-rasterizes crisp once the gesture ends.
   const [interacting, setInteracting] = useState(false)
-  // Swipe-down-to-dismiss drag state (base zoom only).
+  // Swipe-to-dismiss drag state, down or up (base zoom only).
   const dismissRef = useRef<DismissDrag | null>(null)
   const pagerDragRef = useRef<PagerDrag | null>(null)
   const [dismissOffset, setDismissOffset] = useState(0)
@@ -205,7 +205,7 @@ export function ZoomableConversationImage({ src, alt, width, height, onError, on
 
   const applyDismissOffset = useCallback((offsetY: number) => {
     setDismissOffset(offsetY)
-    onDragProgress(dragProgress(Math.max(0, offsetY)))
+    onDragProgress(dragProgress(offsetY))
   }, [onDragProgress])
 
   const updateTransform = useCallback((next: ImageTransform) => {
@@ -317,7 +317,7 @@ export function ZoomableConversationImage({ src, alt, width, height, onError, on
       return
     }
 
-    // Swipe-down-to-dismiss takes priority over pan while a single pointer is
+    // Swipe-to-dismiss takes priority over pan while a single pointer is
     // down at base zoom. Once it locks vertical-down it owns the gesture.
     const dismiss = dismissRef.current
     if (dismiss && points.length === 1 && event.pointerId === dismiss.pointerId) {
@@ -440,7 +440,7 @@ export function ZoomableConversationImage({ src, alt, width, height, onError, on
             // an interrupted or no-op transition). finishDismiss is idempotent.
             setSettling(true)
             setAnimateOut(true)
-            setDismissOffset(viewportHeight || dismiss.offsetY)
+            setDismissOffset(viewportHeight ? Math.sign(dismiss.offsetY) * viewportHeight : dismiss.offsetY)
             onDragProgress(1)
             dismissTimerRef.current = setTimeout(finishDismiss, DISMISS_ANIMATION_MS)
           }
@@ -513,7 +513,7 @@ export function ZoomableConversationImage({ src, alt, width, height, onError, on
     updateTransform(clampTransform({ scale: current.scale > MIN_IMAGE_SCALE ? MIN_IMAGE_SCALE : 2, x: 0, y: 0 }))
   }, [clampTransform, updateTransform])
 
-  const dragScale = scaleForProgress(dragProgress(Math.max(0, dismissOffset)))
+  const dragScale = scaleForProgress(dragProgress(dismissOffset))
   const composedTransform = `translate3d(${transform.x}px, ${transform.y + dismissOffset}px, 0) scale(${transform.scale * dragScale})`
   const stage = viewportSize ? containFit({ width, height }, viewportSize) : null
 
