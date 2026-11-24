@@ -36,7 +36,8 @@ export function isReferenceKind(value: unknown): value is ReferenceKind {
 export function referenceKindHasGender(kind: ReferenceKind | null): boolean {
   return kind === null || kind === 'face' || kind === 'person'
 }
-export type ReferenceUse = { userId: string; kind: 'avatar' | 'post'; at: string }
+/** `imageKey`: the post photo drawn from it, so the review queue can put that post first. */
+export type ReferenceUse = { userId: string; kind: 'avatar' | 'post'; at: string; imageKey?: string }
 export type ReferencePhoto = {
   id: string
   objectKey: string
@@ -214,6 +215,14 @@ export async function claimReferencePhoto(args: {
     const claimed = { ...pick, usedBy }
     return { items: items.map((item) => (item.id === pick.id ? claimed : item)), result: claimed }
   })
+}
+
+/** Records the post photo drawn from a claimed library photo. */
+export async function markReferenceImage(id: string, imageKey: string): Promise<void> {
+  await updateLibrary((items) => ({
+    items: items.map((item) => (item.id === id && item.usedBy ? { ...item, usedBy: { ...item.usedBy, imageKey } } : item)),
+    result: null,
+  }))
 }
 
 /** Puts a claimed photo back when the drawing it was claimed for failed. */

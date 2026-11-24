@@ -11,7 +11,7 @@ import { pickPersonVariety, pickPoseVariety } from './post-person-variety'
 import { faceStickerLine } from './face-stickers'
 import { contrastLines, describeReferenceForContrast } from './reference-contrast'
 import { referenceDirectionLines, referencePersonaLine, referenceSeasonClashes, referenceSeasonsToAvoid } from '@/server/reference-library/direction'
-import { claimReferencePhoto, loadReferenceBytes, referenceKindOf, referenceRecreateLines, releaseReferencePhoto, type ReferenceKind } from '@/server/reference-library/library'
+import { markReferenceImage, claimReferencePhoto, loadReferenceBytes, referenceKindOf, referenceRecreateLines, releaseReferencePhoto, type ReferenceKind } from '@/server/reference-library/library'
 
 /** Most group photos hide the friends' faces under stickers; some friends are fine being seen. */
 const FRIEND_STICKER_SHARE = 0.85
@@ -452,7 +452,10 @@ export async function drawReservePostImage(operatorUserId: string, description: 
       console.warn('[operator-post-reserve] image_failed', { operatorUserId, error: drawn.error, detail: drawn.detail })
       return null
     }
-    return await storeReservePostImage(operatorUserId, drawn.bytes)
+    const stored = await storeReservePostImage(operatorUserId, drawn.bytes)
+    // The review queue shows posts drawn from the library first.
+    if (library) await markReferenceImage(library.referenceId, stored.objectKey).catch(() => {})
+    return stored
   } catch (error) {
     console.warn('[operator-post-reserve] image_failed', { operatorUserId, error: error instanceof Error ? error.name : 'unknown' })
     return null
