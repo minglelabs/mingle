@@ -186,3 +186,14 @@ describe('bio styles', () => {
     expect(slots.filter((slot) => slot.bioMentionsLearning).length).toBeLessThan(25)
   })
 })
+
+describe('Korea plans in bios', () => {
+  it('go to about half of the accounts outside Korea and never to Korean ones', () => {
+    const foreign = planPersonaSlots({ ...REQUEST, count: 200, countries: ['JP', 'US', 'BR'] }, { random: seeded(3), now: NOW })
+    const share = foreign.filter((slot) => slot.koreaPlan).length / foreign.length
+    expect(share).toBeGreaterThan(0.35)
+    expect(share).toBeLessThan(0.65)
+    const korean = planPersonaSlots({ ...REQUEST, count: 50, countries: ['KR'] }, { random: seeded(3), now: NOW })
+    expect(korean.every((slot) => slot.koreaPlan === null)).toBe(true)
+  })
+})

@@ -62,6 +62,8 @@ export type PersonaSlot = {
   bioStyle: string
   /** Whether the bio mentions a language they learn. */
   bioMentionsLearning: boolean
+  /** A plan or wish about Korea the bio mentions (accounts outside Korea only). */
+  koreaPlan: string | null
 }
 
 /**
@@ -110,6 +112,25 @@ const BIO_STYLES: ReadonlyArray<{ key: string; female: number; male: number; bri
 ]
 /** Share of bios that mention a language being learned. */
 const BIO_LEARNING_SHARE = 0.25
+
+/**
+ * Plans about Korea for the bios of accounts outside Korea (staff 2026-11-24:
+ * "I want to visit Korea", "going to Seoul", "studying in Korea next year"
+ * were far too rare). About half of those bios carry one.
+ */
+export const BIO_KOREA_SHARE = 0.5
+export const BIO_KOREA_PLANS: readonly string[] = [
+  'wants to travel to Korea someday',
+  'is going to Seoul on a trip soon and is excited about it',
+  'is planning a trip to Korea next year',
+  'plans to study in Korea next year (a language course or an exchange semester)',
+  'is saving up for a working holiday in Korea',
+  'has been to Korea once and wants to go back',
+  'is learning Korean for a trip to Korea',
+  'dreams of living in Seoul for a while',
+  'wants to see Korea in a particular season (cherry blossoms, autumn leaves, snow)',
+  'wants to try real Korean food in Korea',
+]
 
 function pickBioStyle(gender: PersonaGender | null, random: Random): string {
   const weightOf = (style: (typeof BIO_STYLES)[number]) => (gender === 'male' ? style.male : gender === 'female' ? style.female : (style.male + style.female) / 2)
@@ -268,6 +289,7 @@ export function planPersonaSlots(request: PersonaDraftRequest, options: { random
       nameSeed: country.code === 'KR' ? pickKoreanGivenName(genders[index], random) : null,
       bioStyle: pickBioStyle(genders[index], random),
       bioMentionsLearning: random() < BIO_LEARNING_SHARE,
+      koreaPlan: country.code !== 'KR' && random() < BIO_KOREA_SHARE ? BIO_KOREA_PLANS[Math.floor(random() * BIO_KOREA_PLANS.length)] : null,
     }
   })
 }
@@ -283,7 +305,7 @@ For each item in "personas" return one object with the same "slot" and these fie
   When an item has "nameSeed", its given name is that word: build the name on it (a Korean full name with a surname you pick, or the same given name alone, a nickname made from it, or its Latin spelling);, never swap it for another name.
   At most 40 characters, matching "gender" when one is given. Use common names only: never the name of a real public figure, celebrity, influencer or fictional character.
 - handle: a natural username for that person using only lower-case a-z, 0-9, "_" and "."; 3 to 30 characters, starting with a letter (e.g. yuki.tnk, minjun_0412, lucas.silva).
-- bio: the self-description this person types into a chat-app profile, at most 140 characters, written in primaryLanguage. Follow the item's "bioStyle" literally: it sets the length, the form and whether there is an emoji. Mention a language they are learning only when "bioMentionsLearning" is true. Never use the stock pattern of a short line, an emoji, then a longer line about studying a language or wanting to chat; bios in one batch must not share a shape or an opening.
+- bio: the self-description this person types into a chat-app profile, at most 140 characters, written in primaryLanguage. Follow the item's "bioStyle" literally: it sets the length, the form and whether there is an emoji. Mention a language they are learning only when "bioMentionsLearning" is true. When the item has "koreaPlan", the bio says that this person does it (a trip to Korea or Seoul, studying there next year, a working holiday...), in their own words and in the bioStyle form; Korea and Seoul may be named, never a real school or business. Never use the stock pattern of a short line, an emoji, then a longer line about studying a language or wanting to chat; bios in one batch must not share a shape or an opening.
 - primaryLanguage: the language this person writes in; exactly one code from the item's "languages" (normally the first).
 - gender: "female" or "male"; the item's gender when it has one.
 
@@ -360,6 +382,7 @@ async function requestChunk(
         ...(slot.nameSeed ? { nameSeed: slot.nameSeed } : {}),
         bioStyle: slot.bioStyle,
         bioMentionsLearning: slot.bioMentionsLearning,
+        ...(slot.koreaPlan ? { koreaPlan: slot.koreaPlan } : {}),
         languages: slot.country.languages,
       })),
     },
