@@ -48,16 +48,32 @@ describe("mobile canvas bootstrap", () => {
     expect(properties.get(MOBILE_CANVAS_CSS_PROPERTIES.willChange)).toBe("transform");
   });
 
-  it("removes the transform when a resize makes the viewport wide enough", () => {
+  it("removes the transform and fills a phone wider than the canvas", () => {
     const { listeners, properties, runtimeWindow } = runBootstrap(360);
 
     runtimeWindow.innerWidth = 430;
     listeners.get("resize")?.();
 
-    expect(properties.get(MOBILE_CANVAS_CSS_PROPERTIES.scaledWidth)).toBe("400px");
+    expect(properties.get(MOBILE_CANVAS_CSS_PROPERTIES.frameWidth)).toBe("430px");
+    expect(properties.get(MOBILE_CANVAS_CSS_PROPERTIES.scaledWidth)).toBe("430px");
     expect(properties.get(MOBILE_CANVAS_CSS_PROPERTIES.transform)).toBe("none");
     expect(properties.get(MOBILE_CANVAS_CSS_PROPERTIES.frameHeight)).toBe("100svh");
     expect(properties.get(MOBILE_CANVAS_CSS_PROPERTIES.willChange)).toBe("auto");
+  });
+
+  it.each([402, 412])("leaves no side strips on a %ipx-wide phone", (width) => {
+    const { properties } = runBootstrap(width);
+
+    expect(properties.get(MOBILE_CANVAS_CSS_PROPERTIES.frameWidth)).toBe(`${width}px`);
+    expect(properties.get(MOBILE_CANVAS_CSS_PROPERTIES.scaledWidth)).toBe(`${width}px`);
+    expect(properties.get(MOBILE_CANVAS_CSS_PROPERTIES.transform)).toBe("none");
+  });
+
+  it("keeps a centered 400px column on tablet and desktop widths", () => {
+    const { properties } = runBootstrap(1024);
+
+    expect(properties.get(MOBILE_CANVAS_CSS_PROPERTIES.frameWidth)).toBe("400px");
+    expect(properties.get(MOBILE_CANVAS_CSS_PROPERTIES.scaledWidth)).toBe("400px");
   });
 
   it("falls back to the supported canvas width for an invalid input", () => {
