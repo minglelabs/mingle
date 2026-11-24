@@ -84,3 +84,15 @@ describe('poses of the poster', () => {
     expect(pickPoseVariety(() => 0.99, { faces: false }).looseHair).toBe(false)
   })
 })
+
+describe('poses only someone else could shoot', () => {
+  it('never go to a selfie, and a friend\'s shot can be one absorbed in something', async () => {
+    const { FACE_POSES, pickPoseVariety } = await import('./post-person-variety')
+    const others = new Set(FACE_POSES.filter(([, , byOther]) => byOther).map(([pose]) => pose))
+    expect([...others].some((pose) => pose.includes('menu'))).toBe(true)
+    for (let i = 0; i < 300; i += 1) {
+      const line = pickPoseVariety(() => (i + 0.5) / 300, { faces: true, selfie: true }).line
+      for (const pose of others) expect(line).not.toContain(pose)
+    }
+  })
+})
