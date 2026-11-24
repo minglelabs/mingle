@@ -14,7 +14,7 @@ import {
 } from '@/server/operator-posts/convert'
 import { checkOperatorForPosting } from '@/server/operator-posts/operator-check'
 import { createComment } from '@/server/posts/comment-service'
-import { visibleCommentsWhere } from '@/server/posts/comment-visibility'
+import { visibleCommentsWhere, visibleSingleCommentWhere } from '@/server/posts/comment-visibility'
 import { visibleSinglePostWhere } from '@/server/posts/post-visibility'
 import { detectSourceLanguageVerdict } from '@/server/translation/detect-source-language'
 import {
@@ -77,7 +77,10 @@ export type OperatorPostThread = {
     /** Who liked it, newest first (staff only). */
     likers?: InboxPerson[]
     commentCount: number
+    /** The time the app shows (staff may date a post earlier than they publish it). */
     publishedAt: string
+    /** When the post was actually created. */
+    createdAt: string
   }
   /** The operator the thread is read and answered as. */
   operator: ThreadOperator
@@ -212,6 +215,7 @@ export async function loadOperatorPostThread(args: {
       likeCount: true,
       commentCount: true,
       publishedAt: true,
+      createdAt: true,
       author: { select: USER_IDENTITY_SELECT },
       likes: { orderBy: { createdAt: 'desc' }, select: { user: { select: USER_IDENTITY_SELECT } } },
       translations: {
@@ -325,6 +329,7 @@ export async function loadOperatorPostThread(args: {
         likers: post.likes.map((like) => toActivityPerson(like.user)),
         commentCount: post.commentCount,
         publishedAt: post.publishedAt.toISOString(),
+        createdAt: post.createdAt.toISOString(),
       },
       operator,
       operators: [...operatorsById.values()],
@@ -474,4 +479,65 @@ export async function commentAsOperator(ctx: AdminContext, input: {
   }
 
   return { commentId: comment.id, parentId: comment.parentId, text, language: postedLanguage, converted: conversion.converted }
+}
+
+export type OperatorCommentLikeError = 'not_operator' | 'operator_inactive' | 'not_found' | 'own_comment'
+
+/**
+ * Staff like (or unlike) a comment AS an operator account, the way a user
+ * taps the heart in the app: one like row, the comment's count, and the
+ * author's in-app notification (staff, 2026-11-24). Idempotent. Audited.
+ */
+export async function setOperatorCommentLike(ctx: AdminContext, input: {
+  operatorUserId: string
+  postId: string
+  commentId: string
+  liked: boolean
+}): Promise<{ ok: true; liked: boolean; likeCount: number } | { ok: false; error: OperatorCommentLikeError }> {
+  const operator = await prisma.user.findFirst({
+    where: { id: input.operatorUserId, isOperator: true, isDeleted: false },
+    select: { id: true, isActive: true },
+  })
+  if (!operator) return { ok: false, error: 'not_operator' }
+  if (!operator.isActive) return { ok: false, error: 'operator_inactive' }
+  const comment = await prisma.postComment.findFirst({
+    where: {
+      ...visibleSingleCommentWhere(input.commentId, operator.id),
+      postId: input.postId,
+      OR: [{ isDeleted: null }, { isDeleted: false }],
+    },
+    select: { id: true, authorId: true, postId: true, likeCount: true },
+  })
+  if (!comment) return { ok: false, error: 'not_found' }
+  if (comment.authorId === operator.id) return { ok: false, error: 'own_comment' }
+
+  let changed = false
+  if (input.liked) {
+    const created = await prisma.postCommentLike.createMany({ data: [{ commentId: comment.id, userId: operator.id }], skipDuplicates: true })
+    if (created.count) {
+      await prisma.postComment.update({ where: { id: comment.id }, data: { likeCount: { increment: created.count } } })
+      changed = true
+    }
+  } else {
+    const removed = await prisma.postCommentLike.deleteMany({ where: { commentId: comment.id, userId: operator.id } })
+    if (removed.count) {
+      await prisma.postComment.updateMany({ where: { id: comment.id, likeCount: { gt: 0 } }, data: { likeCount: { decrement: removed.count } } })
+      changed = true
+    }
+  }
+  if (changed && input.liked) {
+    await createPostNotification({ type: 'comment_like', recipientId: comment.authorId, actorId: operator.id, postId: comment.postId, commentId: comment.id })
+      .catch((error: unknown) => console.warn('[operator-activity] comment_like_notify_failed', { error: error instanceof Error ? error.name : 'unknown' }))
+  }
+  if (changed) {
+    await writeAdminAudit(ctx, {
+      action: input.liked ? 'activity.comment_like' : 'activity.comment_unlike',
+      operatorUserId: operator.id,
+      targetType: 'comment',
+      targetId: comment.id,
+      metadata: { postId: comment.postId },
+    })
+  }
+  const fresh = await prisma.postComment.findUnique({ where: { id: comment.id }, select: { likeCount: true } })
+  return { ok: true, liked: input.liked, likeCount: fresh?.likeCount ?? comment.likeCount }
 }

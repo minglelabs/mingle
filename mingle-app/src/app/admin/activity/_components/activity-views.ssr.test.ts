@@ -44,7 +44,7 @@ const listData: ActivityListData = {
 const thread: OperatorPostThread = {
   post: {
     id: 'p1', author: operator, text: 'Bom dia', koText: '좋은 아침', translations: [{ language: 'en', text: 'Good morning' }], hasImage: false,
-    likeCount: 3, commentCount: 2, publishedAt: '2026-10-02T08:00:00.000Z',
+    likeCount: 3, commentCount: 2, publishedAt: '2026-10-02T08:00:00.000Z', createdAt: '2026-10-02T09:30:00.000Z',
   },
   operator: { ...operator, personaLanguage: 'pt', isActive: true },
   operators: [{ ...operator, personaLanguage: 'pt', isActive: true }],

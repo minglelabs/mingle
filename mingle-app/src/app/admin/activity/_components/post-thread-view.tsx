@@ -106,8 +106,36 @@ function Likes({ count, likers, size }: { count: number; likers?: InboxPerson[];
   )
 }
 
-function CommentRow({ postId, comment, korean, nowMs, focused, isReply, canReply, onReply }: {
+/** Date and time to the second, Korea time (e.g. 11.24 (월) 15:32:07). */
+function formatExactKst(iso: string): string {
+  const parts = new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', weekday: 'short',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(new Date(iso))
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? ''
+  return `${get('month')}.${get('day')} (${get('weekday')}) ${get('hour')}:${get('minute')}:${get('second')}`
+}
+
+/** The heart under a comment: likes or unlikes it as the operator account. */
+function CommentLikeButton({ liked, pending, onToggle }: { liked: boolean; pending: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={pending}
+      aria-pressed={liked}
+      className={`-mx-1 inline-flex min-h-9 items-center gap-1 rounded-full px-2 font-semibold disabled:opacity-60 ${liked ? 'text-rose-600 active:bg-rose-50' : 'text-slate-500 active:bg-slate-100'}`}
+    >
+      {pending ? <Loader2 size={12} className="animate-spin" aria-hidden="true" /> : <Heart size={12} aria-hidden="true" fill={liked ? 'currentColor' : 'none'} />}
+      {liked ? '좋아요 취소' : '좋아요'}
+    </button>
+  )
+}
+
+function CommentRow({ postId, comment, korean, nowMs, focused, isReply, canReply, onReply, operatorId, onLike }: {
   postId: string
+  operatorId: string
+  onLike: (comment: ThreadComment, liked: boolean) => Promise<void>
   comment: ThreadComment
   korean: boolean
   nowMs: number
@@ -117,6 +145,12 @@ function CommentRow({ postId, comment, korean, nowMs, focused, isReply, canReply
   onReply: (comment: ThreadComment) => void
 }) {
   const text = (korean && comment.koText) || comment.text
+  const liked = (comment.likers ?? []).some((person) => person.userId === operatorId)
+  const [likePending, setLikePending] = useState(false)
+  const toggleLike = useCallback(() => {
+    setLikePending(true)
+    void onLike(comment, !liked).finally(() => setLikePending(false))
+  }, [comment, liked, onLike])
   return (
     <div
       id={`comment-${comment.id}`}
@@ -154,6 +188,9 @@ function CommentRow({ postId, comment, korean, nowMs, focused, isReply, canReply
             ) : null}
             <div className="mt-0.5 flex items-start gap-3 text-xs text-slate-500">
               {comment.likeCount > 0 ? <Likes count={comment.likeCount} likers={comment.likers} size={12} /> : null}
+              {canReply && comment.author.userId !== operatorId ? (
+                <CommentLikeButton liked={liked} pending={likePending} onToggle={toggleLike} />
+              ) : null}
               {canReply ? (
                 <button
                   type="button"
@@ -221,6 +258,23 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
   }, [korean, operatorId, postId])
 
   useAdminInboxRealtime(reload)
+
+  const likeComment = useCallback(async (comment: ThreadComment, liked: boolean) => {
+    setError(null)
+    try {
+      const response = await fetch(`/admin/activity/api/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(comment.id)}/like`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ operatorUserId: operatorId, liked }),
+      })
+      if (response.status === 401) { goToLogin(); return }
+      if (!response.ok) throw new Error(`like_${response.status}`)
+      await reload()
+    } catch {
+      setError(liked ? '좋아요를 누르지 못했어요.' : '좋아요를 취소하지 못했어요.')
+    }
+  }, [operatorId, postId, reload])
 
   // Korean text is fetched only while the switch is on (the server rendered without it).
   const koreanLoadedRef = useRef(false)
@@ -366,6 +420,15 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
             <ProfileLink userId={post.author.userId} className="min-w-0 truncate text-sm font-semibold">{inboxPersonLabel(post.author)}</ProfileLink>
             <span className="ml-auto shrink-0 text-xs text-slate-500">{formatInboxRelativeTime(post.publishedAt, nowMs)}</span>
           </p>
+          <p className="mt-1 text-xs leading-5 text-slate-500">
+            <span className="whitespace-nowrap">앱에 보이는 시각 <b className="font-semibold tabular-nums text-slate-700">{formatExactKst(post.publishedAt)}</b></span>
+            {Math.abs(Date.parse(post.createdAt) - Date.parse(post.publishedAt)) >= 1000 ? (
+              <>
+                <span aria-hidden="true"> · </span>
+                <span className="whitespace-nowrap">실제 게시 <span className="tabular-nums">{formatExactKst(post.createdAt)}</span></span>
+              </>
+            ) : null}
+          </p>
           {postText ? (
             <p className="mt-2 whitespace-pre-wrap break-words text-[15px] leading-6 text-slate-800">{postText}</p>
           ) : null}
@@ -397,6 +460,8 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
                   isReply={false}
                   canReply={canReply}
                   onReply={startReply}
+                  operatorId={operatorId}
+                  onLike={likeComment}
                 />
                 {comment.replies.map((reply) => (
                   <CommentRow
@@ -409,6 +474,8 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
                     isReply
                     canReply={canReply}
                     onReply={startReply}
+                    operatorId={operatorId}
+                    onLike={likeComment}
                   />
                 ))}
               </li>
