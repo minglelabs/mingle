@@ -14,6 +14,7 @@ import {
   readPersistedBooleanPreference,
 } from '@/components/LivePhoneDemo/live-phone-demo.preferences'
 import { formatBirthDate } from '@/lib/birth-date'
+import { clearFirstRunCover } from '@/lib/first-run-cover'
 import { deriveDefaultSttLanguagesForLocale, sanitizeSttLanguageSelection } from '@/lib/stt-languages'
 
 type OnboardingStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
@@ -53,6 +54,7 @@ export function hasConfirmedLanguageOnboarding(storage: OnboardingStorage | null
 export function markLanguageOnboardingConfirmed(storage: OnboardingStorage | null = resolveBrowserStorage()): void {
   try {
     storage?.setItem(LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED, '1')
+    clearFirstRunCover()
   } catch {
     // Ignore storage failures; the onboarding modal will simply reopen next launch.
   }

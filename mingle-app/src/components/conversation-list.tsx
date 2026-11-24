@@ -1,5 +1,6 @@
 "use client";
 
+import { clearFirstRunCover } from "@/lib/first-run-cover";
 import { LoadingMessage } from "@/components/loading-message";
 import type { AppLocale } from "@/i18n/config";
 import type { AppDictionary } from "@/i18n/types";
@@ -3726,6 +3727,7 @@ export default function ConversationList({
       : "ready";
     resolvedLanguageOnboardingPhase = nextLanguageOnboardingPhase;
     setLanguageOnboardingPhase(nextLanguageOnboardingPhase);
+    if (nextLanguageOnboardingPhase === "ready") clearFirstRunCover();
     setFirstSpeakPending(isFirstSpeakPending());
   }, []);
 

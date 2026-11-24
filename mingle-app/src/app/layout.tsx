@@ -10,6 +10,7 @@ import CoinHost from "@/components/coins/coin-host";
 import ContactSyncHost from "@/components/contacts/contact-sync-host";
 import ProfileBasicsGate from "@/components/profile-basics-gate";
 import PendingProfileSync from "@/components/pending-profile-sync";
+import { FIRST_RUN_COVER_SCRIPT } from "@/lib/first-run-cover";
 import FirstMessageGate from "@/components/first-message-gate";
 import KeyboardInsetVar from "@/components/keyboard-inset-var";
 import PushPermissionPrompt from "@/components/push-permission-prompt";
@@ -115,6 +116,10 @@ export default async function RootLayout({
         <script
           id="mingle-mobile-canvas-bootstrap"
           dangerouslySetInnerHTML={{ __html: MOBILE_CANVAS_BOOTSTRAP_SCRIPT }}
+        />
+        <script
+          id="mingle-first-run-cover"
+          dangerouslySetInnerHTML={{ __html: FIRST_RUN_COVER_SCRIPT }}
         />
         <script
           id="mingle-script-load-recovery"
