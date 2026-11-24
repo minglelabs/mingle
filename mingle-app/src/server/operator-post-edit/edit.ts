@@ -6,6 +6,28 @@ import { hidePostByModerator, unhidePostByModerator } from '@/server/reports/mod
 import { detectSourceLanguageVerdict } from '@/server/translation/detect-source-language'
 import { resolveEditTargetLanguages, translatePostBodySettled } from '@/server/translation/post-translation-service'
 import { operatorTextProvider } from '@/server/translation/translate-texts'
+import { convertToPersonaLanguage } from '@/server/operator-posts/convert'
+
+const baseLanguage = (tag: string | null | undefined) => (tag ?? '').toLowerCase().split(/[-_]/)[0]
+
+/**
+ * Staff write edits in Korean; an account whose post was in its own language
+ * (Indonesian, Japanese …) keeps posting in it, so Korean typed by staff is
+ * converted into that language before it is saved, the way staff-written
+ * posts are (operator-posts/convert.ts; staff, 2026-11-25). A post the persona
+ * wrote in Korean on purpose (a learner's post) stays Korean. Null when
+ * nothing needs converting or the conversion failed (the typed text is kept).
+ */
+async function intoPersonaLanguage(text: string, typed: string | null, post: { authorId: string; sourceLanguage: string | null; author: { primaryLanguages: string[] } }): Promise<{ text: string; language: string } | null> {
+  const persona = post.author.primaryLanguages?.[0] ?? null
+  if (!persona || baseLanguage(typed) !== 'ko' || baseLanguage(persona) === 'ko' || baseLanguage(post.sourceLanguage) === 'ko') return null
+  try {
+    const converted = await convertToPersonaLanguage({ operatorUserId: post.authorId, text })
+    return converted.converted && converted.text.trim() ? { text: converted.text.trim(), language: converted.language } : null
+  } catch {
+    return null
+  }
+}
 
 export const OPERATOR_POST_PHOTO_MAX_BYTES = 15 * 1024 * 1024
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
@@ -17,7 +39,7 @@ export type OperatorPostEditResult = { ok: true } | { ok: false; error: string; 
 async function operatorPost(postId: string) {
   const post = await prisma.post.findUnique({
     where: { id: postId },
-    select: { id: true, authorId: true, bodyVersion: true, sourceText: true, sourceLanguage: true, author: { select: { isOperator: true } } },
+    select: { id: true, authorId: true, bodyVersion: true, sourceText: true, sourceLanguage: true, author: { select: { isOperator: true, primaryLanguages: true } } },
   })
   return post?.author.isOperator ? post : null
 }
@@ -48,11 +70,15 @@ export async function replaceOperatorPostPhoto(ctx: AdminContext, postId: string
 export async function editOperatorPostText(ctx: AdminContext, postId: string, rawText: unknown): Promise<OperatorPostEditResult> {
   const post = await operatorPost(postId)
   if (!post) return { ok: false, error: 'not_found', status: 404 }
-  const text = typeof rawText === 'string' ? rawText.trim() : ''
-  if (!text || text.length > MAX_BODY_LENGTH) return { ok: false, error: 'invalid_text', status: 400 }
-  if (text === post.sourceText) return { ok: true }
+  const typed = typeof rawText === 'string' ? rawText.trim() : ''
+  if (!typed || typed.length > MAX_BODY_LENGTH) return { ok: false, error: 'invalid_text', status: 400 }
+  if (typed === post.sourceText) return { ok: true }
 
-  const verdict = await detectSourceLanguageVerdict({ text, clientHint: post.sourceLanguage, provider: operatorTextProvider() })
+  const typedVerdict = await detectSourceLanguageVerdict({ text: typed, clientHint: post.sourceLanguage, provider: operatorTextProvider() })
+  // Korean typed by staff goes out in the persona's own language.
+  const persona = typedVerdict.mixed ? null : await intoPersonaLanguage(typed, typedVerdict.language, post)
+  const text = persona && persona.text.length <= MAX_BODY_LENGTH ? persona.text : typed
+  const verdict = text === typed ? typedVerdict : { language: persona!.language, mixed: false }
   const language = verdict.language
   const mixed = Boolean(language) && verdict.mixed
   const prior = (await prisma.postTranslation.findMany({ where: { postId }, select: { language: true } })).map((row) => row.language)
