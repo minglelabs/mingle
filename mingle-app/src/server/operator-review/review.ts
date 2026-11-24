@@ -322,13 +322,13 @@ export function decodeReviewCursor(value: string | undefined): Pick<TimelineRow,
 export async function listReviewQueue(options: { cursor?: string; now?: Date; userId?: string; kind?: ReviewItem['kind'] } = {}): Promise<ReviewQueue> {
   const now = options.now ?? new Date()
   const after = decodeReviewCursor(options.cursor)
-  // Staff-pinned items first, then posts drawn from the reference library (staff, 2026-11-25), then the rest.
-  const order = `ORDER BY rank, ref, late, round, "authorAt", "kindOrder", id`
+  // Posts drawn from the reference library come first of all (staff, 2026-11-25), then pinned items, then the rest.
+  const order = `ORDER BY ref, rank, late, round, "authorAt", "kindOrder", id`
   // `userId`: one account's own items only (its profile page).
   const conditions: string[] = []
   const params: unknown[] = []
   if (after) {
-    conditions.push(`(rank, ref, late, round, "authorAt", "kindOrder", id) > ($1::bigint, $2::int, $3::boolean, $4::bigint, $5::timestamp, $6::int, $7::text)`)
+    conditions.push(`(ref, rank, late, round, "authorAt", "kindOrder", id) > ($2::int, $1::bigint, $3::boolean, $4::bigint, $5::timestamp, $6::int, $7::text)`)
     params.push(after.rank, after.ref, after.late, after.round, after.authorAt, after.kindOrder, after.id)
   }
   if (options.userId) {
