@@ -160,6 +160,16 @@ describe('reserve post generation', () => {
     expect(drawn[0].imagePrompt).toBe('[self] a clear smiling photo of them at a café')
   })
 
+  it('makes some posts of Asian accounts photo-booth prints, never of others', async () => {
+    answer([{ slot: 1, text: '인생네컷 찍음', photo: 'a pink backdrop and a white frame' }])
+    const booth = await generateReservePosts({ persona: { ...persona, language: 'ko', gender: 'female' }, topics: ['food'], existingTexts: [], random: () => 0 })
+    expect(booth[0].imagePrompt).toBe('[self] (photo booth) a pink backdrop and a white frame')
+    expect(mocks.generateJson.mock.calls.at(-1)![0].input.slots[0].setup).toContain('photo-booth print')
+    answer([{ slot: 1, text: 'photo', photo: 'a pink backdrop and a white frame' }])
+    const other = await generateReservePosts({ persona: { ...persona, language: 'es', gender: 'female' }, topics: ['food'], existingTexts: [], random: () => 0 })
+    expect(other[0].imagePrompt ?? '').not.toContain('(photo booth)')
+  })
+
   it('drops a photo description the slot did not ask for', async () => {
     answer([{ slot: 1, text: '그냥 글', photo: 'a cat' }])
     const posts = await generateReservePosts({ persona, topics: ['thought'], existingTexts: [], random: () => 0.99 })

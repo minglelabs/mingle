@@ -25,6 +25,47 @@ const PERSON_LINES: Record<Exclude<PostPhotoKind, 'scene'>, string> = {
   friends: 'The friends are other adults who look clearly different from the poster and from each other, each with an ordinary everyday face of their own; nobody looks like a celebrity or a model.',
 }
 
+/** With a photo of the poster attached: who they are, and that nothing else of that photo carries over. */
+const REFERENCE_LINES: readonly string[] = [
+  'The poster is the person in the attached photo. Use it only to know who they are (face, hair, build); the attached picture itself must not show up in the new one.',
+  'The face itself stays exactly the same as in the attached photo: the same eye shape and eyelids, nose, mouth, jawline, skin tone and apparent ethnicity, so anyone would say it is the same person. Only what a person changes between days may differ: how the hair is styled (parted, pushed back, tied, under a cap), glasses on or off, makeup, and the camera and light.',
+  'This is a completely different photo taken on another day: a different place, outfit, camera distance, camera angle, head angle, expression, gesture and light. Nothing of the attached photo\'s framing, background, clothes, pose, hand position or expression may carry over; if it would look like the same shot moved somewhere else, it is wrong.',
+  'The attached photo\'s colors are not this photo\'s colors: its filter, haze, softness, brightness, contrast and white balance belong to that one picture. The new photo gets its own color and light from this description.',
+  'The expression comes only from this description, never from the attached photo: a frown, knitted or raised brows, a squint or a tense mouth in the attached photo is a passing look, not part of the face. Unless the description says otherwise, the brows and forehead are relaxed and smooth, also while laughing.',
+]
+
+/** Poses of one booth shot; four different ones make the print. */
+export const BOOTH_POSES = [
+  'a peace sign by the cheek', 'a small finger heart', 'both palms cupping the cheeks', 'a wink with a small smile',
+  'puffed-out cheeks', 'a big heart made with both arms above the head', 'chin resting on both fists', 'laughing, one hand over the mouth',
+  'looking off to the side, unbothered', 'a pout with the eyes looking up', 'both hands framing the face', 'a playful shocked face, mouth open',
+  'holding a booth prop up by the face (a cat-ear headband, oversized round glasses or a tiny hat)', 'a calm, straight look into the camera',
+  'turned a little away, glancing back over the shoulder', 'leaning toward the camera, face close',
+] as const
+
+/**
+ * A self photo-booth print (인생네컷): one person, four flash shots in one
+ * print, ordinary booth poses. Fully dressed in every shot; nothing suggestive.
+ */
+function buildPhotoBoothPrompt(description: string, person: PostPhotoPerson, random: () => number): string {
+  const pool = [...BOOTH_POSES]
+  const poses = Array.from({ length: 4 }, () => pool.splice(Math.floor(random() * pool.length), 1)[0])
+  const layout = random() < 0.6 ? 'a 2x2 grid of four photos' : 'one vertical strip of four photos'
+  return [
+    'A self photo-booth print of the kind young people in Korea, Japan and Taiwan take with friends or alone (인생네컷 style) and post on social media: a photo of the printed sheet, or the booth\'s own digital copy.',
+    `Layout: ${layout} on one printed frame with even white or colored borders, a tiny made-up booth logo word and a date in a corner (no real brand), and at most a few small hand-drawn doodles or stickers (hearts, sparkles, a little animal) on the borders, never over the face.`,
+    `It shows: ${description}`,
+    ...(person.hasReference ? REFERENCE_LINES : [`The poster: ${person.look}.`]),
+    'The same person in all four shots, in the same outfit and the same booth; only the pose and expression change from shot to shot.',
+    `The four poses, in order: ${poses.map((pose, index) => `${index + 1}) ${pose}`).join('; ')}.`,
+    'Framed from the chest or waist up in front of the booth\'s plain backdrop, the same distance in each shot.',
+    'Booth light: one bright, soft frontal flash, very even, gently brightening the skin the way booths do; a flat backdrop with no shadows behind them; colors clean and a little bright.',
+    'Fully and ordinarily dressed in every shot, the same outfit throughout; a cute, friendly, everyday mood, nothing revealing or suggestive.',
+    'The face keeps its own proportions; not an averaged idol face. Hands have five fingers.',
+    'Everyone in the image is an adult; no school uniforms. Vertical image. No captions or watermarks besides the small booth logo and date.',
+  ].join('\n')
+}
+
 /**
  * The photo of a latent post, drawn when the post is published. The post
  * generator writes what the photo shows and which kind it is; this adds what
@@ -47,6 +88,7 @@ export function buildPostImagePrompt(
   const placeLine = place ? [`Taken in ${place}: the street, shops, packaging and objects look like that place, and any writing that happens to be visible is in the local language and script, small and incidental.`] : []
   const frame = `${random() < 0.75 ? 'Vertical 3:4' : 'Horizontal 4:3'} image, like a phone photo. No captions, watermarks, logos, brand names, borders or frames.`
   if (style === 'anime') return buildAnimePostPrompt(kind, description, place, person, frame, random)
+  if (decoded.photoBooth && person) return buildPhotoBoothPrompt(description, person, random)
   if (kind === 'scene' || !person) {
     return [
       'A casual photo someone took on their phone and posted on social media.',
@@ -73,15 +115,7 @@ export function buildPostImagePrompt(
     `It shows: ${description}`,
     // With a photo of them, the photo alone says who they are: a written look on top of it
     // pulls the model back to the photo, and it redraws the same picture in a new place.
-    ...(person.hasReference
-      ? [
-          'The poster is the person in the attached photo. Use it only to know who they are (face, hair, build); the attached picture itself must not show up in the new one.',
-          'The face itself stays exactly the same as in the attached photo: the same eye shape and eyelids, nose, mouth, jawline, skin tone and apparent ethnicity, so anyone would say it is the same person. Only what a person changes between days may differ: how the hair is styled (parted, pushed back, tied, under a cap), glasses on or off, makeup, and the camera and light.',
-          'This is a completely different photo taken on another day: a different place, outfit, camera distance, camera angle, head angle, expression, gesture and light. Nothing of the attached photo\'s framing, background, clothes, pose, hand position or expression may carry over; if it would look like the same shot moved somewhere else, it is wrong.',
-          'The attached photo\'s colors are not this photo\'s colors: its filter, haze, softness, brightness, contrast and white balance belong to that one picture. The new photo gets its own color and light from this description.',
-          'The expression comes only from this description, never from the attached photo: a frown, knitted or raised brows, a squint or a tense mouth in the attached photo is a passing look, not part of the face. Unless the description says otherwise, the brows and forehead are relaxed and smooth, also while laughing.',
-        ]
-      : [`The poster: ${person.look}.`]),
+    ...(person.hasReference ? REFERENCE_LINES : [`The poster: ${person.look}.`]),
     PERSON_LINES[kind],
     ...variety,
     ...(pose ? [pose.line] : []),

@@ -2,7 +2,7 @@ import { SchemaType, type ResponseSchema } from '@google/generative-ai'
 import { getSttLanguageDisplayName } from '@/lib/stt-languages'
 import { generateJson, type GenerateJsonRequest, OPERATOR_POST_TEXT_MODEL } from '@/server/llm/generate-json'
 import { hasContactDetails } from '@/server/operators/persona-rules'
-import { encodePostPhoto, INTRO_PHOTO_SETUP, pickPostPhoto, PROFILE_PHOTO_MARKER } from './post-photo'
+import { encodePostPhoto, INTRO_PHOTO_SETUP, PHOTO_BOOTH_MARKER, PHOTO_BOOTH_SETUP, pickPostPhoto, PROFILE_PHOTO_MARKER } from './post-photo'
 import { canonicalizeSttLanguageCode } from '@/lib/stt-languages'
 import { learnerLevelForDots, learnerPlan, posterProfile, type LearnerPlan, type PosterProfile } from './poster-profile'
 
@@ -60,6 +60,14 @@ export const KOREA_TOPIC_WEIGHTS: Readonly<Record<string, number>> = { korea_tri
 /** Topics that always go out with a photo, and the place the photo was taken when it is not the author's city. */
 const PHOTO_TOPICS = new Set(['photo_caption', 'korea_trip', 'korean_friends', 'photo_intro', 'photo_intro_named'])
 const INTRO_TOPICS = new Set(['photo_intro', 'photo_intro_named'])
+/**
+ * Photo-booth prints (인생네컷) of East and Southeast Asian accounts (staff
+ * 2026-11-24: about 3 % of all posts for women, 1 % for men; those accounts
+ * are about 43 % and 30 % of the live ones, so these are their own shares).
+ */
+const PHOTO_BOOTH_SHARE = { female: 0.07, male: 0.033 } as const
+const BOOTH_LANGUAGES = /^(ko|ja|zh|vi|th|id|ms|fil|tl)\b/i
+
 /** Half the photo intros show the account's own profile photo; the other half a new flattering photo. */
 const INTRO_PROFILE_PHOTO_SHARE = 0.5
 const KOREA_TRIP_PLACES: ReadonlyArray<{ place: string; weight: number }> = [
@@ -285,16 +293,24 @@ export async function generateReservePosts(args: {
   const profile = reservePosterProfile(args.seed ?? `${args.persona.name ?? ''}|${args.persona.city ?? ''}|${args.persona.language}`, args.persona.gender ?? null)
   const seed = args.seed ?? `${args.persona.name ?? ''}|${args.persona.city ?? ''}|${args.persona.language}`
   const learner = reserveLearnerPlan(seed, args.persona.language, args.persona.learning)
+  const boothShare = BOOTH_LANGUAGES.test(args.persona.language)
+    ? args.persona.gender === 'female' ? PHOTO_BOOTH_SHARE.female : args.persona.gender === 'male' ? PHOTO_BOOTH_SHARE.male : 0
+    : 0
   const slots = args.topics.map((topic, index) => {
     const language = random() < learner.share ? learner.language : args.persona.language
+    // Not instead of a photo intro, which shows one good photo of them.
+    const booth = !INTRO_TOPICS.has(topic) && random() < boothShare
     return {
       slot: index + 1,
       topic: briefs.get(topic) ?? topic,
       shape: pickShape(random, profile.shapeFactors).brief,
       language,
-      photo: INTRO_TOPICS.has(topic)
+      photo: booth
+        ? { kind: 'self' as const, setup: PHOTO_BOOTH_SETUP }
+        : INTRO_TOPICS.has(topic)
         ? { kind: 'self' as const, setup: INTRO_PHOTO_SETUP }
         : PHOTO_TOPICS.has(topic) || random() < profile.photoShare ? pickPostPhoto(random) : null,
+      photoBooth: booth,
       photoPlace: topic === 'korea_trip' ? pickKoreaTripPlace(random) : null,
       profilePhoto: INTRO_TOPICS.has(topic) && random() < INTRO_PROFILE_PHOTO_SHARE,
     }
@@ -310,7 +326,7 @@ export async function generateReservePosts(args: {
       persona: modelPersona(args.persona),
       poster: { type: profile.type.brief, length: profile.length.brief, voice: profile.voice },
       learner: { language: learner.language, level: learner.level.brief },
-      slots: slots.map(({ photoPlace, profilePhoto: _profilePhoto, ...slot }) => ({
+      slots: slots.map(({ photoPlace, profilePhoto: _profilePhoto, photoBooth: _photoBooth, ...slot }) => ({
         ...slot,
         photo: slot.photo ? slot.photo.kind : false,
         ...(slot.photo?.setup ? { setup: slot.photo.setup } : {}),
@@ -446,7 +462,7 @@ export function languageOfPost(text: string, planned: string, own: string): stri
 
 function collectGeneratedPosts(
   items: Array<{ slot?: unknown; text?: unknown; photo?: unknown }>,
-  slots: Array<{ language: string; photo: ReturnType<typeof pickPostPhoto> | null; photoPlace: string | null; profilePhoto?: boolean }>,
+  slots: Array<{ language: string; photo: ReturnType<typeof pickPostPhoto> | null; photoPlace: string | null; profilePhoto?: boolean; photoBooth?: boolean }>,
   topics: string[],
   seen: Set<string>,
   ownLanguage: string,
@@ -464,7 +480,7 @@ function collectGeneratedPosts(
     usedSlots.add(slot)
     const plan = slots[slot - 1].photo
     const photo = plan && typeof item.photo === 'string' ? item.photo.replace(/\s+/g, ' ').trim().slice(0, IMAGE_PROMPT_MAX_CHARS) : ''
-    result.push({ topic: topics[slot - 1], text, language: languageOfPost(text, slots[slot - 1].language, ownLanguage), imagePrompt: plan && photo ? encodePostPhoto(plan.kind, `${slots[slot - 1].profilePhoto ? PROFILE_PHOTO_MARKER : ''}${photo}`, slots[slot - 1].photoPlace) : null })
+    result.push({ topic: topics[slot - 1], text, language: languageOfPost(text, slots[slot - 1].language, ownLanguage), imagePrompt: plan && photo ? encodePostPhoto(plan.kind, `${slots[slot - 1].profilePhoto ? PROFILE_PHOTO_MARKER : slots[slot - 1].photoBooth ? PHOTO_BOOTH_MARKER : ''}${photo}`, slots[slot - 1].photoPlace) : null })
   }
   return result
 }
