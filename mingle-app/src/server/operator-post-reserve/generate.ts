@@ -43,11 +43,13 @@ export const RESERVE_TOPICS: ReadonlyArray<{ key: string; weight: number; brief:
   { key: 'question_to_everyone', weight: 3, brief: 'an easy question to everyone that invites replies (preferences, habits, this-or-that)' },
   { key: 'looking_for_friends', weight: 5, brief: 'looking for friends or a language partner: what they want to talk about, what they can teach in return, an invitation to message them' },
   { key: 'self_intro', weight: 4, brief: 'introducing themself: where they are from, what they study or do, what they like; sometimes as a short list of facts on separate lines (age band, city, a personality trait, hobbies)' },
+  // Staff 2026-11-25: hello posts from someone new (and self-introductions) are the posts that may run longer.
+  { key: 'greeting', weight: 3, brief: 'a hello post from someone new here: greeting everyone, where they are from, what they want to do here (make friends, practice a language), and, when they live outside Korea, when they plan to visit Korea or what they want to do there; ends inviting people to say hi' },
   { key: 'place_request', weight: 3, brief: 'asking about real places or plans: where to go, what to eat or see in a named city or neighborhood, or whether anyone wants to study or talk together' },
   { key: 'photo_caption', weight: 4, brief: 'a caption of a few words for the attached photo, nothing more' },
   // Staff 2026-11-24: a very common post is a good photo of oneself with a two-line intro, mostly without a name.
-  { key: 'photo_intro', weight: 6, brief: 'a photo of themself with a very short self-introduction: only their age and nationality or city, maybe one thing they like or want here, often asking back ("And you?", "where are you from?"); no name; one to three short lines' },
-  { key: 'photo_intro_named', weight: 2.5, brief: 'a photo of themself with a very short self-introduction starting with their first name, then their age and nationality or city, maybe one thing they like, sometimes asking back ("And you?"); one to three short lines' },
+  { key: 'photo_intro', weight: 6, brief: 'a photo of themself with a very short self-introduction: only their age and nationality or city, maybe one thing they like or want here, often asking back ("And you?", "where are you from?"); no name; two to five short lines' },
+  { key: 'photo_intro_named', weight: 2.5, brief: 'a photo of themself with a very short self-introduction starting with their first name, then their age and nationality or city, maybe one thing they like, sometimes asking back ("And you?"); two to five short lines' },
   // Only for accounts outside Korea (pickReserveTopics `korea`): the app is where they meet Koreans.
   { key: 'korea_trip', weight: 0, brief: 'a trip to Korea they are on right now or just came back from: a named spot (a Seoul neighborhood, a palace, a market, a café street, a beach in Busan or Jeju), a Korean dish they tried there, something that surprised them; written by someone who loves Korea' },
   { key: 'korean_study', weight: 0, brief: 'studying Korean: one concrete Korean word, expression, ending or 반말/존댓말 nuance that confused or amused them, a K-drama or K-pop line they looked up, or asking Koreans how they really say something; quote the Korean itself' },
@@ -60,6 +62,9 @@ export const KOREA_TOPIC_WEIGHTS: Readonly<Record<string, number>> = { korea_tri
 /** Topics that always go out with a photo, and the place the photo was taken when it is not the author's city. */
 const PHOTO_TOPICS = new Set(['photo_caption', 'korea_trip', 'korean_friends', 'photo_intro', 'photo_intro_named'])
 const INTRO_TOPICS = new Set(['photo_intro', 'photo_intro_named'])
+/** Self-introductions and hellos: the only posts that may run longer than three short lines (staff, 2026-11-25). */
+const LONG_TOPICS = new Set(['self_intro', 'greeting', 'photo_intro', 'photo_intro_named'])
+const LONG_SHAPE = 'a self-introduction or hello that may run longer than other posts: three to six short lines with line breaks, casual, never a formal letter'
 /**
  * Photo-booth prints (인생네컷) of East and Southeast Asian accounts (staff
  * 2026-11-24: about 3 % of all posts for women, 1 % for men; those accounts
@@ -158,8 +163,8 @@ export const RESERVE_SHAPES: ReadonlyArray<{ key: string; weight: number; brief:
   { key: 'one_liner', weight: 4, brief: 'one short blunt sentence' },
   { key: 'reaction', weight: 2.5, brief: 'a complaint, a groan or an excited outburst about one concrete thing that just happened' },
   { key: 'question', weight: 2, brief: 'only a short direct question, with no lead-in before it' },
-  { key: 'few_lines', weight: 3, brief: 'two or three short sentences that include one concrete detail (a number, a dish, a title, a place)' },
-  { key: 'story', weight: 1.5, brief: 'a loose little story of four to six short lines with line breaks, ending flat or with a small joke rather than a lesson' },
+  { key: 'few_lines', weight: 3, brief: 'one or two short sentences that include one concrete detail (a number, a dish, a title, a place)' },
+  { key: 'story', weight: 1, brief: 'a tiny story in two or three short lines with line breaks, ending flat or with a small joke rather than a lesson' },
   { key: 'list', weight: 0.5, brief: 'a tiny list of two to four items on separate lines, with a few words before it' },
 ]
 
@@ -221,6 +226,7 @@ export function buildReserveInstructions(persona: Pick<ReservePersona, 'language
     'Never a photo of handwriting or study material (a notebook, handwritten notes, flashcards, a textbook or worksheet page): drawn, they look fake. For a study or language post, show something else around it (the café or desk, a drink, the view) or make the post about something else.',
     'People post in wildly different ways, and "poster" is how this one does. It comes first: where it conflicts with the general advice below, "poster" wins. Let the type, length and voice show clearly across the set, so that this person could not be mistaken for another account. Register and punctuation hold in every post; each quirk shows in only about one post in three, never in all of them, and never in the same position twice in a row.',
     'Follow each slot\'s "shape" literally. The shapes differ on purpose: the posts must not share one length, one rhythm or one sentence ending.',
+    'Keep every post short (staff, 2026-11-25): most are a few words or one line, and none runs past three short lines, whatever "poster" says about length. The only exception is a self-introduction or hello post, whose shape says it may run longer (up to six short lines).',
     'What makes a post sound human: it is about one specific thing (the actual dish, the actual title, the number of hours, the exact annoying thing), it starts in the middle without setting the scene, and it does not explain how the writer feels about it.',
     'What makes a post sound machine-written, so never do it: a tidy general statement about what is nice, precious or special; describing a mood or an atmosphere; a reflective conclusion or a lesson; balanced, complete, well-formed sentences one after another; addressing "everyone"; asking a survey-like question about preferences in formal wording; words like "truly", "precious", "special", "moment", "time to" used to wrap up a feeling.',
     'Imperfection is welcome: dropped subjects and particles, a run-on, an abrupt stop, a mild typo once in a while. Mild grumbling, laziness, boredom and self-mockery are more common than gratitude.',
@@ -303,7 +309,7 @@ export async function generateReservePosts(args: {
     return {
       slot: index + 1,
       topic: briefs.get(topic) ?? topic,
-      shape: pickShape(random, profile.shapeFactors).brief,
+      shape: LONG_TOPICS.has(topic) ? LONG_SHAPE : pickShape(random, profile.shapeFactors).brief,
       language,
       photo: booth
         ? { kind: 'self' as const, setup: PHOTO_BOOTH_SETUP }
@@ -391,7 +397,7 @@ export async function rewriteReservePostText(args: {
       'This call rewrites ONE post staff sent back, so "slots" has one slot. Its photo is already decided: "fixedPhoto" describes it. Keep that photo and write a new text that fits it as its caption; copy "fixedPhoto" unchanged into "photo" (empty when there is none).',
       `The input also has "revision": the post's current text ("previousText"). The new text must be clearly different from it in wording and opening${args.feedback ? ', and follow the staff "feedback" first, also where it conflicts with the advice above' : ''}.`,
       'Keep what the post is about (the subject of "previousText" and the photo) unless the staff "feedback" asks for something else; change how it is said.',
-      'Do not copy the register, length or sentence endings of "previousText": staff sent it back, so it may be off. Write it the way this person really posts: usually one to three short lines, not a paragraph.',
+      'Do not copy the register, length or sentence endings of "previousText": staff sent it back, so it may be off. Write it the way this person really posts: usually one to three short lines, not a paragraph (only a self-introduction or hello may run to six short lines).',
       'Register: someone under 40 posting on a social app writes casually. In Korean that means 반말 or short 해요-style endings with ㅋㅋ/ㅠㅠ as the voice allows, never the written -습니다/-ㅂ니다 style; in other languages, the casual phone register of that age.',
       'The input also has "profile": everything on this person\'s profile (gender, age, city and country, bio, the languages they speak and the ones they learn with a level from 1 to 5). The text must be something this exact person would post: their age group\'s everyday register in their own language (a young native speaker types casually to friends, not in polite written style, unless "poster" says otherwise), their life as the bio tells it (job or study, where they live, what they like), their gender, and, when the slot is in a language they learn, that level. Use facts from the bio; never contradict the profile or invent a different life.',
     ].join('\n'),

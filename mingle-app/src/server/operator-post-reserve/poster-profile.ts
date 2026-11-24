@@ -93,7 +93,7 @@ export const POSTER_TYPES: readonly PosterType[] = [
 const LENGTHS = [
   { key: 'terse', ko: '짧게', brief: 'keeps everything shorter than the shape suggests; never more than three lines' },
   { key: 'medium', ko: '보통', brief: 'ordinary length for each shape' },
-  { key: 'long', ko: '길게', brief: 'writes longer than the shape suggests, adding one more detail or aside every time' },
+  { key: 'long', ko: '조금 길게', brief: 'adds one more detail or aside than the shape suggests, still never more than three short lines' },
 ] as const
 
 const REGISTERS = [
@@ -256,7 +256,7 @@ export function learnerPlan(seed: string, nativeLanguage: string): LearnerPlan {
 const MALE_PLAIN_SHARE = 0.55
 const MALE_EARNEST_SHARE = 0.15
 const MALE_NO_EMOJI_SHARE = 0.75
-const EARNEST_LENGTH = { key: 'earnest', ko: '진지하게 길게', brief: 'when they post, writes long and earnest: several full sentences that explain what they think and why, no jokes, no emoji' } as const
+const EARNEST_LENGTH = { key: 'earnest', ko: '진지하게 길게', brief: 'when they post, writes earnest: two or three full sentences that say what they think and why, no jokes, no emoji' } as const
 
 function forMen(profile: PosterProfile, seed: string): PosterProfile {
   const random = seeded(`poster-male:${seed}`)
