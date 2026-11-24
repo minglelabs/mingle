@@ -1,5 +1,5 @@
 import type { MessageReadReceiptMember } from '@/lib/message-read-receipts'
-import { MESSAGE_RECALLED_AT_METADATA_KEY } from '@/lib/message-recall'
+import { MESSAGE_RECALLED_AT_METADATA_KEY, readMessageRecalledAtMs } from '@/lib/message-recall'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import {
@@ -11,6 +11,7 @@ import {
 import { sanitizeSttLanguageSelection } from '@/lib/stt-languages'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import { writeAdminAudit } from '@/server/admin/audit'
+import { recallMessageForEveryone } from '@/server/message-recall'
 import type { AdminContext } from '@/server/admin/guard'
 import { USER_IDENTITY_SELECT, identityBadgeFlags, type IdentityBadgeFlags } from '@/server/identity/user-identity-select'
 import { OperatorAccountRequiredError } from '@/server/operators/operator-guard'
@@ -927,6 +928,46 @@ export async function markInboxRoomRead(args: {
     targetId: access.room.conversationId,
   })
   return { ok: true, operatorUserId }
+}
+
+export type InboxDeleteMessageError = InboxRoomAccessError | 'message_not_found' | 'not_operator_message'
+
+/**
+ * Staff delete a message an operator account sent in this room, for everyone:
+ * the app's own "전송 취소", done as that operator (staff, 2026-11-24). Only
+ * an operator member's message; a real user's message stays theirs. Already
+ * unsent counts as done. Audited.
+ */
+export async function deleteInboxOperatorMessage(args: {
+  ctx: AdminContext
+  conversationId: string
+  messageId: string
+}): Promise<{ ok: true; messageId: string; rewritePush: (() => Promise<void>) | null } | { ok: false; error: InboxDeleteMessageError }> {
+  const access = await resolveInboxRoomAccess({ conversationId: args.conversationId })
+  if (!access.ok) return access
+  const message = await prisma.appMessage.findFirst({
+    where: { id: args.messageId, sessionKey: access.room.sessionKey },
+    select: { id: true, userId: true, clientMessageId: true, isDeleted: true, metadata: true, createdAt: true },
+  })
+  if (!message) return { ok: false, error: 'message_not_found' }
+  const sender = access.room.operators.find((operator) => operator.userId === message.userId)
+  if (!sender || !message.userId) return { ok: false, error: 'not_operator_message' }
+  if (readMessageRecalledAtMs(message.metadata) !== null) return { ok: true, messageId: message.id, rewritePush: null }
+  if (message.isDeleted) return { ok: false, error: 'message_not_found' }
+
+  const { rewritePush } = await recallMessageForEveryone({
+    message,
+    sessionKey: access.room.sessionKey,
+    senderUserId: message.userId,
+  })
+  await writeAdminAudit(args.ctx, {
+    action: 'inbox.delete_message',
+    operatorUserId: message.userId,
+    targetType: 'conversation',
+    targetId: access.room.conversationId,
+    metadata: { messageId: message.id },
+  })
+  return { ok: true, messageId: message.id, rewritePush }
 }
 
 /** First page of the inbox plus the operator chips and the unread total, for the list page and its API. */
