@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import sharp from "sharp";
 
 const {
   mockGetServerSession,
@@ -58,8 +59,27 @@ function makeRequest(file: File, crop = { scale: "2", x: "0.25", y: "-0.1" }) {
   });
 }
 
-function makeImageFile(type = "image/png", size = 3) {
-  return new File([new Uint8Array(size).fill(7)], "avatar.png", { type });
+let validImageBuffer: Buffer;
+
+beforeAll(async () => {
+  validImageBuffer = await sharp({
+    create: {
+      width: 16,
+      height: 16,
+      channels: 4,
+      background: { r: 255, g: 0, b: 0, alpha: 1 },
+    },
+  })
+    .png()
+    .toBuffer();
+});
+
+function makeValidImageFile(type = "image/png") {
+  return new File([new Uint8Array(validImageBuffer)], "avatar.png", { type });
+}
+
+function makeCorruptedImageFile(type = "image/png") {
+  return new File([new Uint8Array([7, 7, 7])], "avatar.png", { type });
 }
 
 describe("/api/profile/image route", () => {
@@ -80,7 +100,7 @@ describe("/api/profile/image route", () => {
   it("requires an authenticated session", async () => {
     mockGetServerSession.mockResolvedValue(null);
 
-    const response = await POST(makeRequest(makeImageFile()));
+    const response = await POST(makeRequest(makeValidImageFile()));
 
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({ error: "unauthorized" });
@@ -88,7 +108,15 @@ describe("/api/profile/image route", () => {
   });
 
   it("rejects unsupported image types", async () => {
-    const response = await POST(makeRequest(makeImageFile("image/gif")));
+    const response = await POST(makeRequest(makeValidImageFile("image/gif")));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "invalid_image" });
+    expect(mockPutProfileImage).not.toHaveBeenCalled();
+  });
+
+  it("rejects corrupted or unparseable image files with 400 invalid_image", async () => {
+    const response = await POST(makeRequest(makeCorruptedImageFile()));
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: "invalid_image" });
@@ -96,7 +124,7 @@ describe("/api/profile/image route", () => {
   });
 
   it("rejects crop values outside the supported range", async () => {
-    const response = await POST(makeRequest(makeImageFile(), { scale: "5", x: "0", y: "0" }));
+    const response = await POST(makeRequest(makeValidImageFile(), { scale: "5", x: "0", y: "0" }));
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: "invalid_image_crop" });
@@ -113,7 +141,7 @@ describe("/api/profile/image route", () => {
       imageCropY: -0.1,
     });
 
-    const response = await POST(makeRequest(makeImageFile()));
+    const response = await POST(makeRequest(makeValidImageFile()));
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
@@ -124,15 +152,15 @@ describe("/api/profile/image route", () => {
       imageCropY: -0.1,
     });
     expect(mockPutProfileImage).toHaveBeenCalledWith(expect.objectContaining({
-      objectKey: expect.stringMatching(/^profiles\/user_123\/.+\.png$/),
-      contentType: "image/png",
+      objectKey: expect.stringMatching(/^profiles\/user_123\/.+\.jpg$/),
+      contentType: "image/jpeg",
       body: expect.any(Uint8Array),
     }));
     expect(mockUserUpdate).toHaveBeenCalledWith({
       where: { id: "user_123" },
       data: {
         image: "https://images.example.com/profiles/user_123/new.png",
-        imageObjectKey: expect.stringMatching(/^profiles\/user_123\/.+\.png$/),
+        imageObjectKey: expect.stringMatching(/^profiles\/user_123\/.+\.jpg$/),
         imageCropScale: 2,
         imageCropX: 0.25,
         imageCropY: -0.1,
@@ -145,7 +173,7 @@ describe("/api/profile/image route", () => {
   it("reports a missing R2 configuration without changing the profile", async () => {
     mockPutProfileImage.mockRejectedValue(new Error("profile_image_storage_not_configured"));
 
-    const response = await POST(makeRequest(makeImageFile()));
+    const response = await POST(makeRequest(makeValidImageFile()));
 
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ error: "image_storage_not_configured" });
