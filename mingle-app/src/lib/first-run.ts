@@ -76,10 +76,33 @@ export function clearDiscoveryPromptDue(storage: FirstRunStorage | null = resolv
  */
 export function shouldOpenConversationsInsteadOfFeed(input: {
   isNativeApp: boolean
+  /** The page was loaded on the feed (the app launched there), not reached by a tab tap or back. */
+  launchedOnFeed: boolean
   onboardingConfirmed: boolean
   firstSpeakPending: boolean
   hasPostTarget: boolean
 }): boolean {
-  if (!input.isNativeApp || input.hasPostTarget) return false
+  if (!input.isNativeApp || input.hasPostTarget || !input.launchedOnFeed) return false
   return !input.onboardingConfirmed || input.firstSpeakPending
+}
+
+/**
+ * True when this document was loaded on the feed, i.e. the app opened there.
+ * The Home tab, back from a profile, or a page loaded elsewhere first is not a
+ * launch onto the feed and must never be sent to the conversation list.
+ * Without a navigation entry (old WebViews), the current path decides.
+ */
+export function isDocumentLoadedOnFeed(
+  documentUrl: string | null | undefined,
+  currentPathname: string,
+): boolean {
+  let pathname = currentPathname
+  if (documentUrl) {
+    try {
+      pathname = new URL(documentUrl).pathname
+    } catch {
+      // Keep the current path.
+    }
+  }
+  return /^\/[^/]+\/feed\/?$/.test(pathname)
 }
