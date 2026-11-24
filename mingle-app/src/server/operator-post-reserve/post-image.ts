@@ -88,8 +88,8 @@ export function buildPostImagePrompt(
 
 export type PostImageStyle = 'photo' | 'anime'
 
-/** Staff like 2D pictures (2026-11): an account with an anime-style profile picture mostly posts drawings too. */
-const ANIME_ACCOUNT_SHARE = 0.6
+/** An account with an anime-style profile picture posts a drawing now and then; staff found all-drawing feeds tiresome (2026-11-24). */
+const ANIME_ACCOUNT_SHARE = 0.1
 /** Everyone else now and then shares a drawing of a scene, never of themselves. */
 const ANIME_SCENE_SHARE = 0.05
 
@@ -209,6 +209,9 @@ export async function reservePostPerson(operatorUserId: string, style: PostImage
     const reference = character && user?.image ? await fetchReference(user.image) : null
     return { person: { look: describeAccountLook(persona, seededRandom(`${operatorUserId}:look`)), hasReference: Boolean(reference), gender: persona.gender }, reference }
   }
+  // An anime profile picture is no photo of the poster, and an earlier anime post would turn the
+  // photo into a drawing (staff 2026-11-24): their photos get no attached picture at all.
+  if (isAnimeSpec(spec)) return { person: { look: describeAccountLook(persona, seededRandom(`${operatorUserId}:look`)), hasReference: false, gender: persona.gender }, reference: null }
   const subject = specSubject(spec)
   let reference: AvatarReference | null = null
   if (subject && user?.image) reference = await fetchReference(user.image)

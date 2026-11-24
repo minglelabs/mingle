@@ -109,7 +109,7 @@ describe('anime-style post pictures', () => {
       for (let index = 0; index < 2000; index += 1) if (pickPostImageStyle(spec, kind, () => (index + 0.5) / 2000) === 'anime') drawn += 1
       return drawn / 2000
     }
-    expect(share(anime, 'self')).toBeCloseTo(0.6, 2)
+    expect(share(anime, 'self')).toBeCloseTo(0.1, 2)
     expect(share(photo, 'scene')).toBeCloseTo(0.05, 2)
     expect(share(photo, 'self')).toBe(0)
   })

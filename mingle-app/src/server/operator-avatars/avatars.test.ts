@@ -77,7 +77,7 @@ describe('avatar taxonomy', () => {
     expect(faces / photos).toBeLessThan(0.9)
     // Korean accounts hide the face more, but still show it in most photos.
     const kr = sampleCategories(korean, 2000)
-    expect(((kr.get('face') ?? 0) + (kr.get('partial') ?? 0)) / (2000 - (kr.get('other') ?? 0))).toBeGreaterThan(0.55)
+    expect(((kr.get('face') ?? 0) + (kr.get('partial') ?? 0)) / (2000 - (kr.get('other') ?? 0))).toBeGreaterThan(0.5)
     for (const { key } of AVATAR_CATEGORIES) expect(seen.get(key) ?? 0).toBeGreaterThan(0)
   })
 
@@ -447,11 +447,11 @@ describe('describeFace', () => {
 })
 
 describe('anime-style profile pictures', () => {
-  it('are about one in five, mostly the account\'s own gender, sometimes a pet or a thing', () => {
+  it('are about one in seven, mostly the account\'s own gender, sometimes a pet or a thing', () => {
     const male = { ...american, gender: 'male' as const }
     const anime = Array.from({ length: 3000 }, (_, index) => pickAvatarSpec(male, seededRandom(`anime:${index}`))).filter((spec) => spec.subtype === 'anime_icon')
-    expect(anime.length / 3000).toBeGreaterThan(0.15)
-    expect(anime.length / 3000).toBeLessThan(0.3)
+    expect(anime.length / 3000).toBeGreaterThan(0.11)
+    expect(anime.length / 3000).toBeLessThan(0.2)
     const subjects = new Set(anime.map((spec) => spec.attributes.animeSubject))
     expect([...subjects].sort()).toEqual(['cat', 'critter', 'dog', 'landscape', 'object', 'person'])
     for (const spec of anime.filter((item) => item.attributes.animeSubject === 'person')) expect(spec.prompt).toMatch(/young man/)
@@ -461,7 +461,7 @@ describe('anime-style profile pictures', () => {
     const male = { ...american, gender: 'male' as const }
     const people = Array.from({ length: 3000 }, (_, index) => pickAvatarSpec(male, seededRandom(`anime-variety:${index}`)))
       .filter((spec) => spec.subtype === 'anime_icon' && spec.attributes.animeSubject === 'person')
-    expect(people.length).toBeGreaterThan(400)
+    expect(people.length).toBeGreaterThan(250)
     const distinct = (axis: string) => new Set(people.map((spec) => spec.attributes[axis])).size
     expect(distinct('animeStyle')).toBeGreaterThanOrEqual(12)
     expect(distinct('animePalette')).toBeGreaterThanOrEqual(10)
@@ -497,5 +497,17 @@ describe('good-looking accounts', () => {
     expect(share('striking')).toBeGreaterThan(0.42)
     expect(share('striking')).toBeLessThan(0.58)
     expect(share('ordinary')).toBeLessThan(0.18)
+  })
+})
+
+describe('profile mix (staff 2026-11-24)', () => {
+  it('has scenery, solid-color and fan pictures, and fan pictures never show a recognizable face', () => {
+    const korean = { ...american, countryCode: 'KR', gender: 'female' as const }
+    const specs = Array.from({ length: 4000 }, (_, index) => pickAvatarSpec(korean, seededRandom(`mix:${index}`)))
+    const share = (test: (spec: (typeof specs)[number]) => boolean) => specs.filter(test).length / specs.length
+    expect(share((spec) => spec.category === 'scenery' && spec.subtype !== 'fan_concert')).toBeGreaterThan(0.02)
+    expect(share((spec) => spec.subtype === 'solid_color')).toBeGreaterThan(0.02)
+    expect(share((spec) => spec.subtype === 'fan_goods' || spec.subtype === 'fan_concert')).toBeGreaterThan(0.02)
+    for (const spec of specs.filter((item) => item.subtype.startsWith('fan_'))) expect(spec.prompt).toMatch(/unrecognizable|no face can be made out/)
   })
 })
