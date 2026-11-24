@@ -14,9 +14,11 @@ import {
 } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
 import { buildClientApiPath } from "@/lib/api-contract";
 import {
+  clearPendingBio,
   clearPendingHeight,
   clearPendingPhoto,
   dataUrlToFile,
+  readPendingBio,
   readPendingFaceSimilarity,
   readPendingHeight,
   readPendingPhoto,
@@ -28,6 +30,8 @@ type ProfileSnapshot = {
   heightCm?: number | null;
   interestLanguages?: unknown;
   imageObjectKey?: string | null;
+  bio?: string | null;
+  bioDraft?: string | null;
 };
 
 /**
@@ -49,7 +53,8 @@ export default function PendingProfileSync() {
     const interestLanguages = readPendingInterestLanguages();
     const discoverySource = readPendingDiscoverySource();
     const photo = readPendingPhoto();
-    if (!gender && !birthDate && !heightCm && interestLanguages.length === 0 && !discoverySource && !photo) return;
+    const bio = readPendingBio();
+    if (!gender && !birthDate && !heightCm && interestLanguages.length === 0 && !discoverySource && !photo && !bio) return;
     doneFor.current = userId;
 
     void (async () => {
@@ -66,6 +71,7 @@ export default function PendingProfileSync() {
         if (heightCm && !profile.heightCm) patch.heightCm = heightCm;
         const hasInterest = Array.isArray(profile.interestLanguages) && profile.interestLanguages.length > 0;
         if (interestLanguages.length > 0 && !hasInterest) patch.interestLanguages = interestLanguages;
+        if (bio && !profile.bioDraft?.trim() && !profile.bio?.trim()) patch.bio = bio.slice(0, 160);
         if (Object.keys(patch).length > 0) {
           const saved = await fetch(buildClientApiPath("/profile"), {
             method: "PATCH",
@@ -81,6 +87,7 @@ export default function PendingProfileSync() {
         clearPendingBirthDate();
         clearPendingHeight();
         clearPendingInterestLanguages();
+        clearPendingBio();
 
         // Asked once; its own request so a refused value never blocks the rest.
         if (discoverySource) {

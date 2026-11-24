@@ -35,7 +35,8 @@ describe('profile height', () => {
 
   it('is wired: the step only for men, saved by the gate, shown on profiles', () => {
     const modal = read('../components/LivePhoneDemo/LanguageOnboardingModal.tsx')
-    expect(modal).toContain('entry !== "height" || gender === "male" || !baseSteps.includes("gender")')
+    // Height and the self-introduction (2026-11-25): men only.
+    expect(modal).toContain('(entry !== "height" && entry !== "bio") || gender === "male" || !baseSteps.includes("gender")')
     expect(read('../components/profile-basics-gate.tsx')).toContain('body.heightCm = payload.heightCm')
     expect(read('../app/api/profile/route.ts')).toContain('error: "invalid_height"')
     expect(read('../components/profile-gender-age-badge.tsx')).toContain('data-qa="profile-height"')
@@ -59,5 +60,18 @@ describe('profile height', () => {
     expect(read('../app/api/users/discover/route.ts')).toContain('isFollowing: user.followerRelations.length > 0')
     // The card's Message goes through the same first-message setup as the profile's.
     expect(read('./use-start-direct-conversation.ts')).toContain('requestFirstMessageSetup(needs)')
+  })
+
+  // Owner, 2026-11-25: sign-up needs a face-verified photo (no "later"), and men a 20+ character self-introduction.
+  it('asks a face-verified photo of everyone and a self-introduction of men before sign-up', async () => {
+    const { BIO_MIN_LENGTH, bioLength } = await import('@/lib/pending-profile-extras')
+    expect(BIO_MIN_LENGTH).toBe(20)
+    expect(bioLength('  안녕하세요 😀  ')).toBe(7)
+    const modal = readFileSync(new URL('../components/LivePhoneDemo/LanguageOnboardingModal.tsx', import.meta.url), 'utf8')
+    expect(modal).toContain('target === "profile-photo" ? Boolean(photoDataUrl) && faceVerified')
+    expect(modal).toContain('target === "bio" ? bioLength(bio) >= BIO_MIN_LENGTH')
+    expect(modal).not.toContain('onboarding-photo-skip')
+    const sync = readFileSync(new URL('../components/pending-profile-sync.tsx', import.meta.url), 'utf8')
+    expect(sync).toContain('patch.bio = bio.slice(0, 160)')
   })
 })

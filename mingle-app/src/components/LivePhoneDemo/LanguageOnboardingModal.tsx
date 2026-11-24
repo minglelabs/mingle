@@ -17,9 +17,13 @@ import KoreaVisitCalendar from "@/components/onboarding/korea-visit-calendar";
 import { resolveOnboardingExtraCopy } from "@/i18n/onboarding-extra-copy";
 import { canAskMicPermission, requestMicPermission, type MicPermissionResult } from "@/lib/mic-permission";
 import {
+  BIO_MIN_LENGTH,
+  bioLength,
+  readPendingBio,
   readPendingFaceSimilarity,
   readPendingPhoto,
   squarePhotoDataUrl,
+  writePendingBio,
   writePendingFaceSimilarity,
   writePendingHeight,
   writePendingPhoto,
@@ -120,7 +124,7 @@ interface LanguageOnboardingModalProps {
   onConfirm: (payload: LanguageOnboardingConfirmPayload) => void | Promise<void>;
 }
 
-export type OnboardingStep = "language" | "nationality" | "korea-visit" | "interest-language" | "profile-photo" | "voice-intro" | "usage-purpose" | "discovery-source" | "gender" | "birth-date" | "height";
+export type OnboardingStep = "language" | "bio" | "nationality" | "korea-visit" | "interest-language" | "profile-photo" | "voice-intro" | "usage-purpose" | "discovery-source" | "gender" | "birth-date" | "height";
 
 // "korea-visit": only after "no, not Korean" (owner, 2026-11-23; see @/lib/korea-visit).
 // "interest-language": asked up front (owner, 2026-11-23), not later on the feed;
@@ -133,8 +137,10 @@ export type OnboardingStep = "language" | "nationality" | "korea-visit" | "inter
 // Korea is the old "yes", anything else the old "no".
 export const FIRST_RUN_ONBOARDING_STEPS: readonly OnboardingStep[] = [
   "language", "nationality", "korea-visit", "interest-language",
-  "gender", "height", "birth-date", "profile-photo", "discovery-source", "voice-intro",
+  "gender", "height", "birth-date", "profile-photo", "bio", "discovery-source", "voice-intro",
 ];
+// Sign-up needs a face-verified photo (no "later"), and men also a
+// self-introduction of BIO_MIN_LENGTH+ characters (owner, 2026-11-25).
 // An invite already says where they came from (a friend).
 export const INVITE_ONBOARDING_STEPS: readonly OnboardingStep[] = FIRST_RUN_ONBOARDING_STEPS.filter(
   (entry) => entry !== "discovery-source",
@@ -184,11 +190,12 @@ export default function LanguageOnboardingModal({
   const [micAsking, setMicAsking] = useState(false);
   // A wheel like the birth date, starting at a typical height (no keyboard).
   const [heightCm, setHeightCm] = useState<number>(DEFAULT_HEIGHT_CM);
+  const [bio, setBio] = useState(() => readPendingBio() ?? "");
   // Height is asked of men only: when the gender is asked in this same run the
   // step appears once "male" is picked; asked alone, the caller already knows.
   const steps = useMemo(
     () => baseSteps.filter((entry) => (
-      (entry !== "height" || gender === "male" || !baseSteps.includes("gender"))
+      ((entry !== "height" && entry !== "bio") || gender === "male" || !baseSteps.includes("gender"))
       && (entry !== "korea-visit" || koreanAnswer === "no")
     )),
     [baseSteps, gender, koreanAnswer],
@@ -425,7 +432,8 @@ export default function LanguageOnboardingModal({
     target === "language" ? true
       : target === "nationality" ? Boolean(nationality)
       : target === "korea-visit" ? Boolean(koreaVisit.start && koreaVisit.end)
-      : target === "profile-photo" ? Boolean(photoDataUrl)
+      : target === "profile-photo" ? Boolean(photoDataUrl) && faceVerified
+      : target === "bio" ? bioLength(bio) >= BIO_MIN_LENGTH
       : target === "voice-intro" ? true
       : target === "interest-language" ? Boolean(interestCode)
       : target === "usage-purpose" ? Boolean(usagePurpose)
@@ -441,6 +449,7 @@ export default function LanguageOnboardingModal({
     const asked = (target: OnboardingStep) => steps.includes(target);
     // Kept on the device until the account exists (PendingProfileSync saves it).
     if (asked("voice-intro")) writePendingHeight(asked("height") ? heightCm : null);
+    if (asked("voice-intro")) writePendingBio(asked("bio") ? bio : null);
     setIsConfirming(true);
     try {
       await onConfirm({
@@ -558,7 +567,7 @@ export default function LanguageOnboardingModal({
     // The last screen waits for the footer button instead of finishing on a tap.
     if (isLastStep) return;
     const nextSteps = baseSteps.filter((entry) => (
-      (entry !== "height" || nextGender === "male" || !baseSteps.includes("gender"))
+      ((entry !== "height" && entry !== "bio") || nextGender === "male" || !baseSteps.includes("gender"))
       && (entry !== "korea-visit" || koreanAnswer === "no")
     ));
     const next = nextSteps[nextSteps.indexOf("gender") + 1];
@@ -839,15 +848,6 @@ export default function LanguageOnboardingModal({
                 {extraCopy.photoTitle}
               </h2>
               <p className="text-[0.92rem] leading-snug text-slate-500">{extraCopy.photoDescription}</p>
-              <button
-                type="button"
-                data-qa="onboarding-photo-skip"
-                disabled={isConfirming}
-                onClick={skipCurrentStep}
-                className="pt-0.5 text-[0.85rem] font-medium text-slate-500 underline underline-offset-4"
-              >
-                {extraCopy.photoSkip}
-              </button>
             </div>
           ) : step === "voice-intro" ? (
             <div className="space-y-3 px-6 pb-4 pt-2 text-left">
@@ -885,6 +885,16 @@ export default function LanguageOnboardingModal({
               <p className="text-[0.85rem] leading-relaxed text-slate-500">
                 {heightCopy.hint}
               </p>
+            </div>
+          ) : step === "bio" ? (
+            <div className="space-y-2 px-6 pb-4 pt-0 text-center">
+              <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
+                {extraCopy.bioLabel}
+              </p>
+              <h2 id={titleId} className="text-[1.6rem] font-extrabold leading-tight tracking-[-0.02em] text-slate-950">
+                {extraCopy.bioTitle}
+              </h2>
+              <p className="text-[0.92rem] leading-snug text-slate-500">{extraCopy.bioDescription}</p>
             </div>
           ) : step === "birth-date" ? (
             <div className="space-y-2 px-6 pb-4 pt-0 text-center">
@@ -1084,7 +1094,7 @@ export default function LanguageOnboardingModal({
                   data-qa="onboarding-face-check"
                   disabled={isConfirming}
                   onClick={() => setSelfieOpen(true)}
-                  className="text-[0.9rem] font-semibold text-amber-600 underline underline-offset-4"
+                  className="rounded-full bg-slate-950 px-6 py-3 text-[0.98rem] font-bold text-white active:scale-[0.98]"
                 >
                   {extraCopy.faceCheck}
                 </button>
@@ -1160,6 +1170,28 @@ export default function LanguageOnboardingModal({
             <div data-qa="onboarding-height">
               <ProfileHeightWheel value={heightCm} onChange={setHeightCm} />
             </div>
+          </div>
+        ) : step === "bio" ? (
+          <div
+            className="flex flex-1 flex-col overflow-y-auto px-6 py-2"
+            style={{ paddingBottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))" }}
+          >
+            <textarea
+              data-qa="onboarding-bio"
+              value={bio}
+              disabled={isConfirming}
+              maxLength={160}
+              rows={5}
+              onChange={(event) => setBio(event.target.value)}
+              placeholder={extraCopy.bioPlaceholder}
+              className="w-full resize-none rounded-[18px] border border-[#e6dfd2] bg-white px-4 py-3.5 text-[1rem] leading-relaxed text-slate-900 shadow-[0_8px_24px_rgba(15,23,42,0.05)] outline-none placeholder:text-slate-400 focus:border-amber-400"
+            />
+            <p
+              data-qa="onboarding-bio-count"
+              className={`mt-2 text-right text-[0.85rem] font-semibold tabular-nums ${bioLength(bio) >= BIO_MIN_LENGTH ? "text-emerald-600" : "text-slate-400"}`}
+            >
+              {extraCopy.bioCount.replace("{count}", String(Math.min(bioLength(bio), BIO_MIN_LENGTH)))}
+            </p>
           </div>
         ) : step === "birth-date" ? (
           <div

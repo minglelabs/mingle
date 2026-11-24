@@ -19,7 +19,7 @@ describe('Korean sign-up: asked, phone first, then the contact sync', () => {
     // "korea-visit" shows only for a country other than Korea (the modal filters it).
     expect(FIRST_RUN_ONBOARDING_STEPS).toEqual([
       'language', 'nationality', 'korea-visit', 'interest-language',
-      'gender', 'height', 'birth-date', 'profile-photo', 'discovery-source', 'voice-intro',
+      'gender', 'height', 'birth-date', 'profile-photo', 'bio', 'discovery-source', 'voice-intro',
     ])
     expect(INVITE_ONBOARDING_STEPS.slice(0, 4)).toEqual(['language', 'nationality', 'korea-visit', 'interest-language'])
     expect(INVITE_ONBOARDING_STEPS).not.toContain('discovery-source')

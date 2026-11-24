@@ -8,6 +8,43 @@ const HEIGHT_KEY = "mingle.pending.heightCm.v1";
 const PHOTO_KEY = "mingle.pending.profilePhoto.v1";
 // The selfie check passed against the pending photo (its similarity score).
 const FACE_KEY = "mingle.pending.faceSimilarity.v1";
+// Men's self-introduction (owner, 2026-11-25).
+const BIO_KEY = "mingle.pending.bio.v1";
+
+/** The shortest self-introduction a man can sign up with. */
+export const BIO_MIN_LENGTH = 20;
+
+/** Characters as people count them (an emoji or a Hangul syllable is one). */
+export function bioLength(text: string): number {
+  return Array.from(text.trim()).length;
+}
+
+export function writePendingBio(text: string | null): void {
+  try {
+    const value = text?.trim() ?? "";
+    if (value) storage()?.setItem(BIO_KEY, value);
+    else storage()?.removeItem(BIO_KEY);
+  } catch {
+    // Written again on My page.
+  }
+}
+
+export function readPendingBio(): string | null {
+  try {
+    const value = storage()?.getItem(BIO_KEY)?.trim() ?? "";
+    return value || null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearPendingBio(): void {
+  try {
+    storage()?.removeItem(BIO_KEY);
+  } catch {
+    // Harmless: the profile already has one.
+  }
+}
 
 function storage(): Storage | null {
   try {
