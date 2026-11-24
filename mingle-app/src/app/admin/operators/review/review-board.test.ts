@@ -18,7 +18,7 @@ const profileItem: ReviewItem = {
   pinned: false,
   profile: {
     userId: 'u1', name: '민아', handle: 'mina', image: null, bio: '안녕하세요', age: 27, city: 'Seoul', country: 'KR',
-    primaryLanguages: ['ko'], interestLanguages: [], personaGender: 'female', profileState: 'pending', profileFeedback: null,
+    primaryLanguages: ['ko'], interestLanguages: [], personaGender: 'female', profileState: 'pending', profileFeedback: null, candidate: null,
   },
 }
 

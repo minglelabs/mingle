@@ -90,6 +90,27 @@ describe('reviewOperatorProfile', () => {
     expect(mocks.userDelete).not.toHaveBeenCalled()
   })
 
+  it('draws a live account\'s new photo for review without touching the account or its current photo', async () => {
+    mocks.canDraw.mockReturnValue(true)
+    mocks.accountFindUnique.mockResolvedValue({ ...PENDING_ACCOUNT, reviewState: 'approved', pendingImage: null, pendingDrawingAt: null })
+    mocks.drawAvatar.mockResolvedValue({ ok: true, image: 'https://img/new.jpg' })
+    await expect(reviewOperatorProfile(null, 'op1', 'regenerate', '밝게')).resolves.toEqual({ ok: true, state: 'drawing' })
+    expect(mocks.accountUpdate).toHaveBeenCalledWith({ where: { userId: 'op1' }, data: expect.objectContaining({ reviewFeedback: '밝게', pendingDrawingAt: expect.any(Date) }) })
+    await vi.waitFor(() => expect(mocks.drawAvatar).toHaveBeenCalledWith(null, 'op1', expect.objectContaining({ candidate: true, feedback: '밝게' })))
+    expect(mocks.userUpdate).not.toHaveBeenCalled()
+    expect(mocks.userDelete).not.toHaveBeenCalled()
+    mocks.canDraw.mockReturnValue(false)
+  })
+
+  it('takes a live account\'s new photo only when staff publish it', async () => {
+    mocks.accountFindUnique.mockResolvedValue({
+      ...PENDING_ACCOUNT, reviewState: 'approved', pendingImage: 'https://img/new.jpg', pendingImageObjectKey: 'profiles/op1/new.jpg',
+      pendingAvatarSpec: { category: 'face' }, pendingDrawingAt: null, user: { isOperator: true, isDeleted: false, imageObjectKey: 'profiles/op1/old.jpg' },
+    })
+    await expect(reviewOperatorProfile(null, 'op1', 'publish', null)).resolves.toEqual({ ok: true, state: 'approved', image: 'https://img/new.jpg' })
+    expect(mocks.userUpdate).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'op1' }, data: expect.objectContaining({ image: 'https://img/new.jpg', imageObjectKey: 'profiles/op1/new.jpg' }) }))
+  })
+
   it('leaves the new photo, with the feedback, to be drawn by hand', async () => {
     mocks.accountFindUnique.mockResolvedValue(PENDING_ACCOUNT)
     mocks.generateAvatar.mockResolvedValue({ prompt: 'a photo' })

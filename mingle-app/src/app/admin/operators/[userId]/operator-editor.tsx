@@ -102,7 +102,7 @@ export function OperatorEditor({
   const [message, setMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
   const [photo, setPhoto] = useState<{ status: 'idle' | 'uploading' | 'failed'; error?: string }>({ status: 'idle' })
   const [copied, setCopied] = useState(false)
-  const [aiBusy, setAiBusy] = useState<ProfileAiScope | 'photo' | null>(null)
+  const [aiBusy, setAiBusy] = useState<ProfileAiScope | 'photo' | 'review' | null>(null)
 
   const baseline = useMemo(() => detailToValues(account), [account])
   const patch = useMemo(
@@ -303,6 +303,21 @@ export function OperatorEditor({
     if (done) setMessage({ tone: 'success', text: '새 프로필 사진으로 바꿨습니다.' })
   }
 
+  /** A live account: a new photo is drawn and waits in the review queue; the current one stays until staff take it there. */
+  const photoToReview = async () => {
+    if (aiBusy || saving) return
+    if (!window.confirm('새 프사를 AI로 그려서 검수에 올립니다. 검수에서 \'새 프사로\'를 누를 때까지 지금 프사는 그대로입니다.')) return
+    setAiBusy('review')
+    setMessage(null)
+    const started = await sendJson<{ state: string }>('/admin/operators/api/review', { kind: 'profile', id: account.id, action: 'regenerate' })
+    setAiBusy(null)
+    if (!started.ok) {
+      setMessage({ tone: 'error', text: requestErrorMessage(started.error) })
+      return
+    }
+    setMessage({ tone: 'success', text: '새 프사를 그리는 중입니다(30초~2분). 다 그려지면 검수 화면의 계정 탭에 올라옵니다.' })
+  }
+
   /** 전체: a new profile and bio, saved right away, then a photo drawn for the new profile. */
   const remakeAll = async () => {
     if (aiBusy || saving) return
@@ -419,8 +434,14 @@ export function OperatorEditor({
             </button>
           ))}
         </div>
+        {account.isActive ? (
+          <button type="button" className={`${SECONDARY_BUTTON} mt-2 w-full px-2`} onClick={photoToReview} disabled={Boolean(aiBusy) || saving}>
+            {aiBusy === 'review' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+            새 프사 그려서 검수에 올리기
+          </button>
+        ) : null}
         <p className="mt-2 text-xs leading-5 text-slate-500">
-          소개글만·소개글·프사 빼고는 칸만 채우고 저장은 직접 누릅니다. 프사만·전체는 바로 반영됩니다(저장 안 한 수정이 있으면 먼저 저장).
+          소개글만·소개글·프사 빼고는 칸만 채우고 저장은 직접 누릅니다. 프사만·전체는 바로 반영됩니다(저장 안 한 수정이 있으면 먼저 저장). 검수에 올린 새 프사는 검수에서 고를 때까지 지금 프사가 그대로입니다.
         </p>
       </section>
 
