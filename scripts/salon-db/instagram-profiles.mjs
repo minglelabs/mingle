@@ -44,7 +44,7 @@ const closeChrome = async () => {
   } catch {}
   chromeProc?.kill();
 };
-const page = ctx.pages()[0] || (await ctx.newPage());
+let page = ctx.pages()[0] || (await ctx.newPage());
 
 async function ensureLogin() {
   await page.goto('https://www.instagram.com/', { waitUntil: 'domcontentloaded' });
@@ -74,6 +74,8 @@ async function scrape(handle) {
       jsons.push(await r.json());
     } catch {}
   };
+  // 로그인 중 탭이 바뀌거나 닫히면 살아 있는 탭으로 갈아탄다
+  if (page.isClosed()) page = ctx.pages().find((p) => !p.isClosed()) || (await ctx.newPage());
   page.on('response', onResp);
   try {
     await page.goto(`https://www.instagram.com/${handle}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
