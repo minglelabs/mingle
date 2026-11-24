@@ -18,6 +18,9 @@ const nextConfig = {
     ignoreBuildErrors: process.env.MINGLE_SKIP_BUILD_TYPECHECK === "1",
   },
   experimental: {
+    // The proxy cuts request bodies at 10MB by default, which broke uploads of
+    // big reference photos (/admin/operators/api/references, up to 30MB).
+    proxyClientMaxBodySize: "32mb",
     staleTimes: {
       // How long a fully prefetched route stays usable without a server
       // round-trip. The native tab bar prefetches its tab roots (which carry no

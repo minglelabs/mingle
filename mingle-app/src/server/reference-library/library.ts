@@ -15,7 +15,7 @@ import type { ReferenceAttributes } from './classify'
  */
 export const REFERENCE_LIBRARY_KEY = 'reference_library'
 const OBJECT_PREFIX = 'post-images/reference-library'
-export const REFERENCE_MAX_BYTES = 15 * 1024 * 1024
+export const REFERENCE_MAX_BYTES = 30 * 1024 * 1024
 export const REFERENCE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'] as const
 
 export type ReferenceGender = 'female' | 'male'
