@@ -18,9 +18,22 @@ export const REFERENCE_MAX_BYTES = 15 * 1024 * 1024
 export const REFERENCE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'] as const
 
 export type ReferenceGender = 'female' | 'male'
-/** face: a person whose face shows · person: a person whose face does not show · thing: food, a place, an object, an animal. */
-export type ReferenceKind = 'face' | 'person' | 'thing'
-export const REFERENCE_KINDS: readonly ReferenceKind[] = ['face', 'person', 'thing']
+/**
+ * By how many people it shows: thing (nobody: food, a place, an object, an
+ * animal) · face / person (one person, face shown / not shown) · group (two
+ * or more people).
+ */
+export type ReferenceKind = 'face' | 'person' | 'thing' | 'group'
+export const REFERENCE_KINDS: readonly ReferenceKind[] = ['face', 'person', 'thing', 'group']
+
+export function isReferenceKind(value: unknown): value is ReferenceKind {
+  return value === 'face' || value === 'person' || value === 'thing' || value === 'group'
+}
+
+/** Gender is kept only for a photo of one person. */
+export function referenceKindHasGender(kind: ReferenceKind | null): boolean {
+  return kind === null || kind === 'face' || kind === 'person'
+}
 export type ReferenceUse = { userId: string; kind: 'avatar' | 'post'; at: string }
 export type ReferencePhoto = {
   id: string
@@ -43,7 +56,7 @@ function parseGender(value: unknown): ReferenceGender | null {
 }
 
 function parseKind(value: unknown): ReferenceKind | null {
-  return value === 'face' || value === 'person' || value === 'thing' ? value : null
+  return isReferenceKind(value) ? value : null
 }
 
 /** The kind a photo is used as (an untagged one counts as a face photo). */
@@ -115,7 +128,7 @@ export async function addReferencePhoto(bytes: Buffer, tags: { gender: Reference
   await putPostImage(objectKey, data)
   const photo: ReferencePhoto = {
     id, objectKey, width: info.width ?? null, height: info.height ?? null,
-    gender: tags.kind === 'thing' ? null : tags.gender, kind: tags.kind, summary: tags.summary ?? null, note: normalizeReferenceNote(tags.note),
+    gender: referenceKindHasGender(tags.kind) ? tags.gender : null, kind: tags.kind, summary: tags.summary ?? null, note: normalizeReferenceNote(tags.note),
     createdAt: new Date().toISOString(), usedBy: null,
   }
   await updateLibrary((items) => ({ items: [photo, ...items], result: null }))
@@ -139,6 +152,7 @@ export async function updateReferenceTags(id: string, tags: { gender?: Reference
           ...item,
           ...(tags.kind ? { kind: tags.kind } : {}),
           ...(tags.gender !== undefined ? { gender: tags.gender } : {}),
+          ...(tags.kind && !referenceKindHasGender(tags.kind) ? { gender: null } : {}),
           ...(tags.note !== undefined ? { note: normalizeReferenceNote(tags.note) } : {}),
         }
         : item)),
@@ -174,7 +188,7 @@ export async function claimReferencePhoto(args: {
       && (args.id
         ? item.id === args.id
         : (!args.kinds || args.kinds.includes(referenceKindOf(item)))
-          && (!args.gender || !item.gender || item.gender === args.gender))
+          && (!args.gender || !item.gender || !referenceKindHasGender(item.kind) || item.gender === args.gender))
     const candidates = items.filter(fits)
     // Prefer a photo tagged with the gender asked for over an untagged one.
     const pick = (args.gender ? candidates.filter((item) => item.gender === args.gender).at(-1) : null) ?? candidates.at(-1) ?? null
@@ -220,6 +234,24 @@ export function referenceRecreateLines(input: { kind: ReferenceKind; look: strin
     ...(note ? [`Staff note about the reference photo, to follow: ${note}`] : []),
     ...(fit ? [`What the photo is for (change details so it fits, keeping the shot): ${fit}`] : []),
   ]
+  if (input.kind === 'group') {
+    const posterLines = input.poster
+      ? [
+          'The attached image is two photos side by side. LEFT: the shot to recreate. RIGHT: the poster, the person this account belongs to.',
+          'The poster from the RIGHT photo is one of the people in the new photo (the most central or nearest one): the same eye shape, nose, mouth, jawline, skin tone and apparent ethnicity. Take nothing else from the RIGHT photo. Draw one single photo, never two side by side.',
+        ]
+      : input.look ? [`One of the people (the most central or nearest one): ${input.look}.`] : []
+    const source = input.poster ? 'the LEFT photo' : 'the attached photo'
+    return [
+      `Recreate ${source} as a new phone photo of a different group of friends, as many people as in it.`,
+      ...posterLines,
+      `Keep from ${source}: the composition and camera angle, how the people stand or sit and what they do, the kind of outfits, the place and background, the light and the mood.`,
+      ...fitLine,
+      `Nobody's face may resemble anyone in ${source}: everyone gets a new, ordinary everyday face, so nobody could be recognized. Faces that do not show in ${source} stay hidden.`,
+      NO_INTERFACE_LINE,
+      SNAPSHOT_LINE,
+    ]
+  }
   if (input.kind === 'thing') {
     return [
       'Recreate the attached photo as a new phone photo, as if the same person took another photo of the same kind of thing.',

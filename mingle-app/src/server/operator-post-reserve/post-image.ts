@@ -372,6 +372,7 @@ const LIBRARY_KINDS_BY_POST: Partial<Record<PostPhotoKind, readonly ReferenceKin
   self_faceless: ['person'],
   self_back: ['person'],
   scene: ['thing'],
+  friends: ['group'],
 }
 
 /**
@@ -405,7 +406,7 @@ async function libraryPostRequest(
   try {
     const kind = referenceKindOf(photo)
     const shot = await loadReferenceBytes(photo)
-    const poster = kind === 'face' && base.reference ? base.reference : null
+    const poster = (kind === 'face' || kind === 'group') && base.reference ? base.reference : null
     const look = specSubject(spec) ?? describeAccountLook(persona, seededRandom(`${operatorUserId}:look`))
     const place = brief.place ?? await reservePostPlace(operatorUserId)
     const prompt = [
