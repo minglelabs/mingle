@@ -211,7 +211,7 @@ export type ReviewAuthor = {
 /** One card of the review timeline: a new account (at sign-up) or a post (at creation). `pinned`: staff moved it up. */
 export type ReviewItem =
   | { kind: 'profile'; key: string; at: string; pinned: boolean; profile: ReviewProfile }
-  | { kind: 'post'; key: string; at: string; pinned: boolean; post: ReviewPost; author: ReviewAuthor }
+  | { kind: 'post'; key: string; at: string; pinned: boolean; fromReference: boolean; post: ReviewPost; author: ReviewAuthor }
 
 export type ReviewQueue = {
   items: ReviewItem[]
@@ -269,21 +269,26 @@ const REVIEW_POST_STATES = ['review', 'regenerating']
  * of the same group, so the queue deals one post per account in turn.
  * `authorAt`: the author's sign-up time, the order within a round.
  */
-type TimelineRow = { rank: number; late: boolean; round: number; authorAt: Date; kindOrder: number; kind: 'profile' | 'post'; id: string; at: Date; userId: string }
+type TimelineRow = { rank: number; ref: number; late: boolean; round: number; authorAt: Date; kindOrder: number; kind: 'profile' | 'post'; id: string; at: Date; userId: string }
 
 /** Rank of an item staff did not move: after every ranked one. */
 const UNRANKED = 2147483647
 
 // A post's round counts every reserve row of its author (any state), so it
 // does not shift when staff answer other posts and paging stays stable.
+/** Post photos drawn from the reference library (library.ts, markReferenceImage). */
+const REFERENCE_IMAGE_KEYS_SQL = `SELECT e->'usedBy'->>'imageKey' FROM app.app_admin_settings s, jsonb_array_elements(s.value->'items') e WHERE s.key = 'reference_library' AND e->'usedBy'->>'imageKey' IS NOT NULL`
+
 const TIMELINE_SQL = `
-  SELECT rank, late, round, "authorAt", "kindOrder", kind, id, at, "userId" FROM (
-    SELECT COALESCE(o.review_rank, ${UNRANKED})::bigint AS rank, false AS late, 1::bigint AS round, u.created_at AS "authorAt", 0 AS "kindOrder", 'profile' AS kind, u.id, u.created_at AS at, u.id AS "userId"
+  SELECT rank, ref, late, round, "authorAt", "kindOrder", kind, id, at, "userId" FROM (
+    SELECT COALESCE(o.review_rank, ${UNRANKED})::bigint AS rank, 1 AS ref, false AS late, 1::bigint AS round, u.created_at AS "authorAt", 0 AS "kindOrder", 'profile' AS kind, u.id, u.created_at AS at, u.id AS "userId"
     FROM app.app_users u JOIN app.app_operator_accounts o ON o.user_id = u.id
     WHERE u.is_operator AND NOT u.is_deleted AND (o.review_state <> 'approved' OR o.pending_image IS NOT NULL OR o.pending_drawing_at IS NOT NULL)
     UNION ALL
-    SELECT rank, late, round, "authorAt", 1 AS "kindOrder", 'post' AS kind, id, at, "userId" FROM (
-      SELECT COALESCE(r.review_rank, ${UNRANKED})::bigint AS rank, r.image_object_key IS NULL AS late,
+    SELECT rank, ref, late, round, "authorAt", 1 AS "kindOrder", 'post' AS kind, id, at, "userId" FROM (
+      SELECT COALESCE(r.review_rank, ${UNRANKED})::bigint AS rank,
+        CASE WHEN r.image_object_key IN (${REFERENCE_IMAGE_KEYS_SQL}) THEN 0 ELSE 1 END AS ref,
+        r.image_object_key IS NULL AS late,
         ROW_NUMBER() OVER (PARTITION BY r.operator_user_id, r.image_object_key IS NULL ORDER BY r.created_at, r.id) AS round,
         u.created_at AS "authorAt", r.id, r.created_at AS at, r.state, u.is_deleted, r.operator_user_id AS "userId"
       FROM app.app_operator_post_reserve r JOIN app.app_users u ON u.id = r.operator_user_id
@@ -291,18 +296,18 @@ const TIMELINE_SQL = `
     WHERE state IN ('review', 'regenerating', 'scheduled') AND NOT is_deleted
   ) t`
 
-/** Cursor = `<rank>|<0|1 late>|<round>|<author iso time>|<0 profile, 1 post>|<id>` of the last item shown. */
+/** Cursor = `<rank>|<0 reference, 1 other>|<0|1 late>|<round>|<author iso time>|<0 profile, 1 post>|<id>` of the last item shown. */
 export function encodeReviewCursor(row: TimelineRow): string {
-  return `${row.rank}|${row.late ? 1 : 0}|${row.round}|${row.authorAt.toISOString()}|${row.kindOrder}|${row.id}`
+  return `${row.rank}|${row.ref}|${row.late ? 1 : 0}|${row.round}|${row.authorAt.toISOString()}|${row.kindOrder}|${row.id}`
 }
 
-export function decodeReviewCursor(value: string | undefined): Pick<TimelineRow, 'rank' | 'late' | 'round' | 'authorAt' | 'kindOrder' | 'id'> | null {
-  const [rank, late, round, iso, kindOrder, id] = (value ?? '').split('|')
+export function decodeReviewCursor(value: string | undefined): Pick<TimelineRow, 'rank' | 'ref' | 'late' | 'round' | 'authorAt' | 'kindOrder' | 'id'> | null {
+  const [rank, ref, late, round, iso, kindOrder, id] = (value ?? '').split('|')
   const authorAt = new Date(iso ?? '')
   const rankNumber = Number(rank)
   const roundNumber = Number(round)
-  if (!id || !Number.isInteger(rankNumber) || (late !== '0' && late !== '1') || (kindOrder !== '0' && kindOrder !== '1') || !Number.isInteger(roundNumber) || roundNumber < 0 || Number.isNaN(authorAt.getTime())) return null
-  return { rank: rankNumber, late: late === '1', round: roundNumber, authorAt, kindOrder: Number(kindOrder), id }
+  if (!id || !Number.isInteger(rankNumber) || (ref !== '0' && ref !== '1') || (late !== '0' && late !== '1') || (kindOrder !== '0' && kindOrder !== '1') || !Number.isInteger(roundNumber) || roundNumber < 0 || Number.isNaN(authorAt.getTime())) return null
+  return { rank: rankNumber, ref: Number(ref), late: late === '1', round: roundNumber, authorAt, kindOrder: Number(kindOrder), id }
 }
 
 /**
@@ -317,13 +322,14 @@ export function decodeReviewCursor(value: string | undefined): Pick<TimelineRow,
 export async function listReviewQueue(options: { cursor?: string; now?: Date; userId?: string; kind?: ReviewItem['kind'] } = {}): Promise<ReviewQueue> {
   const now = options.now ?? new Date()
   const after = decodeReviewCursor(options.cursor)
-  const order = `ORDER BY rank, late, round, "authorAt", "kindOrder", id`
+  // Staff-pinned items first, then posts drawn from the reference library (staff, 2026-11-25), then the rest.
+  const order = `ORDER BY rank, ref, late, round, "authorAt", "kindOrder", id`
   // `userId`: one account's own items only (its profile page).
   const conditions: string[] = []
   const params: unknown[] = []
   if (after) {
-    conditions.push(`(rank, late, round, "authorAt", "kindOrder", id) > ($1::bigint, $2::boolean, $3::bigint, $4::timestamp, $5::int, $6::text)`)
-    params.push(after.rank, after.late, after.round, after.authorAt, after.kindOrder, after.id)
+    conditions.push(`(rank, ref, late, round, "authorAt", "kindOrder", id) > ($1::bigint, $2::int, $3::boolean, $4::bigint, $5::timestamp, $6::int, $7::text)`)
+    params.push(after.rank, after.ref, after.late, after.round, after.authorAt, after.kindOrder, after.id)
   }
   if (options.userId) {
     params.push(options.userId)
@@ -336,7 +342,7 @@ export async function listReviewQueue(options: { cursor?: string; now?: Date; us
   }
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
   const rows = (await prisma.$queryRawUnsafe<TimelineRow[]>(`${TIMELINE_SQL} ${where} ${order} LIMIT ${REVIEW_ITEMS_PER_PAGE + 1}`, ...params))
-    .map((row) => ({ ...row, rank: Number(row.rank), round: Number(row.round), kindOrder: Number(row.kindOrder) }))
+    .map((row) => ({ ...row, rank: Number(row.rank), ref: Number(row.ref), round: Number(row.round), kindOrder: Number(row.kindOrder) }))
   const page = rows.slice(0, REVIEW_ITEMS_PER_PAGE)
 
   const profileIds = page.filter((row) => row.kind === 'profile').map((row) => row.id)
@@ -396,7 +402,7 @@ export async function listReviewQueue(options: { cursor?: string; now?: Date; us
       if (!post) continue
       const author = post.operatorUser
       items.push({
-        kind: 'post', key, at, pinned: row.rank !== UNRANKED,
+        kind: 'post', key, at, pinned: row.rank !== UNRANKED, fromReference: row.ref === 0,
         post: toReviewPost(post),
         author: {
           userId: author.id, name: author.name, handle: author.handle, image: author.image, primaryLanguages: author.primaryLanguages,

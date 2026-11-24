@@ -818,10 +818,11 @@ export function ReviewPhotos({ photos }: { photos: Array<{ objectKey: string; wi
   )
 }
 
-function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }: {
+function PostCard({ post: initial, at, pinned, fromReference, author, profileApproved, onDone }: {
   post: ReviewPost
   at: string
   pinned: boolean
+  fromReference?: boolean
   author: { userId: string; name: string | null; handle: string; image: string | null; languages: string[]; interestLanguages: InterestLanguage[] }
   profileApproved: boolean
   onDone: () => void
@@ -957,6 +958,7 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
         <PinButton kind="post" id={post.id} pinned={pinned} />
       </div>
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
+        {fromReference ? <AdminChip tone="accent">레퍼런스 짤로 그림</AdminChip> : null}
         {post.language ? <AdminChip tone="accent">{koreanLanguageName(post.language)}로 씀</AdminChip> : null}
         {post.topic ? <AdminChip>{post.topic}</AdminChip> : null}
         {post.photoKind ? <AdminChip tone="warning">사진: {PHOTO_KIND[post.photoKind] ?? post.photoKind}</AdminChip> : null}
@@ -1265,6 +1267,7 @@ export function ReviewBoard({ items: initial }: { items: ReviewItem[] }) {
             post={item.post}
             at={item.at}
             pinned={item.pinned}
+            fromReference={item.fromReference}
             author={{ userId, name: item.author.name, handle: item.author.handle, image: images[userId] ?? item.author.image, languages: item.author.primaryLanguages, interestLanguages: item.author.interestLanguages }}
             profileApproved={approved.has(userId)}
             onDone={() => remove((other) => other.key === item.key)}

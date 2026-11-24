@@ -26,6 +26,7 @@ const postItem: ReviewItem = {
   kind: 'post',
   key: 'k-post',
   at: '2026-11-22T14:05:00.000Z',
+  fromReference: false,
   pinned: true,
   author: { userId: 'u1', name: '민아', handle: 'mina', image: null, primaryLanguages: ['ko'], interestLanguages: [], profileState: 'pending' },
   post: {
