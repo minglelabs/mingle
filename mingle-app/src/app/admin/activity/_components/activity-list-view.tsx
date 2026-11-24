@@ -70,18 +70,20 @@ function ActivityCard({ item, nowMs, korean, active }: { item: ActivityItem; now
   const isOwnComment = item.type === 'comment_like'
   const isFollow = item.type === 'follow' || item.type === 'user_follow'
   const commentText = (korean && item.commentKoText) || item.commentText
+  // The actor's photo and name open their profile in the admin; the rest of the card opens the thread.
+  const actorHref = adminProfileHref(item.actor.userId, LIST_PATH)
   const body = (
     <>
-      <span className="relative shrink-0">
+      <Link href={actorHref} prefetch={false} aria-label={`${inboxPersonLabel(item.actor)} 프로필`} className="relative z-10 shrink-0 self-start rounded-full active:opacity-70">
         <InboxAvatar person={item.actor} size={44} />
         <span className={`absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full text-white ring-2 ring-white ${copy.tone}`}>
           <Icon size={11} strokeWidth={2.6} aria-hidden="true" />
         </span>
-      </span>
+      </Link>
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="flex min-w-0 items-start gap-1.5">
           <span className={`min-w-0 flex-1 break-words text-sm leading-5 ${item.isRead ? 'text-slate-700' : 'font-medium text-slate-900'}`}>
-            <span className="font-semibold">{inboxPersonLabel(item.actor)}</span>
+            <Link href={actorHref} prefetch={false} className="relative z-10 font-semibold active:opacity-70">{inboxPersonLabel(item.actor)}</Link>
             {copy.text}
           </span>
           <span className="shrink-0 pl-1 text-xs leading-5 text-slate-500">{formatInboxRelativeTime(item.createdAt, nowMs)}</span>
@@ -132,23 +134,25 @@ function ActivityCard({ item, nowMs, korean, active }: { item: ActivityItem; now
       </span>
     </>
   )
-  const className = `flex gap-3 rounded-2xl border p-3 shadow-sm transition-colors ${
+  const cardHref = href ?? (isFollow ? actorHref : null)
+  const className = `relative flex gap-3 rounded-2xl border p-3 shadow-sm transition-colors ${
     active ? 'border-sky-400 bg-sky-50/60 ring-1 ring-sky-300' : 'border-slate-200 bg-white'
   }`
   return (
     <li>
-      {href ? (
-        <Link href={href} prefetch={false} aria-current={active ? 'page' : undefined} className={`${className} active:bg-slate-50`}>
-          {body}
-        </Link>
-      ) : isFollow ? (
-        // A follow has no thread: open the follower's profile (inside the admin) instead.
-        <Link href={adminProfileHref(item.actor.userId, LIST_PATH)} prefetch={false} className={`${className} active:bg-slate-50`}>
-          {body}
-        </Link>
-      ) : (
-        <div className={className}>{body}</div>
-      )}
+      {/* A follow has no thread: the whole card opens the follower's profile too. */}
+      <div className={`${className} ${cardHref ? 'active:bg-slate-50' : ''}`}>
+        {cardHref ? (
+          <Link
+            href={cardHref}
+            prefetch={false}
+            aria-current={active ? 'page' : undefined}
+            aria-label={`${inboxPersonLabel(item.actor)}${copy.text}`}
+            className="absolute inset-0 rounded-2xl"
+          />
+        ) : null}
+        {body}
+      </div>
     </li>
   )
 }
