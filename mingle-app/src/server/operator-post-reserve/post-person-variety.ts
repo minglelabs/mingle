@@ -125,52 +125,68 @@ export function pickPersonVariety(random: Random, options: { faces: boolean; fem
  * with the head angle, expression, hair, outfit, light, distance and the
  * focus and hair picks, no two photos come out the same.
  */
-export const FACE_POSES: ReadonlyArray<readonly [string, boolean]> = [
-  ['walking toward the camera mid-step, arms loose', false],
-  ['looking back over the shoulder while walking away, the shoulders turned too', false],
-  ['sitting on a curb or low steps, elbows on the knees', false],
-  ['leaning one shoulder against a wall, a pole or a door frame', false],
-  ['sitting at a table, chin resting on one hand', false],
-  ['holding a cup with both hands in front of the chest', false],
-  ['sipping a drink through a straw, eyes up toward the camera', false],
-  ['caught mid-bite of food, a little off guard', false],
-  ['laughing with one hand over the mouth', false],
-  ['pushing the hair back with one hand', false],
-  ['tucking the hair behind one ear', false],
-  ['both hands in the coat or hoodie pockets', false],
-  ['one hand holding the bag strap on the shoulder', false],
-  ['arms loosely crossed, relaxed', false],
-  ['stretching both arms up', false],
-  ['crouching beside something they found (a cat, flowers, a puddle), looking up at the camera', false],
-  ['lying on the grass or a bed, the camera above', false],
-  ['looking at their own phone with a half smile, not at the camera', false],
-  ['shading the eyes from the sun with one hand', false],
-  ['sitting hugging their knees', false],
-  ['reaching a hand toward the camera as if to grab the phone', false],
-  ['an umbrella resting on one shoulder', false],
-  ['carrying shopping bags in one hand', false],
-  ['the head resting against a window', false],
-  ['one hand holding a small thing up beside the face (a flower, a candy, a leaf, a drink), partly covering one eye or a cheek', true],
-  ['a peace sign near the face', true],
-  ['a small finger heart', true],
-  ['the mouth hidden behind a long sleeve, smiling with the eyes', true],
-  ['one hand covering one eye', true],
-  ['a cheek squished on one palm, a little pout', true],
-  ['poking one cheek with a finger', true],
-  ['holding a dessert or an ice cream next to the cheek', true],
-  ['holding a bouquet up close, half the face behind the flowers', true],
-  ['peeking out from behind a pole, a door or a pillar, part of the face hidden', true],
-  ['both hands framing the face', true],
-  ['a wink or the tongue out', true],
-  ['blowing a kiss toward the camera', true],
-  ['the head resting on folded arms on a table, looking up', true],
-  ['holding the hoodie strings or the coat collar up to the chin', true],
-  ['holding a book, a ticket or a menu up, covering the lower half of the face', true],
-  ['squatting, arms on the knees, looking up at the camera', true],
-  ['arms spread wide as if presenting the place', true],
+export const FACE_POSES: ReadonlyArray<readonly [pose: string, posed: boolean, byOther: boolean]> = [
+  ['walking toward the camera mid-step, arms loose', false, true],
+  ['looking back over the shoulder while walking away, the shoulders turned too', false, true],
+  ['sitting on a curb or low steps, elbows on the knees', false, true],
+  ['leaning one shoulder against a wall, a pole or a door frame', false, true],
+  ['sitting at a table, chin resting on one hand', false, false],
+  ['holding a cup with both hands in front of the chest', false, false],
+  ['sipping a drink through a straw, eyes up toward the camera', false, false],
+  ['caught mid-bite of food, a little off guard', false, true],
+  ['laughing with one hand over the mouth', false, false],
+  ['pushing the hair back with one hand', false, false],
+  ['tucking the hair behind one ear', false, false],
+  ['both hands in the coat or hoodie pockets', false, true],
+  ['one hand holding the bag strap on the shoulder', false, false],
+  ['arms loosely crossed, relaxed', false, true],
+  ['stretching both arms up', false, true],
+  ['crouching beside something they found (a cat, flowers, a puddle), looking up at the camera', false, true],
+  ['lying on the grass or a bed, the camera above', false, false],
+  ['looking at their own phone with a half smile, not at the camera', false, true],
+  ['shading the eyes from the sun with one hand', false, false],
+  ['sitting hugging their knees', false, true],
+  ['reaching a hand toward the camera as if to grab the phone', false, true],
+  ['an umbrella resting on one shoulder', false, false],
+  ['carrying shopping bags in one hand', false, true],
+  ['the head resting against a window', false, false],
+  ['one hand holding a small thing up beside the face (a flower, a candy, a leaf, a drink), partly covering one eye or a cheek', true, false],
+  ['a peace sign near the face', true, false],
+  ['a small finger heart', true, false],
+  ['the mouth hidden behind a long sleeve, smiling with the eyes', true, false],
+  ['one hand covering one eye', true, false],
+  ['a cheek squished on one palm, a little pout', true, false],
+  ['poking one cheek with a finger', true, false],
+  ['holding a dessert or an ice cream next to the cheek', true, false],
+  ['holding a bouquet up close, half the face behind the flowers', true, true],
+  ['peeking out from behind a pole, a door or a pillar, part of the face hidden', true, true],
+  ['both hands framing the face', true, true],
+  ['a wink or the tongue out', true, false],
+  ['blowing a kiss toward the camera', true, false],
+  ['the head resting on folded arms on a table, looking up', true, true],
+  ['holding the hoodie strings or the coat collar up to the chin', true, false],
+  ['holding a book, a ticket or a menu up, covering the lower half of the face', true, true],
+  ['squatting, arms on the knees, looking up at the camera', true, true],
+  ['arms spread wide as if presenting the place', true, true],
+  // Staff 2026-11-24: absorbed in doing something, not looking at the camera, a friend's shot.
+  ['looking down at a menu or a display case, choosing, not at the camera', false, true],
+  ['opening a box or a small gift on the table, eyes on it', false, true],
+  ['pouring tea or a drink, eyes on the cup', false, true],
+  ['reading a book or a paper, absorbed in it', false, true],
+  ['writing or drawing in a notebook at a table, the page itself not readable', false, true],
+  ['putting on an earring or fastening a bracelet, eyes down', false, true],
+  ['searching through their bag for something', false, true],
+  ['trying on a ring, a hat or sunglasses in a shop, looking at it', false, true],
+  ['petting a cat or a dog, eyes on the animal', false, true],
+  ['tying a shoelace, bent down', false, true],
+  ['typing on a laptop, the screen turned away', false, true],
+  ['looking through clothes on a rack', false, true],
+  ['taking a photo of the food with their own phone', false, true],
+  ['watching something off to one side, chin a little up', false, true],
+  ['sitting sideways on a chair, half turned away, looking down at the table', false, true],
 ]
 
-export const BODY_POSES: ReadonlyArray<readonly [string, boolean]> = [
+export const BODY_POSES: ReadonlyArray<readonly [pose: string, posed: boolean]> = [
   ['walking, hands in the pockets', false],
   ['one hand on the hip', false],
   ['sitting with the legs crossed', false],
@@ -193,8 +209,12 @@ export const LOOSE_HAIR_SHARE = 0.3
 export type PoseVariety = { line: string; posed: boolean; deepFocus: boolean; looseHair: boolean }
 
 /** The pose, and the focus and hair picks that go with a photo of the poster. */
-export function pickPoseVariety(random: Random, options: { faces: boolean }): PoseVariety {
-  const [pose, posed] = pick(random, options.faces ? FACE_POSES : BODY_POSES)
+export function pickPoseVariety(random: Random, options: { faces: boolean; selfie?: boolean }): PoseVariety {
+  // A selfie gets no pose only someone else could shoot.
+  const poses: ReadonlyArray<readonly [string, boolean, boolean?]> = options.faces
+    ? (options.selfie ? FACE_POSES.filter(([, , byOther]) => !byOther) : FACE_POSES)
+    : BODY_POSES
+  const [pose, posed] = pick(random, poses)
   const deepFocus = random() < DEEP_FOCUS_SHARE
   const looseHair = options.faces && random() < LOOSE_HAIR_SHARE
   return { line: `Pose and hands in this photo, unless the description already says: ${pose}.`, posed, deepFocus, looseHair }

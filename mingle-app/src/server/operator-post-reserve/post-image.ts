@@ -58,7 +58,7 @@ export function buildPostImagePrompt(
   }
   const faces = kind === 'self' || kind === 'friends'
   // Group photos keep their own poses (cheers, side by side); the poster alone gets one picked.
-  const pose = kind === 'friends' ? null : pickPoseVariety(random, { faces: kind === 'self' })
+  const pose = kind === 'friends' ? null : pickPoseVariety(random, { faces: kind === 'self', selfie: /selfie|front[- ]camera|mirror/i.test(description) })
   const realism = phonePhotoRealism(random, {
     people: true, faces, focusOnPerson: true, lens: lensForShot(description), pickTime: true, scene: `${description} ${place ?? ''}`,
     deepFocus: pose?.deepFocus, looseHair: pose?.looseHair, posed: pose?.posed,

@@ -49,6 +49,9 @@ const SETUPS: Record<Exclude<PostPhotoKind, 'scene'>, readonly string[]> = {
     'a close front-camera selfie at their desk, a plain wall or a shelf right behind',
     'a close front-camera selfie on the sofa or the bed against a plain wall, room light only',
     'a close front-camera selfie in an elevator or a stairwell, plain walls right behind',
+    // Staff 2026-11-24: a friend's shot of the poster busy with something, not looking at the camera.
+    'a friend took it while the poster was busy with something at a table (choosing from a menu, opening a box, pouring a drink), eyes down, not looking at the camera',
+    'a friend took it while the poster was absorbed in something in a shop or a room (trying something on, looking through things), turned partly away from the camera',
   ],
   // Staff 2026-11-24: far too many top-down shots of the poster's own feet and legs; none now.
   self_faceless: [
