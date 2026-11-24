@@ -18,6 +18,7 @@ export type AdminAuditAction =
   | 'inbox.open'
   | 'inbox.reply'
   | 'inbox.mark_read'
+  | 'inbox.delete_message'
   | 'activity.mark_read'
   | 'activity.comment'
   | 'activity.comment_generated'

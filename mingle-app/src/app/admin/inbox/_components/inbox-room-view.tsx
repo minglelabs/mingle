@@ -138,6 +138,47 @@ type MessageListProps = {
   viewerUserId: string
   /** userId -> the member's own language, for the avatar flag. */
   ownLanguages: Readonly<Record<string, string>>
+  /** Operator accounts of the room: their messages get a 삭제 button. */
+  operatorIds: ReadonlySet<string>
+  onDeleteMessage: (messageId: string) => Promise<boolean>
+}
+
+/** 삭제 under an operator's message: tap, then tap again within 4 s to delete it for everyone. */
+function DeleteMessageButton({ messageId, alignRight, onDelete }: {
+  messageId: string
+  alignRight: boolean
+  onDelete: (messageId: string) => Promise<boolean>
+}) {
+  const [state, setState] = useState<'idle' | 'confirm' | 'pending' | 'failed'>('idle')
+  useEffect(() => {
+    if (state !== 'confirm' && state !== 'failed') return
+    const timer = window.setTimeout(() => setState('idle'), 4000)
+    return () => window.clearTimeout(timer)
+  }, [state])
+  const onClick = useCallback(() => {
+    if (state === 'pending') return
+    if (state !== 'confirm') { setState('confirm'); return }
+    setState('pending')
+    void onDelete(messageId).then((ok) => setState(ok ? 'idle' : 'failed'))
+  }, [messageId, onDelete, state])
+  const label = state === 'confirm' ? '한 번 더 눌러 모두에게서 삭제'
+    : state === 'pending' ? '삭제하는 중…'
+      : state === 'failed' ? '삭제하지 못했어요 · 다시 누르기' : '삭제'
+  return (
+    <div className={`mt-0.5 flex ${alignRight ? 'justify-end pr-1' : 'pl-12'}`}>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={state === 'pending'}
+        className={`inline-flex min-h-8 items-center gap-1 rounded-full px-2 text-xs ${
+          state === 'confirm' || state === 'failed' ? 'bg-rose-50 font-semibold text-rose-600 ring-1 ring-rose-200' : 'text-slate-400 active:bg-slate-100'
+        }`}
+      >
+        {state === 'pending' ? <Loader2 size={12} className="animate-spin" aria-hidden="true" /> : <Trash2 size={12} aria-hidden="true" />}
+        {label}
+      </button>
+    </div>
+  )
 }
 
 /** The bubbles, through the app's own ChatBubble with the operator as viewer. Memoized: typing never re-renders it. */
@@ -149,6 +190,8 @@ const RoomMessageList = memo(function RoomMessageList({
   languageOrder,
   viewerUserId,
   ownLanguages,
+  operatorIds,
+  onDeleteMessage,
 }: MessageListProps) {
   return (
     <ConversationImageSrcProvider resolve={resolveInboxImageSrc}>
@@ -178,6 +221,13 @@ const RoomMessageList = memo(function RoomMessageList({
               shouldAnimateEntrance={false}
               bubbleTextClassName="text-[15px]"
             />
+            {speakerId && operatorIds.has(speakerId) && item.utterance.serverMessageId && !item.utterance.recalled ? (
+              <DeleteMessageButton
+                messageId={item.utterance.serverMessageId}
+                alignRight={speakerId === viewerUserId}
+                onDelete={onDeleteMessage}
+              />
+            ) : null}
           </div>
         )
       })}
@@ -556,6 +606,24 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
     }
     return map
   }, [room.operators, room.counterparts])
+  const operatorIds = useMemo(() => new Set(room.operators.map((candidate) => candidate.userId)), [room.operators])
+  const deleteMessage = useCallback(async (messageId: string) => {
+    try {
+      const response = await fetch(`/admin/inbox/api/rooms/${encodeURIComponent(conversationId)}/delete-message`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ messageId }),
+      })
+      if (response.status === 401) { goToLogin(); return false }
+      if (!response.ok) return false
+    } catch {
+      return false
+    }
+    await refresh().catch(() => {})
+    dispatchAdminInboxUpdated()
+    return true
+  }, [conversationId, refresh])
   const operatorName = inboxPersonLabel(operator)
   const personaLanguageName = inboxLanguageName(operator.personaLanguage)
   const unavailable = roomGone
@@ -660,6 +728,8 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
             languageOrder={languageOrder}
             viewerUserId={operatorId}
             ownLanguages={ownLanguages}
+            operatorIds={operatorIds}
+            onDeleteMessage={deleteMessage}
           />
           </MessageReadReceiptsStaticProvider>
           {pending.map((reply) => (
