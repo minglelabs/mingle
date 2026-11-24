@@ -1,6 +1,7 @@
 import { Suspense, type ReactNode } from "react";
 import { ShieldCheck } from "lucide-react";
 import { AdminNavTracker } from "./admin-nav";
+import { AdminPullRefresh } from "./admin-pull-refresh";
 import { AdminPhotoSaver } from "./admin-photo-saver";
 import { AdminTabBar } from "./admin-tab-bar";
 import type { AdminTabBadges } from "./admin-tabs";
@@ -33,7 +34,8 @@ export function AdminShell({
           <span className="text-[15px] font-semibold tracking-tight text-slate-900">HashChat Admin</span>
         </div>
       </header>
-      <div className="flex min-h-0 w-full flex-1 flex-col lg:flex-row">
+      <div className="relative flex min-h-0 w-full flex-1 flex-col lg:flex-row">
+        {signedIn ? <AdminPullRefresh /> : null}
         <main
           className="min-h-0 w-full min-w-0 flex-1 overflow-y-auto overscroll-contain pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
           id={ADMIN_SCROLL_CONTAINER_ID}
