@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
+import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/server/admin/guard'
 import { getOperatorAccountDetail } from '@/server/operators/operator-admin-query'
 import { safeBackPath } from '../../_lib/back-path'
@@ -33,8 +34,15 @@ export default async function OperatorDetailPage({ params, searchParams }: Opera
   const { userId } = await params
   await requireAdmin(`/admin/operators/${userId}`)
   const { posts, from, back } = await searchParams
-  const account = await getOperatorAccountDetail(decodeSegment(userId).trim())
-  if (!account) notFound()
+  const id = decodeSegment(userId).trim()
+  const account = await getOperatorAccountDetail(id)
+  if (!account) {
+    // Only operator accounts can be edited here ("never act as any user"); an
+    // official account staff answer for (Hamzzi) opens on its read-only profile.
+    const user = await prisma.user.findFirst({ where: { id, isDeleted: false }, select: { id: true } })
+    if (user) redirect(`/admin/operators/${encodeURIComponent(user.id)}/profile`)
+    notFound()
+  }
 
   return (
     <OperatorsMain>

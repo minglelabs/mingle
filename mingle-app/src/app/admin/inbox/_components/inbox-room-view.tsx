@@ -672,7 +672,7 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
           <ChevronLeft size={24} aria-hidden="true" />
         </Link>
         <Link
-          href={`/admin/operators/${encodeURIComponent(operator.userId)}`}
+          href={`/admin/operators/${encodeURIComponent(operator.userId)}${operator.isOfficial ? '/profile' : ''}`}
           prefetch={false}
           aria-label={`${operatorName} 운영 계정 상세`}
           className="shrink-0 rounded-full active:opacity-70"
