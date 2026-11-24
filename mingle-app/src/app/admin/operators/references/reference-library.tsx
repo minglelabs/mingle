@@ -8,6 +8,9 @@ import type { ReferenceGender, ReferenceKind } from '@/server/reference-library/
 import type { ReferencePhotoView } from '@/server/reference-library/view'
 import { adminProfileHref } from '../../_lib/profile-href'
 import { UploadQueueOverlay, type QueueItem } from './upload-queue-overlay'
+import { filesFromDrop, takeDroppedEntries } from './dropped-files'
+
+const UPLOAD_CONCURRENCY = 3
 import { ReferenceAttributesView } from './reference-attributes'
 import { reviewImageUrl } from '../review/review-image-url'
 
@@ -86,39 +89,46 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag }: { initialIt
   // Each keeps the tags chosen when it was added.
   const [queue, setQueue] = useState<QueueItem[]>([])
   const jobsRef = useRef(new Map<string, { file: File; form: Record<string, string> }>())
-  const runningRef = useRef(false)
-
+  const workersRef = useRef(0)
   const waitingRef = useRef<string[]>([])
 
-  /** Uploads waiting photos one by one until none is left; a second call while it runs does nothing. */
-  const pump = useCallback(async () => {
-    if (runningRef.current) return
-    runningRef.current = true
-    try {
-      for (let id = waitingRef.current.shift(); id; id = waitingRef.current.shift()) {
-        const job = jobsRef.current.get(id)
-        if (!job) continue
-        const current = id
-        setQueue((list) => list.map((item) => (item.id === current ? { ...item, status: 'uploading' } : item)))
-        let error: string | null = null
-        try {
-          const form = new FormData()
-          form.append('file', job.file)
-          for (const [key, value] of Object.entries(job.form)) form.set(key, value)
-          const response = await fetch('/admin/operators/api/references', { method: 'POST', body: form })
-          const body = await response.json().catch(() => ({})) as { added?: number; failures?: Array<{ reason: string }>; error?: string; items?: ReferencePhotoView[] }
-          if (body.items) setItems(body.items)
-          if (!response.ok || !body.added) {
-            error = FAILURE_LABEL[body.failures?.[0]?.reason ?? body.error ?? ''] ?? (response.status === 413 ? '파일이 너무 큼' : '올리지 못함')
+  /**
+   * Uploads waiting photos, three at a time, until none is left (each one is
+   * read by the AI on the server, which takes a few seconds). Calling it
+   * while workers run only adds workers up to the limit.
+   */
+  const pump = useCallback(() => {
+    const work = async () => {
+      try {
+        for (let id = waitingRef.current.shift(); id; id = waitingRef.current.shift()) {
+          const job = jobsRef.current.get(id)
+          if (!job) continue
+          const current = id
+          setQueue((list) => list.map((item) => (item.id === current ? { ...item, status: 'uploading' } : item)))
+          let error: string | null = null
+          try {
+            const form = new FormData()
+            form.append('file', job.file)
+            for (const [key, value] of Object.entries(job.form)) form.set(key, value)
+            const response = await fetch('/admin/operators/api/references', { method: 'POST', body: form })
+            const body = await response.json().catch(() => ({})) as { added?: number; failures?: Array<{ reason: string }>; error?: string; items?: ReferencePhotoView[] }
+            if (body.items) setItems(body.items)
+            if (!response.ok || !body.added) {
+              error = FAILURE_LABEL[body.failures?.[0]?.reason ?? body.error ?? ''] ?? (response.status === 413 ? '파일이 너무 큼' : '올리지 못함')
+            }
+          } catch {
+            error = '연결이 끊겼어요'
           }
-        } catch {
-          error = '연결이 끊겼어요'
+          if (!error) jobsRef.current.delete(current)
+          setQueue((list) => list.map((item) => (item.id === current ? { ...item, status: error ? 'failed' : 'done', error } : item)))
         }
-        if (!error) jobsRef.current.delete(current)
-        setQueue((list) => list.map((item) => (item.id === current ? { ...item, status: error ? 'failed' : 'done', error } : item)))
+      } finally {
+        workersRef.current -= 1
       }
-    } finally {
-      runningRef.current = false
+    }
+    while (workersRef.current < UPLOAD_CONCURRENCY && waitingRef.current.length > 0) {
+      workersRef.current += 1
+      void work()
     }
   }, [])
 
@@ -139,14 +149,14 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag }: { initialIt
     })
     setQueue((current) => [...current, ...added])
     setNote('')
-    void pump()
+    pump()
   }, [pump])
 
   const retryUpload = useCallback((id: string) => {
     if (!jobsRef.current.has(id)) return
     waitingRef.current.push(id)
     setQueue((current) => current.map((item) => (item.id === id ? { ...item, status: 'waiting', error: null } : item)))
-    void pump()
+    pump()
   }, [pump])
 
   const clearQueue = useCallback(() => {
@@ -240,10 +250,12 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag }: { initialIt
         }}
         onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false) }}
         onDrop={(event) => {
-          if (!event.dataTransfer.files.length) return
+          if (!event.dataTransfer.files.length && !event.dataTransfer.items.length) return
           event.preventDefault()
           setDragging(false)
-          upload(Array.from(event.dataTransfer.files))
+          // Folders too: every photo inside (subfolders included).
+          const taken = takeDroppedEntries(event.dataTransfer)
+          void filesFromDrop(taken).then(upload)
         }}
       >
         <div className="flex flex-col gap-2.5">
@@ -272,12 +284,28 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag }: { initialIt
             placeholder="한 줄 설명 (선택) — 이번에 올리는 사진 모두에 붙어요"
             className="w-full rounded-xl border border-slate-200 px-3 py-2 text-base text-slate-900 outline-none focus:border-slate-400 sm:text-sm"
           />
-          <label className="inline-flex min-h-11 cursor-pointer items-center justify-center self-center rounded-xl bg-sky-600 px-4 text-sm font-semibold text-white active:bg-sky-700">
-            {uploading ? `사진 더 고르기 (남은 ${uploading}장)` : '사진 고르기'}
-            <input type="file" accept="image/*" multiple className="sr-only" onChange={(event) => { upload(Array.from(event.target.files ?? [])); event.target.value = '' }} />
-          </label>
+          <div className="flex flex-wrap justify-center gap-2">
+            <label className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-xl bg-sky-600 px-4 text-sm font-semibold text-white active:bg-sky-700">
+              {uploading ? `사진 더 고르기 (남은 ${uploading}장)` : '사진 고르기 (여러 장)'}
+              <input type="file" accept="image/*,.heic,.heif" multiple className="sr-only" onChange={(event) => { upload(Array.from(event.target.files ?? [])); event.target.value = '' }} />
+            </label>
+            <label className="hidden min-h-11 cursor-pointer items-center justify-center rounded-xl border border-sky-300 bg-white px-4 text-sm font-semibold text-sky-700 active:bg-sky-50 sm:inline-flex">
+              폴더 통째로
+              <input
+                type="file"
+                multiple
+                className="sr-only"
+                {...{ webkitdirectory: '', directory: '' }}
+                onChange={(event) => {
+                  const files = Array.from(event.target.files ?? []).sort((left, right) => left.name.localeCompare(right.name, undefined, { numeric: true }))
+                  upload(files)
+                  event.target.value = ''
+                }}
+              />
+            </label>
+          </div>
           <p className="text-center text-xs text-slate-500">
-            여러 장을 끌어다 놓거나 ⌘V로 붙여넣어도 됩니다. {people === 'auto' ? 'AI가 사진마다 사람 수·얼굴·성별을 붙여요(12월 12일까지). ' : ''}올린 뒤 사진을 눌러 고칠 수 있어요.
+            사진이나 폴더를 끌어다 놓거나 ⌘V로 붙여넣어도 됩니다. 몇백 장도 넣어 두면 3장씩 동시에 올라가요. {people === 'auto' ? 'AI가 사진마다 사람 수·얼굴·성별을 붙여요(12월 12일까지). ' : ''}올린 뒤 사진을 눌러 고칠 수 있어요.
           </p>
           {status ? <p role="status" className="text-center text-xs font-semibold text-slate-700">{status}</p> : null}
         </div>
