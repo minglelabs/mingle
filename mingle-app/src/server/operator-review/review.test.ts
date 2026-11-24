@@ -45,7 +45,7 @@ vi.mock('@/server/operator-post-reserve/worker', () => ({
   PHOTO_REQUESTED: 'photo_requested',
 }))
 
-import { normalizeReviewFeedback, parseReviewAction, releaseOrphanedDrawings, reviewOperatorPost, reviewOperatorProfile, setReviewPostText, editReviewPost } from './review'
+import { normalizeReviewFeedback, parseReviewAction, releaseOrphanedDrawings, reviewOperatorPost, reviewOperatorProfile, setReviewPostText, editReviewPost, scheduleReviewPost, unscheduleReviewPost } from './review'
 
 const PENDING_ACCOUNT = { reviewState: 'pending', user: { isOperator: true, isDeleted: false } }
 const REVIEW_POST = {
@@ -347,5 +347,39 @@ describe('editReviewPost', () => {
     mocks.reserveUpdateMany.mockResolvedValue({ count: 1 })
     await expect(editReviewPost({} as never, 'r1', { publishAt: null }, now)).resolves.toMatchObject({ ok: true })
     expect(mocks.reserveUpdateMany).toHaveBeenLastCalledWith({ where: { id: 'r1', state: { in: ['review', 'regenerating'] } }, data: { releaseAt: null } })
+  })
+})
+
+describe('예약 게시', () => {
+  const READY = { state: 'review', imagePrompt: '[self] x', imageObjectKey: 'posts/op1/a.jpg', operatorUserId: 'op1', operatorUser: { isActive: true, operatorAccount: { personaCountry: 'KR' } } }
+  const now = new Date('2026-11-24T09:00:00Z')
+
+  it('schedules a reviewed post at a time picked 2-30 hours ahead, or the one staff set', async () => {
+    mocks.reserveFindUnique.mockResolvedValue(READY)
+    mocks.reserveUpdateMany.mockResolvedValue({ count: 1 })
+    await scheduleReviewPost(null, 'r1', null, now)
+    const picked = mocks.reserveUpdateMany.mock.calls.at(-1)![0]
+    expect(picked.where).toEqual({ id: 'r1', state: { in: ['review', 'scheduled'] } })
+    expect(picked.data.state).toBe('scheduled')
+    expect(picked.data.releaseAt.getTime()).toBeGreaterThan(now.getTime() + 60 * 60_000)
+    const chosen = new Date('2026-11-25T12:30:00Z')
+    await scheduleReviewPost(null, 'r1', chosen, now)
+    expect(mocks.reserveUpdateMany.mock.calls.at(-1)![0].data.releaseAt).toEqual(chosen)
+  })
+
+  it('refuses a past time, an account not yet public and a photo not yet drawn', async () => {
+    mocks.reserveFindUnique.mockResolvedValue(READY)
+    await expect(scheduleReviewPost(null, 'r1', new Date('2026-11-24T08:00:00Z'), now)).resolves.toEqual({ ok: false, error: 'invalid_time' })
+    mocks.reserveFindUnique.mockResolvedValue({ ...READY, operatorUser: { ...READY.operatorUser, isActive: false } })
+    await expect(scheduleReviewPost(null, 'r1', null, now)).resolves.toEqual({ ok: false, error: 'profile_pending' })
+    mocks.reserveFindUnique.mockResolvedValue({ ...READY, imageObjectKey: null })
+    await expect(scheduleReviewPost(null, 'r1', null, now)).resolves.toEqual({ ok: false, error: 'photo_pending' })
+  })
+
+  it('cancelling puts it back in review with no time', async () => {
+    mocks.reserveFindUnique.mockResolvedValue({ operatorUserId: 'op1' })
+    mocks.reserveUpdateMany.mockResolvedValue({ count: 1 })
+    await unscheduleReviewPost(null, 'r1')
+    expect(mocks.reserveUpdateMany.mock.calls.at(-1)![0]).toEqual({ where: { id: 'r1', state: 'scheduled' }, data: { state: 'review', releaseAt: null } })
   })
 })

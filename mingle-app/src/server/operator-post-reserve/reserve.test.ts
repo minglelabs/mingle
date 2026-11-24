@@ -167,13 +167,15 @@ describe('reserve worker', () => {
 
   it('does nothing while the reserve is off', async () => {
     mocks.settingFindUnique.mockResolvedValue(null)
+    mocks.queryRaw.mockResolvedValueOnce([]) // posts staff scheduled still go out
     expect(await runOperatorPostReserve({ now: () => NOW })).toMatchObject({ enabled: false, released: 0, generated: 0 })
-    expect(mocks.queryRaw).not.toHaveBeenCalled()
+    expect(mocks.queryRaw).toHaveBeenCalledTimes(1)
   })
 
   it('releases due posts, schedules the next one and refills an account', async () => {
     mocks.settingFindUnique.mockResolvedValue({ value: { enabled: true, targetPerOperator: 200, dailyPercent: 1 } })
     mocks.queryRaw
+      .mockResolvedValueOnce([]) // scheduled by staff
       .mockResolvedValueOnce([{ id: 'r1', operatorUserId: 'op_1', text: '산책 다녀옴', attempts: 1 }]) // claim
       .mockResolvedValueOnce([{ operatorUserId: 'op_1', personaCountry: 'KR', lastAt: NOW, headId: 'r2' }]) // unscheduled
       .mockResolvedValueOnce([{ operatorUserId: 'op_1', waiting: 40 }]) // refill
@@ -194,10 +196,20 @@ describe('reserve worker', () => {
     expect(mocks.reserveCreateMany.mock.calls[0][0].data).toHaveLength(2)
   })
 
+  it('publishes a post staff scheduled in review at its time, even while the reserve is off', async () => {
+    mocks.settingFindUnique.mockResolvedValue(null)
+    mocks.queryRaw.mockResolvedValueOnce([{ id: 's1', operatorUserId: 'op_1', text: '예약한 글', attempts: 1, createdAt: NOW }])
+    const summary = await runOperatorPostReserve({ now: () => NOW })
+    expect(summary).toMatchObject({ enabled: false, released: 1 })
+    expect(mocks.publishPost).toHaveBeenCalledWith(expect.objectContaining({ authorId: 'op_1', clientPostId: reserveClientPostId('s1') }))
+    expect(mocks.reserveUpdateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ state: 'published' }) }))
+  })
+
   it('fails a post of a retired account instead of publishing it', async () => {
     mocks.settingFindUnique.mockResolvedValue({ value: { enabled: true } })
     mocks.checkOperator.mockResolvedValue({ ok: false, reason: 'operator_inactive' })
     mocks.queryRaw
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ id: 'r1', operatorUserId: 'op_1', text: 'x', attempts: 1 }])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
