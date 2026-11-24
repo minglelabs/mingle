@@ -24,7 +24,9 @@ const ctx = await chromium.launchPersistentContext(PROFILE_DIR, {
   headless: false,
   locale: 'ko-KR',
   viewport: { width: 1100, height: 900 },
-  args: ['--disk-cache-size=1', '--media-cache-size=1'],
+  // 자동화 표시(배너·navigator.webdriver)를 끈다: 켜져 있으면 인스타가 로그인을 거부한다
+  ignoreDefaultArgs: ['--enable-automation'],
+  args: ['--disk-cache-size=1', '--media-cache-size=1', '--disable-blink-features=AutomationControlled'],
 });
 const page = ctx.pages()[0] || (await ctx.newPage());
 
