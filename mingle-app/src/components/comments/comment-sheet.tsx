@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
-import { motion, useDragControls, type PanInfo } from "framer-motion";
+import { animate, motion, useDragControls, useMotionValue, type PanInfo } from "framer-motion";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { commentsCopy, formatCommentsCopy, formatViewReplies } from "@/i18n/comments-copy";
@@ -22,6 +22,7 @@ import type { CommentNode } from "./comment-types";
 import { useCommentSheet, type ReplyTarget } from "./use-comment-sheet";
 import CommentItem, { type CommentItemHandlers } from "./comment-item";
 import CommentComposer from "./comment-composer";
+import { shouldClosePulledSheet, shouldStartSheetPull } from "./comment-sheet-pull";
 
 export type CommentSheetProps = {
   open: boolean;
@@ -93,6 +94,12 @@ export default function CommentSheet(props: CommentSheetProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const dragControls = useDragControls();
   const [dismissing, setDismissing] = useState(false);
+  // Offset of a pull that started in the comment list (see the effect below).
+  const listPullY = useMotionValue(0);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     const id = window.requestAnimationFrame(() => setMounted(true));
@@ -204,6 +211,84 @@ export default function CommentSheet(props: CommentSheetProps) {
     return () => window.cancelAnimationFrame(id);
   }, [sheet.phase, initialCommentId, sheet.expanded, sheet.nodes]);
 
+  // ── Pull down from the top of the list closes the sheet ──────────────────
+  // With the list scrolled all the way up, a downward pull on the comments
+  // moves the whole sheet (like a pull on the header) instead of bouncing the
+  // list. Native listeners: touchmove must be non-passive to stop the list's
+  // own scroll once the sheet is being pulled.
+  useEffect(() => {
+    if (!open || !mounted) return;
+    const list = scrollRef.current;
+    if (!list) return;
+    let start: { x: number; y: number; atTop: boolean } | null = null;
+    let pulling = false;
+    let last = { y: 0, t: 0 };
+    let velocityY = 0;
+    let closeTimer: number | null = null;
+
+    const onTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1) {
+        start = null;
+        return;
+      }
+      const touch = event.touches[0];
+      start = { x: touch.clientX, y: touch.clientY, atTop: list.scrollTop <= 0 };
+      pulling = false;
+      velocityY = 0;
+      last = { y: touch.clientY, t: event.timeStamp };
+    };
+    const onTouchMove = (event: TouchEvent) => {
+      if (!start || event.touches.length !== 1) return;
+      const touch = event.touches[0];
+      const dy = touch.clientY - start.y;
+      if (!pulling) {
+        if (!shouldStartSheetPull({ startedAtTop: start.atTop, dx: touch.clientX - start.x, dy })) {
+          // Once the list has scrolled, this touch belongs to the list.
+          if (list.scrollTop > 0) start = null;
+          return;
+        }
+        pulling = true;
+      }
+      event.preventDefault();
+      const dt = event.timeStamp - last.t;
+      if (dt > 0) velocityY = ((touch.clientY - last.y) / dt) * 1000;
+      last = { y: touch.clientY, t: event.timeStamp };
+      listPullY.set(Math.max(0, dy));
+    };
+    const onTouchEnd = () => {
+      if (!pulling) {
+        start = null;
+        return;
+      }
+      pulling = false;
+      start = null;
+      const offsetY = listPullY.get();
+      if (shouldClosePulledSheet({ offsetY, velocityY })) {
+        setDismissing(true);
+        closeTimer = window.setTimeout(() => {
+          setDismissing(false);
+          listPullY.set(0);
+          onCloseRef.current();
+        }, 180);
+        return;
+      }
+      animate(listPullY, 0, { duration: 0.2, ease: [0.22, 1, 0.36, 1] });
+    };
+
+    list.addEventListener("touchstart", onTouchStart, { passive: true });
+    list.addEventListener("touchmove", onTouchMove, { passive: false });
+    list.addEventListener("touchend", onTouchEnd);
+    list.addEventListener("touchcancel", onTouchEnd);
+    return () => {
+      list.removeEventListener("touchstart", onTouchStart);
+      list.removeEventListener("touchmove", onTouchMove);
+      list.removeEventListener("touchend", onTouchEnd);
+      list.removeEventListener("touchcancel", onTouchEnd);
+      if (closeTimer !== null) window.clearTimeout(closeTimer);
+      listPullY.set(0);
+    };
+  }, [open, mounted, listPullY]);
+
   // ── Focus: move into the sheet, trap Tab, restore on close ────────────────
   const reportOpenRef = useRef(false);
   useEffect(() => {
@@ -286,8 +371,8 @@ export default function CommentSheet(props: CommentSheetProps) {
     return copy.actionFailed;
   }, [sheet.notice, copy, locale]);
 
-  // Swipe-down dismiss: the drag starts only from the handle / header so the
-  // comment list keeps its own vertical scroll.
+  // Swipe-down dismiss from the handle / header. The comment list keeps its own
+  // vertical scroll; a pull there closes only from the top (see the effect above).
   const handleDragEnd = (_e: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     if (info.offset.y > 110 || info.velocity.y > 600) {
       setDismissing(true);
@@ -316,6 +401,7 @@ export default function CommentSheet(props: CommentSheetProps) {
         tabIndex={-1}
       />
 
+      <motion.div className="relative" style={{ y: listPullY }}>
       <motion.div
         ref={panelRef}
         tabIndex={-1}
@@ -467,6 +553,7 @@ export default function CommentSheet(props: CommentSheetProps) {
             keyboardOpen={keyboardInset > 0}
           />
         )}
+      </motion.div>
       </motion.div>
 
       {/* Report flow for others' comments (R team owns the sheet body). */}
