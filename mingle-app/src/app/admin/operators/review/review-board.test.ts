@@ -28,6 +28,7 @@ const postItem: ReviewItem = {
   at: '2026-11-22T14:05:00.000Z',
   fromReference: false,
   reference: null,
+  pastStats: null,
   pinned: true,
   author: { userId: 'u1', name: '민아', handle: 'mina', image: null, primaryLanguages: ['ko'], interestLanguages: [], profileState: 'pending' },
   post: {
