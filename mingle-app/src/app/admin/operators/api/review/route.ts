@@ -88,6 +88,6 @@ export async function POST(request: Request) {
   const result = kind === 'profile'
     ? await reviewOperatorProfile(auth.ctx, id, action, feedback, { reference })
     : await reviewOperatorPost(auth.ctx, id, action, feedback, new Date(), { reference })
-  if (!result.ok) return json({ error: result.error }, ERROR_STATUS[result.error] ?? 500)
+  if (!result.ok) return json({ error: result.error, ...('detail' in result && result.detail ? { detail: result.detail } : {}) }, ERROR_STATUS[result.error] ?? 500)
   return json(result)
 }

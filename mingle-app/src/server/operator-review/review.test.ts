@@ -31,7 +31,7 @@ vi.mock('@/lib/prisma', () => ({
 }))
 vi.mock('@/server/admin/audit', () => ({ writeAdminAudit: mocks.audit }))
 vi.mock('@/server/operator-avatars/generate', () => ({ planOperatorAvatar: mocks.generateAvatar, canDrawImagesHere: mocks.canDraw, generateOperatorAvatar: mocks.drawAvatar }))
-vi.mock('@/server/operator-post-reserve/post-image', () => ({ drawReservePostImage: mocks.drawImage, libraryHasPhotoForPost: vi.fn(async () => true) }))
+vi.mock('@/server/operator-post-reserve/post-image', () => ({ drawReservePostImage: mocks.drawImage, libraryPhotoForPost: vi.fn(async () => ({ available: true, need: '' })) }))
 vi.mock('@/server/posts/post-image-storage', () => ({ getPostImage: vi.fn(async () => Buffer.from('old-photo')) }))
 vi.mock('@/server/operator-post-reserve/generate', () => ({
   generateReservePosts: mocks.generatePosts,
