@@ -490,13 +490,13 @@ describe('anime-style profile pictures', () => {
 })
 
 describe('good-looking accounts', () => {
-  it('make about half of the people shown striking and few ordinary', () => {
+  it('make about a third of the people shown striking, most pleasant and few ordinary', () => {
     const people = Array.from({ length: 3000 }, (_, index) => pickAvatarSpec(korean, seededRandom(`looks:${index}`)))
       .filter((spec) => spec.attributes.attractiveness)
     const share = (grade: string) => people.filter((spec) => spec.attributes.attractiveness === grade).length / people.length
-    expect(share('striking')).toBeGreaterThan(0.42)
-    expect(share('striking')).toBeLessThan(0.58)
-    expect(share('ordinary')).toBeLessThan(0.18)
+    expect(share('striking')).toBeGreaterThan(0.24)
+    expect(share('striking')).toBeLessThan(0.36)
+    expect(share('ordinary')).toBeLessThan(0.2)
   })
 })
 

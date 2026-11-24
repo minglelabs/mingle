@@ -65,7 +65,7 @@ const FACE_AXES: ReadonlyArray<readonly [axis: string, features: readonly Featur
     ['short_cheekbone', 1.5, 'a short face whose widest part is broad, high cheekbones', 'distinctive'],
     ['soft_square', 1.2, 'a softly square face, the jaw corners faintly visible on each side', 'distinctive'],
     ['diamond', 1, 'a diamond-shaped face: a narrower forehead and chin, widest at the cheekbones', 'distinctive'],
-    ['soft_round_slim_chin', 1.5, 'a soft, rounded outline widest across the middle of the cheeks, curving smoothly with no corners to a slim, short chin, with soft flesh on the cheeks but none along the jaw', 'distinctive'],
+    ['soft_round_slim_chin', 2.5, 'a soft, rounded outline widest across the middle of the cheeks, curving smoothly with no corners to a slim, short chin, with soft flesh on the cheeks but none along the jaw', 'distinctive'],
     ['lean_front_cheekbones', 1.5, 'a lean face whose bone structure shows, not a smooth egg-shaped oval: prominent front cheekbones that catch the light with a slight hollow below them, and a jaw that is neither angular nor V-shaped', 'distinctive'],
     ['high_forehead', 1.2, 'a high, wide forehead over a short lower face', 'distinctive'],
     ['long', 1, 'a long face', 'plain'],
@@ -76,7 +76,8 @@ const FACE_AXES: ReadonlyArray<readonly [axis: string, features: readonly Featur
     ['lean', 3, 'lean flesh and a clean jawline, any width coming from bone, not fullness', 'common'],
     ['youthful', 3, 'soft, youthful fullness in the cheeks over a small, narrow bone structure, the jaw staying narrow and smooth', 'common'],
     ['soft', 2, 'soft cheeks over a still visible jawline', 'common'],
-    ['full', 1, 'full, round cheeks that soften the jawline', 'plain'],
+    // An everyday pretty face often has round, full cheeks (staff 2026-11-24).
+    ['full', 1.6, 'full, round cheeks that soften the jawline', 'plain'],
   ]],
   ['forehead', [
     ['average', 4, '', 'common'],
