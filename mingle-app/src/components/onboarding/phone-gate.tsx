@@ -63,20 +63,9 @@ export default function PhoneGate({ locale, onAccess }: { locale: string; onAcce
     setIsLeavingAsForeigner(true);
     writeKoreanAnswer("no");
     captureMingleClientEvent("mingle_first_run_step", { step: "phone_gate_not_korean" });
-    try {
-      const profileResponse = await fetch(buildClientApiPath("/profile"), { cache: "no-store" });
-      const profile = profileResponse.ok ? await profileResponse.json() as { nationalityCountry?: unknown } : null;
-      if (profile?.nationalityCountry === "KR") {
-        await fetch(buildClientApiPath("/profile"), {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ nationalityCountry: null }),
-        });
-      }
-      markKoreanAnswerSynced();
-    } catch {
-      // Saved by the contact-sync host on the next launch.
-    }
+    // "한국 전화번호가 없어요" (owner, 2026-11-25): only the phone step is
+    // dropped; the nationality picked on the first screen stays.
+    markKoreanAnswerSynced();
     await handleVerified("not_korean");
     setIsLeavingAsForeigner(false);
   }, [handleVerified, isLeavingAsForeigner]);

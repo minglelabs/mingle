@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { FIRST_RUN_ONBOARDING_STEPS, INVITE_ONBOARDING_STEPS } from '@/components/LivePhoneDemo/LanguageOnboardingModal'
 import { PRIMARY_UI_LOCALES } from '@/i18n/mingle-locales'
 import { resolveContactSyncCopy } from '@/i18n/contact-sync-copy'
-import { resolveKoreanCheckCopy } from '@/i18n/korean-check-copy'
+import { MAJOR_NATIONALITY_CODES, NATIONALITY_COUNTRY_CODES } from '@/lib/nationality'
 import { resolvePhoneSignInCopy } from '@/i18n/phone-sign-in-copy'
 import { isKoreanAppLocale, resolveIsKorean } from '@/lib/korean-signup'
 import { isPhoneRequiredFor } from '@/server/app-access'
@@ -14,20 +14,19 @@ const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf
 // contact sync (inviting friends is the point of it). Who is Korean is asked
 // right after the language, since many Koreans pick English.
 describe('Korean sign-up: asked, phone first, then the contact sync', () => {
-  it('asks "Are you Korean?" right after the language, in every first run', () => {
-    // "korea-visit" shows only after "no" (the modal filters it).
-    // One pass before sign-in (2026-11-24): the profile, then the microphone.
+  it('asks the nationality right after the language, Korea and the top visitor countries first', () => {
+    // Owner, 2026-11-25: the country is picked at once instead of "Are you Korean?".
+    // "korea-visit" shows only for a country other than Korea (the modal filters it).
     expect(FIRST_RUN_ONBOARDING_STEPS).toEqual([
-      'language', 'korean', 'nationality', 'korea-visit', 'interest-language',
+      'language', 'nationality', 'korea-visit', 'interest-language',
       'gender', 'height', 'birth-date', 'profile-photo', 'discovery-source', 'voice-intro',
     ])
-    expect(INVITE_ONBOARDING_STEPS.slice(0, 5)).toEqual(['language', 'korean', 'nationality', 'korea-visit', 'interest-language'])
+    expect(INVITE_ONBOARDING_STEPS.slice(0, 4)).toEqual(['language', 'nationality', 'korea-visit', 'interest-language'])
     expect(INVITE_ONBOARDING_STEPS).not.toContain('discovery-source')
-    for (const locale of PRIMARY_UI_LOCALES) {
-      const copy = resolveKoreanCheckCopy(locale)
-      for (const text of [copy.label, copy.title, copy.yes, copy.no]) expect(text.trim(), locale).not.toBe('')
-    }
-    expect(resolveKoreanCheckCopy('ko').title).toBe('한국인이신가요?')
+    expect(MAJOR_NATIONALITY_CODES[0]).toBe('KR')
+    expect(MAJOR_NATIONALITY_CODES).toHaveLength(11)
+    expect(new Set(MAJOR_NATIONALITY_CODES).size).toBe(11)
+    for (const code of MAJOR_NATIONALITY_CODES) expect(NATIONALITY_COUNTRY_CODES).toContain(code)
   })
 
   it('goes by the answer, and by the Korean app language only without one', () => {

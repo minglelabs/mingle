@@ -16,6 +16,13 @@ const ISO_COUNTRY_CODES = (
 ).split(" ");
 
 export const NATIONALITY_COUNTRY_CODES: readonly string[] = ISO_COUNTRY_CODES;
+
+/**
+ * The first-run nationality list's top block (owner, 2026-11-25): Korea, then
+ * the ten countries the most visitors to Korea come from, in that order; the
+ * rest follow in alphabetical order.
+ */
+export const MAJOR_NATIONALITY_CODES: readonly string[] = ["KR", "CN", "JP", "US", "TW", "VN", "TH", "PH", "HK", "SG", "ID"];
 const COUNTRY_CODE_SET = new Set(ISO_COUNTRY_CODES);
 
 export function normalizeNationalityCountry(value: unknown): string | null {

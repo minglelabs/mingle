@@ -112,10 +112,11 @@ export default function ContactSyncHost() {
     try {
       let nationalityCountry: string | null | undefined;
       const pickedCountry = readNationalityAnswer();
-      if (answer === "yes") {
-        nationalityCountry = "KR";
-      } else if (pickedCountry && pickedCountry !== "KR") {
+      if (pickedCountry) {
+        // Picked on the first screen (Korea included, 2026-11-25).
         nationalityCountry = pickedCountry;
+      } else if (answer === "yes") {
+        nationalityCountry = "KR";
       } else {
         const profileResponse = await fetch(buildClientApiPath("/profile"), { cache: "no-store" });
         if (!profileResponse.ok) return;
