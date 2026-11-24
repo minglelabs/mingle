@@ -3,6 +3,8 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import ImageZoomOverlay from '@/components/feed/image-zoom-overlay'
+import { ZoomableImage } from '../../feed/_components/zoomable-image'
 import { OPERATOR_POST_STAT_KEYS, conversionRate, formatConversionRate, formatStatCount, type OperatorPostStats } from '@/lib/operator-post-stats'
 import { OPERATOR_POST_STAT_LABELS, OperatorPostStatsRow } from '../../_components/operator-post-stats-row'
 import { InfiniteMore } from '../../_components/infinite-more'
@@ -827,6 +829,8 @@ function PhotoRedoOverlay({ drawing, disabled, onRedo, onRedoFromReference }: {
 /** A post's photos, swiped sideways like the app's feed, with a "2 / 4" count. */
 export function ReviewPhotos({ photos }: { photos: Array<{ objectKey: string; width: number | null; height: number | null }> }) {
   const [index, setIndex] = useState(0)
+  // Tap a photo: full screen with pinch zoom, as in the app.
+  const [zoomed, setZoomed] = useState<string | null>(null)
   return (
     <div className="relative mt-2">
       <div
@@ -846,10 +850,12 @@ export function ReviewPhotos({ photos }: { photos: Array<{ objectKey: string; wi
             height={photo.height ?? undefined}
             loading="lazy"
             decoding="async"
-            className="h-auto max-h-[85svh] w-full shrink-0 snap-center bg-slate-100 object-contain"
+            onClick={() => setZoomed(reviewImageUrl(photo.objectKey))}
+            className="h-auto max-h-[85svh] w-full shrink-0 cursor-zoom-in snap-center bg-slate-100 object-contain"
           />
         ))}
       </div>
+      <ImageZoomOverlay open={zoomed !== null} src={zoomed ?? ''} alt="" closeLabel="닫기" reducedMotion={false} onClose={() => setZoomed(null)} />
       {photos.length > 1 ? (
         <span className="absolute right-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-xs font-semibold text-white tabular-nums">
           {Math.min(index, photos.length - 1) + 1} / {photos.length}
@@ -1254,8 +1260,7 @@ function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDelete
       ) : null}
       {shownImage ? (
         <div className="relative">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={shownImage} alt="" className="aspect-square max-h-[75svh] w-full rounded-xl bg-slate-100 object-cover" />
+          <ZoomableImage src={shownImage} alt="프사" className="aspect-square max-h-[75svh] w-full rounded-xl bg-slate-100 object-cover" />
           {profile.primaryLanguages.length ? (
             <div className="absolute bottom-2 left-2 flex gap-1 rounded-full bg-white/90 px-2 py-1 text-2xl leading-none shadow-sm">
               {profile.primaryLanguages.map((code) => <LanguageFlag key={code} language={code} />)}
