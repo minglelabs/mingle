@@ -43,6 +43,7 @@ export const userProfileSelect = {
   isOfficial: true,
   isOperator: true,
   faceVerifiedAt: true,
+  phoneVerifiedAt: true,
   heightCm: true,
   createdAt: true,
   _count: {
@@ -87,6 +88,7 @@ type SelectedUserProfile = {
   isOfficial?: boolean | null;
   isOperator?: boolean | null;
   faceVerifiedAt?: Date | null;
+  phoneVerifiedAt?: Date | null;
   heightCm?: number | null;
   _count: {
     followerRelations: number;
@@ -123,6 +125,8 @@ export type UserProfile = {
   isOfficial?: boolean;
   /** Passed the selfie check for the current photo; present (true) only then. */
   faceVerified?: boolean;
+  /** Has a verified phone number (never the number); present (true) only then. */
+  phoneVerified?: boolean;
   /** Height in cm, as the user typed it; present only when set. */
   heightCm?: number;
   /** "Member #N": the order the account joined in (see @/server/member-number); absent for staff accounts. */
@@ -186,6 +190,7 @@ export function serializeUserProfile(profile: SelectedUserProfile, now: Date = n
     isOfficial,
     isOperator,
     faceVerifiedAt,
+    phoneVerifiedAt,
     heightCm,
   } = profile;
   const location = typeof locationLatitude === "number"
@@ -231,6 +236,7 @@ export function serializeUserProfile(profile: SelectedUserProfile, now: Date = n
     followingCount: _count.followingRelations,
     ...identityBadgeFlags({ isOfficial }),
     ...(faceVerifiedAt ? { faceVerified: true } : {}),
+    ...(phoneVerifiedAt ? { phoneVerified: true } : {}),
     ...(typeof heightCm === "number" ? { heightCm } : {}),
   };
 }

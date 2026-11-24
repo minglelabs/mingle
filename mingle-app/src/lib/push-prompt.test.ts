@@ -57,9 +57,10 @@ describe('notification prompt timing', () => {
     expect(read('../app/layout.tsx')).toContain('<PushPermissionPrompt />')
   })
 
-  it('sends a new account to Home after sign-in, with the say-something card there', () => {
+  it('sends a new account to Explore after sign-in (2026-11-25), with the say-something card there', () => {
     const list = read('../components/conversation-list.tsx')
-    expect(list).toContain('router.replace(buildNativeAwareTabPath(homeHref(locale), params, { tabRoot: true }));')
+    expect(list).toContain('router.replace(buildNativeAwareTabPath(exploreHref(locale), params, { tabRoot: true }));')
+    expect(read('../app/[locale]/explore/page.tsx')).toContain('<HomeFeedLayer locale={locale} />')
     expect(list).toContain('if (params.get("firstSpeak") !== "1") return;')
     const home = read('../components/home/home-feed-layer.tsx')
     expect(home).toContain('data-qa="home-first-speak-card"')

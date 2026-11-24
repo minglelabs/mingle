@@ -230,7 +230,7 @@ import type { LatestUtterancePayload } from "@/components/LivePhoneDemo/LivePhon
 import MingleWordmark from "@/components/mingle-wordmark";
 import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
 import { PUSH_PROMPT_CLOSED_EVENT, holdPushPrompt, requestPushPrompt } from "@/lib/push-prompt";
-import { homeHref } from "@/lib/home-routes";
+import { exploreHref } from "@/lib/home-routes";
 import AppTopHeader from "@/components/app-top-header";
 import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
 import { useUnreadNotifications } from "@/components/notifications/use-unread-notifications";
@@ -5647,9 +5647,10 @@ export default function ConversationList({
     void handleCreateConversation();
   }, [handleCreateConversation]);
 
-  // A new account that just signed in here goes to the Home tab: the app is
-  // for meeting people, so they are the first thing it shows. The "say
-  // something" card is on Home as well and comes back here with `firstSpeak=1`.
+  // A new account that just signed in here goes to the Explore tab (owner,
+  // 2026-11-25; was Home): the app is for meeting people, and the lounge may
+  // be empty while few are online. The "say something" card is there as well
+  // and comes back here with `firstSpeak=1`.
   // The mark is cleared by Home once it is on screen (see shouldGoHomeAfterSignIn):
   // signing in can reload this page or bring it back here after the first move.
   useEffect(() => {
@@ -5663,7 +5664,7 @@ export default function ConversationList({
     const params = new URLSearchParams(window.location.search);
     if (params.has("firstSpeak")) return;
     captureMingleClientEvent("mingle_first_run_step", { step: "home_after_sign_in" });
-    router.replace(buildNativeAwareTabPath(homeHref(locale), params, { tabRoot: true }));
+    router.replace(buildNativeAwareTabPath(exploreHref(locale), params, { tabRoot: true }));
   }, [activeConversation, locale, router, sessionStatus]);
 
   // Home's "say something" card lands here with `firstSpeak=1`: open the room at once.

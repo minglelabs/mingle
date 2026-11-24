@@ -100,7 +100,11 @@ describe('selfie check steps', () => {
     expect(read('../app/api/profile/image/route.ts')).toContain('faceVerifiedAt: null')
     expect(read('../server/user-profile.ts')).toContain('faceVerified: true')
     expect(read('../app/api/users/[userId]/route.ts')).toContain('faceVerified: true')
-    expect(read('../components/public-user-profile-screen.tsx')).toContain('<FaceVerifiedBadge')
+    // Chips on the profile, one per check (2026-11-25), and the check on the photo.
+    const profileScreen = read('../components/public-user-profile-screen.tsx')
+    expect(profileScreen).toContain('<VerificationChips faceVerified={profile.faceVerified === true} phoneVerified={profile.phoneVerified === true}')
+    expect(profileScreen).toContain('faceVerified={profile.faceVerified === true}')
+    expect(read('../app/api/users/[userId]/route.ts')).toContain('phoneVerified: true')
     expect(read('../components/my-page.tsx')).toContain('<SelfieVerifyScreen')
     const screen = read('../components/selfie-verify-screen.tsx')
     expect(screen).toContain('<TurnGauge step={step} position={gauge} />')

@@ -1,8 +1,8 @@
 /**
  * Home is the voice rooms tab (owner, 2026-11-24): the lounge and the rooms on
- * now. A new account lands there after the speak trial, so the first thing
- * after speaking is a place to speak. The feed and the people cards (explore)
- * have their own tabs. Every "go home" (landing, after sign-in) opens it.
+ * now. The app launch opens it. A new account lands on explore right after
+ * signing up instead (owner, 2026-11-25: people first, the lounge may be
+ * empty while few are online). The feed and explore have their own tabs.
  */
 export function homeHref(locale: string): string {
   return `/${locale}/voice`

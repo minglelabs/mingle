@@ -51,6 +51,7 @@ const userProfileSelect = {
   locationCountry: true,
   locationCountryCode: true,
   faceVerifiedAt: true,
+  phoneVerifiedAt: true,
   heightCm: true,
   createdAt: true,
   _count: {
@@ -171,6 +172,8 @@ export async function GET(_request: NextRequest, { params }: UserProfileRoutePro
     ...identityBadgeFlags(user),
     // Passed the selfie check for the current photo.
     ...(user.faceVerifiedAt ? { faceVerified: true } : {}),
+    // A verified number (never the number itself), shown as a chip.
+    ...(user.phoneVerifiedAt ? { phoneVerified: true } : {}),
     ...(typeof user.heightCm === "number" ? { heightCm: user.heightCm } : {}),
     // "Member #N" (the order the account joined in); staff accounts have none.
     ...(memberNumber ? { memberNumber } : {}),

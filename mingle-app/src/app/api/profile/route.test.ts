@@ -176,6 +176,7 @@ describe("/api/profile route", () => {
         isOfficial: true,
         isOperator: true,
         faceVerifiedAt: true,
+        phoneVerifiedAt: true,
         heightCm: true,
         createdAt: true,
         _count: {
@@ -259,6 +260,7 @@ describe("/api/profile route", () => {
         isOfficial: true,
         isOperator: true,
         faceVerifiedAt: true,
+        phoneVerifiedAt: true,
         heightCm: true,
         createdAt: true,
         _count: {

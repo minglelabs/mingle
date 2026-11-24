@@ -2,7 +2,7 @@
 
 import { requestProfileBasics } from "@/lib/profile-basics";
 import { parseFirstMessageSetupNeeds, requestFirstMessageSetup } from "@/lib/first-message-setup";
-import FaceVerifiedBadge from "@/components/face-verified-badge";
+import { resolveVerificationBadgesCopy } from "@/i18n/verification-badges-copy";
 import ProfileBio from "@/components/profile-bio";
 import { sameBioLanguage } from "@/lib/profile-bio";
 import ProfileGenderAgeBadge from "@/components/profile-gender-age-badge";
@@ -49,6 +49,8 @@ import {
   Loader2,
   MessageCircle,
   MoreHorizontal,
+  ScanFace,
+  Smartphone,
   UserRound,
   UserX,
   X,
@@ -109,6 +111,7 @@ type PublicUserProfile = {
   isOperator?: boolean;
   /** Passed the selfie check for the current photo; absent means false. */
   faceVerified?: boolean;
+  phoneVerified?: boolean;
   /** "Member #N" (see @/server/member-number); absent for staff accounts. */
   memberNumber?: number;
 };
@@ -228,6 +231,34 @@ function ProfileAvatar({
         </span>
       ) : null}
     </button>
+  );
+}
+
+/**
+ * The checks this account passed, one chip each with its own icon (owner,
+ * 2026-11-25): the face (selfie check) and the phone number. More can join.
+ */
+function VerificationChips({ faceVerified, phoneVerified, locale }: { faceVerified: boolean; phoneVerified: boolean; locale: string }) {
+  if (!faceVerified && !phoneVerified) return null;
+  const copy = resolveVerificationBadgesCopy(locale);
+  const chips = [
+    faceVerified ? { key: "face", label: copy.face, icon: <ScanFace size={14} strokeWidth={2.3} aria-hidden="true" /> } : null,
+    phoneVerified ? { key: "phone", label: copy.phone, icon: <Smartphone size={14} strokeWidth={2.3} aria-hidden="true" /> } : null,
+  ].filter((chip): chip is { key: string; label: string; icon: React.ReactElement } => chip !== null);
+  return (
+    <div data-qa="profile-verification-chips" className="mt-2 flex flex-wrap gap-1.5">
+      {chips.map((chip) => (
+        <span
+          key={chip.key}
+          data-qa={`profile-verified-${chip.key}`}
+          className="inline-flex items-center gap-1 rounded-full bg-emerald-50 py-1 pl-1.5 pr-2.5 text-[12px] font-semibold text-emerald-700"
+        >
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white">{chip.icon}</span>
+          {chip.label}
+          <Check size={13} strokeWidth={3} aria-hidden="true" />
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -640,7 +671,6 @@ export default function PublicUserProfileScreen({
         <h1 className="flex min-w-0 items-center justify-center gap-1.5 text-[17px] font-bold">
           <span className="truncate">{name}</span>
           <AccountBadge kind={repeatedNameBadge} locale={locale} tone="dark" />
-          {profile?.faceVerified ? <FaceVerifiedBadge locale={locale} /> : null}
         </h1>
         <div aria-hidden="true" />
       </header>
@@ -712,6 +742,7 @@ export default function PublicUserProfileScreen({
                   {profile.handle ? <span className="min-w-0 truncate text-[13px] text-gray-500">{formatHandle(profile.handle)}</span> : null}
                 </p>
                 <MemberNumberLine memberNumber={profile.memberNumber} locale={locale} />
+                <VerificationChips faceVerified={profile.faceVerified === true} phoneVerified={profile.phoneVerified === true} locale={locale} />
                 <ProfileLanguageLevels
                   primaryLanguages={primaryLanguages}
                   interestLanguages={sanitizeInterestLanguages(profile.interestLanguages, primaryLanguages)}
