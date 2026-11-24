@@ -60,6 +60,12 @@ export function lensForShot(description: string): PhoneLens {
  * the camera, not from blemishes.
  */
 const CAMERA_FOCUSED = 'Straight out of the phone\'s main camera: no portrait mode, no beauty app, no face slimming, no eye enlarging. The focus is on the person: they are sharp, things a few meters behind them are noticeably soft, and far-off signs and writing are blurred and unreadable, the natural falloff of a real lens rather than an artificial portrait blur.'
+/**
+ * The same, with everything sharp: a phone's main camera a few meters away
+ * barely blurs the background, and many real photos look like that (staff
+ * 2026-11-24). Half of the posts of the poster get it.
+ */
+const CAMERA_DEEP = 'Straight out of the phone\'s main camera: no portrait mode, no beauty app, no face slimming, no eye enlarging. Deep focus like a small phone lens a few meters away: the person and the place behind them are almost equally sharp, with no background blur at all; only far-off small writing stays unreadable.'
 const SKIN_CLEAN = 'Skin: smooth and soft, the way a phone renders a face at an ordinary distance: an even natural tone with no visible pores or fine texture, matte, with no shine, sweat or glossy highlights on the forehead, nose or cheeks, no painted-on color or contouring, no blemishes, rough patches, redness, stubble shadow or grime; still real skin, not plastic, waxy or porcelain.'
 
 /** The camera line for photos without a person: the beauty-app words only invite a face. */
@@ -504,6 +510,10 @@ function offColorObject(random: Random, kind: SceneKind): string | null {
 const SKIN = 'Skin: smooth and soft at phone distance, an even matte tone with only slight natural variation; pores and fine texture are not visible; makeup sits on the skin rather than looking airbrushed; never gritty, grainy or crawling with texture. No shine or sweat sheen anywhere on the face; no porcelain, waxy or glossy skin.'
 
 const PEOPLE = 'Clothes crease and hang naturally; the expression is relaxed and caught mid-moment, not a posed photo smile.'
+/** For a pose the person chose for the photo (see post-person-variety.ts). */
+const PEOPLE_POSED = 'Clothes crease and hang naturally; the pose is one the person chose for the photo, done the easy, slightly playful way people pose for a friend\'s phone, not a model\'s pose and not stiff.'
+/** Hair that falls over part of the face, as it often does in real photos. */
+const HAIR_LOOSE = 'Hair: not arranged for the photo; a few strands or a whole lock fall across part of the face (over a cheek or one eye), which is fine. The hair reads as soft clumps and locks the way a phone resolves it, not hundreds of individually drawn strands.'
 
 const HAIR: Record<PhotoEnvironment, string> = {
   outdoor: 'Hair: a light breeze moves it a little, one loose strand across the face at most. The hair reads as soft clumps and locks the way a phone resolves it, not hundreds of individually drawn strands. The hairstyle keeps its shape.',
@@ -582,7 +592,15 @@ function pickFlaws(random: Random, count: number): string[] {
  */
 export function phonePhotoRealism(
   random: Random = Math.random,
-  options: { people?: boolean; faces?: boolean; environment?: PhotoEnvironment; focusOnPerson?: boolean; lens?: PhoneLens; scene?: string; pickTime?: boolean } = {},
+  options: {
+    people?: boolean; faces?: boolean; environment?: PhotoEnvironment; focusOnPerson?: boolean; lens?: PhoneLens; scene?: string; pickTime?: boolean
+    /** Background as sharp as the person, instead of going soft behind them. */
+    deepFocus?: boolean
+    /** Hair may fall across part of the face. */
+    looseHair?: boolean
+    /** The pose is one the person chose (a gesture, a prop by the face), not a caught moment. */
+    posed?: boolean
+  } = {},
 ): string {
   const environment = options.environment ?? 'any'
   const people = options.people !== false
@@ -598,7 +616,7 @@ export function phonePhotoRealism(
   const grade = options.pickTime ? pickColorGrade(random) : null
   const rendering = grade ? CAMERA[1].replace('; auto white balance a bit off (slightly too warm or too cool).', '.') : CAMERA[1]
   return [
-    ...(people ? [options.focusOnPerson ? CAMERA_FOCUSED : CAMERA[0], rendering] : [CAMERA_NO_PEOPLE, rendering]),
+    ...(people ? [options.focusOnPerson ? (options.deepFocus ? CAMERA_DEEP : CAMERA_FOCUSED) : CAMERA[0], rendering] : [CAMERA_NO_PEOPLE, rendering]),
     ...(grade ? [`Color and exposure in this photo: ${grade}. ${NOT_WASHED_OUT}`] : []),
     ...(options.lens ? [LENS[options.lens]] : []),
     ...(time ? [`Time and light, like this: ${time}. Take only the time, weather and light from it; the place stays the one described above.`] : []),
@@ -613,11 +631,11 @@ export function phonePhotoRealism(
     TEXTURE,
     DETAIL,
     ...(offColor ? [`Somewhere in the background, small and incidental: ${offColor}. Nothing else is added just for color.`] : ['Add no stray objects just for color; the place keeps only what it really has.']),
-    ...(people ? [options.focusOnPerson ? SKIN_CLEAN : SKIN, HAIR[environment], PEOPLE] : []),
+    ...(people ? [options.focusOnPerson ? SKIN_CLEAN : SKIN, options.looseHair ? HAIR_LOOSE : HAIR[environment], options.posed ? PEOPLE_POSED : PEOPLE] : []),
     // People taking their own photo frame it with some care, so fewer flaws there.
     `Imperfections in this photo: ${flaws.join('; ')}.`,
     ...(softLook ? [SOFT_LOOK] : []),
     ...(faces ? [AVOID_FACE] : []),
-    avoidLine(Boolean(options.focusOnPerson), softLook),
+    avoidLine(Boolean(options.focusOnPerson) && !options.deepFocus, softLook),
   ].join('\n')
 }

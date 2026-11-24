@@ -42,7 +42,7 @@ describe('photos of the poster', () => {
     expect(prompt).toContain('The poster is the person in the attached photo')
     expect(prompt).toContain('completely different photo')
     expect(prompt).not.toContain('The poster: a Japanese woman')
-    expect(prompt).toContain('face is clearly visible')
+    expect(prompt).toContain('face is visible; a hand')
     expect(prompt).toContain('no school uniforms')
     expect(prompt).not.toContain('No face and no recognizable person')
     expect(prompt).toContain('The focus is on the person')

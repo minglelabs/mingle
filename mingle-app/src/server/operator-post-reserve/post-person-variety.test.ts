@@ -66,3 +66,21 @@ describe('variety in photos of the poster', () => {
     }
   })
 })
+
+describe('poses of the poster', () => {
+  it('spread over caught moments and chosen poses, with the focus and hair picked apart from the pose', async () => {
+    const { FACE_POSES, pickPoseVariety } = await import('./post-person-variety')
+    expect(FACE_POSES.length).toBeGreaterThan(30)
+    expect(FACE_POSES.filter(([, posed]) => posed).length).toBeGreaterThan(10)
+    expect(FACE_POSES.filter(([, posed]) => !posed).length).toBeGreaterThan(10)
+    let seed = 11
+    const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+    const picks = Array.from({ length: 2000 }, () => pickPoseVariety(random, { faces: true }))
+    expect(new Set(picks.map((pick) => pick.line)).size).toBe(FACE_POSES.length)
+    const share = (test: (pick: (typeof picks)[number]) => boolean) => picks.filter(test).length / picks.length
+    expect(share((pick) => pick.deepFocus)).toBeGreaterThan(0.4)
+    expect(share((pick) => pick.looseHair)).toBeGreaterThan(0.2)
+    expect(share((pick) => pick.posed)).toBeGreaterThan(0.3)
+    expect(pickPoseVariety(() => 0.99, { faces: false }).looseHair).toBe(false)
+  })
+})

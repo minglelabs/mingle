@@ -7,7 +7,7 @@ import { newPostImageKey } from '@/server/posts/post-image-keys'
 import { getPostImage, putPostImage } from '@/server/posts/post-image-storage'
 import { decodePostPhoto, type PostPhotoKind } from './post-photo'
 import { pairImages, stripImages } from './pair-images'
-import { pickPersonVariety } from './post-person-variety'
+import { pickPersonVariety, pickPoseVariety } from './post-person-variety'
 import { faceStickerLine } from './face-stickers'
 import { contrastLines, describeReferenceForContrast } from './reference-contrast'
 
@@ -18,7 +18,7 @@ const FRIEND_STICKER_SHARE = 0.85
 export type PostPhotoPerson = { look: string; hasReference: boolean; gender?: string | null }
 
 const PERSON_LINES: Record<Exclude<PostPhotoKind, 'scene'>, string> = {
-  self: 'The poster\'s face is clearly visible.',
+  self: 'The poster\'s face is visible; a hand, something they hold or their hair may cover a small part of it.',
   self_faceless: 'The poster\'s face is not visible: out of frame, covered by the phone or a hand, or turned away. Only their outfit, hair, hands or body show.',
   self_back: 'The poster is seen from behind; their face is not visible.',
   friends: 'The friends are other adults who look clearly different from the poster and from each other, each with an ordinary everyday face of their own; nobody looks like a celebrity or a model.',
@@ -57,7 +57,12 @@ export function buildPostImagePrompt(
     ].join('\n')
   }
   const faces = kind === 'self' || kind === 'friends'
-  const realism = phonePhotoRealism(random, { people: true, faces, focusOnPerson: true, lens: lensForShot(description), pickTime: true, scene: `${description} ${place ?? ''}` })
+  // Group photos keep their own poses (cheers, side by side); the poster alone gets one picked.
+  const pose = kind === 'friends' ? null : pickPoseVariety(random, { faces: kind === 'self' })
+  const realism = phonePhotoRealism(random, {
+    people: true, faces, focusOnPerson: true, lens: lensForShot(description), pickTime: true, scene: `${description} ${place ?? ''}`,
+    deepFocus: pose?.deepFocus, looseHair: pose?.looseHair, posed: pose?.posed,
+  })
   // Picked after the realism block so its picks stay what they were for a given seed.
   const variety = pickPersonVariety(random, { faces: kind === 'self' || (kind === 'friends' && person.hasReference), female: person.gender === 'female', hasReference: person.hasReference })
   // Picked last so the picks above stay what they were for a given seed.
@@ -78,6 +83,7 @@ export function buildPostImagePrompt(
       : [`The poster: ${person.look}.`]),
     PERSON_LINES[kind],
     ...variety,
+    ...(pose ? [pose.line] : []),
     ...(stickers ? [stickers] : []),
     ...placeLine,
     'It must look like a real, unedited snapshot, not a photoshoot: an ordinary moment, the outfit the person would really wear there.',
