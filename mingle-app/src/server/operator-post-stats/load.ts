@@ -11,7 +11,8 @@ import { ATTRIBUTION_WINDOW_MS, countConversions, type ConversionCandidateRow } 
 
 /** Which posts: a list of ids (optionally of one operator only), or everything published in a range. */
 export type OperatorPostStatsTarget =
-  | { postIds: readonly string[]; authorId?: string | null }
+  /** `anyAuthor`: real users' posts too (staff, 2026-11-25), not only operator accounts'. */
+  | { postIds: readonly string[]; authorId?: string | null; anyAuthor?: boolean }
   | { publishedFrom: Date; publishedTo: Date }
 
 /**
@@ -38,7 +39,7 @@ function targetPostsCte(target: OperatorPostStatsTarget): Prisma.Sql {
   return Prisma.sql`target AS (
     SELECT p."id", p."author_id", p."published_at"
     FROM "app"."app_posts" AS p
-    JOIN "app"."app_users" AS author ON author."id" = p."author_id" AND author."is_operator"
+    JOIN "app"."app_users" AS author ON author."id" = p."author_id"${'postIds' in target && target.anyAuthor ? Prisma.empty : Prisma.sql` AND author."is_operator"`}
     WHERE ${filter} AND (p."is_deleted" IS NULL OR p."is_deleted" = false)
   )`
 }

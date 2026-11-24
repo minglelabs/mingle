@@ -96,7 +96,7 @@ export async function loadFeedChunk(view: FeedView, cursor: string | null, here:
     post.id,
     post.translations.filter((translation) => translation.bodyVersion === post.bodyVersion).map((translation) => ({ language: translation.language, text: translation.text! })),
   ]))
-  const statsByPost = await loadOperatorPostStats({ postIds: feed.posts.filter((post) => post.author.isOperator).map((post) => post.id) })
+  const statsByPost = await loadOperatorPostStats({ postIds: feed.posts.map((post) => post.id), anyAuthor: true })
 
   const now = new Date()
   const node = (
