@@ -45,3 +45,17 @@ describe('reference library', () => {
     expect((await listReferencePhotos()).some((item) => item.id === 'old-m')).toBe(false)
   })
 })
+
+describe('reference kinds', () => {
+  it('claims only the kinds asked for, an untagged photo counting as a face photo', async () => {
+    store.value = { items: [
+      { ...photo('food', null), kind: 'thing' },
+      { ...photo('back', 'female'), kind: 'person' },
+      photo('legacy', 'female'),
+    ] }
+    expect((await claimReferencePhoto({ userId: 'u1', kind: 'post', kinds: ['thing'] }))?.id).toBe('food')
+    expect(await claimReferencePhoto({ userId: 'u1', kind: 'post', kinds: ['thing'] })).toBeNull()
+    expect((await claimReferencePhoto({ userId: 'u1', kind: 'post', kinds: ['face'], gender: 'female' }))?.id).toBe('legacy')
+    expect((await claimReferencePhoto({ userId: 'u1', kind: 'post', kinds: ['person'], gender: 'male' }))).toBeNull()
+  })
+})

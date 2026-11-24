@@ -10,7 +10,7 @@ import { pairImages, stripImages } from './pair-images'
 import { pickPersonVariety, pickPoseVariety } from './post-person-variety'
 import { faceStickerLine } from './face-stickers'
 import { contrastLines, describeReferenceForContrast } from './reference-contrast'
-import { claimReferencePhoto, loadReferenceBytes, referenceRecreateLines, releaseReferencePhoto } from '@/server/reference-library/library'
+import { claimReferencePhoto, loadReferenceBytes, referenceKindOf, referenceRecreateLines, releaseReferencePhoto, type ReferenceKind } from '@/server/reference-library/library'
 
 /** Most group photos hide the friends' faces under stickers; some friends are fine being seen. */
 const FRIEND_STICKER_SHARE = 0.85
@@ -366,38 +366,54 @@ async function profilePhotoForPost(operatorUserId: string): Promise<ReservePostI
   return photo ? storeReservePostImage(operatorUserId, photo.bytes) : null
 }
 
+/** Which library photos a post photo of each kind can be drawn from. */
+const LIBRARY_KINDS_BY_POST: Partial<Record<PostPhotoKind, readonly ReferenceKind[]>> = {
+  self: ['face'],
+  self_faceless: ['person'],
+  self_back: ['person'],
+  scene: ['thing'],
+}
+
 /**
- * The request for an account's first selfie drawn from a reference-library
- * photo: only for a selfie-type photo of a real-photo account whose profile
- * photo hides the face and that has posted no selfie yet. Null otherwise, or
- * when the library has no photo left for the account's gender.
+ * A post photo drawn from an unused reference-library photo of the fitting
+ * kind (staff, 2026-11-24: posts use the library as much as it allows): a
+ * selfie keeps the poster's face (the library shot on the left, the poster on
+ * the right), or gets a new face when the account has none yet, which then
+ * fixes it for later posts; a faceless shot keeps the face hidden; a scene
+ * becomes another photo of the same kind of thing. Null when the post does
+ * not fit (anime account, friends photo, profile-photo intro) or the library
+ * has nothing left, and the photo is drawn the usual way.
  */
-async function libraryFirstSelfie(operatorUserId: string, description: string): Promise<{ request: { prompt: string; reference: AvatarReference }; referenceId: string } | null> {
+async function libraryPostRequest(
+  operatorUserId: string,
+  description: string,
+  base: { prompt: string; reference: AvatarReference | null },
+): Promise<{ request: { prompt: string; reference: AvatarReference }; referenceId: string } | null> {
   const brief = decodePostPhoto(description)
-  if (brief.kind !== 'self' || brief.profilePhoto) return null
-  const [persona, user, selfie] = await Promise.all([
+  const kinds = LIBRARY_KINDS_BY_POST[brief.kind]
+  if (!kinds || brief.profilePhoto) return null
+  const [persona, user] = await Promise.all([
     loadAvatarPersona(operatorUserId),
     prisma.user.findUnique({ where: { id: operatorUserId }, select: { operatorAccount: { select: { avatarSpec: true } } } }),
-    prisma.operatorPostReserve.findFirst({
-      where: { operatorUserId, state: 'published', imagePrompt: { startsWith: '[self]' }, postId: { not: null } },
-      select: { id: true },
-    }),
   ])
-  if (!persona || selfie) return null
+  if (!persona) return null
   const spec = user?.operatorAccount?.avatarSpec as Partial<AvatarSpec> | null | undefined
-  if (isAnimeSpec(spec) || specSubject(spec)) return null
-  const photo = await claimReferencePhoto({ userId: operatorUserId, kind: 'post', gender: persona.gender === 'female' || persona.gender === 'male' ? persona.gender : null }).catch(() => null)
+  if (isAnimeSpec(spec)) return null
+  const gender = persona.gender === 'female' || persona.gender === 'male' ? persona.gender : null
+  const photo = await claimReferencePhoto({ userId: operatorUserId, kind: 'post', kinds, gender: kinds.includes('thing') ? null : gender }).catch(() => null)
   if (!photo) return null
   try {
-    const reference = await loadReferenceBytes(photo)
-    const look = describeAccountLook(persona, seededRandom(`${operatorUserId}:look`))
+    const kind = referenceKindOf(photo)
+    const shot = await loadReferenceBytes(photo)
+    const poster = kind === 'face' && base.reference ? base.reference : null
+    const look = specSubject(spec) ?? describeAccountLook(persona, seededRandom(`${operatorUserId}:look`))
     const place = brief.place ?? await reservePostPlace(operatorUserId)
     const prompt = [
-      ...referenceRecreateLines(look),
-      ...(brief.description.trim() ? [`What the post is about (fit the moment to it where the shot allows): ${brief.description.trim()}`] : []),
+      ...referenceRecreateLines({ kind, look, poster: Boolean(poster), fit: brief.description }),
       ...(place ? [`It was taken around ${place}.`] : []),
       'Vertical 3:4 image, one single photo (never two side by side). No watermarks, logos, borders or frames.',
     ].join('\n')
+    const reference = poster ? { bytes: await pairImages(shot.bytes, poster.bytes), mimeType: 'image/jpeg' } : shot
     return { request: { prompt, reference }, referenceId: photo.id }
   } catch {
     await releaseReferencePhoto(photo.id).catch(() => {})
@@ -413,9 +429,8 @@ export async function drawReservePostImage(operatorUserId: string, description: 
       if (profile) return profile
     }
     const base = await reservePostImageRequest(operatorUserId, description)
-    // No face to keep yet (the profile hides it, no selfie posted): the first selfie is drawn
-    // from a reference-library photo, and that selfie fixes the face for the ones after it.
-    const library = !staffReference && !context && !base.reference ? await libraryFirstSelfie(operatorUserId, description) : null
+    // A fresh drawing (not a staff redo) comes from the reference library while it has a fitting photo.
+    const library = !staffReference && !context ? await libraryPostRequest(operatorUserId, description, base) : null
     const request = library
       ? library.request
       : context

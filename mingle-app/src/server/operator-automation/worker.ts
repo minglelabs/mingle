@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import type { AdminContext } from '@/server/admin/guard'
-import { assignReferencePhoto, claimReferencePhoto, loadReferenceBytes, releaseReferencePhoto } from '@/server/reference-library/library'
+import { assignReferencePhoto, claimReferencePhoto, loadReferenceBytes, referenceKindOf, releaseReferencePhoto } from '@/server/reference-library/library'
 import { generateOperatorAvatar, type AvatarGenerationResult } from '@/server/operator-avatars/generate'
 import { createOperatorAccount, type CreatedOperatorAccount } from '@/server/operators/create-operator'
 import { generatePersonaDrafts } from '@/server/operators/persona-draft'
@@ -143,7 +143,8 @@ export async function createNextSeedAccount(
     let referenceUsed = false
     // A new account waiting for review gets its photo now, so staff judge both together.
     if (options.inReview && canDrawImagesHere()) {
-      const libraryReference = reference ? await loadReferenceBytes(reference).catch(() => null) : null
+      const bytes = reference ? await loadReferenceBytes(reference).catch(() => null) : null
+      const libraryReference = reference && bytes ? { reference: bytes, kind: referenceKindOf(reference) } : null
       const drawn = await generateOperatorAvatar(ctx, account.userId, { now: options.now, ...(libraryReference ? { libraryReference } : {}) }).catch(() => null)
       // A photo that was not drawn from goes back to the library for the next account.
       referenceUsed = Boolean(reference && libraryReference && drawn?.ok)

@@ -3,12 +3,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Loader2, Trash2, UserPlus } from 'lucide-react'
-import type { ReferenceGender } from '@/server/reference-library/library'
+import type { ReferenceGender, ReferenceKind } from '@/server/reference-library/library'
 import type { ReferencePhotoView } from '@/server/reference-library/view'
 import { adminProfileHref } from '../../_lib/profile-href'
 import { reviewImageUrl } from '../review/review-image-url'
 
 const GENDER_LABEL: Record<ReferenceGender, string> = { female: '여', male: '남' }
+const KIND_LABEL: Record<ReferenceKind, string> = { face: '얼굴 나옴', person: '얼굴 없는 사람', thing: '음식·풍경·물건' }
+const KINDS: readonly ReferenceKind[] = ['face', 'person', 'thing']
+type UploadGender = ReferenceGender | 'none' | 'auto'
+type UploadKind = ReferenceKind | 'auto'
 type Filter = 'unused' | 'used' | 'all'
 
 function isImage(file: File): boolean {
@@ -17,13 +21,16 @@ function isImage(file: File): boolean {
 
 export function ReferenceLibrary({ initialItems, canDraw }: { initialItems: ReferencePhotoView[]; canDraw: boolean }) {
   const [items, setItems] = useState(initialItems)
-  const [gender, setGender] = useState<ReferenceGender | ''>('female')
+  const [gender, setGender] = useState<UploadGender>('auto')
+  const [kind, setKind] = useState<UploadKind>('auto')
   const [uploading, setUploading] = useState(0)
   const [dragging, setDragging] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [filter, setFilter] = useState<Filter>('unused')
   const genderRef = useRef(gender)
   genderRef.current = gender
+  const kindRef = useRef(kind)
+  kindRef.current = kind
 
   const upload = useCallback(async (files: File[]) => {
     const images = files.filter(isImage)
@@ -38,6 +45,7 @@ export function ReferenceLibrary({ initialItems, canDraw }: { initialItems: Refe
       const form = new FormData()
       for (const file of batch) form.append('file', file)
       form.set('gender', genderRef.current)
+      form.set('kind', kindRef.current)
       try {
         const response = await fetch('/admin/operators/api/references', { method: 'POST', body: form })
         const body = await response.json().catch(() => ({})) as { added?: number; rejected?: number; items?: ReferencePhotoView[] }
@@ -66,10 +74,10 @@ export function ReferenceLibrary({ initialItems, canDraw }: { initialItems: Refe
     return () => document.removeEventListener('paste', onPaste)
   }, [upload])
 
-  const setItemGender = useCallback(async (id: string, next: ReferenceGender | null) => {
-    setItems((current) => current.map((item) => (item.id === id ? { ...item, gender: next } : item)))
+  const setItemTags = useCallback(async (id: string, tags: { gender?: ReferenceGender | null; kind?: ReferenceKind }) => {
+    setItems((current) => current.map((item) => (item.id === id ? { ...item, ...tags } : item)))
     await fetch(`/admin/operators/api/references/${encodeURIComponent(id)}`, {
-      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ gender: next }),
+      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(tags),
     }).catch(() => {})
   }, [])
 
@@ -101,16 +109,29 @@ export function ReferenceLibrary({ initialItems, canDraw }: { initialItems: Refe
           void upload(Array.from(event.dataTransfer.files))
         }}
       >
-        <div className="flex flex-wrap items-center justify-center gap-2 text-sm">
-          <span className="font-semibold text-slate-700">올릴 사진의 성별</span>
-          {(['female', 'male', ''] as const).map((value) => (
+        <div className="flex flex-wrap items-center justify-center gap-1.5 text-sm">
+          <span className="w-full font-semibold text-slate-700 sm:w-auto">종류</span>
+          {(['auto', ...KINDS] as const).map((value) => (
             <button
-              key={value || 'none'}
+              key={value}
+              type="button"
+              onClick={() => setKind(value)}
+              className={`min-h-9 rounded-full px-3 font-semibold ${kind === value ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'}`}
+            >
+              {value === 'auto' ? '자동' : KIND_LABEL[value]}
+            </button>
+          ))}
+        </div>
+        <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5 text-sm">
+          <span className="w-full font-semibold text-slate-700 sm:w-auto">성별</span>
+          {(['auto', 'female', 'male', 'none'] as const).map((value) => (
+            <button
+              key={value}
               type="button"
               onClick={() => setGender(value)}
               className={`min-h-9 rounded-full px-3 font-semibold ${gender === value ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'}`}
             >
-              {value ? GENDER_LABEL[value] : '구분 없음'}
+              {value === 'auto' ? '자동' : value === 'none' ? '구분 없음' : GENDER_LABEL[value]}
             </button>
           ))}
         </div>
@@ -118,7 +139,7 @@ export function ReferenceLibrary({ initialItems, canDraw }: { initialItems: Refe
           {uploading ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" />올리는 중 {uploading}</> : '사진 고르기'}
           <input type="file" accept="image/*" multiple className="sr-only" onChange={(event) => { void upload(Array.from(event.target.files ?? [])); event.target.value = '' }} />
         </label>
-        <p className="mt-2 text-xs text-slate-500">여러 장을 끌어다 놓거나 ⌘V로 붙여넣어도 됩니다. 성별은 나중에 사진마다 바꿀 수 있어요.</p>
+        <p className="mt-2 text-xs text-slate-500">여러 장을 끌어다 놓거나 ⌘V로 붙여넣어도 됩니다. “자동”이면 AI가 사진마다 종류와 성별을 붙이고, 나중에 사진마다 고칠 수 있어요.</p>
         {status ? <p role="status" className="mt-1 text-xs font-semibold text-slate-700">{status}</p> : null}
       </div>
 
@@ -138,14 +159,17 @@ export function ReferenceLibrary({ initialItems, canDraw }: { initialItems: Refe
           </button>
         ))}
       </div>
-      <p className="mt-2 text-xs text-slate-500">자동 생성이 새 계정을 만들 때 안 쓴 사진을 오래된 순서로 하나씩 씁니다. 사진의 성별에 맞춰 계정을 만듭니다.</p>
+      <p className="mt-2 text-xs text-slate-500">
+        안 쓴 사진은 오래된 순서로 씁니다. 새 계정 프사는 종류 상관없이 한 장(사람 사진이면 그 성별로 계정 생성), 글 사진은 셀카 ← 얼굴 나옴, 얼굴 없는 셀카·뒷모습 ← 얼굴 없는 사람, 일상 사진 ← 음식·풍경·물건. 한 장은 한 계정만 씁니다.
+        {' '}남은 사진: {KINDS.map((value) => `${KIND_LABEL[value]} ${items.filter((item) => !item.usedBy && (item.kind ?? 'face') === value).length}`).join(' · ')}
+      </p>
 
       {shown.length === 0 ? (
         <p className="py-10 text-center text-sm text-slate-500">{items.length ? '해당하는 사진이 없습니다.' : '아직 올린 사진이 없습니다.'}</p>
       ) : (
         <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {shown.map((item) => (
-            <ReferenceCard key={item.id} item={item} canDraw={canDraw} onGender={setItemGender} onRemove={remove} onUsed={(next) => setItems(next)} />
+            <ReferenceCard key={item.id} item={item} canDraw={canDraw} onTags={setItemTags} onRemove={remove} onUsed={(next) => setItems(next)} />
           ))}
         </ul>
       )}
@@ -153,10 +177,10 @@ export function ReferenceLibrary({ initialItems, canDraw }: { initialItems: Refe
   )
 }
 
-function ReferenceCard({ item, canDraw, onGender, onRemove, onUsed }: {
+function ReferenceCard({ item, canDraw, onTags, onRemove, onUsed }: {
   item: ReferencePhotoView
   canDraw: boolean
-  onGender: (id: string, gender: ReferenceGender | null) => void
+  onTags: (id: string, tags: { gender?: ReferenceGender | null; kind?: ReferenceKind }) => void
   onRemove: (id: string) => void
   onUsed: (items: ReferencePhotoView[]) => void
 }) {
@@ -201,18 +225,29 @@ function ReferenceCard({ item, canDraw, onGender, onRemove, onUsed }: {
         </button>
       </div>
       <div className="space-y-2 p-2">
-        <div className="flex gap-1 text-xs">
-          {(['female', 'male'] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => onGender(item.id, item.gender === value ? null : value)}
-              className={`min-h-8 flex-1 rounded-lg font-semibold ${item.gender === value ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}
-            >
-              {GENDER_LABEL[value]}
-            </button>
-          ))}
-        </div>
+        <select
+          value={item.kind ?? 'face'}
+          onChange={(event) => onTags(item.id, { kind: event.target.value as ReferenceKind, ...(event.target.value === 'thing' ? { gender: null } : {}) })}
+          aria-label="사진 종류"
+          className="min-h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700"
+        >
+          {KINDS.map((value) => <option key={value} value={value}>{KIND_LABEL[value]}</option>)}
+        </select>
+        {(item.kind ?? 'face') !== 'thing' ? (
+          <div className="flex gap-1 text-xs">
+            {(['female', 'male'] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => onTags(item.id, { gender: item.gender === value ? null : value })}
+                className={`min-h-8 flex-1 rounded-lg font-semibold ${item.gender === value ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}
+              >
+                {GENDER_LABEL[value]}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {item.summary ? <p className="line-clamp-2 text-[11px] leading-4 text-slate-400">{item.summary}</p> : null}
         {item.usedByAccount ? (
           <Link href={adminProfileHref(item.usedByAccount.userId, '/admin/operators/references')} className="block truncate text-xs font-semibold text-sky-700">
             {item.usedByAccount.name ?? `@${item.usedByAccount.handle}`} @{item.usedByAccount.handle}
