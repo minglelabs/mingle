@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { resolveKoreanCheckCopy } from "@/i18n/korean-check-copy";
 import { readKoreanAnswer, readNationalityAnswer, writeKoreanAnswer, writeNationalityAnswer, type KoreanAnswer } from "@/lib/korean-signup";
 import { NATIONALITY_COUNTRY_CODES, countryFlagEmoji, defaultNationalityForLanguage, getCountryDisplayName } from "@/lib/nationality";
@@ -26,10 +27,11 @@ import {
 } from "@/lib/pending-profile-extras";
 
 // The camera and face models load only when the check opens.
-const SelfieVerifyScreen = lazy(() => import("@/components/selfie-verify-screen"));
+// Client only (like My page): the face library has a Node build that must not reach the server.
+const SelfieVerifyScreen = dynamic(() => import("@/components/selfie-verify-screen"), { ssr: false });
 import { Camera, Check, ChevronLeft, Loader2, Mic, Search, X } from "lucide-react";
 import { createPortal } from "react-dom";
-import { Suspense, lazy, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
 import { registerNativeEdgeSwipeSuppression } from "@/components/slide-surface";
 import { isLeftEdgeSwipeBack, isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
 import {
@@ -1124,7 +1126,7 @@ export default function LanguageOnboardingModal({
             ) : null}
             {photoError ? <p className="text-center text-[0.85rem] text-rose-600">{extraCopy.photoFailed}</p> : null}
             {selfieOpen && photoDataUrl ? (
-              <Suspense fallback={null}>
+              <>
                 <SelfieVerifyScreen
                   locale={language}
                   hasPhoto
@@ -1137,7 +1139,7 @@ export default function LanguageOnboardingModal({
                   onVerified={() => undefined}
                   onClose={() => setSelfieOpen(false)}
                 />
-              </Suspense>
+              </>
             ) : null}
           </div>
         ) : step === "voice-intro" ? (
