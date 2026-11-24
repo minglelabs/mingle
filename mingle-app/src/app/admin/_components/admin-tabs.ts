@@ -1,4 +1,4 @@
-export type AdminTabKey = "inbox" | "activity" | "review" | "feed" | "operators" | "more";
+export type AdminTabKey = "inbox" | "activity" | "review" | "feed" | "operators" | "references" | "more";
 
 /** Optional count per tab (e.g. unread inbox rooms). 0 / undefined shows nothing. */
 export type AdminTabBadges = Partial<Record<AdminTabKey, number>>;
@@ -12,6 +12,7 @@ export const ADMIN_TABS: readonly AdminTabDefinition[] = [
   { key: "review", href: "/admin/operators/review", label: "검토" },
   { key: "feed", href: "/admin/feed", label: "피드" },
   { key: "operators", href: "/admin/operators", label: "계정" },
+  { key: "references", href: "/admin/operators/references", label: "레퍼런스" },
   { key: "more", href: "/admin/more", label: "더보기" },
 ];
 
@@ -20,7 +21,7 @@ function isUnder(pathname: string, href: string): boolean {
 }
 
 /**
- * The current tab, by the longest matching href (검토 sits under 계정's path).
+ * The current tab, by the longest matching href (검토 and 레퍼런스 sit under 계정's path).
  * Every admin screen that is not under 인박스 / 알림 / 검토 / 피드 / 계정
  * (피드백 `/admin`, 게시물, 신고함, 대시보드, 대화록, 알림 설정, 더보기 itself) is
  * reached from 더보기, so that tab is current there.
