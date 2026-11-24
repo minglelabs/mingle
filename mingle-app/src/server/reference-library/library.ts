@@ -89,7 +89,10 @@ function parseItems(value: unknown): ReferencePhoto[] {
       attributes: row.attributes && typeof row.attributes === 'object' && !Array.isArray(row.attributes) ? row.attributes as ReferenceAttributes : null,
       createdAt: typeof row.createdAt === 'string' ? row.createdAt : new Date(0).toISOString(),
       usedBy: used && typeof used.userId === 'string' && (used.kind === 'avatar' || used.kind === 'post')
-        ? { userId: used.userId, kind: used.kind, at: typeof used.at === 'string' ? used.at : new Date(0).toISOString() }
+        ? {
+            userId: used.userId, kind: used.kind, at: typeof used.at === 'string' ? used.at : new Date(0).toISOString(),
+            ...(typeof used.imageKey === 'string' && used.imageKey ? { imageKey: used.imageKey } : {}),
+          }
         : null,
     }]
   })

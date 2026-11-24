@@ -15,7 +15,7 @@ vi.mock('@/lib/prisma', () => {
 })
 vi.mock('@/server/posts/post-image-storage', () => ({ putPostImage: vi.fn(), getPostImage: vi.fn(), deletePostImage: vi.fn(async () => {}) }))
 
-import { claimReferencePhoto, listReferencePhotos, releaseReferencePhoto, removeReferencePhoto } from './library'
+import { claimReferencePhoto, listReferencePhotos, markReferenceImage, releaseReferencePhoto, removeReferencePhoto } from './library'
 
 function photo(id: string, gender: string | null, used = false) {
   return { id, objectKey: `post-images/reference-library/${id}.jpg`, width: 10, height: 10, gender, createdAt: '2026-11-24T00:00:00.000Z', usedBy: used ? { userId: 'u0', kind: 'avatar', at: 'x' } : null }
@@ -57,5 +57,15 @@ describe('reference kinds', () => {
     expect(await claimReferencePhoto({ userId: 'u1', kind: 'post', kinds: ['thing'] })).toBeNull()
     expect((await claimReferencePhoto({ userId: 'u1', kind: 'post', kinds: ['face'], gender: 'female' }))?.id).toBe('legacy')
     expect((await claimReferencePhoto({ userId: 'u1', kind: 'post', kinds: ['person'], gender: 'male' }))).toBeNull()
+  })
+})
+
+describe('the post photo drawn from a library photo', () => {
+  it('stays recorded across later writes of the library', async () => {
+    store.value = { items: [photo('a', 'female'), photo('b', 'female')] }
+    await claimReferencePhoto({ userId: 'u1', kind: 'post', id: 'a' })
+    await markReferenceImage('a', 'post-images/u1/x.jpg')
+    await claimReferencePhoto({ userId: 'u2', kind: 'post', id: 'b' })
+    expect((await listReferencePhotos()).find((item) => item.id === 'a')?.usedBy?.imageKey).toBe('post-images/u1/x.jpg')
   })
 })
