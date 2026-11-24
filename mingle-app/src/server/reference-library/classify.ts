@@ -16,7 +16,7 @@ const INSTRUCTIONS = [
   '"face" when one person is and their face can be seen (even partly: sunglasses, a hand, a phone in a mirror);',
   '"person" when one person is but their face cannot be seen (from behind, turned away, cropped above the face, covered, a silhouette, only the body).',
   'gender: "female" or "male" for that one person when kind is face or person and it is clear; else null.',
-  'summary: at most 12 English words on what the photo shows.',
+  'summary: a detailed description in English (80 to 150 words) so an artist could redraw the photo without seeing it: for each person, apparent age, hairstyle and hair color, outfit and accessories, pose, gesture, expression and where they look (never who they are); the objects, food or animals and how they are arranged; the place and background; the camera angle, distance and framing (selfie, mirror shot, taken by someone else, from above…); the light, colors and time of day; the mood; any visible text or app interface.',
   'Answer with JSON only: {"kind": "...", "gender": "female"|"male"|null, "summary": "..."}',
 ].join('\n')
 
@@ -40,7 +40,7 @@ export function parseClassification(text: string): ReferenceClassification | nul
     const kind = isReferenceKind(value.kind) ? value.kind : null
     if (!kind) return null
     const gender = referenceKindHasGender(kind) && (value.gender === 'female' || value.gender === 'male') ? value.gender : null
-    const summary = typeof value.summary === 'string' && value.summary.trim() ? value.summary.trim().slice(0, 160) : null
+    const summary = typeof value.summary === 'string' && value.summary.trim() ? value.summary.trim().slice(0, 1500) : null
     return { kind, gender, summary }
   } catch {
     return null
@@ -55,7 +55,7 @@ export async function classifyReferencePhoto(bytes: Buffer, options: { timeoutMs
     const client = new Anthropic({ apiKey, maxRetries: 1 })
     const message = await client.messages.create({
       model: OPERATOR_TEXT_MODEL,
-      max_tokens: 200,
+      max_tokens: 700,
       system: INSTRUCTIONS,
       messages: [{
         role: 'user',
