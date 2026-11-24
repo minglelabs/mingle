@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { hasConfirmedLanguageOnboarding } from "@/components/LivePhoneDemo/language-onboarding.storage";
 import { conversationsHref } from "@/lib/posting-feed-guard";
-import { isFirstSpeakPending, shouldOpenConversationsInsteadOfFeed } from "@/lib/first-run";
+import { isDocumentLoadedOnFeed, isFirstSpeakPending, shouldOpenConversationsInsteadOfFeed } from "@/lib/first-run";
 
 export type FirstRunHomeStatus = "checking" | "feed" | "conversations";
 
@@ -15,6 +15,15 @@ function scheduleMicrotask(callback: () => void): void {
 
 /** The app launch is judged once per page load; later visits to the feed tab stay on the feed. */
 let launchJudged = false;
+
+function readDocumentUrl(): string | null {
+  try {
+    const entry = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+    return entry?.name || null;
+  } catch {
+    return null;
+  }
+}
 
 function isNativeAppRuntime(): boolean {
   const bridge = (window as { ReactNativeWebView?: { postMessage?: unknown } }).ReactNativeWebView;
@@ -44,6 +53,7 @@ export function useFirstRunHome(locale: string): FirstRunHomeStatus {
       const params = new URLSearchParams(window.location.search);
       const moveToConversations = shouldOpenConversationsInsteadOfFeed({
         isNativeApp: isNativeAppRuntime(),
+        launchedOnFeed: isDocumentLoadedOnFeed(readDocumentUrl(), window.location.pathname),
         onboardingConfirmed: hasConfirmedLanguageOnboarding(),
         firstSpeakPending: isFirstSpeakPending(),
         hasPostTarget: params.has("postId") || params.has("commentId"),
