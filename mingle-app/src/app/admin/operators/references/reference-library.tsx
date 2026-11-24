@@ -461,6 +461,26 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag, openPhotoId }
   )
 }
 
+/** What this photo was drawn into (the post photo or profile photo), on the photo itself: tap to open that account. */
+function UsedResultOverlay({ item }: { item: ReferencePhotoView }) {
+  const use = item.usedBy
+  if (!use || !item.usedByAccount) return null
+  const src = use.kind === 'post' ? (use.imageKey ? reviewImageUrl(use.imageKey) : null) : item.usedByAccount.image
+  if (!src) return null
+  const tab = use.kind === 'post' && item.useStatus !== 'published' ? '&tab=review' : ''
+  const href = `${adminProfileHref(item.usedByAccount.userId, '/admin/operators/references')}${tab}`
+  return (
+    <Link
+      href={href}
+      className="absolute bottom-2 left-2 flex items-end gap-1.5 rounded-xl bg-black/60 p-1.5 pr-2.5 text-xs font-semibold text-white backdrop-blur active:bg-black/75"
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt="만든 사진" className="h-20 w-[3.75rem] rounded-lg object-cover ring-1 ring-white/60" />
+      {use.kind === 'post' ? '만든 글 사진' : '만든 프사'}
+    </Link>
+  )
+}
+
 /** The sheet a photo opens: its tags and note to change, plus 계정 만들기 and 지우기. */
 function ReferenceEditor({ item, canDraw, autoTag, onSave, onRemove, onItems, onClose }: {
   item: ReferencePhotoView
@@ -556,7 +576,10 @@ function ReferenceEditor({ item, canDraw, autoTag, onSave, onRemove, onItems, on
           </button>
         </div>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={reviewImageUrl(item.objectKey)} alt="" className="mx-auto max-h-[42dvh] w-auto max-w-full rounded-xl bg-slate-100 object-contain" />
+        <div className="relative">
+          <img src={reviewImageUrl(item.objectKey)} alt="" className="mx-auto max-h-[42dvh] w-auto max-w-full rounded-xl bg-slate-100 object-contain" />
+          <UsedResultOverlay item={item} />
+        </div>
         <details className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500">
           <summary className="cursor-pointer font-semibold text-slate-600">AI 판별 {analysis.attributes || analysis.summary ? '보기' : '없음'}</summary>
           {analysis.attributes ? <div className="mt-2"><ReferenceAttributesView attributes={analysis.attributes} /></div> : null}
