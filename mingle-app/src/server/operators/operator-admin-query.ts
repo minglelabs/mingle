@@ -30,6 +30,8 @@ export type OperatorListItem = {
   interestLanguages: InterestLanguage[]
   /** Posts that are up (not deleted). */
   postCount: number
+  /** An operator account's review state (approved = live); null for a real user. */
+  reviewState: string | null
 }
 
 /** Which accounts the 계정 tab lists: everyone (default), only operator accounts, or only real users. */
@@ -94,7 +96,7 @@ export async function listOperatorAccounts(args: { query?: string; page?: number
       gender: true,
       interestLanguages: true,
       interestLanguageLevels: true,
-      operatorAccount: { select: { personaCountry: true } },
+      operatorAccount: { select: { personaCountry: true, reviewState: true } },
       _count: { select: { posts: { where: { isDeleted: { not: true } } } } },
     },
   })
@@ -116,6 +118,7 @@ export async function listOperatorAccounts(args: { query?: string; page?: number
       primaryLanguages: row.primaryLanguages,
       interestLanguages: zipInterestLanguages(row.interestLanguages, row.interestLanguageLevels),
       postCount: row._count.posts,
+      reviewState: row.operatorAccount?.reviewState ?? null,
     })),
     total,
     page,
