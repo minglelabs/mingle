@@ -55,34 +55,34 @@ export function AccountItems({ items, back }: { items: OperatorListItem[]; back:
         ].filter(Boolean).join(' · ')
         return (
           <li key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4">
-            <div className="flex gap-3">
-              {item.image ? (
-                <div className="relative h-28 w-28 shrink-0">
-                  <ZoomableImage
-                    src={item.image}
-                    alt={`${item.name || item.handle} 프사`}
-                    loading="lazy"
-                    decoding="async"
-                    className="h-28 w-28 rounded-xl bg-slate-100 object-cover"
-                  />
-                  {item.isOperator ? <PhotoEngineBadge id={item.image} className="absolute bottom-1 left-1 z-[1]" /> : null}
-                </div>
-              ) : (
+            {item.image ? (
+              <div className="relative mb-3 w-2/3 max-w-[320px]">
+                <ZoomableImage
+                  src={item.image}
+                  alt={`${item.name || item.handle} 프사`}
+                  loading="lazy"
+                  decoding="async"
+                  className="aspect-square w-full rounded-xl bg-slate-100 object-cover"
+                />
+                {item.isOperator ? <PhotoEngineBadge id={item.image} className="absolute bottom-2 left-2 z-[1]" /> : null}
+              </div>
+            ) : (
+              <div className="mb-3">
                 <OperatorAvatar image={null} name={item.name} size={112} />
-              )}
-              <Link href={href} className="min-w-0 flex-1 active:opacity-70">
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="truncate text-[15px] font-semibold text-slate-900">{item.name || '이름 없음'}</span>
-                  {item.isOperator ? <OperatorChip /> : null}
-                  {item.isOperator && !item.isActive ? <InactiveChip /> : null}
-                  <ChevronRight className="ml-auto h-5 w-5 shrink-0 text-slate-400" aria-hidden="true" />
-                </span>
-                <span className="block truncate text-sm text-slate-500">@{item.handle}</span>
-                <span className="mt-1 block text-xs text-slate-500">{facts}</span>
-                <span className="mt-0.5 block text-xs text-slate-500">만든 시각 {koreanTime(item.createdAt)} · {relativeTime(item.createdAt, now)}</span>
-                <CompactLanguageLevels primaryLanguages={item.primaryLanguages} interestLanguages={item.interestLanguages} locale="ko" className="mt-1" />
-              </Link>
-            </div>
+              </div>
+            )}
+            <Link href={href} className="block min-w-0 active:opacity-70">
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="truncate text-[15px] font-semibold text-slate-900">{item.name || '이름 없음'}</span>
+                {item.isOperator ? <OperatorChip /> : null}
+                {item.isOperator && !item.isActive ? <InactiveChip /> : null}
+                <ChevronRight className="ml-auto h-5 w-5 shrink-0 text-slate-400" aria-hidden="true" />
+              </span>
+              <span className="block truncate text-sm text-slate-500">@{item.handle}</span>
+              <span className="mt-1 block text-xs text-slate-500">{facts}</span>
+              <span className="mt-0.5 block text-xs text-slate-500">만든 시각 {koreanTime(item.createdAt)} · {relativeTime(item.createdAt, now)}</span>
+              <CompactLanguageLevels primaryLanguages={item.primaryLanguages} interestLanguages={item.interestLanguages} locale="ko" className="mt-1" />
+            </Link>
             {item.bio ? <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-slate-800">{item.bio}</p> : null}
             {item.isOperator ? (
               <div className="mt-3">
