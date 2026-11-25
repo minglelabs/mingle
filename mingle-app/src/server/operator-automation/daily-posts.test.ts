@@ -26,7 +26,7 @@ vi.mock('@/server/operator-post-reserve/generate', () => ({
   isKoreaCountry: () => true,
   reservePosterProfile: () => ({ topicFactors: {} }),
 }))
-vi.mock('@/server/operator-post-reserve/post-image', () => ({ drawReservePostImage: m.draw }))
+vi.mock('@/server/operator-post-reserve/post-image', () => ({ PHOTO_NO_REFERENCE: 'photo_no_reference', drawReservePostImage: m.draw }))
 vi.mock('@/server/operator-avatars/generate', () => ({ canDrawImagesHere: m.canDraw, generateOperatorAvatar: vi.fn() }))
 vi.mock('@/server/operators/create-operator', () => ({ createOperatorAccount: vi.fn() }))
 vi.mock('@/server/operators/persona-draft', () => ({ generatePersonaDrafts: vi.fn() }))
@@ -61,7 +61,7 @@ describe('daily operator posts', () => {
     expect(m.userFindMany.mock.calls[0][0].where.operatorAccount).toEqual({ reviewState: 'approved', personaCountry: { not: null } })
     expect(m.reserveCreate).toHaveBeenCalledTimes(2)
     expect(m.reserveCreate.mock.calls[0][0].data).toMatchObject({ operatorUserId: 'a', state: 'review', reviewRank: -11, imagePrompt: '[scene] ramen', language: null })
-    expect(m.draw).toHaveBeenCalledWith('a', '[scene] ramen')
+    expect(m.draw).toHaveBeenCalledWith('a', '[scene] ramen', undefined, undefined, expect.objectContaining({ onNoReference: expect.any(Function) }))
     expect(m.reserveUpdateMany.mock.calls[0][0].data).toMatchObject({ imageObjectKey: 'post-images/a/1.jpg' })
   })
 

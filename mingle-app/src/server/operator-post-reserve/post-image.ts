@@ -437,12 +437,18 @@ async function libraryPostRequest(
   description: string,
   base: { prompt: string; reference: AvatarReference | null },
   options: { staff?: boolean } = {},
-): Promise<{ request: { prompt: string; reference: AvatarReference }; referenceId: string } | null> {
+): Promise<
+  /** `not_applicable`: this post's photo is never drawn from the library (anime account, screenshot, profile-photo intro). */
+  | { status: 'not_applicable' }
+  /** `none`: no unused library photo fits it (kind, gender, age, look, season), or it could not be read. */
+  | { status: 'none' }
+  | { status: 'ok'; request: { prompt: string; reference: AvatarReference }; referenceId: string }
+> {
   const filter = await libraryPostFilter(operatorUserId, description, options)
-  if (!filter) return null
+  if (!filter) return { status: 'not_applicable' }
   const { brief, persona } = filter
   const photo = await claimReferencePhoto({ userId: operatorUserId, kind: 'post', ...filter.claim }).catch(() => null)
-  if (!photo) return null
+  if (!photo) return { status: 'none' }
   try {
     const kind = referenceKindOf(photo)
     const shot = await loadReferenceBytes(photo)
@@ -459,12 +465,16 @@ async function libraryPostRequest(
       'Vertical 3:4 image, one single photo (never two side by side). No watermarks, logos, borders or frames.',
     ].join('\n')
     const reference = poster ? { bytes: await pairImages(shot.bytes, poster.bytes), mimeType: 'image/jpeg' } : shot
-    return { request: { prompt, reference }, referenceId: photo.id }
-  } catch {
+    return { status: 'ok', request: { prompt, reference }, referenceId: photo.id }
+  } catch (error) {
+    console.warn('[operator-post-reserve] library_request_failed', { operatorUserId, referenceId: photo.id, error: error instanceof Error ? error.name : 'unknown' })
     await releaseReferencePhoto(photo.id).catch(() => {})
-    return null
+    return { status: 'none' }
   }
 }
+
+/** On a post whose automatic photo waits for a fitting reference-library photo (none was left). */
+export const PHOTO_NO_REFERENCE = 'photo_no_reference'
 
 export async function drawReservePostImage(
   operatorUserId: string,
@@ -473,7 +483,12 @@ export async function drawReservePostImage(
   context?: RedrawContext,
   /** `fromLibrary`: staff asked for a redraw from a reference-library photo; fails when none fits. */
   /** `engine`: 'seedream' when staff picked Seedream 5.5 for this photo (review tool only). */
-  options: { fromLibrary?: boolean; engine?: ImageEngine } = {},
+  /**
+   * `onNoReference`: called when an automatic photo (not a staff redo) is left
+   * undrawn because no library photo fits it (staff, 2026-11-25: every
+   * automatic post photo is drawn from a reference photo, never without one).
+   */
+  options: { fromLibrary?: boolean; engine?: ImageEngine; onNoReference?: () => void } = {},
 ): Promise<ReservePostImage | null> {
   try {
     // A redo always draws a new photo.
@@ -482,11 +497,19 @@ export async function drawReservePostImage(
       if (profile) return profile
     }
     const base = await reservePostImageRequest(operatorUserId, description)
-    // A fresh drawing (not a staff redo) comes from the reference library while it has a fitting photo.
-    const library = options.fromLibrary
+    // A fresh drawing (not a staff redo) always comes from the reference library:
+    // with no fitting photo it waits for staff to upload one instead of being drawn without.
+    const automatic = !staffReference && !context
+    const fromLibrary = options.fromLibrary
       ? await libraryPostRequest(operatorUserId, description, base, { staff: true })
-      : !staffReference && !context ? await libraryPostRequest(operatorUserId, description, base) : null
-    if (options.fromLibrary && !library) return null
+      : automatic ? await libraryPostRequest(operatorUserId, description, base) : null
+    if (options.fromLibrary && fromLibrary?.status !== 'ok') return null
+    if (automatic && fromLibrary?.status === 'none') {
+      console.warn('[operator-post-reserve] no_reference', { operatorUserId })
+      options.onNoReference?.()
+      return null
+    }
+    const library = fromLibrary?.status === 'ok' ? fromLibrary : null
     const request = library
       ? library.request
       : context

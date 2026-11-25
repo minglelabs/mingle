@@ -51,6 +51,9 @@ const ERROR_COPY: Record<string, string> = {
   invalid_language: '언어를 다시 골라 주세요.',
 }
 
+/** Automatic photos are drawn only from a reference photo; this one found none that fits. */
+const NO_REFERENCE_WAIT = '맞는 레퍼런스 짤이 없어 사진을 아직 안 그렸어요. 레퍼런스 탭에 이 글에 맞는 짤을 올린 뒤 「글은 그대로, 사진만 그리기」를 눌러 주세요.'
+
 type ReviewPhoto = { objectKey: string; width: number | null; height: number | null }
 const MAX_POST_PHOTOS = 10
 
@@ -1032,6 +1035,7 @@ function PostCard({ post: initial, at, pinned, fromReference, reference: initial
     setPost(latest)
     setReference((read?.reference as ReviewReference | null | undefined) ?? null)
     if (latest.photoDrawFailed || latest.error === 'photo_draw_failed') setError(ERROR_COPY.draw_failed)
+    else if (latest.photoNoReference) setError(NO_REFERENCE_WAIT)
     return true
   })
 
@@ -1212,9 +1216,10 @@ function PostCard({ post: initial, at, pinned, fromReference, reference: initial
         <div className="mt-2 flex aspect-square w-full flex-col items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-6 text-center">
           <p className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
             {post.photoDrawing ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> : null}
-            {post.photoDrawing ? '사진 · ChatGPT로 그리는 중 (1~3분)' : post.photoRequested ? '사진 · ChatGPT로 그리는 중' : '사진 · 아직 안 그림'}
+            {post.photoDrawing ? '사진 · ChatGPT로 그리는 중 (1~3분)' : post.photoRequested ? '사진 · ChatGPT로 그리는 중' : post.photoNoReference ? '사진 · 레퍼런스 짤 기다리는 중' : '사진 · 아직 안 그림'}
           </p>
           <p className="text-sm leading-6 text-slate-700">{post.photoDescription}</p>
+          {post.photoNoReference && !post.photoDrawing ? <p className="text-xs leading-5 text-amber-700">{NO_REFERENCE_WAIT}</p> : null}
         </div>
       ) : null}
       {editingPhotos || post.scheduledAt ? null : (

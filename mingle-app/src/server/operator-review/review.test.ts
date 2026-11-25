@@ -40,7 +40,7 @@ vi.mock('@/server/reference-library/avatar-reference', () => ({
 vi.mock('@/server/reference-library/library', () => ({ listReferencePhotos: vi.fn(async () => []), releaseReferencePhoto: mocks.releaseRef }))
 vi.mock('@/server/admin/audit', () => ({ writeAdminAudit: mocks.audit }))
 vi.mock('@/server/operator-avatars/generate', () => ({ planOperatorAvatar: mocks.generateAvatar, canDrawImagesHere: mocks.canDraw, generateOperatorAvatar: mocks.drawAvatar }))
-vi.mock('@/server/operator-post-reserve/post-image', () => ({ drawReservePostImage: mocks.drawImage, libraryPhotoForPost: vi.fn(async () => ({ available: true, need: '' })) }))
+vi.mock('@/server/operator-post-reserve/post-image', () => ({ PHOTO_NO_REFERENCE: 'photo_no_reference', drawReservePostImage: mocks.drawImage, libraryPhotoForPost: vi.fn(async () => ({ available: true, need: '' })) }))
 vi.mock('@/server/posts/post-image-storage', () => ({ getPostImage: vi.fn(async () => Buffer.from('old-photo')) }))
 vi.mock('@/server/operator-post-reserve/generate', () => ({
   generateReservePosts: mocks.generatePosts,
@@ -216,7 +216,7 @@ describe('where this server can draw (the ChatGPT pool)', () => {
     expect(result).toMatchObject({ ok: true, state: 'review', post: { photoDrawing: true } })
     expect(mocks.reserveUpdateMany.mock.calls[0][0]).toMatchObject({ where: { id: 'r1', state: 'review' }, data: { state: 'regenerating', error: 'photo_drawing' } })
     await vi.waitFor(() => expect(mocks.reserveUpdateMany).toHaveBeenCalledTimes(2))
-    expect(mocks.drawImage).toHaveBeenCalledWith('op1', '[self] a selfie\nStaff feedback on this photo, to follow: 웃는 얼굴로', undefined, undefined, { engine: undefined })
+    expect(mocks.drawImage).toHaveBeenCalledWith('op1', '[self] a selfie\nStaff feedback on this photo, to follow: 웃는 얼굴로', undefined, undefined, expect.objectContaining({ engine: undefined }))
     expect(mocks.generatePosts).not.toHaveBeenCalled()
     const done = mocks.reserveUpdateMany.mock.calls[1][0]
     expect(done.data).toMatchObject({ state: 'review', imageObjectKey: 'posts/op1/a.jpg', error: null })
@@ -249,6 +249,17 @@ describe('where this server can draw (the ChatGPT pool)', () => {
     await expect(reviewOperatorPost(null, 'r1', 'draw', null)).resolves.toMatchObject({ ok: true })
     await vi.waitFor(() => expect(mocks.reserveUpdateMany).toHaveBeenCalledTimes(2))
     expect(mocks.reserveUpdateMany.mock.calls[1][0].data).toEqual({ state: 'review', error: 'photo_draw_failed' })
+  })
+
+  it('leaves an automatic photo waiting for a reference photo when none fits', async () => {
+    mocks.reserveFindUnique.mockResolvedValue({ ...REVIEW_POST, imagePrompt: '[self] a selfie' })
+    mocks.drawImage.mockImplementation(async (_user: string, _brief: string, _ref: unknown, _context: unknown, options?: { onNoReference?: () => void }) => {
+      options?.onNoReference?.()
+      return null
+    })
+    await expect(reviewOperatorPost(null, 'r1', 'draw', null)).resolves.toMatchObject({ ok: true })
+    await vi.waitFor(() => expect(mocks.reserveUpdateMany).toHaveBeenCalledTimes(2))
+    expect(mocks.reserveUpdateMany.mock.calls[1][0].data).toEqual({ state: 'review', error: 'photo_no_reference' })
   })
 
   it('draws a new profile photo in the background on 재제작', async () => {

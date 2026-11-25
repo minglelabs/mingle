@@ -11,7 +11,7 @@ import type { AdminContext } from '@/server/admin/guard'
 import { ageOn } from '@/server/operator-auto-reply/generate'
 import { canDrawImagesHere, generateOperatorAvatar, planOperatorAvatar, type AvatarReference } from '@/server/operator-avatars/generate'
 import { generateReservePosts, isKoreaCountry, pickReserveTopics, reservePosterProfile, rewriteReservePostText } from '@/server/operator-post-reserve/generate'
-import { drawReservePostImage, libraryPhotoForPost, type RedrawContext } from '@/server/operator-post-reserve/post-image'
+import { drawReservePostImage, libraryPhotoForPost, PHOTO_NO_REFERENCE, type RedrawContext } from '@/server/operator-post-reserve/post-image'
 import { MAX_RESERVE_EXTRA_IMAGES, reserveExtraImages, type ReserveExtraImage } from '@/server/operator-post-reserve/extra-images'
 import { decodePostPhoto } from '@/server/operator-post-reserve/post-photo'
 import { pickScheduledPublishAt } from '@/server/operator-post-reserve/schedule'
@@ -75,12 +75,13 @@ async function releaseProfileIfCutOff(userId: string): Promise<boolean> {
  */
 async function drawPostPhotoInBackground(reserveId: string, operatorUserId: string, description: string, onDrawn: () => Promise<unknown>, onFailed: () => Promise<unknown>, staffReference?: AvatarReference, context?: RedrawContext, drawOptions?: { fromLibrary?: boolean; engine?: ImageEngine }): Promise<void> {
   try {
-    const image = await drawReservePostImage(operatorUserId, description, staffReference, context, drawOptions)
+    let noReference = false
+    const image = await drawReservePostImage(operatorUserId, description, staffReference, context, { ...drawOptions, onNoReference: () => { noReference = true } })
     await prisma.operatorPostReserve.updateMany({
       where: { id: reserveId, state: 'regenerating' },
       data: image
         ? { state: 'review', imageObjectKey: image.objectKey, imageWidth: image.width, imageHeight: image.height, error: null }
-        : { state: 'review', error: PHOTO_DRAW_FAILED },
+        : { state: 'review', error: noReference ? PHOTO_NO_REFERENCE : PHOTO_DRAW_FAILED },
     })
     await (image ? onDrawn() : onFailed())
   } catch (error) {
@@ -201,6 +202,8 @@ export type ReviewPost = {
   rewriting: boolean
   /** The pool's last try at the photo failed; drawing it again is allowed. */
   photoDrawFailed: boolean
+  /** The automatic photo waits for a fitting reference-library photo (none was left to draw it from). */
+  photoNoReference: boolean
   /** The time staff set for the post to be dated at when published (ISO); null: a random time between writing and 게시. */
   publishAt: string | null
 }
@@ -275,6 +278,7 @@ function toReviewPost(row: {
     photoDrawing: row.state === 'regenerating' && row.error === PHOTO_DRAWING,
     rewriting: row.state === 'regenerating' && row.error !== PHOTO_DRAWING,
     photoDrawFailed: !row.imageObjectKey && row.error === PHOTO_DRAW_FAILED,
+    photoNoReference: !row.imageObjectKey && row.error === PHOTO_NO_REFERENCE,
     // In review, release_at only holds the (past) time staff set; once scheduled, it is when the post goes out.
     publishAt: row.state !== 'scheduled' && row.releaseAt ? row.releaseAt.toISOString() : null,
     scheduledAt: row.state === 'scheduled' && row.releaseAt ? row.releaseAt.toISOString() : null,
