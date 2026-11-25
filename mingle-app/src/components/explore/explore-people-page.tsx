@@ -336,9 +336,10 @@ function PersonCard({
         onClick={() => onOpen(person.id)}
         aria-label={label}
         data-qa="home-person-card"
-        className="block w-full flex-1 text-left transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+        className="flex w-full flex-1 flex-col items-stretch justify-start text-left transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
       >
-        <span className="relative block aspect-square w-full overflow-hidden bg-gray-100" aria-hidden="true">
+        {/* The photo is always the same square at the top; Safari centres a button's content otherwise. */}
+        <span className="relative block aspect-square w-full shrink-0 overflow-hidden bg-gray-100" aria-hidden="true">
           {person.image && !imageFailed ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -390,10 +391,13 @@ function PersonCard({
             ) : null}
             <AccountBadge kind={accountBadge} locale={locale} tone="dark" />
           </span>
-          {primary.length || interest.length ? (
-            <CompactLanguageLevels primaryLanguages={primary} interestLanguages={interest} locale={locale} className="mt-1.5" />
-          ) : null}
-          {person.bio ? <span className="mt-1.5 line-clamp-2 block text-[12.5px] leading-snug text-slate-600">{person.bio}</span> : null}
+          {/* Same height on every card: the language row and two bio lines are kept even when empty. */}
+          <span className="mt-1.5 block min-h-[26px]">
+            {primary.length || interest.length ? (
+              <CompactLanguageLevels primaryLanguages={primary} interestLanguages={interest} locale={locale} />
+            ) : null}
+          </span>
+          <span className="mt-1.5 line-clamp-2 block h-[2.75em] text-[12.5px] leading-snug text-slate-600">{person.bio ?? ""}</span>
         </span>
       </button>
       {isOwn ? null : (
