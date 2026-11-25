@@ -18,6 +18,7 @@ import { pickScheduledPublishAt } from '@/server/operator-post-reserve/schedule'
 import { loadExistingReserveTexts, loadReservePersona, PHOTO_REQUESTED, publishReservePostNow } from '@/server/operator-post-reserve/worker'
 import { applyAvatarCandidate, candidateDrawing, discardAvatarCandidate } from '@/server/operators/avatar-candidate'
 import { seedreamConfigured, type ImageEngine } from '@/server/seedream/client'
+import { showAccountHiddenByTakedown } from '@/server/operators/account-takedown'
 
 /**
  * Staff review of operator profiles and their pre-written posts. A profile
@@ -562,6 +563,8 @@ export async function reviewOperatorProfile(
       prisma.operatorAccount.update({ where: { userId }, data: { reviewState: 'approved', ...(feedback ? { reviewFeedback: feedback } : {}) } }),
       prisma.user.update({ where: { id: userId }, data: { isActive: true } }),
     ])
+    // An account sent back with 내리고 검토로 shows in the app again.
+    await showAccountHiddenByTakedown(userId)
     await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'publish', feedback } })
     return { ok: true, state: 'approved' }
   }
