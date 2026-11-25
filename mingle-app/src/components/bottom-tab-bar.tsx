@@ -1,7 +1,7 @@
 "use client";
 
 import type { AppDictionary } from "@/i18n/types";
-import { Compass, GalleryVerticalEnd, MessageCircle, Mic, UserCircle } from "lucide-react";
+import { Compass, GalleryVerticalEnd, MessageCircle, UserCircle } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -443,13 +443,25 @@ export default function BottomTabBar({
         aria-label={voiceRoomsCopy(locale).tabLabel}
         aria-current={isVoiceActive ? "page" : undefined}
       >
-        <Mic
-          size={26}
-          fill={isVoiceActive ? activeColor : "none"}
+        {/* The microphone in two parts (owner, 2026-11-25): active, the head is
+            filled and the cup under it only changes its line colour. Filling the
+            whole icon also painted the gap between the two. */}
+        <svg
+          width={26}
+          height={26}
+          viewBox="0 0 24 24"
+          fill="none"
           stroke={isVoiceActive ? activeColor : inactiveColor}
           strokeWidth={isVoiceActive ? activeStroke - 0.4 : 1.9}
+          strokeLinecap="round"
+          strokeLinejoin="round"
           aria-hidden="true"
-        />
+          data-qa={isVoiceActive ? "tab-voice-active" : undefined}
+        >
+          <path d="M12 19v3" />
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+          <rect x="9" y="2" width="6" height="13" rx="3" fill={isVoiceActive ? activeColor : "none"} />
+        </svg>
       </button>
       <button
         type="button"

@@ -241,6 +241,7 @@ export default function ExplorePeoplePage({ dictionary, locale }: ExplorePeopleP
       {filterOpen ? (
         <ExploreFilterSheet
           copy={safetyCopy}
+          locale={locale}
           value={filters}
           onClose={() => setFilterOpen(false)}
           onApply={(next) => {

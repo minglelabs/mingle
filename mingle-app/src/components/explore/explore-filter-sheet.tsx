@@ -4,6 +4,8 @@ import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression"
 import { X } from "lucide-react";
 import { useState } from "react";
 import type { PeopleSafetyCopy } from "@/i18n/people-safety-copy";
+import { PRIMARY_UI_LOCALES } from "@/i18n/mingle-locales";
+import { getSttLanguageDisplayName } from "@/lib/stt-languages";
 
 /** The explore tab's filters (owner, 2026-11-25); the server reads the same names (server/people-discovery). */
 export type ExploreFilters = {
@@ -11,15 +13,23 @@ export type ExploreFilters = {
   ageMin: number;
   ageMax: number;
   onlineOnly: boolean;
+  /** Has this among their own languages (편한 언어); null = any. */
+  primaryLanguage: string | null;
+  /** Has this among their 관심 언어; null = any. */
+  interestLanguage: string | null;
 };
 
 export const EXPLORE_AGE_MIN = 18;
 export const EXPLORE_AGE_MAX = 60;
-export const NO_EXPLORE_FILTERS: ExploreFilters = { gender: null, ageMin: EXPLORE_AGE_MIN, ageMax: EXPLORE_AGE_MAX, onlineOnly: false };
+// No language filter by default (owner, 2026-11-25): there are few people at first.
+export const NO_EXPLORE_FILTERS: ExploreFilters = { gender: null, ageMin: EXPLORE_AGE_MIN, ageMax: EXPLORE_AGE_MAX, onlineOnly: false, primaryLanguage: null, interestLanguage: null };
+/** The languages the two language filters offer. */
+export const EXPLORE_FILTER_LANGUAGES: readonly string[] = PRIMARY_UI_LOCALES;
 const STORAGE_KEY = "mingle.explore.filters.v1";
 
 export function isFiltering(filters: ExploreFilters): boolean {
-  return filters.gender !== null || filters.ageMin > EXPLORE_AGE_MIN || filters.ageMax < EXPLORE_AGE_MAX || filters.onlineOnly;
+  return filters.gender !== null || filters.ageMin > EXPLORE_AGE_MIN || filters.ageMax < EXPLORE_AGE_MAX || filters.onlineOnly
+    || filters.primaryLanguage !== null || filters.interestLanguage !== null;
 }
 
 /** The query the discover API takes; the ends of the age range are left out (no limit). */
@@ -29,6 +39,8 @@ export function exploreFilterParams(filters: ExploreFilters): Record<string, str
   if (filters.ageMin > EXPLORE_AGE_MIN) params.ageMin = String(filters.ageMin);
   if (filters.ageMax < EXPLORE_AGE_MAX) params.ageMax = String(filters.ageMax);
   if (filters.onlineOnly) params.online = "1";
+  if (filters.primaryLanguage) params.primaryLanguage = filters.primaryLanguage;
+  if (filters.interestLanguage) params.interestLanguage = filters.interestLanguage;
   return params;
 }
 
@@ -39,6 +51,7 @@ export function readExploreFilters(): ExploreFilters {
     const age = (value: unknown, fallback: number) => (
       typeof value === "number" && Number.isInteger(value) && value >= EXPLORE_AGE_MIN && value <= EXPLORE_AGE_MAX ? value : fallback
     );
+    const language = (value: unknown) => (typeof value === "string" && EXPLORE_FILTER_LANGUAGES.includes(value) ? value : null);
     const ageMin = age(raw.ageMin, EXPLORE_AGE_MIN);
     const ageMax = age(raw.ageMax, EXPLORE_AGE_MAX);
     return {
@@ -46,6 +59,8 @@ export function readExploreFilters(): ExploreFilters {
       ageMin: Math.min(ageMin, ageMax),
       ageMax: Math.max(ageMin, ageMax),
       onlineOnly: raw.onlineOnly === true,
+      primaryLanguage: language(raw.primaryLanguage),
+      interestLanguage: language(raw.interestLanguage),
     };
   } catch {
     return NO_EXPLORE_FILTERS;
@@ -64,11 +79,14 @@ const AGES = Array.from({ length: EXPLORE_AGE_MAX - EXPLORE_AGE_MIN + 1 }, (_, i
 
 export default function ExploreFilterSheet({
   copy,
+  locale,
   value,
   onApply,
   onClose,
 }: {
   copy: PeopleSafetyCopy;
+  /** For the names of the languages. */
+  locale: string;
   value: ExploreFilters;
   onApply: (filters: ExploreFilters) => void;
   onClose: () => void;
@@ -143,6 +161,29 @@ export default function ExploreFilterSheet({
           >
             {AGES.map((age) => <option key={age} value={age}>{ageLabel(age, "max")}</option>)}
           </select>
+        </div>
+
+        {/* Languages (owner, 2026-11-25): each on its own, "all" until picked. */}
+        <div className="mt-5 grid grid-cols-2 gap-2">
+          {([
+            { key: "primaryLanguage", label: copy.filterOwnLanguage },
+            { key: "interestLanguage", label: copy.filterInterestLanguage },
+          ] as const).map((field) => (
+            <label key={field.key} className="block min-w-0">
+              <span className="text-[13px] font-bold text-slate-500">{field.label}</span>
+              <select
+                data-qa={`explore-filter-${field.key}`}
+                value={draft[field.key] ?? ""}
+                onChange={(event) => setDraft((current) => ({ ...current, [field.key]: event.target.value || null }))}
+                className={`mt-2 h-11 w-full rounded-xl border bg-white px-3 text-[15px] font-semibold ${draft[field.key] ? "border-amber-400 text-slate-950" : "border-gray-200 text-slate-600"}`}
+              >
+                <option value="">{copy.filterAll}</option>
+                {EXPLORE_FILTER_LANGUAGES.map((code) => (
+                  <option key={code} value={code}>{getSttLanguageDisplayName(code, locale) || code}</option>
+                ))}
+              </select>
+            </label>
+          ))}
         </div>
 
         <label className="mt-5 flex cursor-pointer items-center justify-between gap-3">

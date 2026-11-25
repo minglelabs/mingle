@@ -111,6 +111,10 @@ export type PeopleDiscoveryFilters = {
   ageMin?: number | null;
   ageMax?: number | null;
   onlineOnly?: boolean;
+  /** Someone who has this among their own languages (편한 언어). */
+  primaryLanguage?: string | null;
+  /** Someone who has this among their 관심 언어. */
+  interestLanguage?: string | null;
 };
 
 export const DISCOVERY_AGE_MIN = 18;
@@ -132,7 +136,15 @@ export function parsePeopleDiscoveryFilters(params: URLSearchParams): PeopleDisc
     ageMin: ageMin !== null && ageMin > DISCOVERY_AGE_MIN ? ageMin : null,
     ageMax: ageMax !== null && ageMax < DISCOVERY_AGE_MAX ? ageMax : null,
     onlineOnly: params.get("online") === "1",
+    primaryLanguage: readLanguageFilter(params.get("primaryLanguage")),
+    interestLanguage: readLanguageFilter(params.get("interestLanguage")),
   };
+}
+
+/** A language code as profiles store it ("ko", "zh-CN"), lower-cased for the comparison; null when it is not one. */
+function readLanguageFilter(value: string | null): string | null {
+  const code = (value ?? "").trim();
+  return /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$/.test(code) ? code.toLowerCase() : null;
 }
 
 export type PeopleDiscoverySqlInput = {
@@ -180,7 +192,9 @@ export function buildPeopleDiscoverySql({
         ${filters.gender ? Prisma.sql`AND u.gender = ${filters.gender}` : Prisma.empty}
         ${filters.ageMin ? Prisma.sql`AND u.birth_date <= ${yearsAgo(filters.ageMin)}::date` : Prisma.empty}
         ${filters.ageMax ? Prisma.sql`AND u.birth_date > ${yearsAgo(filters.ageMax + 1)}::date` : Prisma.empty}
-        ${filters.onlineOnly ? Prisma.sql`AND u.last_seen_at >= (${onlineSince}::timestamptz AT TIME ZONE 'UTC')` : Prisma.empty}`;
+        ${filters.onlineOnly ? Prisma.sql`AND u.last_seen_at >= (${onlineSince}::timestamptz AT TIME ZONE 'UTC')` : Prisma.empty}
+        ${filters.primaryLanguage ? Prisma.sql`AND EXISTS (SELECT 1 FROM unnest(u.primary_languages) AS own(code) WHERE lower(own.code) = ${filters.primaryLanguage})` : Prisma.empty}
+        ${filters.interestLanguage ? Prisma.sql`AND EXISTS (SELECT 1 FROM unnest(u.interest_languages) AS wanted(code) WHERE lower(wanted.code) = ${filters.interestLanguage})` : Prisma.empty}`;
 
   const cursorClause = cursor
     ? Prisma.sql`WHERE (

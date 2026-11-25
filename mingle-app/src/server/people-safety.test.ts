@@ -33,8 +33,8 @@ describe('a woman can stop new rooms from men', () => {
 
 describe('explore filters', () => {
   it('reads gender, an age range and online only; the range ends mean no limit', () => {
-    expect(parsePeopleDiscoveryFilters(new URLSearchParams('gender=female&ageMin=25&ageMax=34&online=1'))).toEqual({ gender: 'female', ageMin: 25, ageMax: 34, onlineOnly: true })
-    expect(parsePeopleDiscoveryFilters(new URLSearchParams('gender=x&ageMin=18&ageMax=60'))).toEqual({ gender: null, ageMin: null, ageMax: null, onlineOnly: false })
+    expect(parsePeopleDiscoveryFilters(new URLSearchParams('gender=female&ageMin=25&ageMax=34&online=1'))).toEqual({ gender: 'female', ageMin: 25, ageMax: 34, onlineOnly: true, primaryLanguage: null, interestLanguage: null })
+    expect(parsePeopleDiscoveryFilters(new URLSearchParams('gender=x&ageMin=18&ageMax=60'))).toEqual({ gender: null, ageMin: null, ageMax: null, onlineOnly: false, primaryLanguage: null, interestLanguage: null })
     expect(parsePeopleDiscoveryFilters(new URLSearchParams('ageMin=40&ageMax=30'))).toMatchObject({ ageMin: 30, ageMax: 40 })
     expect(parsePeopleDiscoveryFilters(new URLSearchParams('ageMin=5'))).toMatchObject({ ageMin: null })
   })
