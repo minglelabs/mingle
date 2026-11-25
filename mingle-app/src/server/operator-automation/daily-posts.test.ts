@@ -22,7 +22,7 @@ vi.mock('@/lib/prisma', () => ({
 vi.mock('@/server/operator-post-reserve/worker', () => ({ loadReservePersona: m.persona, loadExistingReserveTexts: m.texts }))
 vi.mock('@/server/operator-post-reserve/generate', () => ({
   generateReservePosts: m.generate,
-  pickReserveTopics: () => ['food'],
+  pickReserveTopics: (count: number) => ['food', 'travel'].slice(0, count),
   isKoreaCountry: () => true,
   reservePosterProfile: () => ({ topicFactors: {} }),
 }))
@@ -65,8 +65,26 @@ describe('daily operator posts', () => {
     expect(m.reserveUpdateMany.mock.calls[0][0].data).toMatchObject({ imageObjectKey: 'post-images/a/1.jpg' })
   })
 
+  it('writes a second post for an account that also wins the second roll', async () => {
+    m.userFindMany.mockResolvedValue([{ id: 'a' }, { id: 'b' }])
+    m.generate.mockImplementation(async ({ topics }: { topics: string[] }) => topics.map((topic, index) => ({ topic, text: `글${index}`, language: 'ko', imagePrompt: null })))
+    // a: wins both (2 posts); b: loses the first, wins the second (1 post).
+    const rolls = [0.1, 0.1, 0.9, 0.1]
+    const result = await writeDailyOperatorPosts(40, new Date('2026-11-01T00:00:00Z'), () => rolls.shift() ?? 0.99, 20)
+    expect(result).toEqual({ accounts: 2, written: 3, failed: 0 })
+    expect(m.generate.mock.calls[0][0].topics).toHaveLength(2)
+    expect(m.reserveCreate.mock.calls.map((call) => call[0].data.operatorUserId)).toEqual(['a', 'a', 'b'])
+  })
+
+  it('keeps the second roll optional in settings', () => {
+    const body = { avatars: { enabled: false, intervalMinutes: 10 }, accounts: { enabled: true, perDay: 10, totalTarget: 100 }, posts: { enabled: true, chancePercent: 40 } }
+    expect(parseAutomationSettings(body)).toMatchObject({ ok: true, settings: { posts: { chancePercent: 40, secondChancePercent: 0 } } })
+    expect(parseAutomationSettings({ ...body, posts: { enabled: true, chancePercent: 40, secondChancePercent: 20 } })).toMatchObject({ ok: true, settings: { posts: { secondChancePercent: 20 } } })
+    expect(parseAutomationSettings({ ...body, posts: { enabled: true, chancePercent: 40, secondChancePercent: 101 } })).toEqual({ ok: false, error: 'invalid_chance' })
+  })
+
   it('reads and requires the posts rule in settings', () => {
-    expect(normalizeAutomationSettings(null).posts).toEqual({ enabled: false, chancePercent: 20 })
+    expect(normalizeAutomationSettings(null).posts).toEqual({ enabled: false, chancePercent: 20, secondChancePercent: 0 })
     const body = { avatars: { enabled: false, intervalMinutes: 10 }, accounts: { enabled: true, perDay: 10, totalTarget: 100 }, posts: { enabled: true, chancePercent: 20 } }
     expect(parseAutomationSettings(body)).toMatchObject({ ok: true, settings: { posts: { enabled: true, chancePercent: 20 } } })
     expect(parseAutomationSettings({ ...body, posts: { enabled: true, chancePercent: 0 } })).toEqual({ ok: false, error: 'invalid_chance' })
