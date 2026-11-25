@@ -1,14 +1,18 @@
 'use client'
 
-import { Check, Clock, Lock } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { Check, Clock, Lock, Phone } from 'lucide-react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import FlagEmoji from '@/components/flag-emoji'
+import { isVoiceTalkAvailable } from '@/components/LivePhoneDemo/VoiceTalkPanel'
 import { resolvePostCategoryCopy } from '@/i18n/post-category-copy'
 import type { AppLocale } from '@/i18n'
 import { formatProfileAge } from '@/i18n/profile-age-copy'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { countryFlagEmoji, getCountryDisplayName } from '@/lib/nationality'
 import { POST_CATEGORIES, POST_HOBBIES, POST_INTRO_HOBBIES_MAX, type PostCategory, type PostHobby } from '@/lib/post-category'
+
+// Whether this is the app does not change while the page is open.
+const subscribeNever = () => () => undefined
 
 type ProfileFacts = { country: string | null; age: number | null; heightCm: number | null }
 
@@ -53,6 +57,10 @@ export default function ComposeCategoryPicker({
     return () => { cancelled = true }
   }, [category, facts])
 
+  // A call post is answered in the app (its voice engine): only the app offers it.
+  const canTakeCalls = useSyncExternalStore(subscribeNever, isVoiceTalkAvailable, () => false)
+  const categories = POST_CATEGORIES.filter((entry) => entry !== 'call' || canTakeCalls)
+
   const toggleHobby = (hobby: PostHobby) => {
     if (hobbies.includes(hobby)) onHobbiesChange(hobbies.filter((entry) => entry !== hobby))
     else if (hobbies.length < POST_INTRO_HOBBIES_MAX) onHobbiesChange([...hobbies, hobby])
@@ -62,7 +70,7 @@ export default function ComposeCategoryPicker({
     <section data-qa="compose-category" className="border-b border-foreground/10 px-4 pb-3 pt-3">
       <p className="text-[12px] font-bold text-foreground/50">{copy.label}</p>
       <div className="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label={copy.label}>
-        {POST_CATEGORIES.map((entry) => {
+        {categories.map((entry) => {
           const picked = entry === category
           return (
             <button
@@ -76,7 +84,7 @@ export default function ComposeCategoryPicker({
                 picked ? 'border-amber-400 bg-amber-50 text-slate-950' : 'border-foreground/15 bg-background text-foreground/70'
               }`}
             >
-              {picked ? <Check size={14} strokeWidth={3} aria-hidden="true" /> : entry === 'hour' ? <Clock size={14} strokeWidth={2.4} aria-hidden="true" /> : null}
+              {picked ? <Check size={14} strokeWidth={3} aria-hidden="true" /> : entry === 'hour' ? <Clock size={14} strokeWidth={2.4} aria-hidden="true" /> : entry === 'call' ? <Phone size={13} strokeWidth={2.4} aria-hidden="true" /> : null}
               {copy.categories[entry]}
             </button>
           )
@@ -84,6 +92,7 @@ export default function ComposeCategoryPicker({
       </div>
 
       {category === 'hour' ? <p className="mt-2 text-[13px] text-foreground/55" data-qa="compose-category-hour-hint">{copy.hourHint}</p> : null}
+      {category === 'call' ? <p className="mt-2 text-[13px] text-foreground/55" data-qa="compose-category-call-hint">{copy.callHint}</p> : null}
 
       {category === 'intro' ? (
         <div className="mt-3" data-qa="compose-intro-form">

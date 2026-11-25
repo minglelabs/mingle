@@ -75,7 +75,7 @@ export type FeedPostDto = {
    * the moment it leaves the lists, 'intro' with the author's answers. Absent
    * on the wire: an ordinary post.
    */
-  category?: 'hour' | 'intro'
+  category?: 'hour' | 'intro' | 'call'
   expiresAt?: string
   intro?: PostIntro
   image: FeedPostImageDto | null

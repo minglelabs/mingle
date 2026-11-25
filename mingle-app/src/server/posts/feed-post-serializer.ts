@@ -338,7 +338,7 @@ export function serializeFeedPost(post: SerializerPostRow, ctx: SerializerContex
     ...(translationLanguages.length > 0 ? { translationLanguages } : {}),
     backgroundKey: post.backgroundKey ?? '',
     // Only for the kinds that show something: an ordinary post carries none of these.
-    ...(post.category === 'hour' && post.expiresAt ? { category: 'hour' as const, expiresAt: post.expiresAt.toISOString() } : {}),
+    ...((post.category === 'hour' || post.category === 'call') && post.expiresAt ? { category: post.category, expiresAt: post.expiresAt.toISOString() } : {}),
     ...(post.category === 'intro' && readPostIntro(post.intro) ? { category: 'intro' as const, intro: readPostIntro(post.intro) as PostIntro } : {}),
     image: serializePostImage(post.id, post.imageObjectKey, post.imageWidth, post.imageHeight),
     ...(post.imageObjectKey && post.extraImages?.length

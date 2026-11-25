@@ -1,8 +1,9 @@
 "use client";
 
-import { Clock } from "lucide-react";
+import { Clock, Phone } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import FlagEmoji from "@/components/flag-emoji";
+import PostCallButton from "@/components/feed/post-call-button";
 import { resolvePostCategoryCopy } from "@/i18n/post-category-copy";
 import type { AppLocale } from "@/i18n";
 import { formatProfileAge } from "@/i18n/profile-age-copy";
@@ -14,30 +15,50 @@ const PILL = "inline-flex h-6 shrink-0 items-center gap-1 rounded-full bg-white/
 /**
  * What kind of post a card is (owner, 2026-11-25): an hour post shows how long
  * it still has; a self-introduction shows the author's country, age, height
- * and hobbies. An ordinary post shows nothing. White pills, so they read on
- * any background or photo.
+ * and hobbies; a call post shows how long it still takes calls, with the
+ * call button for everyone but its author. An ordinary post shows nothing.
+ * White pills, so they read on any background or photo.
  */
 export default function PostCategoryStrip({
   category,
   expiresAt,
   intro,
   locale,
+  postId,
+  ownPost,
 }: {
-  category?: PostCategory;
+  category?: Exclude<PostCategory, "free">;
   expiresAt?: string | null;
   intro?: PostIntro | null;
   locale: string;
+  /** For a call post: which post to call, and whether the viewer wrote it (no button then). */
+  postId?: string;
+  ownPost?: boolean;
 }) {
   const copy = useMemo(() => resolvePostCategoryCopy(locale), [locale]);
   // The minutes run down while the card is on screen.
   const [now, setNow] = useState(() => Date.now());
-  const isHour = category === "hour" && Boolean(expiresAt);
+  const isCall = category === "call" && Boolean(expiresAt);
+  const isHour = (category === "hour" || isCall) && Boolean(expiresAt);
   useEffect(() => {
     if (!isHour) return;
     const timer = window.setInterval(() => setNow(Date.now()), 30_000);
     return () => window.clearInterval(timer);
   }, [isHour]);
 
+  if (isCall) {
+    const minutes = postMinutesLeft(expiresAt, now);
+    return (
+      <div className="mt-1 flex flex-wrap items-center gap-1.5" data-qa="post-category-strip" data-post-category="call">
+        <span className={`${PILL} text-emerald-700`}>
+          <Phone size={12} strokeWidth={2.6} aria-hidden="true" />
+          {copy.categories.call}
+          <span className="font-medium text-slate-500">· {copy.minutesLeft.replace("{n}", String(minutes ?? 1))}</span>
+        </span>
+        {postId && !ownPost ? <PostCallButton postId={postId} locale={locale} /> : null}
+      </div>
+    );
+  }
   if (isHour) {
     const minutes = postMinutesLeft(expiresAt, now);
     return (

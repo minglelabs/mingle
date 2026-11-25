@@ -48,7 +48,7 @@ export type PublishInput = {
   /** The draft to delete on success (only that draft). */
   draftId: string | null
   /** The post's kind and, for a self-introduction, the hobbies picked (see @/lib/post-category). Absent: an ordinary post. */
-  category?: 'free' | 'hour' | 'intro'
+  category?: 'free' | 'hour' | 'intro' | 'call'
   hobbies?: string[]
 }
 

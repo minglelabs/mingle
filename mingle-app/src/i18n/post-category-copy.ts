@@ -1,4 +1,5 @@
 import { resolvePrimaryUiLocaleTag, type PrimaryUiLocale } from "@/i18n/mingle-locales";
+import { resolvePostCallCopy } from "@/i18n/post-call-copy";
 import { POST_HOBBIES, type PostCategory, type PostHobby } from "@/lib/post-category";
 
 /** The post categories of the write screen and the card (owner, 2026-11-25; see @/lib/post-category). */
@@ -9,6 +10,8 @@ export type PostCategoryCopy = {
   hourHint: string;
   /** Under the chips while "self-introduction" is picked. */
   introHint: string;
+  /** Under the chips while "1:1 voice talk" is picked. */
+  callHint: string;
   hobbiesLabel: string;
   needHobby: string;
   needText: string;
@@ -41,13 +44,15 @@ const ROWS: Record<PrimaryUiLocale, Row> = {
   vi: ["Danh mục", "Tự do", "1 giờ", "Giới thiệu bản thân", "Bài đăng này biến mất sau một giờ.", "Chọn sở thích và giới thiệu bản thân. Quốc gia, tuổi và chiều cao lấy từ hồ sơ.", "Sở thích", "Hãy chọn ít nhất một sở thích.", "Hãy viết thêm một chút về bạn.", "Còn {n} phút", "Du lịch|Âm nhạc|Hoạt hình|Phim & phim bộ|Trò chơi|Thể thao|Nấu ăn|Cà phê & ẩm thực|Nhiếp ảnh|Đọc sách|Thời trang|Ngoại ngữ"],
 };
 
-function build(row: Row): PostCategoryCopy {
+function build(row: Row, call: { category: string; hint: string }): PostCategoryCopy {
   const names = row[10].split("|");
   return {
     label: row[0],
-    categories: { free: row[1], hour: row[2], intro: row[3] },
+    // The call kind's words live with the rest of the call's (@/i18n/post-call-copy).
+    categories: { free: row[1], hour: row[2], intro: row[3], call: call.category },
     hourHint: row[4],
     introHint: row[5],
+    callHint: call.hint,
     hobbiesLabel: row[6],
     needHobby: row[7],
     needText: row[8],
@@ -58,5 +63,5 @@ function build(row: Row): PostCategoryCopy {
 
 export function resolvePostCategoryCopy(rawLocale: string): PostCategoryCopy {
   const locale = resolvePrimaryUiLocaleTag(rawLocale) ?? "en";
-  return build(ROWS[locale] ?? ROWS.en);
+  return build(ROWS[locale] ?? ROWS.en, resolvePostCallCopy(rawLocale));
 }

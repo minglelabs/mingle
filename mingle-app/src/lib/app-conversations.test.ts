@@ -240,6 +240,7 @@ describe("app-conversations", () => {
           { isDeleted: false },
           { isDeleted: null },
         ],
+        isDuoCall: false,
       },
     }));
   });
@@ -1171,6 +1172,7 @@ describe("app-conversations", () => {
           { isDeleted: false },
           { isDeleted: null },
         ],
+        isDuoCall: false,
       },
     }));
   });

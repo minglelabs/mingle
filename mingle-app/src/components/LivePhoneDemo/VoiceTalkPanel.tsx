@@ -28,6 +28,10 @@ import { rememberLiveRoom } from '@/lib/live-room-bubble'
 import { voiceStageCopy } from '@/i18n/voice-stage-copy'
 import { voiceRoomCopy } from '@/i18n/voice-room-copy'
 import VoiceRoomStage from './VoiceRoomStage'
+import DuoCallStage, { type DuoCallPhase } from './DuoCallStage'
+import { usePostCallRoom } from './use-post-call-room'
+import { resolvePostCallCopy } from '@/i18n/post-call-copy'
+import { isPostCallOver, postCallInterpretsByDefault } from '@/lib/post-call'
 import { resolveVoiceStage, voiceStageTransition, type VoiceStageRole } from './voice-talk-stage'
 import { useNativeBannerSuppression } from '@/lib/use-native-banner-suppression'
 import { VOICE_TALK_MAX_SEATS, voiceTalkCopy } from '@/i18n/voice-talk-copy'
@@ -256,11 +260,16 @@ export type VoiceTalkPanelProps = {
    * 'room': the voice room screen of an open room (owner, 2026-11-25): the
    * stage is always there under the top bar (VoiceRoomStage), in the call or
    * not. 'panel' (default): the strip of a chat room's call, shown only
-   * while this phone is in it.
+   * while this phone is in it. 'duo': the call screen of a 1:1 voice talk
+   * from a post (owner, 2026-11-25; DuoCallStage, src/server/post-calls.ts).
    */
-  variant?: 'panel' | 'room'
-  /** 'room' only: the stage's height in px (0 when gone), so the chat starts below it. */
+  variant?: 'panel' | 'room' | 'duo'
+  /** 'room' and 'duo': the stage's height in px (0 when gone), so the chat starts below it. */
   onHeightChange?: (heightPx: number) => void
+  /** 'duo' only: the call is over (or was hung up here): the screen closes. */
+  onDuoCallClose?: () => void
+  /** 'duo' only: this viewer is speaking into the call (their face in the bottom bar ripples). */
+  onLocalSpeakingChange?: (speaking: boolean) => void
 }
 
 export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
@@ -271,6 +280,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   const listenOn = props.listenOn !== false
   const viewerUserId = props.viewerUserId ?? null
   const copy = voiceTalkCopy(props.uiLocale)
+  const duoVariant = props.variant === 'duo'
   const coinWallet = useCoinWallet().wallet
   // Interpretation is paid. While it is on the wallet is read more often than
   // the app's usual minute, and when the Hash run out the switch goes off and
@@ -459,7 +469,8 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   // cover it, and a card low on the screen would sit half under it. It is
   // hidden while any of the three (start/join, leave, incoming call) is up.
   const dialogOpen = startPrompt || confirmLeave || incomingOffered
-  useNativeBannerSuppression(dialogOpen)
+  // The call screen of a 1:1 voice talk is the whole screen: no banner over it.
+  useNativeBannerSuppression(dialogOpen || duoVariant)
 
   // Decline the call that just started: it is not offered again by itself.
   const decline = useCallback(() => {
@@ -750,6 +761,167 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
       </div>
     </div>
   ) : null
+
+  // ---- 1:1 voice talk from a post (variant 'duo'; src/server/post-calls.ts) ----
+  // The hidden room was made for one call. This screen reads that call: it
+  // rings (the caller waits, the author answers), both phones join when it is
+  // answered, and the screen closes when it is over.
+  const postCall = usePostCallRoom(conversationId, duoVariant)
+  const postCallAct = postCall.act
+  const duoCall = postCall.call
+  const duoCopy = resolvePostCallCopy(props.uiLocale)
+  const duoStatus = duoCall?.status ?? null
+  const duoCallId = duoCall?.id ?? null
+  const duoPeerName = duoCall?.peer.name ?? ''
+  const duoPeerUserId = duoCall?.peer.userId ?? null
+  const onDuoCallCloseRef = useRef(props.onDuoCallClose)
+  useEffect(() => { onDuoCallCloseRef.current = props.onDuoCallClose }, [props.onDuoCallClose])
+  const leaveRef = useRef(leave)
+  useEffect(() => { leaveRef.current = leave }, [leave])
+
+  // Answered: this phone joins the call, once.
+  const duoJoinedCallRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!duoVariant || duoStatus !== 'accepted' || !duoCallId || duoJoinedCallRef.current === duoCallId) return
+    duoJoinedCallRef.current = duoCallId
+    if (phaseRef.current === 'connecting' || phaseRef.current === 'connected') return
+    joinVoiceTalk({ conversationId, title: duoPeerName || conversationTitle, lang: myLangRef.current })
+  }, [conversationId, conversationTitle, duoCallId, duoPeerName, duoStatus, duoVariant])
+
+  // Over (or a room whose call is gone): out of the call, say so briefly, close.
+  const duoOver = duoVariant && postCall.loaded && (duoStatus === null || isPostCallOver(duoStatus))
+  const duoSelfEndedRef = useRef(false)
+  useEffect(() => {
+    if (!duoOver) return
+    if (phaseRef.current === 'connecting' || phaseRef.current === 'connected') leaveRef.current()
+    const timer = window.setTimeout(() => onDuoCallCloseRef.current?.(), duoSelfEndedRef.current ? 150 : 1800)
+    return () => window.clearTimeout(timer)
+  }, [duoOver])
+
+  const duoHangUp = useCallback(() => {
+    duoSelfEndedRef.current = true
+    if (phaseRef.current === 'connecting' || phaseRef.current === 'connected') leave()
+    void postCallAct('hangup').then((next) => {
+      // The server could not be told: the screen still closes; the call ends by itself.
+      if (!next) onDuoCallCloseRef.current?.()
+    })
+  }, [leave, postCallAct])
+
+  const duoPeerSeat = duoPeerUserId ? seats.find((seat) => seat.userId === duoPeerUserId) ?? null : null
+  const duoPeerInCall = joined && !!room && !!duoPeerSeat
+  // Interpretation starts on by itself only when the two speak different
+  // languages (owner, 2026-11-25), once per call: what the viewer switches
+  // afterwards stays, also when they come back to this screen.
+  const duoPeerLang = duoPeerSeat?.lang || duoCall?.peer.language || ''
+  const walletExhausted = isCoinBillingActive(coinWallet) && coinWallet?.exhausted === true
+  useEffect(() => {
+    if (!duoVariant || !connected || !duoCallId || !duoPeerInCall) return
+    const key = `mingle.post-call.defaults:${duoCallId}`
+    try {
+      if (window.sessionStorage.getItem(key)) return
+      window.sessionStorage.setItem(key, '1')
+    } catch {
+      return
+    }
+    if (!postCallInterpretsByDefault(myLangRef.current, duoPeerLang)) return
+    // Interpretation is paid: with no Hash it stays off, without the sheet.
+    if (interpretOnRef.current || walletExhausted) return
+    onInterpretChange?.(true)
+  }, [connected, duoCallId, duoPeerInCall, duoPeerLang, duoVariant, onInterpretChange, walletExhausted])
+
+  const localSpeaking = duoVariant && joined && seats.some((seat) => seat.isLocal && seat.isSpeaking)
+  const onLocalSpeakingChange = props.onLocalSpeakingChange
+  useEffect(() => {
+    onLocalSpeakingChange?.(localSpeaking)
+  }, [localSpeaking, onLocalSpeakingChange])
+
+  const duoPhase: DuoCallPhase = !duoCall
+    ? (duoOver ? 'over' : 'connecting')
+    : duoOver
+      ? 'over'
+      : duoStatus === 'ringing'
+        ? (duoCall.role === 'author' ? 'ringing_in' : 'ringing_out')
+        : connected && duoPeerInCall ? 'talking' : 'connecting'
+
+  // The room's messages start under the face and the buttons.
+  const duoAnchorRef = useRef<HTMLDivElement | null>(null)
+  const duoBlockRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!duoVariant) return
+    const block = duoBlockRef.current
+    const anchor = duoAnchorRef.current
+    if (!block || !anchor) return
+    const report = () => onHeightChangeRef.current?.(Math.max(0, Math.round(block.getBoundingClientRect().bottom - anchor.getBoundingClientRect().top)))
+    report()
+    // The block slides up when interpretation goes on: measured again once it has.
+    const settled = window.setTimeout(report, 360)
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(report)
+    observer?.observe(block)
+    window.addEventListener('resize', report)
+    return () => {
+      window.clearTimeout(settled)
+      observer?.disconnect()
+      window.removeEventListener('resize', report)
+      onHeightChangeRef.current?.(0)
+    }
+  }, [duoPhase, duoVariant, interpretOn])
+
+  if (duoVariant) {
+    return (
+      <>
+        <div ref={duoAnchorRef} aria-hidden="true" className="pointer-events-none absolute inset-x-0 h-0" style={{ top: props.topOffset }} />
+        <DuoCallStage
+          locale={props.uiLocale}
+          labels={{
+            waiting: duoCopy.waiting,
+            incoming: duoCopy.incoming,
+            accept: duoCopy.accept,
+            decline: duoCopy.decline,
+            cancel: duoCopy.cancel,
+            hangUp: duoCopy.hangUp,
+            connecting: duoCopy.connecting,
+            translate: duoCopy.translate,
+            readAloud: duoCopy.readAloud,
+            mic: duoCopy.mic,
+            micMuted: copy.micMuted,
+          }}
+          peer={duoCall?.peer ?? null}
+          phase={duoPhase}
+          secondsLeft={postCall.secondsLeft}
+          overText={duoStatus === 'ended' || duoStatus === null ? duoCopy.ended : duoCopy.notConnected}
+          note={error}
+          peerSpeaking={duoPeerSeat?.isSpeaking === true}
+          peerMicOn={duoPeerSeat ? duoPeerSeat.micOn : true}
+          micOn={!listenOnly}
+          interpretOn={interpretOn}
+          listenOn={listenOn}
+          earphonesConnected={props.earphonesConnected === true}
+          busy={postCall.busy}
+          onAccept={() => void postCallAct('accept')}
+          onHangUp={duoHangUp}
+          onToggleMic={() => onListenOnlyChange?.(!listenOnly)}
+          onToggleInterpret={() => {
+            // No Hash: the switch stays off and the "out of Hash" sheet opens.
+            if (!interpretOn && !ensureCoinsForPaidFeature()) return
+            onInterpretChange?.(!interpretOn)
+          }}
+          onToggleListen={() => {
+            // Reading aloud is part of interpreting: off, it turns both on.
+            if (!interpretOn) {
+              if (!ensureCoinsForPaidFeature()) return
+              onInterpretChange?.(true)
+              if (!listenOn) onListenChange?.(true)
+              return
+            }
+            onListenChange?.(!listenOn)
+          }}
+          onOpenProfile={onOpenProfile}
+          compact={interpretOn}
+          blockRef={duoBlockRef}
+        />
+      </>
+    )
+  }
 
   // The voice room screen: the stage is the room, whether or not this phone
   // is in the call. Coming in is the stage's own button (no "join?" card).

@@ -1,6 +1,7 @@
 'use client'
 
 import ComposeCategoryPicker from '@/components/compose/compose-category-picker'
+import { POST_CALL_LISTEN_EVENT } from '@/lib/post-call'
 import { postIntroProblem, type PostCategory, type PostHobby } from '@/lib/post-category'
 import { requestProfileBasics } from '@/lib/profile-basics'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -548,6 +549,8 @@ export default function ComposeScreen({
       }
       // The post now belongs to the publish job; no more draft writes for it.
       saver().close()
+      // A call post: the app starts listening for calls at once (IncomingPostCallGate).
+      if (category === 'call') window.dispatchEvent(new Event(POST_CALL_LISTEN_EVENT))
       // Return to the feed; the PublishStatusBanner shows progress there.
       if (onPublished) onPublished()
       // Replace: back from the feed must not reopen the composer.

@@ -18,9 +18,10 @@ const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 
 describe("post categories", () => {
   it("is free, 1 hour or a self-introduction; anything else is an ordinary post", () => {
-    expect([...POST_CATEGORIES]).toEqual(["free", "hour", "intro"]);
+    expect([...POST_CATEGORIES]).toEqual(["free", "hour", "intro", "call"]);
     expect(parsePostCategory("hour")).toBe("hour");
-    expect(parsePostCategory("call")).toBe("free");
+    expect(parsePostCategory("call")).toBe("call");
+    expect(parsePostCategory("story")).toBe("free");
     expect(parsePostCategory(undefined)).toBe("free");
   });
 
@@ -40,7 +41,7 @@ describe("post categories", () => {
     expect(postNotExpiredWhere(now)).toEqual({ OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] });
     expect(visiblePostWhere(null).AND).toHaveLength(1);
     expect(read("src/app/api/search/posts/post-search-query.ts")).toContain("AND (p.expires_at IS NULL OR p.expires_at > CURRENT_TIMESTAMP)");
-    expect(read("src/server/posts/post-category.ts")).toContain("expiresAt: new Date(args.publishedAt.getTime() + POST_HOUR_MS)");
+    expect(read("src/server/posts/post-category.ts")).toContain("data: { category: args.category, expiresAt: new Date(args.publishedAt.getTime() + POST_HOUR_MS) }");
     // The card counts the minutes down, never below one while it is up.
     const end = "2026-11-25T13:00:00Z";
     expect(postMinutesLeft(end, Date.parse("2026-11-25T12:00:00Z"))).toBe(60);
@@ -58,7 +59,7 @@ describe("post categories", () => {
     const screen = read("src/components/compose/compose-screen.tsx");
     expect(screen).toContain("<ComposeCategoryPicker");
     expect(screen).toContain("const publishable = canPublish({ sourceText: text, hasImage }) && !introProblem");
-    expect(read("src/components/feed/feed-post-card.tsx")).toContain("<PostCategoryStrip category={post.category} expiresAt={post.expiresAt} intro={post.intro} locale={locale} />");
+    expect(read("src/components/feed/feed-post-card.tsx")).toContain("<PostCategoryStrip category={post.category} expiresAt={post.expiresAt} intro={post.intro} locale={locale} postId={post.id} ownPost={Boolean(viewerId) && post.author.id === viewerId} />");
     for (const locale of PRIMARY_UI_LOCALES) {
       const copy = resolvePostCategoryCopy(locale);
       for (const category of POST_CATEGORIES) expect(copy.categories[category].length).toBeGreaterThan(0);

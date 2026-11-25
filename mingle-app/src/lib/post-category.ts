@@ -5,10 +5,12 @@
  * - `hour`: gone from every list an hour after it was published.
  * - `intro`: a self-introduction. The author's country, age and height come
  *   from the profile; at least one hobby and some text are required.
+ * - `call`: takes 1:1 voice talks for an hour (then it is gone, as an hour
+ *   post is). Its card has a call button; see src/server/post-calls.ts.
  *
  * Client-safe: the write screen, the card and the server all read this.
  */
-export const POST_CATEGORIES = ["free", "hour", "intro"] as const;
+export const POST_CATEGORIES = ["free", "hour", "intro", "call"] as const;
 export type PostCategory = (typeof POST_CATEGORIES)[number];
 
 export const POST_HOUR_MS = 60 * 60 * 1000;

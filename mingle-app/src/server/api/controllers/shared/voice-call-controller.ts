@@ -160,6 +160,15 @@ function readLang(value: unknown): string | null {
   return /^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})?$/.test(trimmed) ? trimmed : null;
 }
 
+async function isDuoCallRoom(conversationId: string): Promise<boolean> {
+  try {
+    const row = await prisma.appConversationChannel.findUnique({ where: { id: conversationId }, select: { isDuoCall: true } });
+    return row?.isDuoCall === true;
+  } catch {
+    return false;
+  }
+}
+
 export async function postVoiceCallTokenResponse(request: NextRequest, conversationId: string) {
   const member = await requireChannelMember(request, conversationId);
   if ("response" in member) return member.response;
@@ -200,7 +209,10 @@ export async function postVoiceCallTokenResponse(request: NextRequest, conversat
   const { created, ...call } = joined;
 
   refreshMemberLists(member.sessionKey);
-  if (created) {
+  // A 1:1 voice talk from a post rang its author already (server/post-calls.ts):
+  // its hidden room gets no "started a voice talk" message and no second push.
+  const duoCall = created ? await isDuoCallRoom(conversationId) : false;
+  if (created && !duoCall) {
     // Everyone else in the room gets a voice talk push; tapping it opens the
     // room, where the panel offers Join or Decline.
     const sessionKey = member.sessionKey;

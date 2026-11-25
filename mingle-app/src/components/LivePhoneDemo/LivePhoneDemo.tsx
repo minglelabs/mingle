@@ -342,6 +342,8 @@ import VoiceTalkPanel, {
 import HashRushRoomLayer from '@/features/hash-rush/HashRushRoomLayer'
 import { VoiceTalkRoomContext, type VoiceTalkRoomState } from './voice-talk-room-context'
 import { takeVoiceRoomEntry } from '@/lib/voice-room-entry'
+import { takePostCallEntry } from '@/lib/post-call'
+import { DuoCallSelfFace } from './DuoCallStage'
 import type { VoiceTalkParticipantChip } from './VoiceTalkParticipantStrip'
 import { HashRushRoomContext, type HashRushRoomState } from './hash-rush-room-context'
 import { HashRushRoomPrompts, useHashRushRoomGame } from './HashRushRoomPrompts'
@@ -2488,6 +2490,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // from the room's own record, or at once when it was opened from the voice-room tab.
   const [voiceRoomId, setVoiceRoomId] = useState<string | null>(null)
   const isVoiceRoom = !!conversationId && voiceRoomId === conversationId
+  // The hidden room of a 1:1 voice talk from a post (owner, 2026-11-25;
+  // src/server/post-calls.ts): this screen is then the call screen. Known from
+  // the room's own record, or at once when the call was just asked for or answered.
+  const [duoCallRoomId, setDuoCallRoomId] = useState<string | null>(null)
+  const isDuoCall = !!conversationId && duoCallRoomId === conversationId
+  useEffect(() => {
+    if (conversationId && takePostCallEntry(conversationId)) setDuoCallRoomId(conversationId)
+  }, [conversationId])
+  // The viewer is speaking into that call (their face in the bottom bar ripples).
+  const [duoSelfSpeaking, setDuoSelfSpeaking] = useState(false)
   const [isTogglingPublic, setIsTogglingPublic] = useState(false)
   // The number people type in Search to find this room.
   const [roomCode, setRoomCode] = useState<number | null>(null)
@@ -2517,7 +2529,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const hashRushGameChatShown = hashRushGameOpen && hashRushGameChatMode !== null && Boolean(conversationId) && !isBlockedCounterpart
   // What the bottom bar shows: the keyboard composer or voice (Start). Over the
   // game it is the game's own mode; the room's saved one (isComposerOpen) stays.
-  const composerShown = hashRushGameChatShown ? hashRushGameChatMode === 'text' : isComposerOpen
+  // The call screen of a 1:1 voice talk has the text box, never the Start bar.
+  const composerShown = hashRushGameChatShown ? hashRushGameChatMode === 'text' : isComposerOpen || isDuoCall
   // The composer's text box has focus (its keyboard, not the game's, is up).
   const [isComposerTextareaFocused, setIsComposerTextareaFocused] = useState(false)
   // The message the next typed send replies to (set from a bubble's menu).
@@ -5975,7 +5988,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     })
       .then(async (response) => {
         if (!response.ok) throw new Error(`conversation_share_status_failed:${response.status}`)
-        return response.json() as Promise<{ shareToken?: unknown; shareEnabled?: unknown; isPublic?: unknown; isVoiceRoom?: unknown; roomCode?: unknown }>
+        return response.json() as Promise<{ shareToken?: unknown; shareEnabled?: unknown; isPublic?: unknown; isVoiceRoom?: unknown; isDuoCall?: unknown; roomCode?: unknown }>
       })
       .then((body) => {
         if (cancelled) return
@@ -5984,6 +5997,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         setShareEnabled(body.shareEnabled === true)
         setIsPublicRoom(body.isPublic === true)
         setVoiceRoomId(body.isVoiceRoom === true ? conversationId : null)
+        setDuoCallRoomId(body.isDuoCall === true ? conversationId : null)
         setRoomCode(typeof body.roomCode === 'number' ? body.roomCode : null)
       })
       .catch(() => {
@@ -9153,6 +9167,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       <div
         ref={liveDemoRootRef}
         data-qa="live-demo-root"
+        // The call screen of a 1:1 voice talk: see-through bars over the
+        // backdrop, and messages that fade out under the face (globals.css).
+        data-duo-call={isDuoCall ? 'on' : undefined}
+        style={isDuoCall ? ({ '--duo-stage-h': `${voiceRoomStageHeightPx}px` } as CSSProperties) : undefined}
         className="relative flex h-full min-h-0 flex-col overflow-hidden"
       >
 
@@ -9175,8 +9193,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             myLang={voiceTalkLang}
             topOffset="calc(54px + env(safe-area-inset-top, 0px))"
             // A voice room: its stage is the screen, the chat runs below it. An open chat room keeps the strip.
-            variant={isVoiceRoom ? 'room' : 'panel'}
+            variant={isDuoCall ? 'duo' : isVoiceRoom ? 'room' : 'panel'}
             onHeightChange={setVoiceRoomStageHeightPx}
+            onDuoCallClose={onBack}
+            onLocalSpeakingChange={setDuoSelfSpeaking}
             onAvailabilityChange={handleVoiceTalkAvailability}
                 onParticipantsChange={setVoiceTalkParticipants}
             openSignal={voiceTalkOpenSignal}
@@ -9263,7 +9283,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 <button
                   type="button"
                   onClick={openRenameConversationDialog}
-                  disabled={!conversationId || isRenamingConversation}
+                  disabled={!conversationId || isRenamingConversation || isDuoCall}
                   aria-label={roomManagementCopy.renameButtonLabel}
                   className={`block truncate text-left text-[0.98rem] font-semibold text-gray-950 outline-none transition-colors hover:text-gray-700 focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-default disabled:opacity-100 ${
                     conversationTitleBadge ? 'min-w-0' : 'w-full'
@@ -9342,7 +9362,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 />
               ) : null}
             </div>
-            {headerMode === 'conversation' && conversationId && hasOtherParticipants && showMenuButton ? (
+            {headerMode === 'conversation' && conversationId && hasOtherParticipants && showMenuButton && !isDuoCall ? (
               <button
                 data-qa="live-demo-participants-button"
                 type="button"
@@ -9358,7 +9378,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 ) : null}
               </button>
             ) : null}
-            {showMenuButton ? (
+            {/* A 1:1 voice talk is one call: no room menu (invite, share, leave). */}
+            {showMenuButton && !isDuoCall ? (
               <div className="relative">
                 <button
                   ref={menuButtonRef}
@@ -11042,6 +11063,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           ) : null}
           {/* Chat Area */}
           <div
+            data-qa="live-demo-chat-area"
             className="relative min-h-0 flex-1 bg-gray-50/50"
             style={CHAT_SCROLL_SURFACE_STYLE}
           >
@@ -11084,7 +11106,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   ···
                 </button>
               )}
-              {directPeerMember && !hasOlderUtterances && (
+              {directPeerMember && !hasOlderUtterances && !isDuoCall && (
                 <ConversationPeerProfileCard
                   member={directPeerMember}
                   uiLocale={uiLocale}
@@ -11603,6 +11625,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       >
                         <Mic size={Math.round(COMPOSER_MODE_CONTROL_SIZE_PX * 0.5)} strokeWidth={2.1} />
                       </button>
+                    ) : isDuoCall ? (
+                      // The call screen: the viewer's own face, rippling while they speak.
+                      <DuoCallSelfFace
+                        image={typeof session?.user?.image === 'string' ? session.user.image : null}
+                        name={typeof session?.user?.name === 'string' ? session.user.name : null}
+                        speaking={duoSelfSpeaking}
+                        micOn={!voiceTalkListenOnly}
+                        sizePx={COMPOSER_MODE_CONTROL_SIZE_PX}
+                      />
                     ) : (
                       <ChatActionPlusButton
                         open={actionPanelOpen}

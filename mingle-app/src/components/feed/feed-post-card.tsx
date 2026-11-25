@@ -908,7 +908,7 @@ export default function FeedPostCard({
         actionSlot={actionSlot}
         controlSlot={(
           <>
-            <PostCategoryStrip category={post.category} expiresAt={post.expiresAt} intro={post.intro} locale={locale} />
+            <PostCategoryStrip category={post.category} expiresAt={post.expiresAt} intro={post.intro} locale={locale} postId={post.id} ownPost={Boolean(viewerId) && post.author.id === viewerId} />
             {controlSlot}
           </>
         )}

@@ -178,6 +178,8 @@ model User {
   profileVisitorUnlockedBy  ProfileVisitorUnlock[]         @relation("ProfileVisitorUnlockVisitor")
   profileLikesSent          ProfileLike[]                  @relation("ProfileLikeLiker")
   profileLikesReceived      ProfileLike[]                  @relation("ProfileLikeLiked")
+  postCallsMade             PostCall[]                     @relation("PostCallCaller")
+  postCallsTaken            PostCall[]                     @relation("PostCallAuthor")
   postHides                 PostHide[]
   postDrafts                PostDraft[]
   recentSearches            RecentSearch[]
@@ -467,6 +469,10 @@ model AppConversationChannel {
   // chat rooms) and shown with the stage; entering it from that tab joins
   // its call. Only ever true together with isPublic.
   isVoiceRoom                Boolean   @default(false) @map("is_voice_room")
+  // The hidden two-person room of a 1:1 voice talk started from a post
+  // (owner, 2026-11-25; src/server/post-calls.ts). No list shows it: the
+  // call screen is the only way in.
+  isDuoCall                  Boolean   @default(false) @map("is_duo_call")
   // Women only (owner, 2026-11-25): made by a woman for women. Listed for
   // everyone, but only a woman can come in (a man sees it locked).
   womenOnly                  Boolean   @default(false) @map("women_only")
@@ -861,6 +867,7 @@ model Post {
 
   author        User               @relation(fields: [authorId], references: [id], onDelete: Cascade)
   extraImages   PostImage[]
+  calls         PostCall[]
   translations  PostTranslation[]
   comments      PostComment[]
   likes         PostLike[]
@@ -1058,6 +1065,31 @@ model ProfileVisitorUnlock {
   @@id([userId, visitorId])
   @@index([visitorId], map: "app_profile_visitor_unlocks_visitor_id_idx")
   @@map("app_profile_visitor_unlocks")
+}
+
+/// A 1:1 voice talk asked for from a "call" post (owner, 2026-11-25;
+/// src/server/post-calls.ts). `status`: ringing (the author has 30 seconds),
+/// accepted, declined, missed, cancelled, ended. The call itself runs in the
+/// hidden room `channelId` (AppConversationChannel.isDuoCall).
+model PostCall {
+  id         String    @id @default(cuid())
+  postId     String    @map("post_id")
+  callerId   String    @map("caller_id")
+  authorId   String    @map("author_id")
+  channelId  String    @map("channel_id")
+  status     String    @default("ringing")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  answeredAt DateTime? @map("answered_at")
+  endedAt    DateTime? @map("ended_at")
+
+  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  caller User @relation("PostCallCaller", fields: [callerId], references: [id], onDelete: Cascade)
+  author User @relation("PostCallAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([authorId, status], map: "app_post_calls_author_id_status_idx")
+  @@index([callerId, status], map: "app_post_calls_caller_id_status_idx")
+  @@index([channelId], map: "app_post_calls_channel_id_idx")
+  @@map("app_post_calls")
 }
 
 /// A heart on a profile (owner, 2026-11-25; src/server/profile-likes.ts): one

@@ -82,7 +82,7 @@ describe('the voice room stage', () => {
   it('is the screen of a voice room, with the chat starting below it, in every app language', () => {
     const room = read('src/components/LivePhoneDemo/LivePhoneDemo.tsx')
     // Only a voice room; an open chat room keeps the strip.
-    expect(room).toContain("variant={isVoiceRoom ? 'room' : 'panel'}")
+    expect(room).toContain("variant={isDuoCall ? 'duo' : isVoiceRoom ? 'room' : 'panel'}")
     expect(room).toContain("setVoiceRoomId(body.isVoiceRoom === true ? conversationId : null)")
     expect(room).toContain('? `${voiceRoomStageHeightPx + 10}px`')
     expect(read('src/components/LivePhoneDemo/VoiceTalkPanel.tsx')).toContain('<VoiceRoomStage')

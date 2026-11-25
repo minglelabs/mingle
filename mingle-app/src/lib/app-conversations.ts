@@ -1361,6 +1361,8 @@ async function listConversationChannelsForMember(
     where: {
       ...memberWhere,
       ...buildVisibleConversationWhere(),
+      // The hidden room of a 1:1 voice talk from a post is in no list.
+      isDuoCall: false,
     },
     orderBy: [
       { updatedAt: "desc" },
@@ -2476,14 +2478,14 @@ export async function getConversationSessionKeyForMember(args: {
 export async function getConversationChannelSharing(args: {
   conversationId: string;
   userId: string;
-}): Promise<{ shareToken: string | null; shareEnabled: boolean; sharedAt: Date | null; isPublic: boolean; isVoiceRoom: boolean; roomCode: number } | null> {
+}): Promise<{ shareToken: string | null; shareEnabled: boolean; sharedAt: Date | null; isPublic: boolean; isVoiceRoom: boolean; isDuoCall: boolean; roomCode: number } | null> {
   const record = await prisma.appConversationChannel.findFirst({
     where: {
       id: args.conversationId,
       ...buildVisibleMembershipWhere(args.userId),
       ...buildVisibleConversationWhere(),
     },
-    select: { shareToken: true, shareEnabled: true, sharedAt: true, isPublic: true, isVoiceRoom: true, roomCode: true },
+    select: { shareToken: true, shareEnabled: true, sharedAt: true, isPublic: true, isVoiceRoom: true, isDuoCall: true, roomCode: true },
   });
   return record ?? null;
 }
@@ -4345,6 +4347,18 @@ export async function createOpenRoom(args: {
     select: conversationChannelSelect,
   });
   return serializeConversationChannelWithPreview(record, args.userId);
+}
+
+/**
+ * The hidden two-person room a 1:1 voice talk from a post runs in (owner,
+ * 2026-11-25; src/server/post-calls.ts): both people are members at once (the
+ * call's own rules already said they may talk), and no list shows it.
+ */
+export async function createDuoCallChannel(args: { callerId: string; authorId: string; locale?: string }): Promise<{ id: string; sessionKey: string }> {
+  const created = await createConversationChannelRecordForUser(args.callerId, { locale: args.locale, inviteeUserIds: [args.authorId] });
+  await prisma.appConversationChannel.update({ where: { id: created.id }, data: { isDuoCall: true } });
+  await materializePendingConversationInvitees(created.sessionKey);
+  return { id: created.id, sessionKey: created.sessionKey };
 }
 
 

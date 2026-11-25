@@ -16,10 +16,11 @@ export async function applyPostCategory(args: {
   hobbies: PostHobby[]
   publishedAt: Date
 }): Promise<void> {
-  if (args.category === 'hour') {
+  // A call post is up for an hour too: its author has to be around to answer.
+  if (args.category === 'hour' || args.category === 'call') {
     await prisma.post.updateMany({
       where: { id: args.postId, authorId: args.authorId },
-      data: { category: 'hour', expiresAt: new Date(args.publishedAt.getTime() + POST_HOUR_MS) },
+      data: { category: args.category, expiresAt: new Date(args.publishedAt.getTime() + POST_HOUR_MS) },
     })
     return
   }

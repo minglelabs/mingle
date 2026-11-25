@@ -715,6 +715,8 @@ export async function getConversationShareResponse(
     isPublic: sharing.isPublic === true,
     // A voice room: the room screen shows the stage (only while it is public).
     isVoiceRoom: sharing.isPublic === true && sharing.isVoiceRoom === true,
+    // The room of a 1:1 voice talk from a post: the room screen is the call screen.
+    isDuoCall: sharing.isDuoCall === true,
     roomCode: sharing.roomCode,
   });
 }
