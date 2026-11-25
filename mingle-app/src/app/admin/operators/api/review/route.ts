@@ -6,6 +6,7 @@ import { parseImageEngine } from '@/server/seedream/client'
 import {
   getReviewPost,
   getReviewProfileState,
+  reviewPostReference,
   normalizeReviewFeedback,
   parseReviewAction,
   reviewOperatorPost,
@@ -69,7 +70,7 @@ export async function GET(request: Request) {
   if ((kind !== 'profile' && kind !== 'post') || !id) return json({ error: 'invalid_request' }, 400)
   if (kind === 'post') {
     const post = await getReviewPost(id)
-    return post ? json({ post }) : json({ error: 'not_found' }, 404)
+    return post ? json({ post, reference: await reviewPostReference(post.imageObjectKey) }) : json({ error: 'not_found' }, 404)
   }
   const profile = await getReviewProfileState(id)
   return profile ? json(profile) : json({ error: 'not_found' }, 404)

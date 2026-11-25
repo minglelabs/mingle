@@ -131,6 +131,13 @@ export async function getReviewPost(reserveId: string): Promise<ReviewPost | nul
   return row ? toReviewPost(row) : null
 }
 
+/** The reference-library photo a post photo was drawn from, for its card to show after a redraw. */
+export async function reviewPostReference(imageObjectKey: string | null | undefined): Promise<ReviewReference | null> {
+  if (!imageObjectKey) return null
+  const photo = (await listReferencePhotos().catch(() => [])).find((item) => item.usedBy?.imageKey === imageObjectKey)
+  return photo ? { id: photo.id, objectKey: photo.objectKey } : null
+}
+
 /** A profile's review state and photo, for its card to poll while a new photo is drawn. */
 export async function getReviewProfileState(userId: string): Promise<{ profileState: string; image: string | null; reference: ReviewReference | null } | null> {
   const state = await readReviewProfileState(userId)

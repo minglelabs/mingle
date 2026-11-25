@@ -928,7 +928,7 @@ export function ReviewPhotos({ photos }: { photos: Array<{ objectKey: string; wi
   )
 }
 
-function PostCard({ post: initial, at, pinned, fromReference, reference, pastStats, author, profileApproved, onDone }: {
+function PostCard({ post: initial, at, pinned, fromReference, reference: initialReference, pastStats, author, profileApproved, onDone }: {
   post: ReviewPost
   at: string
   pinned: boolean
@@ -942,6 +942,8 @@ function PostCard({ post: initial, at, pinned, fromReference, reference, pastSta
 }) {
   const reviewPath = useReviewPath()
   const [post, setPost] = useState(initial)
+  // A 레퍼런스로 재제작 that finishes on this page brings its library photo with it.
+  const [reference, setReference] = useState<ReviewReference | null>(initialReference ?? null)
   const [busy, setBusy] = useState<Action | null>(null)
   const [error, setError] = useState<string | null>(null)
   const sourceLanguage = post.language ?? author.languages[0] ?? null
@@ -1020,13 +1022,15 @@ function PostCard({ post: initial, at, pinned, fromReference, reference, pastSta
   // until both are done. The state lives on the row, so a reload picks it up again.
   const working = post.photoDrawing || Boolean(post.rewriting)
   useDrawPolling(working, async () => {
-    const latest = (await readReview('post', post.id))?.post as ReviewPost | undefined
+    const read = await readReview('post', post.id)
+    const latest = read?.post as ReviewPost | undefined
     if (!latest) return false
     if (latest.photoDrawing || latest.rewriting) {
       if (latest.text !== post.text || latest.photoDrawing !== post.photoDrawing) setPost(latest)
       return false
     }
     setPost(latest)
+    setReference((read?.reference as ReviewReference | null | undefined) ?? null)
     if (latest.photoDrawFailed || latest.error === 'photo_draw_failed') setError(ERROR_COPY.draw_failed)
     return true
   })
