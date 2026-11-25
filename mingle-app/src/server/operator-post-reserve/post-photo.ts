@@ -53,7 +53,8 @@ const SETUPS: Record<Exclude<PostPhotoKind, 'scene'>, readonly string[]> = {
     'a friend took it from a few steps away: the poster sits on steps, a low wall or a bench, glancing off to the side; the place fills most of the frame and the person is small in it',
     'a friend took it across the table at a café or restaurant, the poster mid-laugh or mid-bite',
     'a front-camera selfie on the subway, a bus or a train, the seats and windows behind',
-    'a front-camera selfie at a café table, the drink in the corner of the frame',
+    // Staff 2026-11-25: far too many café tables with a coffee and a laptop.
+    'a front-camera selfie at a food-court, convenience-store or street-stall table, the food in the corner of the frame',
     'a front-camera selfie outdoors with the street or a view behind, hair a little out of place',
     MIRROR_SELF,
     'a friend took a candid while walking, the poster half turned toward the camera',
@@ -80,7 +81,7 @@ const SETUPS: Record<Exclude<PostPhotoKind, 'scene'>, readonly string[]> = {
   // Staff 2026-11-24: far too many top-down shots of the poster's own feet and legs; none now.
   self_faceless: [
     MIRROR_FACELESS,
-    'shoulders down, sitting at a café holding a drink, the face cut off by the top of the frame',
+    'shoulders down, sitting on a bench, steps or a bus seat holding something they just bought (a snack, a shopping bag, flowers), the face cut off by the top of the frame',
     'a friend took it from a few steps away: the poster from the shoulders down, standing at a counter, a railing or a shop window, the place around them',
     'their hands holding food, a book, a ticket or a shopping bag, sleeves and part of the outfit in frame',
     'a friend took it: the poster turned away, or the face hidden behind a hand, a cap brim or hair',
