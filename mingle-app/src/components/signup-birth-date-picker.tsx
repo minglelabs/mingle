@@ -168,11 +168,11 @@ export default function SignupBirthDatePicker({
     const picked = !onPickedChange || initialPicked;
     return { year: picked, month: picked, day: picked };
   });
+  // Moving any one wheel is enough (owner, 2026-11-25): all three then show as picked.
   const markPicked = (column: "year" | "month" | "day") => {
     if (pickedColumns[column]) return;
-    const next = { ...pickedColumns, [column]: true };
-    setPickedColumns(next);
-    onPickedChange?.(next.year && next.month && next.day);
+    setPickedColumns({ year: true, month: true, day: true });
+    onPickedChange?.(true);
   };
   const months = useMemo(() => getSignupBirthMonthOptions(value.year), [value.year]);
   const days = useMemo(() => getSignupBirthDayOptions(value.year, value.month), [value.month, value.year]);

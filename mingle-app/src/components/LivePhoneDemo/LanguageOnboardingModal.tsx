@@ -922,9 +922,6 @@ export default function LanguageOnboardingModal({
           ) : step === "nationality" ? (
             <div className="space-y-3 px-4 pb-4 pt-0">
               <div className="space-y-1.5 px-2 text-center">
-                <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
-                  {extraCopy.nationalityLabel}
-                </p>
                 <h2 id={titleId} className="text-[1.6rem] font-extrabold leading-tight tracking-[-0.02em] text-slate-950">
                   {extraCopy.nationalityTitle}
                 </h2>
@@ -994,9 +991,6 @@ export default function LanguageOnboardingModal({
             </div>
           ) : step === "profile-photo" ? (
             <div className="space-y-2 px-6 pb-4 pt-0 text-center">
-              <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
-                {extraCopy.photoLabel}
-              </p>
               <h2 id={titleId} className="text-[1.6rem] font-extrabold leading-tight tracking-[-0.02em] text-slate-950">
                 {extraCopy.photoTitle}
               </h2>
@@ -1011,9 +1005,6 @@ export default function LanguageOnboardingModal({
             </div>
           ) : step === "gender" ? (
             <div className="space-y-2 px-6 pb-4 pt-0 text-center">
-              <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
-                {genderCopy.label}
-              </p>
               <h2
                 id={titleId}
                 className="text-[1.4rem] font-bold leading-tight tracking-[-0.02em] text-slate-950"
@@ -1023,9 +1014,6 @@ export default function LanguageOnboardingModal({
             </div>
           ) : step === "height" ? (
             <div className="space-y-2 px-6 pb-4 pt-0 text-center">
-              <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
-                {heightCopy.label}
-              </p>
               <h2
                 id={titleId}
                 className="text-[1.4rem] font-bold leading-tight tracking-[-0.02em] text-slate-950"
@@ -1038,9 +1026,6 @@ export default function LanguageOnboardingModal({
             </div>
           ) : step === "bio" ? (
             <div className="space-y-2 px-6 pb-4 pt-0 text-center">
-              <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
-                {extraCopy.bioLabel}
-              </p>
               <h2 id={titleId} className="text-[1.6rem] font-extrabold leading-tight tracking-[-0.02em] text-slate-950">
                 {extraCopy.bioTitle}
               </h2>
@@ -1068,9 +1053,6 @@ export default function LanguageOnboardingModal({
             </div>
           ) : step === "birth-date" ? (
             <div className="space-y-2 px-6 pb-4 pt-0 text-center">
-              <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
-                {signupCopy.birthDateStep}
-              </p>
               <h2
                 id={titleId}
                 className="text-[1.4rem] font-bold leading-tight tracking-[-0.02em] text-slate-950"
@@ -1083,9 +1065,6 @@ export default function LanguageOnboardingModal({
             </div>
           ) : step === "usage-purpose" ? (
             <div className="space-y-2 px-6 pb-4 pt-0 text-center">
-              <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
-                {usagePurposeCopy.step}
-              </p>
               <h2
                 id={titleId}
                 className="text-[1.4rem] font-bold leading-tight tracking-[-0.02em] text-slate-950"
@@ -1095,9 +1074,6 @@ export default function LanguageOnboardingModal({
             </div>
           ) : (
             <div className="space-y-2 px-6 pb-4 pt-0 text-center">
-              <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
-                {discoveryCopy.step}
-              </p>
               <h2
                 id={titleId}
                 className="text-[1.4rem] font-bold leading-tight tracking-[-0.02em] text-slate-950"
@@ -1462,8 +1438,11 @@ export default function LanguageOnboardingModal({
                     : "border-rose-200 bg-rose-50 text-rose-700"
                 }`}
               >
-                {!birthDatePicked ? signupCopy.birthDatePickHint : isEligibleAge ? signupCopy.birthDateAgeHint : signupCopy.birthDateUnderage}
+                {!birthDatePicked || isEligibleAge ? signupCopy.birthDateAgeHint : signupCopy.birthDateUnderage}
               </div>
+              <p data-qa="onboarding-birth-date-lock" className="mt-3 text-center text-[0.82rem] leading-relaxed text-slate-500">
+                {signupCopy.birthDateLockNotice}
+              </p>
             </div>
           </div>
         ) : step === "usage-purpose" ? (

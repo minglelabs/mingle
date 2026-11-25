@@ -13,12 +13,14 @@ describe('birth date must be picked, not accepted', () => {
     const picker = read('../components/signup-birth-date-picker.tsx')
     expect(picker).toContain('onPointerDown={() => { userScrollingRef.current = true; }}')
     expect(picker).toContain('if (userScrollingRef.current) {')
-    expect(picker).toContain('onPickedChange?.(next.year && next.month && next.day);')
+    // One wheel moved is enough (owner, 2026-11-25): all three then count as picked.
+    expect(picker).toContain('setPickedColumns({ year: true, month: true, day: true });')
+    expect(picker).toContain('onPickedChange?.(true);')
     // An unpicked column shows its value grey, as a suggestion.
     expect(picker).toContain('picked ? "scale-[1.04] font-bold text-slate-950" : "font-semibold text-slate-400"')
   })
 
-  it('keeps Continue off in onboarding, and profile edit saves no date, until all three are picked', () => {
+  it('keeps Continue off in onboarding, and profile edit saves no date, until a wheel is moved', () => {
     const modal = read('../components/LivePhoneDemo/LanguageOnboardingModal.tsx')
     expect(modal).toContain(': birthDatePicked && isEligibleAge')
     expect(modal).toContain('onPickedChange={setBirthDatePicked}')
