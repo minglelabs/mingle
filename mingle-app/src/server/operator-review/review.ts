@@ -1,6 +1,7 @@
 import type { OperatorPostStats } from '@/lib/operator-post-stats'
 import { loadOperatorPostStats } from '@/server/operator-post-stats/load'
-import { listReferencePhotos } from '@/server/reference-library/library'
+import { listReferencePhotos, releaseReferencePhoto } from '@/server/reference-library/library'
+import { avatarReferencesByUser, claimAvatarReference, releaseOtherAvatarReferences, type AvatarLibraryReference } from '@/server/reference-library/avatar-reference'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { zipInterestLanguages, type InterestLanguage } from '@/lib/interest-languages'
@@ -131,7 +132,14 @@ export async function getReviewPost(reserveId: string): Promise<ReviewPost | nul
 }
 
 /** A profile's review state and photo, for its card to poll while a new photo is drawn. */
-export async function getReviewProfileState(userId: string): Promise<{ profileState: string; image: string | null } | null> {
+export async function getReviewProfileState(userId: string): Promise<{ profileState: string; image: string | null; reference: ReviewReference | null } | null> {
+  const state = await readReviewProfileState(userId)
+  if (!state) return null
+  const reference = (await avatarReferencesByUser([userId])).get(userId)
+  return { ...state, reference: reference ? { id: reference.id, objectKey: reference.objectKey } : null }
+}
+
+async function readReviewProfileState(userId: string): Promise<{ profileState: string; image: string | null } | null> {
   const account = await prisma.operatorAccount.findUnique({ where: { userId }, select: { reviewState: true, pendingImage: true, pendingDrawingAt: true, user: { select: { image: true } } } })
   if (!account) return null
   // A live account's new photo: the card shows the photo waiting for review.
@@ -206,6 +214,8 @@ export type ReviewProfile = {
   profileFeedback: string | null
   /** A live account's new profile photo waiting for review (`image` = the current one); null for a new account. */
   candidate: { image: string | null; drawing: boolean } | null
+  /** The reference-library photo the profile photo (or the new one under review) was drawn from. */
+  reference: ReviewReference | null
 }
 
 export type ReviewAuthor = {
@@ -391,6 +401,9 @@ export async function listReviewQueue(options: { cursor?: string; now?: Date; us
     }
   }
 
+  // The library photo behind each profile photo on this page.
+  const avatarReferences = profileIds.length ? await avatarReferencesByUser(profileIds) : new Map<string, ReviewReference>()
+
   const items: ReviewItem[] = []
   for (const row of page) {
     const key = encodeReviewCursor(row)
@@ -417,6 +430,10 @@ export async function listReviewQueue(options: { cursor?: string; now?: Date; us
           candidate: user.operatorAccount?.reviewState === 'approved'
             ? { image: user.operatorAccount.pendingImage, drawing: candidateDrawing(user.operatorAccount.pendingDrawingAt, now) }
             : null,
+          reference: (() => {
+            const found = avatarReferences.get(user.id)
+            return found ? { id: found.id, objectKey: found.objectKey } : null
+          })(),
         },
       })
     } else {
@@ -451,6 +468,16 @@ export async function listReviewQueue(options: { cursor?: string; now?: Date; us
  * the account page sends one), 게시 takes it, 삭제 passes on it. The account
  * and its current photo are never touched until staff take the new one.
  */
+/** A 레퍼런스로 재제작 of a profile photo: the library photo it is drawn from, or what to upload when none fits. */
+async function claimProfileReference(userId: string, fromLibrary: boolean): Promise<
+  | { ok: true; library: { id: string; libraryReference: AvatarLibraryReference } | null }
+  | { ok: false; error: 'no_reference'; detail: string }
+> {
+  if (!fromLibrary) return { ok: true, library: null }
+  const claimed = await claimAvatarReference(userId)
+  return claimed.ok ? { ok: true, library: claimed } : { ok: false, error: 'no_reference', detail: claimed.need }
+}
+
 async function reviewAvatarCandidate(
   ctx: AdminContext | null,
   userId: string,
@@ -469,18 +496,24 @@ async function reviewAvatarCandidate(
     const discarded = await discardAvatarCandidate(ctx, userId)
     return discarded.ok ? { ok: true, state: 'deleted' } : { ok: false, error: 'already_approved' }
   }
-  if (action !== 'regenerate') return { ok: false, error: 'already_approved' }
+  if (action !== 'regenerate' && action !== 'redraw_reference') return { ok: false, error: 'already_approved' }
   if (drawing) return { ok: false, error: 'busy' }
   if (!canDrawImagesHere()) return { ok: false, error: 'regenerate_failed' }
+  const claimed = await claimProfileReference(userId, action === 'redraw_reference')
+  if (!claimed.ok) return claimed
+  const library = claimed.library
   await prisma.operatorAccount.update({ where: { userId }, data: { pendingDrawingAt: new Date(), reviewFeedback: feedback } })
   runningHere.add(profileJob(userId))
   void (async () => {
+    let drawnOk = false
     try {
-      const drawn = await generateOperatorAvatar(ctx, userId, { feedback, reference, candidate: true })
-      await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'candidate_regenerate', feedback, drawn: drawn.ok } })
+      const drawn = await generateOperatorAvatar(ctx, userId, { feedback, reference, candidate: true, ...(library ? { libraryReference: library.libraryReference } : {}) })
+      drawnOk = drawn.ok
+      await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'candidate_regenerate', feedback, drawn: drawn.ok, fromLibrary: Boolean(library) } })
     } catch (error) {
       console.warn('[operator-review] background_candidate_failed', { userId, error: error instanceof Error ? error.name : 'unknown' })
     } finally {
+      if (library && !drawnOk) await releaseReferencePhoto(library.id).catch(() => {})
       await prisma.operatorAccount.updateMany({ where: { userId }, data: { pendingDrawingAt: null } }).catch(() => {})
       runningHere.delete(profileJob(userId))
     }
@@ -490,7 +523,7 @@ async function reviewAvatarCandidate(
 
 export type ProfileReviewResult =
   | { ok: true; state: 'approved' | 'deleted' | 'pending' | 'drawing'; image?: string | null }
-  | { ok: false; error: 'not_found' | 'already_approved' | 'busy' | 'regenerate_failed' }
+  | { ok: false; error: 'not_found' | 'already_approved' | 'busy' | 'regenerate_failed' | 'no_reference'; detail?: string }
 
 /** 게시 / 삭제 / 재제작 for a profile waiting for review. */
 export async function reviewOperatorProfile(
@@ -505,6 +538,8 @@ export async function reviewOperatorProfile(
     select: { reviewState: true, user: { select: { isOperator: true, isDeleted: true } } },
   })
   if (!account || !account.user.isOperator || account.user.isDeleted) return { ok: false, error: 'not_found' }
+  // 사진 재제작 on the photo is the card's 재제작: a profile's redo only redraws the photo.
+  if (action === 'redraw_photo' || action === 'draw') action = 'regenerate'
   if (account.reviewState === 'approved') return reviewAvatarCandidate(ctx, userId, action, feedback, options.reference)
 
   if (action === 'publish') {
@@ -528,17 +563,25 @@ export async function reviewOperatorProfile(
   // drawn in the background (longer than the hosting proxy keeps a request
   // open) while the account shows as drawing; the card polls. Once drawn the
   // account is back in review; a failed drawing falls back to drawing by hand.
+  const fromLibrary = action === 'redraw_reference'
+  if (fromLibrary && !canDrawImagesHere()) return { ok: false, error: 'regenerate_failed' }
   if (canDrawImagesHere()) {
+    const claimed = await claimProfileReference(userId, fromLibrary)
+    if (!claimed.ok) return claimed
+    const library = claimed.library
     runningHere.add(profileJob(userId))
     try {
       await prisma.operatorAccount.update({ where: { userId }, data: { reviewState: 'drawing', reviewFeedback: feedback } })
     } catch (error) {
       runningHere.delete(profileJob(userId))
+      if (library) await releaseReferencePhoto(library.id).catch(() => {})
       throw error
     }
     void (async () => {
       try {
-        const drawn = await generateOperatorAvatar(ctx, userId, { feedback, reference: options.reference })
+        const drawn = await generateOperatorAvatar(ctx, userId, { feedback, reference: options.reference, ...(library ? { libraryReference: library.libraryReference } : {}) })
+        // The library photo it was drawn from is now this account's; one that was not drawn goes back.
+        if (library) await (drawn.ok ? releaseOtherAvatarReferences(userId, library.id) : releaseReferencePhoto(library.id)).catch(() => {})
         if (drawn.ok) {
           await prisma.operatorAccount.updateMany({ where: { userId, reviewState: 'drawing' }, data: { reviewState: 'pending' } })
           await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'regenerate', feedback, drawing: false } })

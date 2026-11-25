@@ -1,5 +1,6 @@
 import type { AvatarPersona } from '@/server/operator-avatars/taxonomy'
 import type { ReferenceAttributes, ReferencePersonAttributes } from './classify'
+import type { ReferenceGender, ReferenceKind } from './library'
 
 /**
  * A library photo's direction (연출), read from its analysis, as the lines an
@@ -201,4 +202,32 @@ export function referencePersonaFit(
   if (range && persona.age != null && (persona.age < range.min - 3 || persona.age > range.max + 3)) return 'mismatch'
   if (countries && persona.country && !countries.includes(persona.country.toUpperCase())) return 'mismatch'
   return range && countries && persona.age != null && persona.country ? 'match' : 'unknown'
+}
+
+const KIND_KO: Record<ReferenceKind, string> = { face: '1명·얼굴 보임', person: '1명·얼굴 안 보임', group: '2명 이상', thing: '사람 없음' }
+const ANCESTRY_KO: Record<string, string> = {
+  east_asian: '동아시아', southeast_asian: '동남아', south_asian: '남아시아', white: '백인', black: '흑인', latino: '라틴', middle_eastern: '중동', mixed: '혼혈',
+}
+const SEASON_KO: Record<string, string> = { spring: '봄', summer: '여름', autumn: '가을', winter: '겨울' }
+
+/** In Korean, the library photo a persona needs (kind, gender, age, look, season), for staff to upload when none fits. */
+export function referenceNeedLabel(
+  kinds: readonly ReferenceKind[],
+  gender: ReferenceGender | null,
+  persona: Pick<AvatarPersona, 'age' | 'country'>,
+  now: Date = new Date(),
+): string {
+  const looks = persona.country
+    ? Object.entries(ANCESTRY_COUNTRIES).filter(([, countries]) => countries.includes(persona.country!.toUpperCase())).map(([ancestry]) => ANCESTRY_KO[ancestry] ?? ancestry)
+    : []
+  const avoid = referenceSeasonsToAvoid(persona.country, now)
+  const person = !kinds.includes('thing')
+  const need = [
+    kinds.map((kind) => KIND_KO[kind]).join(' 또는 '),
+    person && gender && !kinds.includes('group') ? (gender === 'female' ? '여' : '남') : null,
+    person && persona.age ? `${persona.age}살 전후(±3)` : null,
+    person && looks.length ? `${looks.join('·')} 외모` : null,
+    avoid.length ? `${avoid.map((season) => SEASON_KO[season] ?? season).join('·')} 사진 말고` : null,
+  ].filter(Boolean).join(' · ')
+  return `필요한 짤: ${need}`
 }

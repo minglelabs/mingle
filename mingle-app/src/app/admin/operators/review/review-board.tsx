@@ -785,9 +785,11 @@ function PastStatsOverlay({ stats }: { stats: OperatorPostStats }) {
  * the persona and this photo go along); the speech-bubble button opens a
  * feedback box (text, and a pasted or picked photo) sent with the redo.
  */
-function PhotoRedoOverlay({ drawing, disabled, onRedo, onRedoFromReference }: {
+function PhotoRedoOverlay({ drawing, disabled, onRedo, onRedoFromReference, engineToggle = true }: {
   drawing: boolean
   disabled: boolean
+  /** The ChatGPT/Seedream switch (post photos only). */
+  engineToggle?: boolean
   onRedo: (feedback: string, image: File | null) => void
   /** 레퍼런스로: redraw from an unused reference-library photo (its direction, this account's persona). */
   onRedoFromReference?: () => void
@@ -824,7 +826,7 @@ function PhotoRedoOverlay({ drawing, disabled, onRedo, onRedoFromReference }: {
         </button>
       ) : null}
       <div className="absolute right-2 top-2 flex gap-1.5">
-        <ImageEngineToggle dark />
+        {engineToggle ? <ImageEngineToggle dark /> : null}
         <button
           type="button"
           disabled={disabled}
@@ -1259,6 +1261,7 @@ function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDelete
   const candidate = profile.candidate
   const [candidateImage, setCandidateImage] = useState(candidate?.image ?? null)
   const [drawing, setDrawing] = useState(candidate ? candidate.drawing : profile.profileState === 'drawing')
+  const [reference, setReference] = useState<ReviewReference | null>(profile.reference)
   const shownImage = candidate ? candidateImage : image
 
   // Where the pool draws, a new profile photo arrives in the background; ask every 10s.
@@ -1266,6 +1269,7 @@ function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDelete
     const latest = await readReview('profile', profile.userId)
     if (!latest || latest.profileState === 'drawing') return false
     setDrawing(false)
+    setReference((latest.reference as ReviewReference | null | undefined) ?? null)
     if (typeof latest.image === 'string') {
       if (candidate) setCandidateImage(latest.image)
       else onImage(latest.image)
@@ -1289,7 +1293,8 @@ function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDelete
       } else if (result.state === 'drawing') setDrawing(true)
       else if (typeof result.image === 'string') onImage(result.image)
     } catch (caught) {
-      setError(ERROR_COPY[(caught as Error).message] ?? '요청하지 못했어요.')
+      const detail = (caught as Error & { detail?: string }).detail
+      setError(`${ERROR_COPY[(caught as Error).message] ?? '요청하지 못했어요.'}${detail ? ` ${detail}` : ''}`)
     } finally {
       setBusy(null)
     }
@@ -1328,6 +1333,24 @@ function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDelete
               {profile.primaryLanguages.map((code) => <LanguageFlag key={code} language={code} />)}
             </div>
           ) : null}
+          {reference && !drawing ? (
+            // The library photo this profile photo was drawn from: tap to open it in the library.
+            <Link
+              href={`/admin/operators/references?photo=${encodeURIComponent(reference.id)}`}
+              className="absolute bottom-2 right-2 z-[1] flex items-end gap-1.5 rounded-xl bg-black/60 p-1.5 pr-2.5 text-xs font-semibold text-white backdrop-blur active:bg-black/75"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={reviewImageUrl(reference.objectKey)} alt="레퍼런스 원본" className="h-20 w-[3.75rem] rounded-lg object-cover ring-1 ring-white/60" />
+              레퍼런스 원본
+            </Link>
+          ) : null}
+          <PhotoRedoOverlay
+            drawing={drawing}
+            disabled={busy !== null}
+            engineToggle={false}
+            onRedo={(feedback, file) => void handle('regenerate', feedback, file)}
+            onRedoFromReference={() => void handle('redraw_reference', '')}
+          />
         </div>
       ) : (
         <div className="flex justify-center py-6"><OperatorAvatar image={null} name={profile.name} size={160} /></div>
