@@ -31,6 +31,7 @@ import { requestProfileBasics } from "@/lib/profile-basics";
 import { useStartDirectConversation } from "@/lib/use-start-direct-conversation";
 import { searchCopy } from "@/i18n/search-copy";
 import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
+import { usePullToRefresh } from "@/lib/use-pull-to-refresh";
 import ExploreFilterSheet, {
   NO_EXPLORE_FILTERS,
   exploreFilterParams,
@@ -120,6 +121,21 @@ export default function ExplorePeoplePage({ dictionary, locale }: ExplorePeopleP
       setLoadingMore(false);
     }
   }, [cacheKey, filters, loadingMore, locale, page]);
+
+  // Pull down at the top of the list (owner, 2026-11-25): the first page is read again.
+  const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
+  const refreshFromTop = useCallback(async () => {
+    try {
+      const first = await fetchDiscoveryPage(locale, null, filters);
+      pageCache.set(cacheKey, first);
+      setPage(first);
+      setFailed(false);
+    } catch {
+      // What is on screen stays.
+      toast(copy.loadError);
+    }
+  }, [cacheKey, copy.loadError, filters, locale]);
+  const pull = usePullToRefresh(scrollEl, refreshFromTop, sessionStatus === "authenticated" && Boolean(viewerId) && !filterOpen);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -227,7 +243,23 @@ export default function ExplorePeoplePage({ dictionary, locale }: ExplorePeopleP
           }}
         />
       ) : null}
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      <div ref={setScrollEl} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        {/* The row a pull opens above the list, with its spinner. */}
+        <div
+          data-qa="explore-pull-refresh"
+          data-refreshing={pull.refreshing ? "true" : "false"}
+          className="flex items-end justify-center overflow-hidden"
+          style={{ height: pull.offset, transition: pull.dragging ? "none" : "height 200ms ease" }}
+          role={pull.refreshing ? "status" : undefined}
+          aria-hidden={pull.refreshing ? undefined : true}
+        >
+          <Loader2
+            size={22}
+            className={`mb-3 shrink-0 ${pull.refreshing ? "animate-spin text-slate-400" : "text-slate-300"}`}
+            style={pull.refreshing ? undefined : { opacity: pull.progress, transform: `rotate(${pull.progress * 270}deg)` }}
+            aria-hidden="true"
+          />
+        </div>
         {sessionStatus === "authenticated" && viewerId ? <ProfileStartCard locale={locale} userId={viewerId} /> : null}
         <HomeNoticeStrip locale={locale} />
         {sessionStatus === "unauthenticated" ? (
