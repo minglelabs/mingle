@@ -420,6 +420,8 @@ export function referenceRecreateLines(input: {
   direction?: readonly string[]
   /** Who the account is (direction.ts): whose face and body the person gets. */
   persona?: string | null
+  /** A post photo redrawn from farther away (direction.ts, widenPostShot): the framing and distance change. */
+  widen?: boolean
 }): string[] {
   const note = input.note?.trim()
   const persona = input.persona?.trim()
@@ -428,7 +430,10 @@ export function referenceRecreateLines(input: {
     ...(input.direction ?? []),
     ...(note ? [`Staff note about the reference photo, to follow: ${note}`] : []),
   ]
-  const keep = `Keep everything else exactly as in ${source}, as if it were the same photo: the hairstyle and hair color, the clothes and accessories, the pose, gesture and hands, every object, the place and background, the framing and crop, the camera angle and distance, the light, the colors, and any blur, grain or other flaw.`
+  const keep = input.widen
+    ? `Keep everything else as in ${source}: the hairstyle and hair color, the clothes and accessories, the pose, gesture and hands, the place, the camera angle, the light, the colors, and any blur, grain or other flaw.`
+    : `Keep everything else exactly as in ${source}, as if it were the same photo: the hairstyle and hair color, the clothes and accessories, the pose, gesture and hands, every object, the place and background, the framing and crop, the camera angle and distance, the light, the colors, and any blur, grain or other flaw.`
+  const wider = input.widen ? [WIDEN_LINE] : []
   const finish = [
     'The result must look like an ordinary, unedited phone photo with no sign of editing. Everyone in it is an adult.',
     NO_INTERFACE_LINE,
@@ -472,7 +477,11 @@ export function referenceRecreateLines(input: {
     ...who,
     ...(persona ? [persona] : []),
     keep,
+    ...wider,
     ...extra,
     ...finish,
   ]
 }
+
+/** How a widened post photo is framed (see referenceRecreateLines `widen`). */
+export const WIDEN_LINE = 'Framing: the camera is pulled back, unlike the reference. A friend took it standing a few steps away at about eye level: the person is seen from about the knees up and fills only part of the frame, with plenty of the place around them in view (the floor, the walls or the street, things nearby). Continue the same place, outfit and light naturally beyond the edges of the reference. Never a close-up.'

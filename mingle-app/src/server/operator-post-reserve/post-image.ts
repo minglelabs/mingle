@@ -12,7 +12,7 @@ import { pairImages, stripImages } from './pair-images'
 import { pickPersonVariety, pickPoseVariety } from './post-person-variety'
 import { faceStickerLine } from './face-stickers'
 import { contrastLines, describeReferenceForContrast } from './reference-contrast'
-import { referenceDirectionLines, referenceNeedLabel, referencePersonaFit, referencePersonaLine, referenceSeasonClashes, referenceSeasonsToAvoid } from '@/server/reference-library/direction'
+import { referenceDirectionLines, WIDE_POST_DISTANCE, widenPostShot, referenceNeedLabel, referencePersonaFit, referencePersonaLine, referenceSeasonClashes, referenceSeasonsToAvoid } from '@/server/reference-library/direction'
 import { markReferenceImage, claimReferencePhoto, listReferencePhotos, loadReferenceBytes, referenceKindOf, referenceRecreateLines, releaseReferencePhoto, type ReferenceGender, type ReferenceKind, type ReferencePhoto } from '@/server/reference-library/library'
 
 /** Most group photos hide the friends' faces under stickers; some friends are fine being seen. */
@@ -462,10 +462,12 @@ async function libraryPostRequest(
     // Hair stays as in the reference: only the face and visible body become the persona's.
     const look = describeAccountFace(persona, seededRandom(`${operatorUserId}:look`))
     const place = brief.place ?? await reservePostPlace(operatorUserId)
+    // Most post photos are seen from a few steps back, even from a close library photo.
+    const widen = (kind === 'face' || kind === 'person') && widenPostShot(photo.attributes)
     const prompt = [
       ...referenceRecreateLines({
-        kind, look, poster: Boolean(poster), fit: brief.description, note: photo.note,
-        direction: referenceDirectionLines(photo.attributes), persona: referencePersonaLine(persona),
+        kind, look, poster: Boolean(poster), fit: brief.description, note: photo.note, widen,
+        direction: referenceDirectionLines(photo.attributes, widen ? { distance: WIDE_POST_DISTANCE } : {}), persona: referencePersonaLine(persona),
       }),
       ...(place ? [`It was taken around ${place}.`] : []),
       'Vertical 3:4 image, one single photo (never two side by side). No watermarks, logos, borders or frames.',
