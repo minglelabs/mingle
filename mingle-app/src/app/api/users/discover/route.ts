@@ -158,7 +158,9 @@ export async function GET(request: NextRequest) {
   after(async () => {
     if ((BIO_DEFAULT_LANGUAGES as readonly string[]).includes(readingLanguage)) {
       for (const userId of untranslated.slice(0, 6)) {
-        await requestBioTranslation(userId, readingLanguage).catch(() => null);
+        // The request only claims the work; the returned job does it.
+        const job = await requestBioTranslation(userId, readingLanguage).catch(() => null);
+        if (job) await job().catch(() => undefined);
       }
     }
     if (nameLanguage) await fillNameTransliterations(details, nameLanguage).catch(() => 0);

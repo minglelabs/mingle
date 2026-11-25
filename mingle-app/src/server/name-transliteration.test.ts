@@ -38,7 +38,12 @@ describe('names in the reader\'s script', () => {
     expect(discover).toContain('name: nameById.get(user.id) ?? user.name,')
     expect(discover).toContain('language: readingLanguage, status: "succeeded"')
     expect(read('src/app/api/users/[userId]/route.ts')).toContain('...(readerName ? { readerName } : {}),')
-    expect(read('src/components/profile-bio.tsx')).toContain('void refresh(true)\n  }, [editing, refresh, snapshot])')
+    const bio = read('src/components/profile-bio.tsx')
+    expect(bio).toContain('void refresh(true)\n  }, [chosenLanguage, editing, refresh, snapshot])')
+    // Flags like a post's instead of a "translate" button.
+    expect(bio).toContain('<PostLanguageChips')
+    // A bio translation asked for from explore is run, not only claimed.
+    expect(discover).toContain('if (job) await job().catch(() => undefined);')
     expect(read('src/server/feed/feed-post-loader.ts')).toContain('viewer?.defaultDisplayLanguage ?? viewer?.primaryLanguages?.[0] ?? null')
   })
 })
