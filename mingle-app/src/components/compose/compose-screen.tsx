@@ -1,5 +1,7 @@
 'use client'
 
+import ComposeCategoryPicker from '@/components/compose/compose-category-picker'
+import { postIntroProblem, type PostCategory, type PostHobby } from '@/lib/post-category'
 import { requestProfileBasics } from '@/lib/profile-basics'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -138,6 +140,9 @@ export default function ComposeScreen({
   const [loadError, setLoadError] = useState(false)
 
   const clientPostId = useRef(generateClientPostId())
+  // The post's kind (see @/lib/post-category); a new post starts as an ordinary one.
+  const [category, setCategory] = useState<PostCategory>('free')
+  const [hobbies, setHobbies] = useState<PostHobby[]>([])
   const objectUrl = useRef<string | null>(null)
   // Latest image, read at save time so a debounced autosave (or an upload that
   // finishes later) never persists a stale image field.
@@ -494,7 +499,9 @@ export default function ComposeScreen({
     width: photo.kind === 'local' ? photo.prepared.originalWidth : photo.width,
     height: photo.kind === 'local' ? photo.prepared.originalHeight : photo.height,
   }))
-  const publishable = canPublish({ sourceText: text, hasImage })
+  // A self-introduction needs a hobby and some text before it can be posted.
+  const introProblem = category === 'intro' ? postIntroProblem({ text, hobbies }) : null
+  const publishable = canPublish({ sourceText: text, hasImage }) && !introProblem
 
   async function handlePublish() {
     if (!publishable || publishing.current) return
@@ -529,6 +536,8 @@ export default function ComposeScreen({
           ? { objectKey: photo.objectKey, file: null, width: photo.width, height: photo.height }
           : { objectKey: null, file: photo.prepared.file, width: photo.prepared.originalWidth, height: photo.prepared.originalHeight }),
         draftId,
+        category,
+        hobbies: category === 'intro' ? hobbies : undefined,
       })
       if (!accepted) {
         // Another publish started in between: same handling as above.
@@ -718,6 +727,16 @@ export default function ComposeScreen({
             {notice}
           </p>
         ) : null}
+
+        {/* What kind of post: an ordinary one, one that lasts an hour, or a self-introduction. */}
+        <ComposeCategoryPicker
+          locale={locale}
+          category={category}
+          onCategoryChange={setCategory}
+          hobbies={hobbies}
+          onHobbiesChange={setHobbies}
+          problem={introProblem}
+        />
 
         <ComposeEditor
           locale={locale}

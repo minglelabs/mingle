@@ -850,6 +850,12 @@ model Post {
   likeCount            Int       @default(0) @map("like_count")
   commentCount         Int       @default(0) @map("comment_count")
   publishedAt          DateTime  @default(now()) @map("published_at")
+  /// What kind of post (owner, 2026-11-25; src/lib/post-category.ts): null or
+  /// 'free' an ordinary post, 'hour' one that leaves every list at `expiresAt`,
+  /// 'intro' a self-introduction with its answers in `intro`.
+  category             String?
+  expiresAt            DateTime? @map("expires_at")
+  intro                Json?
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
 

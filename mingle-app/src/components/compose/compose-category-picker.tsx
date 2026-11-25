@@ -1,0 +1,130 @@
+'use client'
+
+import { Check, Clock, Lock } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import FlagEmoji from '@/components/flag-emoji'
+import { resolvePostCategoryCopy } from '@/i18n/post-category-copy'
+import type { AppLocale } from '@/i18n'
+import { formatProfileAge } from '@/i18n/profile-age-copy'
+import { buildClientApiPath } from '@/lib/api-contract'
+import { countryFlagEmoji, getCountryDisplayName } from '@/lib/nationality'
+import { POST_CATEGORIES, POST_HOBBIES, POST_INTRO_HOBBIES_MAX, type PostCategory, type PostHobby } from '@/lib/post-category'
+
+type ProfileFacts = { country: string | null; age: number | null; heightCm: number | null }
+
+/**
+ * The category of the post being written (owner, 2026-11-25): chips on top of
+ * the write screen. "1 hour" says the post will disappear; "self-introduction"
+ * shows what comes from the profile (country, age, height: locked) and asks
+ * for hobbies. See @/lib/post-category.
+ */
+export default function ComposeCategoryPicker({
+  locale,
+  category,
+  onCategoryChange,
+  hobbies,
+  onHobbiesChange,
+  problem,
+}: {
+  locale: string
+  category: PostCategory
+  onCategoryChange: (category: PostCategory) => void
+  hobbies: readonly PostHobby[]
+  onHobbiesChange: (hobbies: PostHobby[]) => void
+  /** Why a self-introduction cannot be posted yet (shown under the form). */
+  problem: 'hobbies' | 'text' | null
+}) {
+  const copy = useMemo(() => resolvePostCategoryCopy(locale), [locale])
+  const [facts, setFacts] = useState<ProfileFacts | null>(null)
+  useEffect(() => {
+    if (category !== 'intro' || facts) return
+    let cancelled = false
+    void fetch(buildClientApiPath('/profile'), { cache: 'no-store' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: { nationalityCountry?: unknown; age?: unknown; heightCm?: unknown } | null) => {
+        if (cancelled || !body) return
+        setFacts({
+          country: typeof body.nationalityCountry === 'string' ? body.nationalityCountry : null,
+          age: typeof body.age === 'number' ? body.age : null,
+          heightCm: typeof body.heightCm === 'number' ? body.heightCm : null,
+        })
+      })
+      .catch(() => undefined)
+    return () => { cancelled = true }
+  }, [category, facts])
+
+  const toggleHobby = (hobby: PostHobby) => {
+    if (hobbies.includes(hobby)) onHobbiesChange(hobbies.filter((entry) => entry !== hobby))
+    else if (hobbies.length < POST_INTRO_HOBBIES_MAX) onHobbiesChange([...hobbies, hobby])
+  }
+
+  return (
+    <section data-qa="compose-category" className="border-b border-foreground/10 px-4 pb-3 pt-3">
+      <p className="text-[12px] font-bold text-foreground/50">{copy.label}</p>
+      <div className="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label={copy.label}>
+        {POST_CATEGORIES.map((entry) => {
+          const picked = entry === category
+          return (
+            <button
+              key={entry}
+              type="button"
+              role="radio"
+              aria-checked={picked}
+              data-qa={`compose-category-${entry}`}
+              onClick={() => onCategoryChange(entry)}
+              className={`inline-flex h-9 items-center gap-1 rounded-full border px-3.5 text-[14px] font-semibold transition active:scale-[0.97] ${
+                picked ? 'border-amber-400 bg-amber-50 text-slate-950' : 'border-foreground/15 bg-background text-foreground/70'
+              }`}
+            >
+              {picked ? <Check size={14} strokeWidth={3} aria-hidden="true" /> : entry === 'hour' ? <Clock size={14} strokeWidth={2.4} aria-hidden="true" /> : null}
+              {copy.categories[entry]}
+            </button>
+          )
+        })}
+      </div>
+
+      {category === 'hour' ? <p className="mt-2 text-[13px] text-foreground/55" data-qa="compose-category-hour-hint">{copy.hourHint}</p> : null}
+
+      {category === 'intro' ? (
+        <div className="mt-3" data-qa="compose-intro-form">
+          <p className="text-[13px] leading-snug text-foreground/55">{copy.introHint}</p>
+          {/* From the profile: shown, not typed here. */}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded-xl bg-foreground/5 px-3 py-2 text-[14px] font-semibold text-foreground/80">
+            {facts?.country ? (
+              <span className="inline-flex items-center gap-1">
+                <FlagEmoji emoji={countryFlagEmoji(facts.country)} className="text-[15px] leading-none" />
+                {getCountryDisplayName(facts.country, locale as AppLocale)}
+              </span>
+            ) : null}
+            {typeof facts?.age === 'number' ? <span>· {formatProfileAge(facts.age, locale as AppLocale)}</span> : null}
+            {typeof facts?.heightCm === 'number' ? <span className="tabular-nums">· {facts.heightCm}cm</span> : null}
+            <Lock size={13} strokeWidth={2.4} className="ml-auto shrink-0 text-foreground/35" aria-hidden="true" />
+          </div>
+          <p className="mt-3 text-[12px] font-bold text-foreground/50">
+            {copy.hobbiesLabel} <span className="tabular-nums">{hobbies.length}/{POST_INTRO_HOBBIES_MAX}</span>
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {POST_HOBBIES.map((hobby) => {
+              const picked = hobbies.includes(hobby)
+              return (
+                <button
+                  key={hobby}
+                  type="button"
+                  aria-pressed={picked}
+                  data-qa={`compose-hobby-${hobby}`}
+                  onClick={() => toggleHobby(hobby)}
+                  className={`h-9 rounded-full px-3.5 text-[14px] font-semibold transition active:scale-[0.97] ${
+                    picked ? 'bg-amber-400 text-white' : 'bg-foreground/5 text-foreground/70'
+                  }`}
+                >
+                  {copy.hobbies[hobby]}
+                </button>
+              )
+            })}
+          </div>
+          {problem ? <p role="status" className="mt-2 text-[13px] font-semibold text-amber-700">{problem === 'hobbies' ? copy.needHobby : copy.needText}</p> : null}
+        </div>
+      ) : null}
+    </section>
+  )
+}

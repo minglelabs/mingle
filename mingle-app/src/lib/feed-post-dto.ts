@@ -1,3 +1,4 @@
+import type { PostIntro } from '@/lib/post-category'
 /**
  * Wire contract for every list that renders posts: the home feed, an author's
  * profile grid / full-screen viewer, and post search results.
@@ -69,6 +70,14 @@ export type FeedPostDto = {
   translationLanguages?: string[]
   /** A key of POST_BACKGROUND catalog in `@/lib/post-backgrounds`. */
   backgroundKey: string
+  /**
+   * The post's kind when it shows something (owner, 2026-11-25): 'hour' with
+   * the moment it leaves the lists, 'intro' with the author's answers. Absent
+   * on the wire: an ordinary post.
+   */
+  category?: 'hour' | 'intro'
+  expiresAt?: string
+  intro?: PostIntro
   image: FeedPostImageDto | null
   /**
    * Every photo in order, the first being `image`; swiped through sideways on

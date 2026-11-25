@@ -47,6 +47,9 @@ export type PublishInput = {
   extraImages?: PublishExtraImage[]
   /** The draft to delete on success (only that draft). */
   draftId: string | null
+  /** The post's kind and, for a self-introduction, the hobbies picked (see @/lib/post-category). Absent: an ordinary post. */
+  category?: 'free' | 'hour' | 'intro'
+  hobbies?: string[]
 }
 
 export type PublishExtraImage = {
@@ -316,6 +319,8 @@ async function runPipeline(initialInput: PublishInput) {
         : input.imageObjectKey
           ? { imageObjectKey: input.imageObjectKey, imageWidth: input.imageWidth, imageHeight: input.imageHeight }
           : {}),
+      ...(input.category && input.category !== 'free' ? { category: input.category } : {}),
+      ...(input.category === 'intro' ? { hobbies: input.hobbies ?? [] } : {}),
     }),
   })
 

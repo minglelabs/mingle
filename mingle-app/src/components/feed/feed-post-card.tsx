@@ -28,6 +28,7 @@ import {
 import FeedPostView from "@/components/feed/feed-post-view";
 import HeartBurst from "@/components/feed/heart-burst";
 import PostLanguageChips, { ORIGINAL_CHIP } from "@/components/feed/post-language-chips";
+import PostCategoryStrip from "@/components/feed/post-category-strip";
 import { buildLanguageChips } from "@/lib/language-chips";
 import { useViewerLanguages } from "@/lib/use-viewer-languages";
 import { resolveLanguageSearchCopy, resolveMoreLanguagesCopy } from "@/i18n/more-languages-copy";
@@ -905,7 +906,12 @@ export default function FeedPostCard({
           )
         }
         actionSlot={actionSlot}
-        controlSlot={controlSlot}
+        controlSlot={(
+          <>
+            <PostCategoryStrip category={post.category} expiresAt={post.expiresAt} intro={post.intro} locale={locale} />
+            {controlSlot}
+          </>
+        )}
         snippetToggleSlot={snippetToggleSlot}
         overlaySlot={
           <>

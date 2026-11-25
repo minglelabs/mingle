@@ -51,6 +51,7 @@ export function buildPostSearchSql({ viewerId, query, offset, take }: PostSearch
     WHERE p.visibility = 'public'
       AND (p.is_deleted IS NULL OR p.is_deleted = false)
       AND p.moderation_hidden_at IS NULL
+      AND (p.expires_at IS NULL OR p.expires_at > CURRENT_TIMESTAMP)
       AND a.moderation_hidden_at IS NULL
       AND a.dormant_at IS NULL
       ${viewerClause}

@@ -13,6 +13,7 @@
  * there on and never touches the database.
  */
 
+import { readPostIntro, type PostIntro } from '@/lib/post-category'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import { zipInterestLanguages } from '@/lib/interest-languages'
 import { sanitizeSttLanguageSelection } from '@/lib/stt-languages'
@@ -103,6 +104,10 @@ export type SerializerPostRow = {
   likeCount: number
   commentCount: number
   publishedAt: Date
+  /** The post's kind and what goes with it (see @/lib/post-category). Optional for older selects. */
+  category?: string | null
+  expiresAt?: Date | null
+  intro?: unknown
   author: SerializerAuthorRow
 }
 
@@ -332,6 +337,9 @@ export function serializeFeedPost(post: SerializerPostRow, ctx: SerializerContex
     translationState,
     ...(translationLanguages.length > 0 ? { translationLanguages } : {}),
     backgroundKey: post.backgroundKey ?? '',
+    // Only for the kinds that show something: an ordinary post carries none of these.
+    ...(post.category === 'hour' && post.expiresAt ? { category: 'hour' as const, expiresAt: post.expiresAt.toISOString() } : {}),
+    ...(post.category === 'intro' && readPostIntro(post.intro) ? { category: 'intro' as const, intro: readPostIntro(post.intro) as PostIntro } : {}),
     image: serializePostImage(post.id, post.imageObjectKey, post.imageWidth, post.imageHeight),
     ...(post.imageObjectKey && post.extraImages?.length
       ? { images: serializePostImages(post.id, post.imageObjectKey, post.imageWidth, post.imageHeight, post.extraImages) }

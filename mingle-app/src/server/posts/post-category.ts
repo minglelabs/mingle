@@ -1,0 +1,38 @@
+import { prisma } from '@/lib/prisma'
+import { POST_HOUR_MS, type PostCategory, type PostHobby, type PostIntro } from '@/lib/post-category'
+import { resolveNationalityCountry } from '@/lib/nationality'
+import { calculateProfileAge } from '@/server/user-profile'
+
+/**
+ * Marks a post just published with its kind (owner, 2026-11-25; see
+ * @/lib/post-category). An hour post gets the moment it leaves the lists; a
+ * self-introduction gets the author's country, age and height as they are on
+ * the profile now, with the hobbies picked.
+ */
+export async function applyPostCategory(args: {
+  postId: string
+  authorId: string
+  category: PostCategory
+  hobbies: PostHobby[]
+  publishedAt: Date
+}): Promise<void> {
+  if (args.category === 'hour') {
+    await prisma.post.updateMany({
+      where: { id: args.postId, authorId: args.authorId },
+      data: { category: 'hour', expiresAt: new Date(args.publishedAt.getTime() + POST_HOUR_MS) },
+    })
+    return
+  }
+  if (args.category !== 'intro') return
+  const author = await prisma.user.findUnique({
+    where: { id: args.authorId },
+    select: { nationalityCountry: true, primaryLanguages: true, birthDate: true, heightCm: true },
+  })
+  const intro: PostIntro = {
+    country: author ? resolveNationalityCountry(author.nationalityCountry, author.primaryLanguages) ?? null : null,
+    age: author ? calculateProfileAge(author.birthDate) ?? null : null,
+    heightCm: typeof author?.heightCm === 'number' ? author.heightCm : null,
+    hobbies: args.hobbies,
+  }
+  await prisma.post.updateMany({ where: { id: args.postId, authorId: args.authorId }, data: { category: 'intro', intro } })
+}
