@@ -12,6 +12,7 @@
  * existing character, no text or logo in the image.
  */
 import { phonePhotoRealism } from './photo-realism'
+import { MIRROR_FRAMINGS, MIRROR_PLACES } from './mirror-places'
 import { describeFace, foreheadFringe, HAIRLINE, subtleTraits, type FaceGrade } from './face-anatomy'
 export const AVATAR_SPEC_VERSION = 1
 
@@ -682,10 +683,8 @@ const LOCATIONS: Record<'indoor' | 'outdoor' | 'mirror', readonly Option[]> = {
     ['campus', 1, 'on a university campus'], ['night_street', 1.5, 'on a city street at night'], ['flower_field', 0.8, 'near flowering trees or a flower field'],
     ['travel_city', 1.5, 'on a street in a foreign city, as a tourist'], ['festival', 0.6, 'at an outdoor festival'], ['stadium', 0.5, 'in stadium stands'],
   ],
-  mirror: [
-    ['hall_mirror', 3, 'in the hallway mirror at home'], ['bedroom_mirror', 3, 'in a bedroom mirror'], ['bathroom_mirror', 2, 'in a bathroom mirror'],
-    ['elevator', 2, 'in an elevator mirror'], ['shop_mirror', 1.5, 'in a clothing-shop mirror'], ['gym_mirror', 1.5, 'in a gym mirror'],
-  ],
+  // Anywhere with a mirror or a reflection, not mostly at home (mirror-places.ts).
+  mirror: MIRROR_PLACES,
 }
 
 const ANIMAL_SHOTS: readonly Option[] = [
@@ -1147,6 +1146,7 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
       ? (env = 'indoor', take('location', LOCATIONS.indoor.filter((option) => ['bedroom', 'living_room'].includes(option[0]))))
       : takeLocation(mirror ? 'mirror' : random() < 0.55 ? 'indoor' : 'outdoor')
     lines.push(`Setting: ${setting}, consistent with ${place}.`)
+    if (mirror) lines.push(`Mirror framing: ${take('mirrorFraming', MIRROR_FRAMINGS)}.`)
   } else if (category === 'back') {
     lines.push(`Subject: ${describePerson(persona, { face: false, body: true, hair: true }, take, random, attributes)}. The face is not visible at all.`)
     // The subtype already fixes what the body does unless the person is just standing somewhere.

@@ -6,6 +6,7 @@
  * place); the post generator turns that into one concrete description and a
  * caption that fits it.
  */
+import { pickMirrorSelfie } from '@/server/operator-avatars/mirror-places'
 type Random = () => number
 
 export type PostPhotoKind = 'self' | 'self_faceless' | 'self_back' | 'friends' | 'scene'
@@ -41,6 +42,10 @@ const FAR_SELF_SETUPS: readonly string[] = [
   'a friend took it from far back on a campus lawn or in a plaza: the poster sitting or standing small in the frame, buildings behind',
 ]
 
+/** Stand-ins in SETUPS for a mirror selfie, filled in with a place and framing when picked (mirror-places.ts). */
+const MIRROR_SELF = '<mirror selfie, face shown>'
+const MIRROR_FACELESS = '<mirror selfie, face covered>'
+
 /** Setups for each kind with the poster in it, written as briefs for the post generator. */
 const SETUPS: Record<Exclude<PostPhotoKind, 'scene'>, readonly string[]> = {
   self: [
@@ -50,7 +55,7 @@ const SETUPS: Record<Exclude<PostPhotoKind, 'scene'>, readonly string[]> = {
     'a front-camera selfie on the subway, a bus or a train, the seats and windows behind',
     'a front-camera selfie at a café table, the drink in the corner of the frame',
     'a front-camera selfie outdoors with the street or a view behind, hair a little out of place',
-    'a mirror selfie in an elevator, a lift lobby or a shop fitting room, the phone held at chest height so the face shows',
+    MIRROR_SELF,
     'a friend took a candid while walking, the poster half turned toward the camera',
     'a friend took it at a viewpoint, a park or a riverside, the poster in the lower half of the frame, smiling at the camera',
     'a front-camera selfie at home or in a dorm room, lying on the bed or sitting at the desk, relaxed and unbothered',
@@ -74,7 +79,7 @@ const SETUPS: Record<Exclude<PostPhotoKind, 'scene'>, readonly string[]> = {
   ],
   // Staff 2026-11-24: far too many top-down shots of the poster's own feet and legs; none now.
   self_faceless: [
-    'a mirror selfie where the phone covers the face, the full outfit visible',
+    MIRROR_FACELESS,
     'shoulders down, sitting at a café holding a drink, the face cut off by the top of the frame',
     'a friend took it from a few steps away: the poster from the shoulders down, standing at a counter, a railing or a shop window, the place around them',
     'their hands holding food, a book, a ticket or a shopping bag, sleeves and part of the outfit in frame',
@@ -140,7 +145,11 @@ export function pickPostPhoto(random: Random): PostPhotoPlan {
   if (kind === 'scene') return { kind, setup: SCENE_SETUPS[Math.floor(random() * SCENE_SETUPS.length)] }
   // Two in five photos of the poster are taken from far away (FAR_SELF_SHARE).
   const setups = kind === 'self' && random() < FAR_SELF_SHARE ? FAR_SELF_SETUPS : SETUPS[kind]
-  return { kind, setup: setups[Math.floor(random() * setups.length)] }
+  const setup = setups[Math.floor(random() * setups.length)]
+  // A mirror selfie gets its own place and framing, so they are not all one tidy room head to toe.
+  if (setup === MIRROR_SELF) return { kind, setup: `a mirror selfie ${pickMirrorSelfie(random).text}, the phone held low enough that the face shows` }
+  if (setup === MIRROR_FACELESS) return { kind, setup: `a mirror selfie ${pickMirrorSelfie(random).text}, the phone covering the face` }
+  return { kind, setup }
 }
 
 const MARKER = /^\[(self|self_faceless|self_back|friends)\]\s*/
