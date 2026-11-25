@@ -9,7 +9,7 @@ export function AccountTakedownButton({ userId, live }: { userId: string; live: 
   const [error, setError] = useState<string | null>(null)
 
   async function toggle() {
-    if (isLive && !window.confirm('이 계정을 검토 탭 맨 앞으로 돌려보낼까요? 검토에서 다시 게시할 때까지 자동 포스팅·댓글·좋아요가 멈춰요. 프로필과 이미 올린 글은 그대로예요.')) return
+    if (isLive && !window.confirm('이 계정을 검토 탭 맨 앞으로 돌려보낼까요? 검토에서 다시 게시할 때까지 앱에서 프로필·글·댓글이 숨겨지고 자동 포스팅·댓글·좋아요도 멈춰요.')) return
     setBusy(true)
     setError(null)
     try {
