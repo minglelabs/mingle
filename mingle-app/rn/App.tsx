@@ -100,6 +100,7 @@ import {
 } from './src/nativeAuth';
 import { validateRnApiNamespace } from './src/apiNamespace';
 import {
+  buildNativeAccountHintScript,
   buildNativeQaBridgeBootstrapScript,
   WEBVIEW_NAVIGATION_BRIDGE_SCRIPT,
 } from './src/nativeNavigationBridge';
@@ -213,6 +214,8 @@ type NativeRuntimeConfig = {
   // One account per person: the keychain id (iOS) or ANDROID_ID, see src/nativeCapabilities.ts.
   deviceId?: string;
   deviceKind?: string;
+  // iOS: the keychain note that this phone already has an account (survives deleting the app).
+  accountHint?: string;
   qaBridgeEnabled?: string | boolean;
   deviceLocaleTag?: string;
   devicePreferredLanguages?: string[];
@@ -232,6 +235,7 @@ type NativeRuntimeConfig = {
   launchedFromExternalIntent?: string | boolean;
 };
 type NativeConversationRestoreStorageModule = {
+  setAccountHint?: (hint: string) => void;
   rememberConversationRestoreUrl?: (
     url: string,
     conversationId: string,
@@ -917,6 +921,7 @@ type NativeLocationCommand = {
 // The first-run "HashChat is spoken" screen asks for the microphone alone.
 // Answered on the STT channel as { type: 'permission', requestId }.
 type NativeMicPermissionCommand = { type: 'native_mic_permission_request'; payload?: { requestId?: string } };
+type NativeAccountHintCommand = { type: 'native_account_hint_save'; payload?: { hint?: string } };
 
 // Contact sync (see src/nativeContacts.ts).
 type NativeContactsCommand =
@@ -1101,6 +1106,7 @@ type WebViewCommand =
   | NativeOpenAppSettingsCommand
   | NativeLocationCommand
   | NativeMicPermissionCommand
+  | NativeAccountHintCommand
   | NativeContactsCommand
   | NativeAuthStartCommand
   | NativeAuthAckCommand
@@ -2650,7 +2656,8 @@ function AppInner(): React.JSX.Element {
     lastWebViewUrlRef.current = webUrl;
   }, [webUrl]);
   const nativeQaBridgeBootstrapScript = useMemo(
-    () => buildNativeQaBridgeBootstrapScript(RUNTIME_QA_BRIDGE_ENABLED),
+    () => buildNativeQaBridgeBootstrapScript(RUNTIME_QA_BRIDGE_ENABLED)
+      + buildNativeAccountHintScript(NATIVE_RUNTIME_CONFIG.accountHint),
     [],
   );
   const webViewSource = useMemo(() => {
@@ -4698,6 +4705,12 @@ function AppInner(): React.JSX.Element {
 
     if (parsed.type === 'native_location_request') {
       void handleNativeLocationRequest(parsed.payload?.requestId);
+      return;
+    }
+
+    if (parsed.type === 'native_account_hint_save') {
+      const hint = typeof parsed.payload?.hint === 'string' ? parsed.payload.hint : '';
+      if (hint) NATIVE_CONVERSATION_RESTORE_STORAGE.setAccountHint?.(hint);
       return;
     }
 

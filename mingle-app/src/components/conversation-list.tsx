@@ -98,6 +98,7 @@ import { readLastSignInMethod } from "@/lib/last-sign-in-method";
 import { resolveSpeakTrialCopy } from "@/i18n/speak-trial-copy";
 import { isSpeakTrialDone, markSpeakTrialDone } from "@/lib/speak-trial";
 import { clearHaveAccountSkip, isHaveAccountSkipPending, markHaveAccountSkip } from "@/lib/onboarding-draft";
+import { applyNativeAccountHint, saveNativeAccountHint } from "@/lib/account-hint";
 import { PENDING_PROFILE_SYNC_EVENT } from "@/components/pending-profile-sync";
 import { useAppAccess } from "@/components/onboarding/invite-gate";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
@@ -3733,6 +3734,9 @@ export default function ConversationList({
       replaceConversationOverlayUrl(readConversationIdFromLocation(), "initial-route-marker");
     }
 
+    // A reinstall on an iPhone that already had an account here (keychain note):
+    // straight to sign-in, no questions (owner, 2026-11-25).
+    applyNativeAccountHint(() => markLanguageOnboardingConfirmed());
     const nextLanguageOnboardingPhase = shouldAutoOpenLanguageOnboarding(hasConfirmedLanguageOnboarding())
       ? "selection"
       : "ready";
@@ -5655,6 +5659,13 @@ export default function ConversationList({
     resolvedLanguageOnboardingPhase = "ready";
     setLanguageOnboardingPhase("ready");
   }, [locale, sessionStatus]);
+
+  // An account that finished onboarding is signed in here: the iOS shell keeps
+  // a note in the keychain, so a reinstall goes straight to sign-in.
+  useEffect(() => {
+    if (sessionStatus !== "authenticated" || languageOnboardingPhase !== "ready" || isHaveAccountSkipPending()) return;
+    saveNativeAccountHint(readLastSignInMethod());
+  }, [haveAccountChecked, languageOnboardingPhase, sessionStatus]);
 
   // "I already have an account" on the first screen (owner, 2026-11-25): no
   // questions and no speak trial, straight to sign-in. The account is looked

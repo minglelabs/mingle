@@ -3237,6 +3237,45 @@ class NativeRuntimeConfigModule: NSObject, CLLocationManagerDelegate {
         return created
     }
 
+    // "This phone already has an account" (owner, 2026-11-25): kept in the
+    // keychain, so it outlives deleting the app, like the device id. Only the
+    // last sign-in method; never a token or anything about the account.
+    private static let accountHintKeychainService = "com.minglelabs.mingle.account-hint"
+    private static let accountHintKeychainAccount = "account-hint-v1"
+
+    private static func accountHintQuery() -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: accountHintKeychainService,
+            kSecAttrAccount as String: accountHintKeychainAccount,
+        ]
+    }
+
+    private static func readAccountHint() -> String {
+        var query = accountHintQuery()
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var item: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
+              let data = item as? Data,
+              let stored = String(data: data, encoding: .utf8) else { return "" }
+        return stored
+    }
+
+    @objc(setAccountHint:)
+    func setAccountHint(_ hint: String) {
+        let value = hint.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty, value.count <= 256, value != Self.readAccountHint() else { return }
+        let query = Self.accountHintQuery()
+        let data = Data(value.utf8)
+        if SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary) == errSecItemNotFound {
+            var addQuery = query
+            addQuery[kSecValueData as String] = data
+            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            SecItemAdd(addQuery as CFDictionary, nil)
+        }
+    }
+
     private static func runtimeConfigPayload() -> [String: Any] {
         let payload: [String: Any] = [
             "webAppBaseUrl": NativeSTTModule.readRuntimeConfigURL(
@@ -3268,6 +3307,7 @@ class NativeRuntimeConfigModule: NSObject, CLLocationManagerDelegate {
             // the keychain cannot be used; the web then sends no device value.
             "deviceId": readOrCreateDeviceId(),
             "deviceKind": "keychain",
+            "accountHint": readAccountHint(),
         ]
         return payload.merging(MingleLastScreenSnapshotStore.runtimeConfigPayload()) { current, _ in current }
     }

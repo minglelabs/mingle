@@ -69,6 +69,8 @@ RCT_EXTERN_METHOD(clearLastScreenSnapshot:(RCTPromiseResolveBlock)resolve
 
 RCT_EXTERN_METHOD(recordHistoryDebug:(NSString *)payload)
 
+RCT_EXTERN_METHOD(setAccountHint:(NSString *)hint)
+
 RCT_EXTERN_METHOD(checkLocationPermission:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
