@@ -204,6 +204,12 @@ const DEFAULT_PARTIAL_TRANSLATE_INTERVAL_MS = 2_000
 // previews still go out once a second (LivePreviewSender).
 const LIVE_PREVIEW_FLUSH_INTERVAL_MS = 100
 const DEFAULT_PARTIAL_TRANSLATE_STEP = 20
+// The ten-second speak trial (owner, 2026-11-25): the translation is the
+// moment that sells the app, so it is asked for every 10 characters (any
+// language) and at least every second, whatever the usual pace costs less.
+export const EAGER_PARTIAL_TRANSLATE_STEP = 10
+export const EAGER_PARTIAL_TRANSLATE_INTERVAL_MS = 1_000
+const EAGER_PARTIAL_TRANSLATE_MIN_GAP_MS = 600
 let activeNativeSttOwnerKey: string | null = null
 let activeNativeSttOwnerLeaseId: string | null = null
 // A room can remain mounted as a hidden background consumer while the list is
@@ -1583,6 +1589,8 @@ export function buildFinalizedUtterancePayload(
 }
 
 interface UseRealtimeSTTOptions {
+  /** The speak trial: translate the words being spoken far more often (see EAGER_PARTIAL_TRANSLATE_STEP). */
+  eagerPartialTranslate?: boolean
   languages?: string[]
   targetLanguages?: string[]
   onLimitReached?: () => void
@@ -3204,6 +3212,7 @@ const OLDER_SERVER_PAGE_TIMEOUT_MS = 15_000
 const LOAD_BATCH_SIZE = LOCAL_UTTERANCE_CACHE_LIMIT
 
 export default function useRealtimeSTT({
+  eagerPartialTranslate = false,
   languages,
   targetLanguages,
   onLimitReached,
@@ -7313,18 +7322,21 @@ export default function useRealtimeSTT({
     syncVisiblePendingTurn(activePartialSpeakerRef.current)
   }, [bumpPendingTurnRenderVersion, effectiveTargetLanguages, syncVisiblePendingTurn])
 
+  const partialTranslateMode: PartialTranslateMode = eagerPartialTranslate ? 'both' : PARTIAL_TRANSLATE_MODE
+  const partialTranslateStep = eagerPartialTranslate ? EAGER_PARTIAL_TRANSLATE_STEP : PARTIAL_TRANSLATE_STEP
+  const partialTranslateIntervalMs = eagerPartialTranslate ? EAGER_PARTIAL_TRANSLATE_INTERVAL_MS : PARTIAL_TRANSLATE_INTERVAL_MS
   useEffect(() => {
-    if (PARTIAL_TRANSLATE_MODE !== 'time' && PARTIAL_TRANSLATE_MODE !== 'both') return
+    if (partialTranslateMode !== 'time' && partialTranslateMode !== 'both') return
     if (connectionStatus !== 'ready') return
 
     const timer = window.setInterval(() => {
       setPartialTranslateTick((prev) => prev + 1)
-    }, PARTIAL_TRANSLATE_INTERVAL_MS)
+    }, partialTranslateIntervalMs)
 
     return () => {
       window.clearInterval(timer)
     }
-  }, [connectionStatus])
+  }, [connectionStatus, partialTranslateIntervalMs, partialTranslateMode])
 
   // ===== Partial translation: fire immediately once, then re-trigger per configured mode =====
   useEffect(() => {
@@ -7354,18 +7366,28 @@ export default function useRealtimeSTT({
       const isInitialPartialRequest = !runtime.hasFiredInitialRequest
       const targetLanguagesChanged = runtime.lastTargetSignature !== targetLanguageSignature
       const scheduleDecision = shouldTriggerPartialTranslate({
-        mode: PARTIAL_TRANSLATE_MODE,
+        mode: partialTranslateMode,
         isInitialRequest: isInitialPartialRequest,
         targetLanguagesChanged,
         textLength: len,
         currentText: trimmed,
         lastRequestedText: runtime.lastRequestedText,
         lastTranslateLen: runtime.lastTranslateLen,
-        charStep: PARTIAL_TRANSLATE_STEP,
+        charStep: partialTranslateStep,
         elapsedSinceLastRequestMs: Math.max(0, Date.now() - runtime.lastRequestedAtMs),
-        intervalMs: PARTIAL_TRANSLATE_INTERVAL_MS,
+        intervalMs: partialTranslateIntervalMs,
       })
       if (!scheduleDecision.shouldRequest) continue
+      // A new request cancels the one in flight. At the trial's pace that could
+      // cancel every answer before its first word: one just sent is left to
+      // write (the next tick, a second later at most, asks again).
+      if (
+        eagerPartialTranslate
+        && !isInitialPartialRequest
+        && !targetLanguagesChanged
+        && runtime.controller
+        && Date.now() - runtime.lastRequestedAtMs < EAGER_PARTIAL_TRANSLATE_MIN_GAP_MS
+      ) continue
       runtime.hasFiredInitialRequest = true
       runtime.lastTranslateLen = scheduleDecision.nextLastTranslateLen
 
@@ -7518,6 +7540,10 @@ export default function useRealtimeSTT({
     getPendingTurnTranslationRuntime,
     effectiveTargetLanguages,
     partialTranslateTick,
+    eagerPartialTranslate,
+    partialTranslateIntervalMs,
+    partialTranslateMode,
+    partialTranslateStep,
     pendingTurnRenderVersion,
     translateViaApi,
   ])

@@ -1541,7 +1541,8 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
             <p role="alert" className="text-lg font-bold leading-snug text-[#2D2A1E]">
               {resolveSignInFailedCopy(props.locale)}
             </p>
-          ) : props.authNotice ? (
+          ) : props.authNotice && signingInProvider === null && !isSigningIn ? (
+            // Gone once a sign-in is under way (owner, 2026-11-25): the loading line below takes its place.
             <p className="text-[0.92rem] font-semibold leading-snug text-[#2D2A1E]/75">{props.authNotice}</p>
           ) : null}
           {/* Social sign-in in progress: the buttons below only dim, so say so here. */}

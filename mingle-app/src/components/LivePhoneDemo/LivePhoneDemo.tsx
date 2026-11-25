@@ -5351,6 +5351,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     demoTypingLang,
     demoTypingTranslations,
   } = useRealtimeSTT({
+    eagerPartialTranslate: Boolean(trialSpeechLength),
     targetLanguages: effectiveTranslationLanguages,
     onLimitReached,
     onTtsRequested: handleTtsRequested,

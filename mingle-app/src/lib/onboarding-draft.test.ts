@@ -51,6 +51,27 @@ describe('onboarding draft', () => {
   })
 })
 
+describe('the speak trial', () => {
+  it('translates every 10 characters and at least every second, without cancelling an answer just asked for', async () => {
+    const stt = await import('@/components/LivePhoneDemo/use-realtime-stt')
+    expect(stt.EAGER_PARTIAL_TRANSLATE_STEP).toBe(10)
+    expect(stt.EAGER_PARTIAL_TRANSLATE_INTERVAL_MS).toBe(1000)
+    const ask = (textLength: number, lastTranslateLen: number, elapsed: number) => stt.shouldTriggerPartialTranslate({
+      mode: 'both', isInitialRequest: false, targetLanguagesChanged: false, textLength,
+      currentText: 'x'.repeat(textLength), lastRequestedText: 'x'.repeat(lastTranslateLen), lastTranslateLen,
+      charStep: stt.EAGER_PARTIAL_TRANSLATE_STEP, elapsedSinceLastRequestMs: elapsed, intervalMs: stt.EAGER_PARTIAL_TRANSLATE_INTERVAL_MS,
+    }).shouldRequest
+    expect(ask(10, 0, 100)).toBe(true)
+    expect(ask(14, 10, 100)).toBe(false)
+    expect(ask(14, 10, 1000)).toBe(true)
+    const source = read('src/components/LivePhoneDemo/use-realtime-stt.ts')
+    expect(source).toContain('Date.now() - runtime.lastRequestedAtMs < EAGER_PARTIAL_TRANSLATE_MIN_GAP_MS')
+    expect(read('src/components/LivePhoneDemo/LivePhoneDemo.tsx')).toContain('eagerPartialTranslate: Boolean(trialSpeechLength)')
+    // The sign-in notice gives way to the loading line once a sign-in starts.
+    expect(read('src/components/mingle-home.tsx')).toContain('props.authNotice && signingInProvider === null && !isSigningIn')
+  })
+})
+
 describe('the Korea trip on the profile', () => {
   it('accepts the three answers and nothing else', () => {
     expect(normalizeKoreaVisitAnswer({ kind: 'undecided' })).toEqual({ kind: 'undecided' })
