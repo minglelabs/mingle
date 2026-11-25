@@ -604,7 +604,7 @@ function TurnGauge({ step, position }: { step: LivenessStep; position: number })
   const rightDone = RIGHT_DONE.includes(step);
   const reached = (step === "turn_left" && position <= -target) || (step === "turn_right" && position >= target);
   return (
-    <div data-qa="selfie-verify-gauge" className="relative mx-auto mt-5 h-8 w-[min(76vw,320px)]" aria-hidden>
+    <div data-qa="selfie-verify-gauge" className="relative mx-auto mt-5 h-8 w-[min(46vw,190px)]" aria-hidden>
       <div className="absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-gray-200" />
       {/* The stretch to cover on each side, from the middle to its target mark. */}
       <div
@@ -622,7 +622,7 @@ function TurnGauge({ step, position }: { step: LivenessStep; position: number })
       {/* Where the head is now. */}
       <div
         data-qa="selfie-verify-gauge-dot"
-        className={`absolute top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-lg transition-[left] duration-300 ease-out ${reached ? "bg-emerald-500" : "bg-[#F97316]"}`}
+        className={`absolute top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-lg transition-[left] duration-100 ease-linear ${reached ? "bg-emerald-500" : "bg-[#F97316]"}`}
         style={{ left: toPercent(position) }}
       />
     </div>

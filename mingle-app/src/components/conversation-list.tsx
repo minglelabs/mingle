@@ -2194,6 +2194,13 @@ export default function ConversationList({
   // Invite-only (server INVITE_GATE): a signed-in account without an invite
   // sees the invite gate. Asked again once a pending invite link is accepted.
   const { access: appAccess, setAccess: setAppAccess } = useAppAccess(sessionStatus === "authenticated" && !inviteOnboarding, locale);
+  // The trial's code is fetched while the questions are still on screen, so
+  // the last "Continue" opens it at once instead of a white screen with a
+  // spinner (which stayed for good when that one request did not come back).
+  useEffect(() => {
+    if (!speakTrialPending || languageOnboardingPhase !== "selection") return;
+    void import("@/components/onboarding/speak-trial").catch(() => undefined);
+  }, [languageOnboardingPhase, speakTrialPending]);
   const handleSpeakTrialDone = useCallback(() => {
     setSpeakTrialPending(false);
     setSpeakTrialJustDone(true);
