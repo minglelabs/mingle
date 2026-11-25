@@ -8,6 +8,7 @@ import type { OperatorPostBatchSummary, OperatorPostJobState } from '@/server/op
 import { JOB_STATE_LABEL, JOB_STATE_TONE, operatorDisplayName } from '../_lib/copy'
 import { formatKstDateTime, formatKstRange } from '../_lib/kst'
 import OperatorAvatar from './operator-avatar'
+import { refreshInPlace } from '../../_components/refresh-in-place'
 
 /** Chip order: what needs attention first. Duplicates count as published. */
 const CHIP_STATES: OperatorPostJobState[] = ['failed', 'conflict', 'publishing', 'queued', 'published', 'cancelled']
@@ -27,7 +28,7 @@ export default function RecentBatchesList({ batches }: { batches: OperatorPostBa
         <p className="text-[13px] text-slate-500">최근 20개 배치</p>
         <button
           type="button"
-          onClick={() => startRefresh(() => router.refresh())}
+          onClick={() => startRefresh(() => refreshInPlace(router))}
           className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-[13px] font-semibold text-slate-600 active:bg-slate-100"
         >
           <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} aria-hidden /> 새로고침

@@ -26,6 +26,7 @@ import { reviewImageUrl } from './review-image-url'
 import { pastedImage } from '../_lib/pasted-image'
 import { createPortal } from 'react-dom'
 import { PhotoMarkupEditor } from './photo-markup-editor'
+import { refreshInPlace } from '../../_components/refresh-in-place'
 
 type Action = 'publish' | 'delete' | 'regenerate' | 'draw' | 'redraw_photo' | 'redraw_reference'
 
@@ -492,7 +493,7 @@ function PinButton({ kind, id, pinned }: { kind: 'profile' | 'post'; id: string;
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ kind, id, pinned: !pinned }),
       })
-      if (response.ok) router.refresh()
+      if (response.ok) refreshInPlace(router)
     } finally {
       setSaving(false)
     }

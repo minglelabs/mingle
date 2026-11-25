@@ -22,6 +22,7 @@ import {
 import { apiErrorMessage } from '../_lib/copy'
 import ComposerItemCard, { type ComposerItemHandlers } from './composer-item-card'
 import OperatorPicker from './operator-picker'
+import { refreshInPlace } from '../../_components/refresh-in-place'
 
 const PICKER_ACCEPT = 'image/jpeg,image/png,image/webp'
 
@@ -373,7 +374,7 @@ export default function OperatorPostComposer({
     setItems((previous) => mergeBatchOutcome(previous, outcome))
     setAttempted(false)
     setNotice({ kind: 'success', batchId: result.data.batchId, queued: result.data.queued, invalid: result.data.invalid })
-    if (result.data.queued > 0) router.refresh()
+    if (result.data.queued > 0) refreshInPlace(router)
   }
 
   let primaryLabel: string
