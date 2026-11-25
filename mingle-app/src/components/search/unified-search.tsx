@@ -36,6 +36,13 @@ const PEOPLE_PREVIEW_LIMIT = 3;
 
 /** Explore with nothing typed: open rooms (the default) or the post grid. */
 export type ExploreTab = "rooms" | "posts";
+/**
+ * Open chat rooms are out of Explore for now (owner, 2026-11-25): with voice
+ * rooms a kind of their own they mean little yet. The search screen is the
+ * recent searches and the grid of posts; a room is still found by its number.
+ * True brings the tab and the title matches back.
+ */
+export const OPEN_ROOMS_IN_EXPLORE = false;
 const EXPLORE_TAB_STORAGE_KEY = "mingle:explore-tab";
 
 // The tab is kept for the browser session, so coming back from a post lands on Posts again.
@@ -101,7 +108,7 @@ export default function UnifiedSearch({
   const roomsCopy = openRoomsCopy(locale);
   const postingFeedEnabled = clientSupportsPostingFeed;
   const canBrowsePosts = postingFeedEnabled && Boolean(onOpenBrowsePost);
-  const canBrowseRooms = Boolean(onOpenLiveRoom);
+  const canBrowseRooms = OPEN_ROOMS_IN_EXPLORE && Boolean(onOpenLiveRoom);
   // Posts first (owner, 2026-11-25): what opens when the search field is tapped.
   const [exploreTab, setExploreTab] = useState<ExploreTab>("posts");
   useEffect(() => {
@@ -444,7 +451,7 @@ export default function UnifiedSearch({
               <RoomCodeResult locale={locale} code={roomCodeQuery} onOpenRoom={onOpenLiveRoom} />
             ) : null}
             {/* Open rooms whose title or topic matches. */}
-            {onOpenLiveRoom && dispatchedQuery ? (
+            {OPEN_ROOMS_IN_EXPLORE && onOpenLiveRoom && dispatchedQuery ? (
               <OpenRooms locale={locale} query={dispatchedQuery} onOpenRoom={onOpenLiveRoom} onCountChange={setRoomMatchCount} />
             ) : null}
             {showPeople.length > 0 ? (

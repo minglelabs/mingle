@@ -69,9 +69,19 @@ async function stepHostOut(channelId: string): Promise<void> {
   })
 }
 
+let loungeMarkedFor: string | null = null
+
+/** The lounge is a voice room; one made before voice rooms were a kind is marked now. */
+async function markLoungeAsVoiceRoom(channelId: string): Promise<void> {
+  if (loungeMarkedFor === channelId) return
+  await prisma.appConversationChannel.updateMany({ where: { id: channelId, isVoiceRoom: false }, data: { isVoiceRoom: true } })
+  loungeMarkedFor = channelId
+}
+
 async function loungeCard(id: string, viewerUserId: string | null): Promise<OpenRoomCard | null> {
   let [card] = await listOpenRooms(viewerUserId, { ids: [id] })
   if (!card) return null
+  await markLoungeAsVoiceRoom(id).catch(() => undefined)
   if (!card.members.some((member) => member.userId === VOICE_LOUNGE_HOST_USER_ID)) {
     loungeHostReadyFor = null
     await keepHostInLounge(id)
@@ -93,7 +103,7 @@ let creating: Promise<string | null> | null = null
 async function createLounge(staleId: string | null): Promise<string | null> {
   const host = await ensureHamzziAccount()
   if (!host) return null
-  const room = await createOpenRoom({ userId: HAMZZI_USER_ID, locale: 'en', title: VOICE_LOUNGE_TITLE })
+  const room = await createOpenRoom({ userId: HAMZZI_USER_ID, locale: 'en', title: VOICE_LOUNGE_TITLE, voiceRoom: true })
   await stepHostOut(room.id)
   // Another server may have made one meanwhile: keep whichever is stored first.
   const stored = await prisma.$transaction(async (tx) => {

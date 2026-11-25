@@ -2476,14 +2476,14 @@ export async function getConversationSessionKeyForMember(args: {
 export async function getConversationChannelSharing(args: {
   conversationId: string;
   userId: string;
-}): Promise<{ shareToken: string | null; shareEnabled: boolean; sharedAt: Date | null; isPublic: boolean; roomCode: number } | null> {
+}): Promise<{ shareToken: string | null; shareEnabled: boolean; sharedAt: Date | null; isPublic: boolean; isVoiceRoom: boolean; roomCode: number } | null> {
   const record = await prisma.appConversationChannel.findFirst({
     where: {
       id: args.conversationId,
       ...buildVisibleMembershipWhere(args.userId),
       ...buildVisibleConversationWhere(),
     },
-    select: { shareToken: true, shareEnabled: true, sharedAt: true, isPublic: true, roomCode: true },
+    select: { shareToken: true, shareEnabled: true, sharedAt: true, isPublic: true, isVoiceRoom: true, roomCode: true },
   });
   return record ?? null;
 }
@@ -4185,8 +4185,13 @@ export async function listOpenRooms(
   options: {
     query?: string;
     now?: Date;
-    /** Only these rooms (the voice lounge card). */
+    /** Only these rooms (the voice lounge card), whatever their kind. */
     ids?: string[];
+    /**
+     * Which kind (owner, 2026-11-25): false (default) the open chat rooms of
+     * Explore, true the voice rooms of the voice-room tab. Never both.
+     */
+    voiceRooms?: boolean;
   } = {},
 ): Promise<OpenRoomCard[]> {
   const query = (options.query ?? "").replace(/^#+/, "").trim();
@@ -4196,7 +4201,7 @@ export async function listOpenRooms(
       where: {
         isPublic: true,
         ...buildVisibleConversationWhere(),
-        ...(options.ids ? { id: { in: options.ids } } : {}),
+        ...(options.ids ? { id: { in: options.ids } } : { isVoiceRoom: options.voiceRooms === true }),
         ...(query
           ? {
             AND: [{
@@ -4307,6 +4312,8 @@ export async function createOpenRoom(args: {
   title: string;
   topic?: string | null;
   password?: string | null;
+  /** A voice room (the voice-room tab) instead of an open chat room (Explore). */
+  voiceRoom?: boolean;
 }): Promise<ConversationChannelSummary> {
   const created = await createConversationChannelRecordForUser(args.userId, { locale: args.locale });
   const record = await prisma.appConversationChannel.update({
@@ -4315,6 +4322,7 @@ export async function createOpenRoom(args: {
       title: args.title,
       userEditedTitleAt: new Date(),
       isPublic: true,
+      isVoiceRoom: args.voiceRoom === true,
       topic: args.topic || null,
       passwordHash: args.password ? hashOpenRoomPassword(args.password) : null,
     },

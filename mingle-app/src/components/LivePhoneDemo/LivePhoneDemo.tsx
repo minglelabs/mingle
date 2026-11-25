@@ -2484,6 +2484,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [shareEnabled, setShareEnabled] = useState(false)
   // Public: listed with its name in the search tab and joinable by anyone.
   const [isPublicRoom, setIsPublicRoom] = useState(initialIsPublicRoom)
+  // A voice room (owner, 2026-11-25): an open room of the voice-room kind. Known
+  // from the room's own record, or at once when it was opened from the voice-room tab.
+  const [voiceRoomId, setVoiceRoomId] = useState<string | null>(null)
+  const isVoiceRoom = !!conversationId && voiceRoomId === conversationId
   const [isTogglingPublic, setIsTogglingPublic] = useState(false)
   // The number people type in Search to find this room.
   const [roomCode, setRoomCode] = useState<number | null>(null)
@@ -5971,7 +5975,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     })
       .then(async (response) => {
         if (!response.ok) throw new Error(`conversation_share_status_failed:${response.status}`)
-        return response.json() as Promise<{ shareToken?: unknown; shareEnabled?: unknown; isPublic?: unknown; roomCode?: unknown }>
+        return response.json() as Promise<{ shareToken?: unknown; shareEnabled?: unknown; isPublic?: unknown; isVoiceRoom?: unknown; roomCode?: unknown }>
       })
       .then((body) => {
         if (cancelled) return
@@ -5979,6 +5983,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         setShareUrl(nextShareToken ? buildConversationShareUrl(window.location.origin, nextShareToken) : null)
         setShareEnabled(body.shareEnabled === true)
         setIsPublicRoom(body.isPublic === true)
+        setVoiceRoomId(body.isVoiceRoom === true ? conversationId : null)
         setRoomCode(typeof body.roomCode === 'number' ? body.roomCode : null)
       })
       .catch(() => {
@@ -6883,6 +6888,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (voiceRoomEntryJoinedRef.current === conversationId) return
     if (!takeVoiceRoomEntry(conversationId)) return
     voiceRoomEntryJoinedRef.current = conversationId
+    // The tab lists voice rooms only: the stage shows without waiting for the room's record.
+    setVoiceRoomId(conversationId)
     if (voiceTalkState.joined) return
     joinVoiceTalk({ conversationId, title: displayConversationTitle || undefined, lang: voiceTalkLang })
   }, [conversationId, displayConversationTitle, headerMode, voiceTalkAvailable, voiceTalkLang, voiceTalkState.joined])
@@ -9167,8 +9174,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             uiLocale={uiLocale}
             myLang={voiceTalkLang}
             topOffset="calc(54px + env(safe-area-inset-top, 0px))"
-            // An open room is a voice room: its stage is the screen, the chat runs below it.
-            variant={isPublicRoom ? 'room' : 'panel'}
+            // A voice room: its stage is the screen, the chat runs below it. An open chat room keeps the strip.
+            variant={isVoiceRoom ? 'room' : 'panel'}
             onHeightChange={setVoiceRoomStageHeightPx}
             onAvailabilityChange={handleVoiceTalkAvailability}
                 onParticipantsChange={setVoiceTalkParticipants}

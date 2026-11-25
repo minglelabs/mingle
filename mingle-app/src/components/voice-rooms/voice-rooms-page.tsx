@@ -154,7 +154,13 @@ export default function VoiceRoomsPage({ dictionary, locale }: VoiceRoomsPagePro
               {joinError ? <p className="pt-2 text-[13px] text-red-500" role="alert">{copy.joinFailed}</p> : null}
             </section>
             {sessionStatus === "authenticated" ? (
-              <OpenRooms locale={locale} liveOnly excludeIds={excludeIds} liveHeading={copy.liveHeading} onOpenRoom={openRoom} />
+              // The voice rooms people made (the lounge is the card above), and the button to make one.
+              <OpenRooms
+                locale={locale}
+                excludeIds={excludeIds}
+                voiceRooms={{ create: copy.createRoom, createTitle: copy.createRoomTitle, heading: copy.roomsHeading }}
+                onOpenRoom={openRoom}
+              />
             ) : null}
           </>
         )}

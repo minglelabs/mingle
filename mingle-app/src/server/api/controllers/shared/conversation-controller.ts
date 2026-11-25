@@ -713,6 +713,8 @@ export async function getConversationShareResponse(
     shareEnabled: sharing.shareEnabled,
     sharedAt: sharing.sharedAt?.toISOString() ?? null,
     isPublic: sharing.isPublic === true,
+    // A voice room: the room screen shows the stage (only while it is public).
+    isVoiceRoom: sharing.isPublic === true && sharing.isVoiceRoom === true,
     roomCode: sharing.roomCode,
   });
 }

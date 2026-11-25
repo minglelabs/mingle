@@ -79,9 +79,11 @@ describe('the voice room stage', () => {
     expect(html).not.toContain('data-qa="voice-room-seats"')
   })
 
-  it('is the screen of an open room, with the chat starting below it, in every app language', () => {
+  it('is the screen of a voice room, with the chat starting below it, in every app language', () => {
     const room = read('src/components/LivePhoneDemo/LivePhoneDemo.tsx')
-    expect(room).toContain("variant={isPublicRoom ? 'room' : 'panel'}")
+    // Only a voice room; an open chat room keeps the strip.
+    expect(room).toContain("variant={isVoiceRoom ? 'room' : 'panel'}")
+    expect(room).toContain("setVoiceRoomId(body.isVoiceRoom === true ? conversationId : null)")
     expect(room).toContain('? `${voiceRoomStageHeightPx + 10}px`')
     expect(read('src/components/LivePhoneDemo/VoiceTalkPanel.tsx')).toContain('<VoiceRoomStage')
     for (const locale of PRIMARY_UI_LOCALES) {

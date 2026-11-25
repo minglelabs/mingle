@@ -75,7 +75,8 @@ async function readPasswordFromBody(request: NextRequest): Promise<string | null
 export async function getOpenRoomsResponse(request: NextRequest) {
   const userId = await resolveUserId(request).catch(() => "");
   const query = (request.nextUrl.searchParams.get("q") ?? "").slice(0, 80);
-  const rooms = await listOpenRooms(userId || null, { query });
+  // `kind=voice`: the voice rooms of the voice-room tab; otherwise the open chat rooms of Explore.
+  const rooms = await listOpenRooms(userId || null, { query, voiceRooms: request.nextUrl.searchParams.get("kind") === "voice" });
   return NextResponse.json({ rooms }, { headers: { "cache-control": "no-store" } });
 }
 
@@ -89,11 +90,11 @@ export async function getVoiceLoungeResponse(request: NextRequest) {
   return NextResponse.json({ lounge }, { headers: { "cache-control": "no-store" } });
 }
 
-/** POST { title, topic?, password?, locale? } — make an open room from Explore. */
+/** POST { title, topic?, password?, locale?, voiceRoom? } — make an open room from Explore, or a voice room from the voice-room tab. */
 export async function postOpenRoomResponse(request: NextRequest) {
   const userId = await resolveUserId(request);
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const body = await request.json().catch(() => null) as { title?: unknown; topic?: unknown; password?: unknown; locale?: unknown } | null;
+  const body = await request.json().catch(() => null) as { title?: unknown; topic?: unknown; password?: unknown; locale?: unknown; voiceRoom?: unknown } | null;
   if (!body) return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   const title = normalizeOpenRoomTitle(body.title);
   if (!title) return NextResponse.json({ error: "invalid_title" }, { status: 400 });
@@ -105,6 +106,7 @@ export async function postOpenRoomResponse(request: NextRequest) {
     title,
     topic: normalizeOpenRoomTopic(body.topic),
     password: password.kind === "ok" ? password.password : null,
+    voiceRoom: body.voiceRoom === true,
   });
   return NextResponse.json({ conversation }, { status: 201 });
 }

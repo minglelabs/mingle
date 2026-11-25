@@ -460,6 +460,11 @@ model AppConversationChannel {
   // anyone may join it from there (through the share link, which turning the
   // room public switches on). A private room is listed only as a locked card.
   isPublic                   Boolean   @default(false) @map("is_public")
+  // Voice room (owner, 2026-11-25): an open room that is always in a voice
+  // talk. Listed on the voice-room tab (not under Explore, which lists open
+  // chat rooms) and shown with the stage; entering it from that tab joins
+  // its call. Only ever true together with isPublic.
+  isVoiceRoom                Boolean   @default(false) @map("is_voice_room")
   // Open room (a public room, listed under Explore): its topic tag, and the
   // password it asks for when it has one (scrypt, see
   // src/server/open-room-password.ts). Both are null on a chat room.

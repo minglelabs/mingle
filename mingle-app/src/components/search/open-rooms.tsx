@@ -48,6 +48,7 @@ export default function OpenRooms({
   liveOnly = false,
   excludeIds,
   liveHeading,
+  voiceRooms,
 }: {
   locale: string;
   /**
@@ -59,6 +60,12 @@ export default function OpenRooms({
   excludeIds?: string[];
   /** Heading over the live rooms (voice tab). */
   liveHeading?: string;
+  /**
+   * The voice-room tab (owner, 2026-11-25): lists voice rooms instead of
+   * open chat rooms, and its "make a room" button makes a voice room. With
+   * the words to use for them.
+   */
+  voiceRooms?: { create: string; createTitle: string; heading: string };
   /** Narrow by title or topic (search results). Empty: the Explore list, with the "make a room" button. */
   query?: string;
   /** Open a room the viewer is (now) a member of. */
@@ -68,6 +75,7 @@ export default function OpenRooms({
 }) {
   const copy = useCopy(locale);
   const searching = Boolean(query.trim());
+  const isVoiceList = Boolean(voiceRooms);
   const [rooms, setRooms] = useState<OpenRoomCard[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -79,7 +87,10 @@ export default function OpenRooms({
   const load = useCallback(async () => {
     const seq = ++requestSeqRef.current;
     try {
-      const params = query.trim() ? `?q=${encodeURIComponent(query.trim())}` : "";
+      const search = new URLSearchParams();
+      if (query.trim()) search.set("q", query.trim());
+      if (isVoiceList) search.set("kind", "voice");
+      const params = search.size > 0 ? `?${search.toString()}` : "";
       const response = await fetch(`${buildClientApiPath("/conversations/open-rooms")}${params}`, { cache: "no-store" });
       if (!response.ok) return;
       const parsed = parseOpenRooms(await response.json());
@@ -90,7 +101,7 @@ export default function OpenRooms({
     } catch {
       // Keep the last list; the next refresh tries again.
     }
-  }, [liveOnly, query]);
+  }, [liveOnly, query, isVoiceList]);
 
   useEffect(() => {
     aliveRef.current = true;
@@ -153,8 +164,10 @@ export default function OpenRooms({
     }
   }, [busyId, copy, join, onOpenRoom]);
 
-  const joined = (rooms ?? []).filter((room) => room.isMember);
-  const others = (rooms ?? []).filter((room) => !room.isMember);
+  // The voice-room tab shows its lounge as a card of its own, above this list.
+  const listed = (rooms ?? []).filter((room) => !(excludeIds ?? []).includes(room.id));
+  const joined = listed.filter((room) => room.isMember);
+  const others = listed.filter((room) => !room.isMember);
 
   const renderRows = (list: OpenRoomCard[]) => (
     <ul className="space-y-2.5 px-4">
@@ -192,7 +205,7 @@ export default function OpenRooms({
   }
 
   return (
-    <section className={searching ? "border-b border-gray-100 pb-3 pt-3" : "pb-6 pt-1"} aria-label={copy.allHeading} data-qa="explore-open-rooms">
+    <section className={searching ? "border-b border-gray-100 pb-3 pt-3" : "pb-6 pt-1"} aria-label={voiceRooms?.heading ?? copy.allHeading} data-qa={voiceRooms ? "voice-rooms-list" : "explore-open-rooms"}>
       {searching ? (
         <>
           <h2 className="px-4 pb-2 text-[13px] font-semibold uppercase tracking-wide text-gray-500">{copy.allHeading}</h2>
@@ -208,13 +221,14 @@ export default function OpenRooms({
               className="flex h-9 items-center gap-1 rounded-full bg-slate-950 px-3.5 text-[13px] font-semibold text-white transition active:bg-slate-800"
             >
               <Plus size={15} strokeWidth={2.6} aria-hidden="true" />
-              {copy.create}
+              {voiceRooms?.create ?? copy.create}
             </button>
           </div>
           {rooms === null ? (
-            <div className="flex justify-center pt-10 text-gray-400"><Loader2 size={22} className="animate-spin" aria-hidden="true" /></div>
-          ) : rooms.length === 0 ? (
-            <p className="px-8 pt-10 text-center text-[14px] leading-relaxed text-gray-500" data-qa="open-rooms-empty">{copy.empty}</p>
+            voiceRooms ? null : <div className="flex justify-center pt-10 text-gray-400"><Loader2 size={22} className="animate-spin" aria-hidden="true" /></div>
+          ) : listed.length === 0 ? (
+            // The voice-room tab always has its lounge: no "nothing here" under it.
+            voiceRooms ? null : <p className="px-8 pt-10 text-center text-[14px] leading-relaxed text-gray-500" data-qa="open-rooms-empty">{copy.empty}</p>
           ) : (
             <>
               {joined.length > 0 ? (
@@ -226,7 +240,7 @@ export default function OpenRooms({
               {others.length > 0 ? (
                 <div className={joined.length > 0 ? "pt-5" : ""}>
                   {joined.length > 0 ? (
-                    <h2 className="px-4 pb-2 text-[13px] font-semibold uppercase tracking-wide text-gray-500">{copy.allHeading}</h2>
+                    <h2 className="px-4 pb-2 text-[13px] font-semibold uppercase tracking-wide text-gray-500">{voiceRooms?.heading ?? copy.allHeading}</h2>
                   ) : null}
                   {renderRows(others)}
                 </div>
@@ -248,6 +262,7 @@ export default function OpenRooms({
         <OpenRoomCreateSheet
           locale={locale}
           copy={copy}
+          voiceRoomTitle={voiceRooms?.createTitle ?? null}
           onClose={() => setCreating(false)}
           onCreated={(conversationId) => {
             setCreating(false);
@@ -415,9 +430,11 @@ function OpenRoomPasswordPrompt({ room, copy, onClose, onSubmit }: {
   );
 }
 
-function OpenRoomCreateSheet({ locale, copy, onClose, onCreated }: {
+function OpenRoomCreateSheet({ locale, copy, voiceRoomTitle = null, onClose, onCreated }: {
   locale: string;
   copy: Copy;
+  /** Set on the voice-room tab: the sheet's title, and the room made is a voice room. */
+  voiceRoomTitle?: string | null;
   onClose: () => void;
   onCreated: (conversationId: string) => void;
 }) {
@@ -437,7 +454,7 @@ function OpenRoomCreateSheet({ locale, copy, onClose, onCreated }: {
       const response = await fetch(buildClientApiPath("/conversations/open-rooms"), {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title, topic, password, locale }),
+        body: JSON.stringify({ title, topic, password, locale, ...(voiceRoomTitle ? { voiceRoom: true } : {}) }),
       });
       const body = await response.json().catch(() => null) as { conversation?: { id?: string } } | null;
       if (response.ok && body?.conversation?.id) {
@@ -452,14 +469,14 @@ function OpenRoomCreateSheet({ locale, copy, onClose, onCreated }: {
   };
 
   return (
-    <Dialog label={copy.createTitle} onClose={onClose} qa="open-room-create-sheet">
+    <Dialog label={voiceRoomTitle ?? copy.createTitle} onClose={onClose} qa="open-room-create-sheet">
       <form
         onSubmit={(event) => {
           event.preventDefault();
           void submit();
         }}
       >
-        <h2 className="text-[16px] font-bold text-slate-900">{copy.createTitle}</h2>
+        <h2 className="text-[16px] font-bold text-slate-900">{voiceRoomTitle ?? copy.createTitle}</h2>
         <label className="mt-3 block text-[13px] font-semibold text-gray-600">
           {copy.titleLabel}
           <input
