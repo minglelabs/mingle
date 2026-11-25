@@ -3003,7 +3003,7 @@ async function joinConversationChannel(args: {
       ...args.by,
       ...buildVisibleConversationWhere(),
     },
-    select: { ...conversationChannelSelect, ownerUserId: true },
+    select: { ...conversationChannelSelect, ownerUserId: true, womenOnly: true },
   });
   if (!conversationRecord) return null;
 
@@ -3014,6 +3014,13 @@ async function joinConversationChannel(args: {
   // Active idempotence: if the caller is already an active member, no-op immediately.
   if (callerExistingMember && !callerExistingMember.leftAt) {
     return serializeConversationChannelWithPreview(conversationRecord, args.userId);
+  }
+
+  // A women-only room (owner, 2026-11-25): whichever way in (the list, a
+  // link, the room number), only a woman joins.
+  if (conversationRecord.womenOnly) {
+    const joiner = await prisma.user.findUnique({ where: { id: args.userId }, select: { gender: true } });
+    if (joiner?.gender !== "female") throw new Error("women_only");
   }
 
   const activeMembers = filterActiveMembers(channelMembers);
@@ -4217,10 +4224,14 @@ export async function listOpenRooms(
       // Rooms with a call or a game may be older than the newest ones: read a
       // few more than are shown, so they are not cut before sorting.
       take: OPEN_ROOMS_LIMIT * 3,
-      select: { id: true, title: true, topic: true, passwordHash: true, ownerUserId: true, selectedLanguages: true, updatedAt: true },
+      select: { id: true, title: true, topic: true, passwordHash: true, ownerUserId: true, selectedLanguages: true, updatedAt: true, womenOnly: true },
     }),
   ]);
   if (records.length === 0) return [];
+  // A women-only room is locked for everyone who is not a woman (signed out too).
+  const viewerIsWoman = records.some((record) => record.womenOnly) && viewerUserId
+    ? (await prisma.user.findUnique({ where: { id: viewerUserId }, select: { gender: true } }))?.gender === "female"
+    : false;
   const membersByChannelId = await listChannelMembersByChannelId(records.map((record) => record.id));
   const cards = records.map((record): OpenRoomCard => {
     const members = filterActiveMembers(membersByChannelId.get(record.id) ?? []);
@@ -4239,6 +4250,8 @@ export async function listOpenRooms(
       members: faces.map(toOpenRoomPerson),
       voiceCallParticipantCount: live?.voiceCallParticipantCount ?? 0,
       hashRushActive: live?.hashRushActive === true,
+      womenOnly: record.womenOnly,
+      locked: record.womenOnly && !viewerIsWoman,
       updatedAt: record.updatedAt.toISOString(),
     };
   });
@@ -4314,6 +4327,8 @@ export async function createOpenRoom(args: {
   password?: string | null;
   /** A voice room (the voice-room tab) instead of an open chat room (Explore). */
   voiceRoom?: boolean;
+  /** Women only (the caller checks that a woman is making it). */
+  womenOnly?: boolean;
 }): Promise<ConversationChannelSummary> {
   const created = await createConversationChannelRecordForUser(args.userId, { locale: args.locale });
   const record = await prisma.appConversationChannel.update({
@@ -4323,6 +4338,7 @@ export async function createOpenRoom(args: {
       userEditedTitleAt: new Date(),
       isPublic: true,
       isVoiceRoom: args.voiceRoom === true,
+      womenOnly: args.womenOnly === true,
       topic: args.topic || null,
       passwordHash: args.password ? hashOpenRoomPassword(args.password) : null,
     },

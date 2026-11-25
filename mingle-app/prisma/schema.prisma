@@ -465,6 +465,9 @@ model AppConversationChannel {
   // chat rooms) and shown with the stage; entering it from that tab joins
   // its call. Only ever true together with isPublic.
   isVoiceRoom                Boolean   @default(false) @map("is_voice_room")
+  // Women only (owner, 2026-11-25): made by a woman for women. Listed for
+  // everyone, but only a woman can come in (a man sees it locked).
+  womenOnly                  Boolean   @default(false) @map("women_only")
   // Open room (a public room, listed under Explore): its topic tag, and the
   // password it asks for when it has one (scrypt, see
   // src/server/open-room-password.ts). Both are null on a chat room.

@@ -33,8 +33,9 @@ function useCopy(locale: string): Copy {
 }
 
 /** What a failed join says to the person. */
-export function openRoomJoinErrorText(code: string | undefined, copy: Pick<Copy, "roomFull" | "joinFailed" | "passwordWrong" | "passwordLocked">): string {
+export function openRoomJoinErrorText(code: string | undefined, copy: Pick<Copy, "roomFull" | "joinFailed" | "passwordWrong" | "passwordLocked" | "womenOnlyLocked">): string {
   if (code === "room_full") return copy.roomFull;
+  if (code === "women_only") return copy.womenOnlyLocked;
   if (code === "password_wrong") return copy.passwordWrong;
   if (code === "password_locked") return copy.passwordLocked;
   return copy.joinFailed;
@@ -86,6 +87,8 @@ export default function OpenRooms({
   const [error, setError] = useState<string | null>(null);
   const [passwordRoom, setPasswordRoom] = useState<OpenRoomCard | null>(null);
   const [creating, setCreating] = useState(false);
+  // A woman may make a women-only room (the server says who).
+  const [canMakeWomenOnly, setCanMakeWomenOnly] = useState(false);
   // The voice-room tab's button lives in its top bar; a counter, so this runs once per press.
   const createSignal = voiceRooms?.createSignal ?? 0;
   const [seenCreateSignal, setSeenCreateSignal] = useState(createSignal);
@@ -105,7 +108,9 @@ export default function OpenRooms({
       const params = search.size > 0 ? `?${search.toString()}` : "";
       const response = await fetch(`${buildClientApiPath("/conversations/open-rooms")}${params}`, { cache: "no-store" });
       if (!response.ok) return;
-      const parsed = parseOpenRooms(await response.json());
+      const body = await response.json() as { canMakeWomenOnly?: unknown };
+      const parsed = parseOpenRooms(body);
+      if (aliveRef.current && seq === requestSeqRef.current) setCanMakeWomenOnly(body.canMakeWomenOnly === true);
       const next = liveOnly
         ? parsed.filter((room) => openRoomStatus(room) !== "chat")
         : parsed;
@@ -164,6 +169,11 @@ export default function OpenRooms({
       return;
     }
     if (busyId) return;
+    // Women only, and this viewer is not one: the card does not open.
+    if (room.locked && !room.isMember) {
+      setError(copy.womenOnlyLocked);
+      return;
+    }
     if (room.hasPassword) {
       setPasswordRoom(room);
       return;
@@ -277,6 +287,7 @@ export default function OpenRooms({
           locale={locale}
           copy={copy}
           voiceRoomTitle={voiceRooms?.createTitle ?? null}
+          canMakeWomenOnly={canMakeWomenOnly}
           onClose={() => setCreating(false)}
           onCreated={(conversationId) => {
             setCreating(false);
@@ -334,14 +345,19 @@ function StatusChip({ room, copy }: { room: OpenRoomCard; copy: Copy }) {
 function OpenRoomRow({ room, copy, busy, onEnter }: { room: OpenRoomCard; copy: Copy; busy: boolean; onEnter: () => void }) {
   // The owner's face is drawn once, beside their name.
   const faces = room.members.filter((member) => member.userId !== room.owner?.userId).slice(0, 3);
+  // Women only and this viewer is not a woman: shown, greyed, and it does not open (like a locked room).
+  const shut = room.locked && !room.isMember;
   return (
     <button
       type="button"
       data-qa="open-room-card"
       data-open-room-locked={room.hasPassword ? "1" : "0"}
+      data-open-room-women-only={room.womenOnly ? "1" : "0"}
+      data-open-room-shut={shut ? "1" : "0"}
+      aria-disabled={shut || undefined}
       disabled={busy}
       onClick={onEnter}
-      className="block w-full rounded-2xl border border-gray-200 bg-white p-3.5 text-left transition active:scale-[0.99] active:bg-gray-50 disabled:opacity-70"
+      className={`block w-full rounded-2xl border p-3.5 text-left transition disabled:opacity-70 ${shut ? "border-gray-200 bg-gray-50 opacity-70" : "border-gray-200 bg-white active:scale-[0.99] active:bg-gray-50"}`}
     >
       <span className="flex items-center gap-1.5">
         {room.languages.length > 0 ? (
@@ -353,6 +369,12 @@ function OpenRoomRow({ room, copy, busy, onEnter }: { room: OpenRoomCard; copy: 
         ) : null}
         {room.topic ? (
           <span className="min-w-0 truncate rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">#{room.topic}</span>
+        ) : null}
+        {room.womenOnly ? (
+          <span data-qa="open-room-women-only" className="flex shrink-0 items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-600">
+            {shut ? <Lock size={11} strokeWidth={2.6} aria-hidden="true" /> : null}
+            {copy.womenOnly}
+          </span>
         ) : null}
         <span className="flex-1" />
         {room.hasPassword ? <Lock size={14} strokeWidth={2.4} className="shrink-0 text-gray-400" aria-hidden="true" /> : null}
@@ -372,9 +394,13 @@ function OpenRoomRow({ room, copy, busy, onEnter }: { room: OpenRoomCard; copy: 
           </span>
         ) : null}
         <span className="shrink-0 text-[12px] tabular-nums text-gray-500">{copy.members(room.memberCount)}</span>
-        <span className="shrink-0 rounded-full bg-amber-500 px-3 py-1 text-[12px] font-semibold text-white">
-          {busy ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : room.isMember ? copy.open : copy.join}
-        </span>
+        {shut ? (
+          <span className="flex shrink-0 items-center rounded-full bg-gray-200 px-2.5 py-1 text-gray-500"><Lock size={13} strokeWidth={2.6} aria-hidden="true" /></span>
+        ) : (
+          <span className="shrink-0 rounded-full bg-amber-500 px-3 py-1 text-[12px] font-semibold text-white">
+            {busy ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : room.isMember ? copy.open : copy.join}
+          </span>
+        )}
       </span>
     </button>
   );
@@ -444,17 +470,20 @@ function OpenRoomPasswordPrompt({ room, copy, onClose, onSubmit }: {
   );
 }
 
-function OpenRoomCreateSheet({ locale, copy, voiceRoomTitle = null, onClose, onCreated }: {
+function OpenRoomCreateSheet({ locale, copy, voiceRoomTitle = null, canMakeWomenOnly = false, onClose, onCreated }: {
   locale: string;
   copy: Copy;
   /** Set on the voice-room tab: the sheet's title, and the room made is a voice room. */
   voiceRoomTitle?: string | null;
+  /** The viewer is a woman: the "women only" choice is shown. */
+  canMakeWomenOnly?: boolean;
   onClose: () => void;
   onCreated: (conversationId: string) => void;
 }) {
   const [title, setTitle] = useState("");
   const [topic, setTopic] = useState("");
   const [password, setPassword] = useState("");
+  const [womenOnly, setWomenOnly] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const passwordOk = readOpenRoomPassword(password).kind !== "invalid";
@@ -468,7 +497,7 @@ function OpenRoomCreateSheet({ locale, copy, voiceRoomTitle = null, onClose, onC
       const response = await fetch(buildClientApiPath("/conversations/open-rooms"), {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title, topic, password, locale, ...(voiceRoomTitle ? { voiceRoom: true } : {}) }),
+        body: JSON.stringify({ title, topic, password, locale, ...(voiceRoomTitle ? { voiceRoom: true } : {}), ...(canMakeWomenOnly && womenOnly ? { womenOnly: true } : {}) }),
       });
       const body = await response.json().catch(() => null) as { conversation?: { id?: string } } | null;
       if (response.ok && body?.conversation?.id) {
@@ -534,6 +563,19 @@ function OpenRoomCreateSheet({ locale, copy, voiceRoomTitle = null, onClose, onC
           />
         </label>
         <p className={`mt-1.5 text-[12px] ${passwordOk ? "text-gray-500" : "text-red-500"}`}>{passwordOk ? copy.passwordHint : copy.passwordPlaceholder}</p>
+        {/* Women only (owner, 2026-11-25): shown to women; men see the room but cannot come in. */}
+        {canMakeWomenOnly ? (
+          <label data-qa="open-room-create-women-only" className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl bg-rose-50 px-3 py-2.5">
+            <span className="min-w-0 flex-1">
+              <span className="block text-[13px] font-bold text-slate-900">{copy.womenOnly}</span>
+              <span className="mt-0.5 block text-[12px] leading-snug text-slate-500">{copy.womenOnlyHint}</span>
+            </span>
+            <input type="checkbox" role="switch" checked={womenOnly} onChange={(event) => setWomenOnly(event.target.checked)} className="sr-only" />
+            <span aria-hidden="true" className={`relative mt-0.5 inline-flex h-6 w-10 shrink-0 rounded-full transition ${womenOnly ? "bg-rose-500" : "bg-gray-300"}`}>
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${womenOnly ? "left-[18px]" : "left-0.5"}`} />
+            </span>
+          </label>
+        ) : null}
         {error ? <p className="mt-2 text-[13px] text-red-500" role="alert">{error}</p> : null}
         <div className="mt-4 flex gap-2">
           <button type="button" onClick={onClose} className="flex h-11 flex-1 items-center justify-center rounded-xl border border-gray-200 bg-white text-[14px] font-semibold text-slate-700 active:bg-gray-100">

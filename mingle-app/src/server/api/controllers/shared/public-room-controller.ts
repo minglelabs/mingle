@@ -77,7 +77,14 @@ export async function getOpenRoomsResponse(request: NextRequest) {
   const query = (request.nextUrl.searchParams.get("q") ?? "").slice(0, 80);
   // `kind=voice`: the voice rooms of the voice-room tab; otherwise the open chat rooms of Explore.
   const rooms = await listOpenRooms(userId || null, { query, voiceRooms: request.nextUrl.searchParams.get("kind") === "voice" });
-  return NextResponse.json({ rooms }, { headers: { "cache-control": "no-store" } });
+  // A woman may make a women-only room: the sheet shows that choice to her only.
+  const canMakeWomenOnly = userId ? await isWoman(userId) : false;
+  return NextResponse.json({ rooms, canMakeWomenOnly }, { headers: { "cache-control": "no-store" } });
+}
+
+async function isWoman(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { gender: true } }).catch(() => null);
+  return user?.gender === "female";
 }
 
 /** GET — the voice tab's always-open lounge, as an open-room card (null when it cannot be made). */
@@ -94,7 +101,7 @@ export async function getVoiceLoungeResponse(request: NextRequest) {
 export async function postOpenRoomResponse(request: NextRequest) {
   const userId = await resolveUserId(request);
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const body = await request.json().catch(() => null) as { title?: unknown; topic?: unknown; password?: unknown; locale?: unknown; voiceRoom?: unknown } | null;
+  const body = await request.json().catch(() => null) as { title?: unknown; topic?: unknown; password?: unknown; locale?: unknown; voiceRoom?: unknown; womenOnly?: unknown } | null;
   if (!body) return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   const title = normalizeOpenRoomTitle(body.title);
   if (!title) return NextResponse.json({ error: "invalid_title" }, { status: 400 });
@@ -107,6 +114,8 @@ export async function postOpenRoomResponse(request: NextRequest) {
     topic: normalizeOpenRoomTopic(body.topic),
     password: password.kind === "ok" ? password.password : null,
     voiceRoom: body.voiceRoom === true,
+    // Only a woman makes a women-only room; from anyone else the choice is dropped.
+    womenOnly: body.womenOnly === true && (await isWoman(userId)),
   });
   return NextResponse.json({ conversation }, { status: 201 });
 }
@@ -176,6 +185,7 @@ export async function postPublicRoomJoinResponse(request: NextRequest, conversat
     if (passwordError) return passwordError;
     const code = error instanceof Error ? error.message : "";
     if (code === "room_full") return NextResponse.json({ error: "room_full" }, { status: 400 });
+    if (code === "women_only") return NextResponse.json({ error: "women_only" }, { status: 403 });
     if (code === "target_user_blocked") return NextResponse.json({ error: "target_user_blocked" }, { status: 403 });
     console.error("[conversations] public_join_failed", error instanceof Error ? error.name : "unknown");
     return NextResponse.json({ error: "conversation_channel_join_conflict" }, { status: 409 });

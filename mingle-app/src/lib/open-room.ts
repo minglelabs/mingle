@@ -24,6 +24,10 @@ export type OpenRoomCard = {
   /** People in the room's live voice talk call (0: none). */
   voiceCallParticipantCount: number;
   hashRushActive: boolean;
+  /** Women only: listed for everyone, entered by women. */
+  womenOnly: boolean;
+  /** This viewer may not come in (women only, and the viewer is not a woman). */
+  locked: boolean;
   /** ISO time of the last change in the room. */
   updatedAt: string;
 };
@@ -106,6 +110,8 @@ export function parseOpenRooms(body: unknown): OpenRoomCard[] {
       members: Array.isArray(row.members) ? row.members.flatMap((member) => person(member) ?? []) : [],
       voiceCallParticipantCount: typeof row.voiceCallParticipantCount === "number" && row.voiceCallParticipantCount > 0 ? Math.floor(row.voiceCallParticipantCount) : 0,
       hashRushActive: row.hashRushActive === true,
+      womenOnly: row.womenOnly === true,
+      locked: row.locked === true,
       updatedAt: typeof row.updatedAt === "string" ? row.updatedAt : "",
     }];
   });
