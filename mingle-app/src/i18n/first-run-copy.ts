@@ -39,7 +39,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
   ko: {
     speakTitle: "외국인 친구에게 건넬 첫 마디, 먼저 말해 볼까요?",
     speakButton: "눌러서 말해 보기",
-    lengthTitle: "문장을 얼마나 길게 묶을까요?",
+    lengthTitle: "음성 인식에서 문장을 얼마나 길게 묶을까요?",
     lengthHint: "밀어 보면 예시가 바뀌어요. 적용을 누르면 바뀌고, 설정에서 언제든 다시 바꿀 수 있어요.",
     lengthApplied: "바꿨어요. 다시 말해 보세요.",
     lengthApply: "적용",
@@ -58,7 +58,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
   en: {
     speakTitle: "Try your first words to a new friend?",
     speakButton: "Tap to speak",
-    lengthTitle: "How long should a sentence run?",
+    lengthTitle: "How long should speech recognition make each sentence?",
     lengthHint: "Slide to see the example change. Tap Apply to use it; you can change it again in settings.",
     lengthApplied: "Changed. Try speaking again.",
     lengthApply: "Apply",
@@ -77,7 +77,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
   ja: {
     speakTitle: "新しい友達への最初のひとこと、話してみませんか？",
     speakButton: "タップして話してみる",
-    lengthTitle: "文をどのくらいの長さでまとめますか？",
+    lengthTitle: "音声認識で文をどのくらいの長さでまとめますか？",
     lengthHint: "動かすと例が変わります。「適用」で反映され、設定でいつでも変更できます。",
     lengthApplied: "変更しました。もう一度話してみてください。",
     lengthApply: "適用",
@@ -96,7 +96,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
   "zh-CN": {
     speakTitle: "先说说想对新朋友说的第一句话吧？",
     speakButton: "点一下说说看",
-    lengthTitle: "一句话要多长才断开？",
+    lengthTitle: "语音识别时，句子要合并成多长？",
     lengthHint: "拖动一下，示例会跟着变。点“应用”后生效，之后也能在设置里更改。",
     lengthApplied: "已更改。请再说一次试试。",
     lengthApply: "应用",
@@ -115,7 +115,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
   "zh-TW": {
     speakTitle: "先說說想對新朋友說的第一句話吧？",
     speakButton: "點一下說說看",
-    lengthTitle: "一句話要多長才斷開？",
+    lengthTitle: "語音辨識時，句子要合併成多長？",
     lengthHint: "拖動一下，範例會跟著變。點「套用」後生效，之後也能在設定裡更改。",
     lengthApplied: "已更改。請再說一次試試。",
     lengthApply: "套用",
@@ -134,7 +134,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
   fr: {
     speakTitle: "Et si vous essayiez vos premiers mots pour un nouvel ami ?",
     speakButton: "Touchez pour parler",
-    lengthTitle: "Quelle longueur pour une phrase ?",
+    lengthTitle: "Quelle longueur pour chaque phrase reconnue à la voix ?",
     lengthHint: "Faites glisser pour voir l’exemple changer. Touchez Appliquer ; vous pourrez le modifier dans les réglages.",
     lengthApplied: "C’est changé. Essayez de parler à nouveau.",
     lengthApply: "Appliquer",
@@ -153,7 +153,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
   de: {
     speakTitle: "Probier deine ersten Worte an einen neuen Freund aus?",
     speakButton: "Tippen und sprechen",
-    lengthTitle: "Wie lang soll ein Satz werden?",
+    lengthTitle: "Wie lang soll die Spracherkennung einen Satz fassen?",
     lengthHint: "Schiebe den Regler, und das Beispiel ändert sich. Tippe auf Übernehmen; in den Einstellungen kannst du es jederzeit ändern.",
     lengthApplied: "Geändert. Sprich noch einmal.",
     lengthApply: "Übernehmen",
@@ -172,7 +172,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
   es: {
     speakTitle: "¿Probamos tus primeras palabras para un nuevo amigo?",
     speakButton: "Toca para hablar",
-    lengthTitle: "¿Qué longitud debe tener una frase?",
+    lengthTitle: "¿Qué longitud debe tener cada frase del reconocimiento de voz?",
     lengthHint: "Desliza y verás cambiar el ejemplo. Toca Aplicar; puedes cambiarlo en los ajustes.",
     lengthApplied: "Cambiado. Prueba a hablar de nuevo.",
     lengthApply: "Aplicar",
@@ -191,7 +191,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
   pt: {
     speakTitle: "Que tal testar suas primeiras palavras para um novo amigo?",
     speakButton: "Toque para falar",
-    lengthTitle: "Qual o tamanho de uma frase?",
+    lengthTitle: "Qual deve ser o tamanho de cada frase no reconhecimento de voz?",
     lengthHint: "Deslize para ver o exemplo mudar. Toque em Aplicar; dá para alterar nos ajustes.",
     lengthApplied: "Alterado. Tente falar de novo.",
     lengthApply: "Aplicar",
@@ -210,7 +210,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
   it: {
     speakTitle: "Vuoi provare le tue prime parole per un nuovo amico?",
     speakButton: "Tocca per parlare",
-    lengthTitle: "Quanto deve essere lunga una frase?",
+    lengthTitle: "Quanto deve essere lunga ogni frase nel riconoscimento vocale?",
     lengthHint: "Fai scorrere e l’esempio cambia. Tocca Applica; puoi modificarlo nelle impostazioni.",
     lengthApplied: "Modificato. Prova a parlare di nuovo.",
     lengthApply: "Applica",
@@ -229,7 +229,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
   ru: {
     speakTitle: "Попробуем сказать первые слова новому другу?",
     speakButton: "Нажмите и говорите",
-    lengthTitle: "Какой длины должна быть фраза?",
+    lengthTitle: "Какой длины делать фразы при распознавании речи?",
     lengthHint: "Передвиньте ползунок — пример изменится. Нажмите «Применить»; позже можно поменять в настройках.",
     lengthApplied: "Изменено. Попробуйте сказать ещё раз.",
     lengthApply: "Применить",
@@ -248,7 +248,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
   ar: {
     speakTitle: "هل تجرّب كلماتك الأولى لصديق جديد؟",
     speakButton: "اضغط وتحدّث",
-    lengthTitle: "ما طول الجملة المناسب؟",
+    lengthTitle: "كم يجب أن يكون طول الجملة في التعرّف على الكلام؟",
     lengthHint: "حرّك المؤشر لترى المثال يتغيّر. اضغط «تطبيق»، ويمكنك تغييره لاحقًا من الإعدادات.",
     lengthApplied: "تم التغيير. جرّب التحدّث مرة أخرى.",
     lengthApply: "تطبيق",
@@ -267,7 +267,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
   hi: {
     speakTitle: "नए दोस्त से कहने वाली पहली बात बोलकर देखें?",
     speakButton: "दबाकर बोलें",
-    lengthTitle: "एक वाक्य कितना लंबा रखा जाए?",
+    lengthTitle: "वॉइस पहचान में हर वाक्य कितना लंबा हो?",
     lengthHint: "स्लाइड करें, उदाहरण बदल जाएगा। लागू करें दबाएँ; सेटिंग्स में कभी भी बदल सकते हैं।",
     lengthApplied: "बदल दिया। फिर से बोलकर देखें।",
     lengthApply: "लागू करें",
@@ -286,7 +286,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
   th: {
     speakTitle: "ลองพูดประโยคแรกที่จะทักเพื่อนใหม่ดูไหม?",
     speakButton: "แตะเพื่อพูด",
-    lengthTitle: "อยากให้หนึ่งประโยคยาวแค่ไหน",
+    lengthTitle: "ให้ระบบจดจำเสียงรวมประโยคยาวแค่ไหน?",
     lengthHint: "เลื่อนดูแล้วตัวอย่างจะเปลี่ยน แตะ \"ใช้\" เพื่อเปลี่ยนจริง และเปลี่ยนได้อีกในการตั้งค่า",
     lengthApplied: "เปลี่ยนแล้ว ลองพูดอีกครั้ง",
     lengthApply: "ใช้",
@@ -305,7 +305,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
   vi: {
     speakTitle: "Thử nói câu đầu tiên với người bạn mới nhé?",
     speakButton: "Chạm để nói",
-    lengthTitle: "Một câu nên dài bao nhiêu?",
+    lengthTitle: "Nhận dạng giọng nói nên gộp mỗi câu dài bao nhiêu?",
     lengthHint: "Kéo để xem ví dụ thay đổi. Bấm Áp dụng; bạn có thể đổi lại trong phần cài đặt.",
     lengthApplied: "Đã đổi. Hãy thử nói lại.",
     lengthApply: "Áp dụng",

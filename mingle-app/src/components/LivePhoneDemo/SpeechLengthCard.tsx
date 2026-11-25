@@ -111,6 +111,21 @@ export default function SpeechLengthCard({
         </defs>
       </svg>
 
+      {/* The question on top, large (owner, 2026-11-25): it is about how speech recognition groups what was said. */}
+      <div className="shrink-0 px-5 pb-3 pt-5">
+        <div className="flex items-start gap-2">
+          <p data-qa="speech-length-title" className="min-w-0 flex-1 text-[1.5rem] font-extrabold leading-tight tracking-[-0.02em] text-slate-950">{copy.lengthTitle}</p>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={copy.lengthClose}
+            className="-mr-2 -mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition active:scale-95"
+          >
+            <X size={17} strokeWidth={2.6} aria-hidden />
+          </button>
+        </div>
+        <p className="mt-1.5 text-[0.85rem] leading-relaxed text-slate-500">{copy.lengthHint}</p>
+      </div>
       <div ref={frameRef} className="relative h-[340px] min-h-[150px] shrink overflow-hidden bg-gradient-to-b from-slate-50 to-slate-100">
       {/* Only the bubbles sit inside the filter: it works on their outline. */}
       <div
@@ -149,19 +164,7 @@ export default function SpeechLengthCard({
       </div>
 
       <div className="shrink-0 px-5 pb-5 pt-4">
-        <div className="flex items-start gap-2">
-          <p className="min-w-0 flex-1 text-[1.08rem] font-extrabold leading-snug tracking-[-0.01em] text-slate-950">{copy.lengthTitle}</p>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={copy.lengthClose}
-            className="-mr-2 -mt-1.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition active:scale-95"
-          >
-            <X size={17} strokeWidth={2.6} aria-hidden />
-          </button>
-        </div>
-        <p className="mt-1 text-[0.8rem] leading-relaxed text-slate-500">{copy.lengthHint}</p>
-        <div className="mt-4">
+        <div>
           <SpeechLengthScale copy={copy} selected={picked} disabled={disabled} livePick levels={SPEECH_LENGTH_SIMPLE_LEVELS} showNumbers={false} recommended={RECOMMENDED_SPEECH_LENGTH_LEVEL} onSelect={setPicked} />
         </div>
         <button

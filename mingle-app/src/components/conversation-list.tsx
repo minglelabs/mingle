@@ -2195,6 +2195,13 @@ export default function ConversationList({
   // Invite-only (server INVITE_GATE): a signed-in account without an invite
   // sees the invite gate. Asked again once a pending invite link is accepted.
   const { access: appAccess, setAccess: setAppAccess } = useAppAccess(sessionStatus === "authenticated" && !inviteOnboarding, locale);
+  // The sign-in screen's code is fetched during the trial, so the end of the
+  // trial opens it at once (it used to show a white spinner for a while).
+  useEffect(() => {
+    if (!speakTrialPending) return;
+    void import("@/components/mingle-home").catch(() => undefined);
+  }, [speakTrialPending]);
+
   // The trial's code is fetched while the questions are still on screen, so
   // the last "Continue" opens it at once instead of a white screen with a
   // spinner (which stayed for good when that one request did not come back).
@@ -5915,8 +5922,14 @@ export default function ConversationList({
         >
           <Suspense
             fallback={(
-              <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
-                <Loader2 size={24} className="animate-spin" aria-hidden />
+              // The app's own loading screen (wordmark and a saying), not a bare
+              // white spinner, while the trial or sign-in loads (owner, 2026-11-25).
+              <div data-qa="auth-loading-splash" className="flex h-full min-h-0 w-full items-center justify-center bg-[#fcfbf8]">
+                <div className="flex flex-col items-center gap-5">
+                  <MingleWordmark />
+                  <Loader2 size={22} className="animate-spin text-amber-500" aria-hidden />
+                  <LoadingMessage locale={locale} className="min-h-10 max-w-[18rem] px-2 text-center text-[13px] leading-5 text-slate-500" />
+                </div>
               </div>
             )}
           >
