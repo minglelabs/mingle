@@ -94,7 +94,14 @@ const SETUPS: Record<Exclude<PostPhotoKind, 'scene'>, readonly string[]> = {
     'a friend took it from behind: the poster walks down a street or an alley ahead of the camera',
     'from behind: the poster stands at a viewpoint, a railing or the water, looking out',
     'from behind: the poster sits on a bench or steps, the view in front of them',
-    'from behind and a little to the side: the poster looks into a shop window or at a sign',
+    // Staff 2026-11-25: far too many backs looking into a shop window; that one is gone, more kinds instead.
+    'from behind and a little to the side: the poster reads a map board or a street sign',
+    'from behind: the poster waits at a crosswalk or a bus stop, traffic and buildings ahead',
+    'from behind: the poster rides an escalator or stands on a subway or train platform',
+    'from behind: the poster orders at a street-food stall or a market stall, the vendor and food ahead',
+    'from behind: the poster stands in a museum or a gallery, looking at a painting or an exhibit',
+    'from behind: the poster stands on a ferry deck, a pier or a bridge, the water and the far shore ahead',
+    'from behind: the poster walks through a park or along a riverside path, trees on both sides',
   ],
   friends: [
     'a front-camera group selfie of the poster and one or two friends, squeezed into the frame',
