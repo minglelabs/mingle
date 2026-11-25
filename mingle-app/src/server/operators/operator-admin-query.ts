@@ -5,6 +5,7 @@ import { buildProfileLinkPath } from '@/lib/profile-link'
 import { isOperatorBioPending } from './bio-queue'
 import { findOperatorAccount } from './operator-guard'
 import { zipInterestLanguages, type InterestLanguage } from '@/lib/interest-languages'
+import { ageOn } from '@/server/operator-auto-reply/generate'
 
 /** Staff-only reads for the admin operator pages. Never serialized to app users. */
 
@@ -20,6 +21,17 @@ export type OperatorListItem = {
   isActive: boolean
   isOperator: boolean
   createdAt: string
+  /** For the big card: what the profile shows. */
+  bio: string | null
+  age: number | null
+  gender: string | null
+  city: string | null
+  primaryLanguages: string[]
+  interestLanguages: InterestLanguage[]
+  /** Posts that are up (not deleted). */
+  postCount: number
+  /** An operator account's review state (approved = live); null for a real user. */
+  reviewState: string | null
 }
 
 /** Which accounts the 계정 tab lists: everyone (default), only operator accounts, or only real users. */
@@ -78,7 +90,14 @@ export async function listOperatorAccounts(args: { query?: string; page?: number
       isOperator: true,
       createdAt: true,
       locationCountry: true,
-      operatorAccount: { select: { personaCountry: true } },
+      locationCity: true,
+      bio: true,
+      birthDate: true,
+      gender: true,
+      interestLanguages: true,
+      interestLanguageLevels: true,
+      operatorAccount: { select: { personaCountry: true, reviewState: true } },
+      _count: { select: { posts: { where: { isDeleted: { not: true } } } } },
     },
   })
   return {
@@ -92,6 +111,14 @@ export async function listOperatorAccounts(args: { query?: string; page?: number
       isActive: row.isActive,
       isOperator: row.isOperator,
       createdAt: row.createdAt.toISOString(),
+      bio: row.bio?.trim() || null,
+      age: ageOn(row.birthDate, new Date()),
+      gender: row.gender ?? null,
+      city: row.locationCity ?? null,
+      primaryLanguages: row.primaryLanguages,
+      interestLanguages: zipInterestLanguages(row.interestLanguages, row.interestLanguageLevels),
+      postCount: row._count.posts,
+      reviewState: row.operatorAccount?.reviewState ?? null,
     })),
     total,
     page,

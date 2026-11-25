@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { referenceAgeRange, referenceCountries, referenceDirectionLines, referencePersonaFit, referencePersonaLine, referenceSeasonClashes, referenceSeasonsToAvoid } from './direction'
+import { WIDE_POST_DISTANCE, widenPostShot, referenceAgeRange, referenceCountries, referenceDirectionLines, referencePersonaFit, referencePersonaLine, referenceSeasonClashes, referenceSeasonsToAvoid } from './direction'
 import { referenceRecreateLines } from './library'
 
 describe('referenceDirectionLines', () => {
@@ -61,5 +61,33 @@ describe('referenceSeasonsToAvoid', () => {
     expect(referenceSeasonClashes({ season: 'summer' }, ['summer'])).toBe(true)
     expect(referenceSeasonClashes({ season: 'unknown' }, ['summer'])).toBe(false)
     expect(referenceSeasonClashes(null, ['summer'])).toBe(false)
+  })
+})
+
+describe('widenPostShot', () => {
+  const base = { distance: 'chest', shooter: 'friend', layout: 'single' } as unknown as Parameters<typeof widenPostShot>[0]
+  it('pulls a close shot back most of the time, a waist-up one half the time', () => {
+    expect(widenPostShot(base, () => 0.8)).toBe(true)
+    expect(widenPostShot(base, () => 0.9)).toBe(false)
+    expect(widenPostShot({ ...base!, distance: 'waist' } as typeof base, () => 0.4)).toBe(true)
+    expect(widenPostShot({ ...base!, distance: 'waist' } as typeof base, () => 0.6)).toBe(false)
+  })
+  it('never moves a far shot, a selfie, a photo booth or a collage', () => {
+    expect(widenPostShot({ ...base!, distance: 'knees' } as typeof base, () => 0)).toBe(false)
+    expect(widenPostShot({ ...base!, shooter: 'selfie' } as typeof base, () => 0)).toBe(false)
+    expect(widenPostShot({ ...base!, layout: 'collage' } as typeof base, () => 0)).toBe(false)
+  })
+  it('says the knees-up distance in the shot line instead of the original', () => {
+    expect(referenceDirectionLines(base, { distance: WIDE_POST_DISTANCE }).join('\n')).toContain('from the knees up')
+  })
+})
+
+describe('referenceRecreateLines widen', () => {
+  it('drops the keep-the-distance rule and asks for a wider shot', () => {
+    const lines = referenceRecreateLines({ kind: 'face', look: 'a woman in her 20s', widen: true }).join('\n')
+    expect(lines).toContain('from about the knees up')
+    expect(lines).not.toContain('the camera angle and distance')
+    const kept = referenceRecreateLines({ kind: 'face', look: 'a woman in her 20s' }).join('\n')
+    expect(kept).toContain('the camera angle and distance')
   })
 })

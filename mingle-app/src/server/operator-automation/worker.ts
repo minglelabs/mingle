@@ -85,7 +85,7 @@ export async function generateNextMissingAvatar(ctx: AdminContext | null = null,
 }
 
 /** A rank ahead of everything now in the review queue (lower goes first). */
-async function frontOfReviewRank(): Promise<number> {
+export async function frontOfReviewRank(): Promise<number> {
   const [row] = await prisma.$queryRaw<Array<{ low: number | null }>>`
     SELECT LEAST(
       (SELECT MIN(review_rank) FROM app.app_operator_accounts),
@@ -189,55 +189,64 @@ export type DailyPostsResult = { accounts: number; written: number; failed: numb
 
 /**
  * One day's posts: each approved, live operator account writes one post with
- * `chancePercent` odds. Each goes into review at the front of the queue, its
- * photo drawn right away where the server can draw (one at a time, so the pool
- * is not flooded). Never throws.
+ * `chancePercent` odds, and with a separate `secondChancePercent` roll one
+ * more (staff, 2026-11-25: 40% one post, 20% another). Each goes into review
+ * at the front of the queue, its photo drawn right away where the server can
+ * draw (one at a time, so the pool is not flooded). Never throws.
  */
-export async function writeDailyOperatorPosts(chancePercent: number, now: Date, random: () => number = Math.random): Promise<DailyPostsResult> {
+export async function writeDailyOperatorPosts(chancePercent: number, now: Date, random: () => number = Math.random, secondChancePercent = 0): Promise<DailyPostsResult> {
   const accounts = await prisma.user.findMany({
     // A staff account (no persona country, e.g. @admin) is never written for.
     where: { isOperator: true, isDeleted: false, isActive: true, operatorAccount: { reviewState: 'approved', personaCountry: { not: null } } },
     select: { id: true },
   })
-  const picked = accounts.filter(() => random() * 100 < chancePercent)
+  const picked = accounts
+    .map(({ id }) => ({
+      id,
+      count: (random() * 100 < chancePercent ? 1 : 0) + (secondChancePercent > 0 && random() * 100 < secondChancePercent ? 1 : 0),
+    }))
+    .filter((account) => account.count > 0)
   const result: DailyPostsResult = { accounts: picked.length, written: 0, failed: 0 }
-  for (const { id } of picked) {
+  for (const { id, count } of picked) {
     try {
       const persona = await loadReservePersona(id, now)
-      if (!persona) { result.failed += 1; continue }
-      const [post] = await generateReservePosts({
+      if (!persona) { result.failed += count; continue }
+      // Both of a day's posts are written together, so they differ in topic and wording.
+      const posts = await generateReservePosts({
         persona,
-        topics: pickReserveTopics(1, random, reservePosterProfile(id).topicFactors, { korea: !isKoreaCountry(persona.country) }),
+        topics: pickReserveTopics(count, random, reservePosterProfile(id).topicFactors, { korea: !isKoreaCountry(persona.country) }),
         existingTexts: await loadExistingReserveTexts(id),
         random,
         seed: id,
       })
-      if (!post) { result.failed += 1; continue }
-      const row = await prisma.operatorPostReserve.create({
-        data: {
-          operatorUserId: id,
-          text: post.text,
-          topic: post.topic,
-          language: post.language === persona.language ? null : post.language,
-          imagePrompt: post.imagePrompt,
-          state: 'review',
-          // Photo posts go to the front; a text-only one waits in the default order, behind the photo posts.
-          reviewRank: post.imagePrompt ? await frontOfReviewRank() : null,
-        },
-        select: { id: true },
-      })
-      result.written += 1
-      if (post.imagePrompt && canDrawImagesHere()) {
-        let noReference = false
-        const image = await drawReservePostImage(id, post.imagePrompt, undefined, undefined, { onNoReference: () => { noReference = true } })
-        if (image) {
-          await prisma.operatorPostReserve.updateMany({
-            where: { id: row.id, state: 'review', imageObjectKey: null },
-            data: { imageObjectKey: image.objectKey, imageWidth: image.width, imageHeight: image.height },
-          })
-        } else if (noReference) {
-          // Drawn once staff upload a fitting reference photo (사진 그리기 / 레퍼런스로 재제작).
-          await prisma.operatorPostReserve.updateMany({ where: { id: row.id, state: 'review', imageObjectKey: null }, data: { error: PHOTO_NO_REFERENCE } })
+      result.failed += Math.max(0, count - posts.length)
+      for (const post of posts.slice(0, count)) {
+        const row = await prisma.operatorPostReserve.create({
+          data: {
+            operatorUserId: id,
+            text: post.text,
+            topic: post.topic,
+            language: post.language === persona.language ? null : post.language,
+            imagePrompt: post.imagePrompt,
+            state: 'review',
+            // Photo posts go to the front; a text-only one waits in the default order, behind the photo posts.
+            reviewRank: post.imagePrompt ? await frontOfReviewRank() : null,
+          },
+          select: { id: true },
+        })
+        result.written += 1
+        if (post.imagePrompt && canDrawImagesHere()) {
+          let noReference = false
+          const image = await drawReservePostImage(id, post.imagePrompt, undefined, undefined, { onNoReference: () => { noReference = true } })
+          if (image) {
+            await prisma.operatorPostReserve.updateMany({
+              where: { id: row.id, state: 'review', imageObjectKey: null },
+              data: { imageObjectKey: image.objectKey, imageWidth: image.width, imageHeight: image.height },
+            })
+          } else if (noReference) {
+            // Drawn once staff upload a fitting reference photo (사진 그리기 / 레퍼런스로 재제작).
+            await prisma.operatorPostReserve.updateMany({ where: { id: row.id, state: 'review', imageObjectKey: null }, data: { error: PHOTO_NO_REFERENCE } })
+          }
         }
       }
     } catch (error) {
@@ -277,8 +286,8 @@ export async function runOperatorAutomation(options: { now?: () => Date } = {}):
     else {
       // Marked first: a restart mid-run must not write a second batch the same day.
       await saveAutomationState({ lastPostsDay: today })
-      console.info('[operator-automation] posts_step_start', { day: today, chancePercent: settings.posts.chancePercent })
-      summary.posts = await writeDailyOperatorPosts(settings.posts.chancePercent, now())
+      console.info('[operator-automation] posts_step_start', { day: today, chancePercent: settings.posts.chancePercent, secondChancePercent: settings.posts.secondChancePercent })
+      summary.posts = await writeDailyOperatorPosts(settings.posts.chancePercent, now(), Math.random, settings.posts.secondChancePercent)
     }
   }
 

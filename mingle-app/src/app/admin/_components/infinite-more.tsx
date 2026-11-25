@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Loader2 } from 'lucide-react'
+import { holdScrollPlace } from './refresh-in-place'
 
 /**
  * Appends the next page below the list instead of opening a new page: when
@@ -29,6 +30,8 @@ export function InfiniteMore<T>({ initialCursor, load, render, label = '다음 �
     setLoading(true)
     setError(false)
     try {
+      // The load is a server action; one Next counts as revalidating scrolls the page to its top.
+      holdScrollPlace()
       const result = await loadRef.current(next)
       setPages((current) => [...current, result.value])
       setCursor(result.nextCursor)

@@ -219,6 +219,7 @@ export function AutomationForm({ initial, imageModel }: { initial: Payload; imag
   const [totalTarget, setTotalTarget] = useState(String(initial.settings.accounts.totalTarget))
   const [postsEnabled, setPostsEnabled] = useState(initial.settings.posts.enabled)
   const [chance, setChance] = useState(String(initial.settings.posts.chancePercent))
+  const [secondChance, setSecondChance] = useState(String(initial.settings.posts.secondChancePercent))
   const [engagementEnabled, setEngagementEnabled] = useState(initial.settings.engagement.enabled)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -232,9 +233,11 @@ export function AutomationForm({ initial, imageModel }: { initial: Payload; imag
   const totalValid = within(totalValue, 1, 2000)
   const chanceValue = toInt(chance)
   const chanceValid = within(chanceValue, 1, 100)
-  const valid = intervalValid && perDayValid && totalValid && chanceValid
+  const secondChanceValue = toInt(secondChance)
+  const secondChanceValid = within(secondChanceValue, 0, 100)
+  const valid = intervalValid && perDayValid && totalValid && chanceValid && secondChanceValid
   const dirty = avatarsEnabled !== saved.avatars.enabled || accountsEnabled !== saved.accounts.enabled || postsEnabled !== saved.posts.enabled || engagementEnabled !== saved.engagement.enabled
-    || (valid && (intervalValue !== saved.avatars.intervalMinutes || perDayValue !== saved.accounts.perDay || totalValue !== saved.accounts.totalTarget || chanceValue !== saved.posts.chancePercent))
+    || (valid && (intervalValue !== saved.avatars.intervalMinutes || perDayValue !== saved.accounts.perDay || totalValue !== saved.accounts.totalTarget || chanceValue !== saved.posts.chancePercent || secondChanceValue !== saved.posts.secondChancePercent))
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
@@ -250,7 +253,7 @@ export function AutomationForm({ initial, imageModel }: { initial: Payload; imag
         body: JSON.stringify({
           avatars: { enabled: avatarsEnabled, intervalMinutes: intervalValue },
           accounts: { enabled: accountsEnabled, perDay: perDayValue, totalTarget: totalValue },
-          posts: { enabled: postsEnabled, chancePercent: chanceValue },
+          posts: { enabled: postsEnabled, chancePercent: chanceValue, secondChancePercent: secondChanceValue },
           engagement: { enabled: engagementEnabled },
         }),
       })
@@ -327,6 +330,7 @@ export function AutomationForm({ initial, imageModel }: { initial: Payload; imag
           off="꺼짐: 매일 새 글을 쓰지 않습니다."
         />
         <NumberField id="auto-post-chance" label="계정별 확률" hint="계정마다 하루에 글을 쓸 확률. 1~100%." value={chance} onChange={setChance} unit="% / 일" invalid={!chanceValid} />
+        <NumberField id="auto-post-second-chance" label="한 개 더 쓸 확률" hint="위와 따로 굴려서, 이 확률로 그날 글을 하나 더 씁니다. 0이면 안 씀." value={secondChance} onChange={setSecondChance} unit="% / 일" invalid={!secondChanceValid} />
       </Card>
 
       <Card title="좋아요 · 댓글">
