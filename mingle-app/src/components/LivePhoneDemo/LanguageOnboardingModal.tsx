@@ -696,21 +696,12 @@ export default function LanguageOnboardingModal({
     setStep(next);
   };
 
-  // One tap picks the gender and moves on; the footer button stays for
-  // someone who came back to this screen and keeps the same answer.
+  // A tap picks the gender and stays: the footer button moves on (owner,
+  // 2026-11-25: jumping to the height screen before Continue felt abrupt).
   const handleGenderSelect = (nextGender: ProfileGender) => {
     if (isConfirming) return;
     setGender(nextGender);
     clearGenderAdvance();
-    // The last screen waits for the footer button instead of finishing on a tap.
-    if (isLastStep) return;
-    const nextSteps = stepsFor(nextGender, tripPlan);
-    const next = nextSteps[nextSteps.indexOf("gender") + 1];
-    if (!next) return;
-    genderAdvanceTimerRef.current = window.setTimeout(() => {
-      genderAdvanceTimerRef.current = null;
-      goToStep(next);
-    }, GENDER_AUTO_ADVANCE_MS);
   };
 
   // Row layout matches LanguageSelector.tsx (the in-room language picker) so the
