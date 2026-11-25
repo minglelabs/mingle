@@ -28,3 +28,12 @@ describe('mirror selfies', () => {
     expect(mirrors).toBeGreaterThan(0)
   })
 })
+
+describe('photos of the poster from behind', () => {
+  it('never look into a shop window', () => {
+    for (let index = 0; index < 3000; index += 1) {
+      const plan = pickPostPhoto(Math.random)
+      if (plan.kind === 'self_back') expect(plan.setup ?? '').not.toMatch(/shop window/)
+    }
+  })
+})
