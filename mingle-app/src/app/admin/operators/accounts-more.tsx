@@ -15,7 +15,7 @@ export function AccountsMore({ query, scope, initialCursor }: { query: string; s
       initialCursor={initialCursor}
       load={load}
       label="계정 더 보기"
-      render={(node, index) => <ul key={index} className="mt-2 grid gap-2 sm:grid-cols-2">{node}</ul>}
+      render={(node, index) => <ul key={index} className="mt-3 space-y-3">{node}</ul>}
     />
   )
 }

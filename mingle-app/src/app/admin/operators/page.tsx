@@ -106,7 +106,7 @@ export default async function OperatorsPage({ searchParams }: OperatorsPageProps
         </section>
       ) : (
         <>
-          <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+          <ul className="mt-4 space-y-3">
             <AccountItems items={list.items} back={listHref(list.query, list.page, scope)} />
           </ul>
           <AccountsMore query={list.query} scope={scope} initialCursor={list.page < list.pageCount ? String(list.page + 1) : null} />
