@@ -11,6 +11,7 @@ import type { AppDictionary, AppLocale } from "@/i18n";
 import { fillVoiceRoomsCount, voiceRoomsCopy } from "@/i18n/voice-rooms-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";
+import { markVoiceRoomEntry } from "@/lib/voice-room-entry";
 import { parseOpenRooms, type OpenRoomCard } from "@/lib/open-room";
 import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
 
@@ -78,6 +79,8 @@ export default function VoiceRoomsPage({ dictionary, locale }: VoiceRoomsPagePro
   }, [joinError]);
 
   const openRoom = useCallback((conversationId: string) => {
+    // A voice room is always in a voice talk: the room joins its call as it opens.
+    markVoiceRoomEntry(conversationId);
     const listHref = buildNativeAwareTabPath(`/${locale}/conversations`, searchParams, { skipConversationRestore: true, tabRoot: true });
     void replaceWithConversationListThenPush(router, listHref, conversationId);
   }, [locale, router, searchParams]);

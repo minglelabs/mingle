@@ -735,7 +735,8 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     {leaveDialog}
     {startDialog}
     {incomingCard}
-    <div className="pointer-events-none absolute inset-x-0 z-30 px-2" style={{ top: props.topOffset }}>
+    {/* Flat across the top (owner, 2026-11-25): a strip flush under the top bar, edge to edge, not a floating card. */}
+    <div className="pointer-events-none absolute inset-x-0 z-30" style={{ top: props.topOffset }}>
       <motion.div
         layout
         drag="y"
@@ -743,7 +744,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
         dragElastic={0.18}
         onDragEnd={onDragEnd}
         transition={{ type: 'spring', stiffness: 420, damping: 36 }}
-        className="pointer-events-auto mt-1 overflow-hidden rounded-2xl border border-gray-100 bg-white/95 shadow-[0_10px_28px_rgba(15,23,42,0.12)] backdrop-blur-sm"
+        className="pointer-events-auto overflow-hidden border-b border-gray-100 bg-white"
         data-qa="voice-talk-panel"
       >
         {/* Top row: always visible; the folded state is only this row, and a

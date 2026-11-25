@@ -341,6 +341,7 @@ import VoiceTalkPanel, {
 } from './VoiceTalkPanel'
 import HashRushRoomLayer from '@/features/hash-rush/HashRushRoomLayer'
 import { VoiceTalkRoomContext, type VoiceTalkRoomState } from './voice-talk-room-context'
+import { takeVoiceRoomEntry } from '@/lib/voice-room-entry'
 import type { VoiceTalkParticipantChip } from './VoiceTalkParticipantStrip'
 import { HashRushRoomContext, type HashRushRoomState } from './hash-rush-room-context'
 import { HashRushRoomPrompts, useHashRushRoomGame } from './HashRushRoomPrompts'
@@ -6871,6 +6872,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // The language this viewer speaks in a call, and the call as a message
   // bubble needs it (the "started a voice talk" message's Join button).
   const voiceTalkLang = ((speechLanguages[0] || ownSelectedLanguages[0] || uiLocale || 'en').split('-')[0] || 'en').toLowerCase()
+  // A voice room is always in a voice talk (owner, 2026-11-25): a room opened
+  // from the voice-room tab joins its call at once, starting it when nobody is
+  // in it, without the "start a voice talk?" question (@/lib/voice-room-entry).
+  const voiceRoomEntryJoinedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (headerMode !== 'conversation' || !conversationId || !voiceTalkAvailable) return
+    if (voiceRoomEntryJoinedRef.current === conversationId) return
+    if (!takeVoiceRoomEntry(conversationId)) return
+    voiceRoomEntryJoinedRef.current = conversationId
+    if (voiceTalkState.joined) return
+    joinVoiceTalk({ conversationId, title: displayConversationTitle || undefined, lang: voiceTalkLang })
+  }, [conversationId, displayConversationTitle, headerMode, voiceTalkAvailable, voiceTalkLang, voiceTalkState.joined])
   const voiceTalkRoom = useMemo<VoiceTalkRoomState | null>(() => (
     headerMode === 'conversation' && conversationId && voiceTalkAvailable
       ? {
