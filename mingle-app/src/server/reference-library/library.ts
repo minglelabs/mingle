@@ -255,7 +255,7 @@ export async function releaseAbandonedReferences(now: Date = new Date()): Promis
         ? prisma.operatorPostReserve.findMany({ where: { imageObjectKey: { in: postUses.map((item) => item.usedBy!.imageKey!) } }, select: { imageObjectKey: true, state: true } })
         : [],
       avatarUses.length
-        ? prisma.user.findMany({ where: { id: { in: avatarUses.map((item) => item.usedBy!.userId) }, isDeleted: false }, select: { id: true, operatorAccount: { select: { avatarSpec: true } } } })
+        ? prisma.user.findMany({ where: { id: { in: avatarUses.map((item) => item.usedBy!.userId) }, isDeleted: false }, select: { id: true, operatorAccount: { select: { avatarSpec: true, pendingAvatarSpec: true } } } })
         : [],
     ])
     const liveKeys = new Set(rows.filter((row) => row.state !== 'cancelled').map((row) => row.imageObjectKey))
@@ -263,7 +263,8 @@ export async function releaseAbandonedReferences(now: Date = new Date()): Promis
       const attributes = spec && typeof spec === 'object' ? (spec as { attributes?: { source?: unknown } }).attributes : undefined
       return attributes?.source === 'reference_library'
     }
-    const liveUsers = new Set(users.filter((user) => fromLibrary(user.operatorAccount?.avatarSpec)).map((user) => user.id))
+    // A live account's new profile photo waiting for review counts too.
+    const liveUsers = new Set(users.filter((user) => fromLibrary(user.operatorAccount?.avatarSpec) || fromLibrary(user.operatorAccount?.pendingAvatarSpec)).map((user) => user.id))
     const abandoned = new Set([
       ...lostDrawings.map((item) => item.id),
       ...postUses.filter((item) => !liveKeys.has(item.usedBy!.imageKey!)).map((item) => item.id),

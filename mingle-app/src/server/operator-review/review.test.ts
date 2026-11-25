@@ -19,6 +19,9 @@ const mocks = vi.hoisted(() => ({
   publishNow: vi.fn(),
   canDraw: vi.fn(() => false),
   drawAvatar: vi.fn(),
+  claimAvatarRef: vi.fn(),
+  releaseOtherAvatarRefs: vi.fn(async () => {}),
+  releaseRef: vi.fn(async () => {}),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -29,6 +32,12 @@ vi.mock('@/lib/prisma', () => ({
     $transaction: mocks.transaction,
   },
 }))
+vi.mock('@/server/reference-library/avatar-reference', () => ({
+  claimAvatarReference: mocks.claimAvatarRef,
+  releaseOtherAvatarReferences: mocks.releaseOtherAvatarRefs,
+  avatarReferencesByUser: vi.fn(async () => new Map()),
+}))
+vi.mock('@/server/reference-library/library', () => ({ listReferencePhotos: vi.fn(async () => []), releaseReferencePhoto: mocks.releaseRef }))
 vi.mock('@/server/admin/audit', () => ({ writeAdminAudit: mocks.audit }))
 vi.mock('@/server/operator-avatars/generate', () => ({ planOperatorAvatar: mocks.generateAvatar, canDrawImagesHere: mocks.canDraw, generateOperatorAvatar: mocks.drawAvatar }))
 vi.mock('@/server/operator-post-reserve/post-image', () => ({ drawReservePostImage: mocks.drawImage, libraryPhotoForPost: vi.fn(async () => ({ available: true, need: '' })) }))
@@ -381,5 +390,25 @@ describe('예약 게시', () => {
     mocks.reserveUpdateMany.mockResolvedValue({ count: 1 })
     await unscheduleReviewPost(null, 'r1')
     expect(mocks.reserveUpdateMany.mock.calls.at(-1)![0]).toEqual({ where: { id: 'r1', state: 'scheduled' }, data: { state: 'review', releaseAt: null } })
+  })
+
+  it('redraws a profile photo from a fitting reference-library photo', async () => {
+    mocks.canDraw.mockReturnValue(true)
+    mocks.accountFindUnique.mockResolvedValue(PENDING_ACCOUNT)
+    const libraryReference = { reference: { bytes: Buffer.from('ref'), mimeType: 'image/jpeg' }, kind: 'face' }
+    mocks.claimAvatarRef.mockResolvedValue({ ok: true, id: 'ref1', libraryReference })
+    mocks.drawAvatar.mockResolvedValue({ ok: true, image: 'https://img.example/b.jpg', spec: {} })
+    await expect(reviewOperatorProfile(null, 'op1', 'redraw_reference', null)).resolves.toEqual({ ok: true, state: 'drawing' })
+    await vi.waitFor(() => expect(mocks.accountUpdateMany).toHaveBeenCalled())
+    expect(mocks.drawAvatar).toHaveBeenCalledWith(null, 'op1', expect.objectContaining({ libraryReference }))
+    expect(mocks.releaseOtherAvatarRefs).toHaveBeenCalledWith('op1', 'ref1')
+  })
+
+  it('says which reference photo a profile needs when none fits', async () => {
+    mocks.canDraw.mockReturnValue(true)
+    mocks.accountFindUnique.mockResolvedValue(PENDING_ACCOUNT)
+    mocks.claimAvatarRef.mockResolvedValue({ ok: false, need: '필요한 짤: 1명·얼굴 보임' })
+    await expect(reviewOperatorProfile(null, 'op1', 'redraw_reference', null)).resolves.toEqual({ ok: false, error: 'no_reference', detail: '필요한 짤: 1명·얼굴 보임' })
+    expect(mocks.drawAvatar).not.toHaveBeenCalled()
   })
 })

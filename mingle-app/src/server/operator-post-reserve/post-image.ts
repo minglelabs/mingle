@@ -11,7 +11,7 @@ import { pairImages, stripImages } from './pair-images'
 import { pickPersonVariety, pickPoseVariety } from './post-person-variety'
 import { faceStickerLine } from './face-stickers'
 import { contrastLines, describeReferenceForContrast } from './reference-contrast'
-import { ANCESTRY_COUNTRIES, referenceDirectionLines, referencePersonaFit, referencePersonaLine, referenceSeasonClashes, referenceSeasonsToAvoid } from '@/server/reference-library/direction'
+import { referenceDirectionLines, referenceNeedLabel, referencePersonaFit, referencePersonaLine, referenceSeasonClashes, referenceSeasonsToAvoid } from '@/server/reference-library/direction'
 import { markReferenceImage, claimReferencePhoto, listReferencePhotos, loadReferenceBytes, referenceKindOf, referenceRecreateLines, releaseReferencePhoto, type ReferenceGender, type ReferenceKind, type ReferencePhoto } from '@/server/reference-library/library'
 
 /** Most group photos hide the friends' faces under stickers; some friends are fine being seen. */
@@ -414,12 +414,6 @@ async function libraryPostFilter(operatorUserId: string, description: string, op
   }
 }
 
-const KIND_KO: Record<ReferenceKind, string> = { face: '1명·얼굴 보임', person: '1명·얼굴 안 보임', group: '2명 이상', thing: '사람 없음' }
-const ANCESTRY_KO: Record<string, string> = {
-  east_asian: '동아시아', southeast_asian: '동남아', south_asian: '남아시아', white: '백인', black: '흑인', latino: '라틴', middle_eastern: '중동', mixed: '혼혈',
-}
-const SEASON_KO: Record<string, string> = { spring: '봄', summer: '여름', autumn: '가을', winter: '겨울' }
-
 /**
  * Whether a 레퍼런스로 재제작 of this post would find a library photo (checked
  * before the drawing starts), and in Korean what kind of photo it needs, so
@@ -435,20 +429,7 @@ export async function libraryPhotoForPost(operatorUserId: string, description: s
     && kinds.includes(referenceKindOf(item))
     && (!gender || !item.gender || item.gender === gender)
     && !skip(item))
-  const persona = filter.persona
-  const looks = persona.country
-    ? Object.entries(ANCESTRY_COUNTRIES).filter(([, countries]) => countries.includes(persona.country!.toUpperCase())).map(([ancestry]) => ANCESTRY_KO[ancestry] ?? ancestry)
-    : []
-  const avoid = referenceSeasonsToAvoid(persona.country)
-  const person = !kinds.includes('thing')
-  const need = [
-    kinds.map((kind) => KIND_KO[kind]).join(' 또는 '),
-    person && gender && !kinds.includes('group') ? (gender === 'female' ? '여' : '남') : null,
-    person && persona.age ? `${persona.age}살 전후(±3)` : null,
-    person && looks.length ? `${looks.join('·')} 외모` : null,
-    avoid.length ? `${avoid.map((season) => SEASON_KO[season] ?? season).join('·')} 사진 말고` : null,
-  ].filter(Boolean).join(' · ')
-  return { available, need: `필요한 짤: ${need}` }
+  return { available, need: referenceNeedLabel(kinds, gender, filter.persona) }
 }
 
 async function libraryPostRequest(
