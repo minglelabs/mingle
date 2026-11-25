@@ -84,7 +84,7 @@ export async function generateNextMissingAvatar(ctx: AdminContext | null = null,
 }
 
 /** A rank ahead of everything now in the review queue (lower goes first). */
-async function frontOfReviewRank(): Promise<number> {
+export async function frontOfReviewRank(): Promise<number> {
   const [row] = await prisma.$queryRaw<Array<{ low: number | null }>>`
     SELECT LEAST(
       (SELECT MIN(review_rank) FROM app.app_operator_accounts),
