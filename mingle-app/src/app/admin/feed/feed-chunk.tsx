@@ -12,6 +12,7 @@ import { OperatorAvatar } from '../operators/_components/operator-ui'
 import { OperatorPostEditor } from './_components/operator-post-editor'
 import { PostBody } from './_components/post-body'
 import { ZoomableImage } from './_components/zoomable-image'
+import { seedreamImageIds } from '@/server/seedream/drawn-images'
 
 /**
  * One page of the admin feed preview: the posts as cards plus the cursor of
@@ -102,6 +103,8 @@ export async function loadFeedChunk(view: FeedView, cursor: string | null, here:
     post.translations.filter((translation) => translation.bodyVersion === post.bodyVersion).map((translation) => ({ language: translation.language, text: translation.text! })),
   ]))
   const statsByPost = await loadOperatorPostStats({ postIds: feed.posts.map((post) => post.id), anyAuthor: true })
+  // Which engine drew an operator's photo (ChatGPT pool unless listed as Seedream's).
+  const seedream = await seedreamImageIds().catch(() => new Set<string>())
 
   const now = new Date()
   const node = (
@@ -139,10 +142,15 @@ export async function loadFeedChunk(view: FeedView, cursor: string | null, here:
                 {post.imageObjectKey ? (
                   <div className={`mt-3 flex gap-2 ${post.extraImages.length ? 'no-scrollbar snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain' : ''}`}>
                     {[
-                      { src: `/api/posts/${post.id}/image/hashchat-${post.id.slice(-8)}.jpg?k=${encodeURIComponent(post.imageObjectKey.slice(-16))}`, width: post.imageWidth, height: post.imageHeight },
-                      ...post.extraImages.map((image) => ({ src: `/api/posts/${post.id}/image/hashchat-${post.id.slice(-8)}-${image.position}.jpg?index=${image.position}`, width: image.imageWidth, height: image.imageHeight })),
+                      { src: `/api/posts/${post.id}/image/hashchat-${post.id.slice(-8)}.jpg?k=${encodeURIComponent(post.imageObjectKey.slice(-16))}`, width: post.imageWidth, height: post.imageHeight, key: post.imageObjectKey as string | null },
+                      ...post.extraImages.map((image) => ({ src: `/api/posts/${post.id}/image/hashchat-${post.id.slice(-8)}-${image.position}.jpg?index=${image.position}`, width: image.imageWidth, height: image.imageHeight, key: (image as { imageObjectKey?: string | null }).imageObjectKey ?? null })),
                     ].map((photo, index, all) => (
-                      <div key={photo.src} className={all.length > 1 ? 'w-[85%] shrink-0 snap-center' : 'w-full'}>
+                      <div key={photo.src} className={`relative ${all.length > 1 ? 'w-[85%] shrink-0 snap-center' : 'w-full'}`}>
+                        {post.author.isOperator && photo.key ? (
+                          <span className={`pointer-events-none absolute left-2 top-2 z-[1] rounded-full px-2 py-0.5 text-[11px] font-semibold text-white ${seedream.has(photo.key) ? 'bg-violet-600/85' : 'bg-black/55'}`}>
+                            {seedream.has(photo.key) ? 'Seedream' : 'ChatGPT'}
+                          </span>
+                        ) : null}
                         <ZoomableImage
                           src={photo.src}
                           alt={`글 사진 ${index + 1}`}

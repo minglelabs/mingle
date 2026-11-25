@@ -35,6 +35,14 @@ export default function OperatorPostStatsRow({ stats, locale }: { stats: Operato
           </dd>
         </div>
       ))}
+      {stats.photoEngine ? (
+        <div className="col-span-3 min-w-0">
+          <dt className="sr-only">Photo</dt>
+          <dd className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${stats.photoEngine === "seedream" ? "bg-violet-500/80" : "bg-white/15"}`}>
+            📷 {stats.photoEngine === "seedream" ? "Seedream" : "ChatGPT"}
+          </dd>
+        </div>
+      ) : null}
     </dl>
   );
 }

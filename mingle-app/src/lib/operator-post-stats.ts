@@ -21,6 +21,8 @@ export type OperatorPostStats = {
   profileVisits: number
   /** People whose first message to the author is credited to this post. */
   messages: number
+  /** Which engine drew the operator post's photo (staff only; absent without a drawn photo). */
+  photoEngine?: 'chatgpt' | 'seedream'
 }
 
 /** The counts shown as a share of the views, in display order. */

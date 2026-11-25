@@ -21,6 +21,7 @@ import { adminProfileHref } from '../../_lib/profile-href'
 import { OperatorAvatar } from '../_components/operator-ui'
 import { PhotoRedrawPanel } from '../../feed/_components/photo-redraw-panel'
 import { ImageEngineToggle, readImageEngine } from '../image-engine'
+import { PhotoEngineBadge } from '../../_components/photo-engine-badge'
 import { buildLanguageOptions, koreanLanguageName } from '../_lib/options'
 import { reviewImageUrl } from './review-image-url'
 import { pastedImage } from '../_lib/pasted-image'
@@ -886,6 +887,7 @@ export function ReviewPhotos({ photos, onEdited }: {
           />
         ))}
       </div>
+      <PhotoEngineBadge id={photos[Math.min(index, photos.length - 1)]?.objectKey} className="absolute left-2 top-12 z-[1]" />
       <ImageZoomOverlay open={zoomed !== null} src={zoomed ?? ''} alt="" closeLabel="닫기" reducedMotion={false} onClose={() => setZoomed(null)} />
       {onEdited && zoomed && zoomedIndex >= 0 && typeof document !== 'undefined' ? createPortal(
         <button
@@ -1343,6 +1345,7 @@ function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDelete
       {shownImage ? (
         <div className="relative">
           <ZoomableImage src={shownImage} alt="프사" className="aspect-square max-h-[75svh] w-full rounded-xl bg-slate-100 object-cover" />
+          <PhotoEngineBadge id={shownImage} className="absolute left-2 top-12 z-[1]" />
           {profile.primaryLanguages.length ? (
             <div className="absolute bottom-2 left-2 flex gap-1 rounded-full bg-white/90 px-2 py-1 text-2xl leading-none shadow-sm">
               {profile.primaryLanguages.map((code) => <LanguageFlag key={code} language={code} />)}
