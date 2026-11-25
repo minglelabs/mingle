@@ -23,6 +23,7 @@ describe('visiblePostWhere', () => {
     const where = visiblePostWhere(viewerId)
     expect(where.author).toEqual({
       moderationHiddenAt: null,
+      dormantAt: null,
       AND: [
         { blockedByRelations: { none: { blockerId: viewerId } } },
         { blockingRelations: { none: { blockedId: viewerId } } },
@@ -39,7 +40,7 @@ describe('visiblePostWhere', () => {
     const where = visiblePostWhere(null)
     expect(where.visibility).toBe('public')
     expect(where.moderationHiddenAt).toBeNull()
-    expect(where.author).toEqual({ moderationHiddenAt: null })
+    expect(where.author).toEqual({ moderationHiddenAt: null, dormantAt: null })
     expect(where).not.toHaveProperty('hides')
   })
 })

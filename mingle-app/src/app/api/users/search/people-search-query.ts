@@ -132,6 +132,8 @@ export function buildPeopleSearchSql({
         LEAST(${fieldTier(nameField)}, ${fieldTier(handleField)})::int AS tier
       FROM app.app_users u
       WHERE u.is_active = true
+        AND u.moderation_hidden_at IS NULL
+        AND u.dormant_at IS NULL
         AND u.id <> ${viewerId}
         AND left(lower(u.handle), ${anonPrefix.length}::int) <> ${anonPrefix}
         AND lower(u.handle) <> ${reserved}

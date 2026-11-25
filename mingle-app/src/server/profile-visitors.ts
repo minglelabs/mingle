@@ -1,6 +1,7 @@
 import { MICRO_PER_COIN } from "@/lib/coin-units";
 import { calculateProfileAge } from "@/server/user-profile";
 import { prisma } from "@/lib/prisma";
+import { accountShownInAppWhere } from "@/server/posts/block-visibility";
 import { resolveUserCoinBillingMode } from "@/server/coins/config";
 import { hasLedgerEntry, takeFromLots, withLockedWallet } from "@/server/coins/ledger";
 
@@ -60,7 +61,7 @@ export async function listProfileVisitors(userId: string, now: Date = new Date()
   const viewerIds = latest.map((row) => row.viewerId);
   const [viewers, blocks, unlocks] = await Promise.all([
     prisma.user.findMany({
-      where: { id: { in: viewerIds }, isActive: true, isDeleted: false, isOfficial: false, moderationHiddenAt: null },
+      where: { id: { in: viewerIds }, isActive: true, isDeleted: false, isOfficial: false, ...accountShownInAppWhere() },
       select: {
         id: true, name: true, handle: true, image: true, imageCropScale: true, imageCropX: true, imageCropY: true,
         birthDate: true, nationalityCountry: true, primaryLanguages: true, interestLanguages: true,

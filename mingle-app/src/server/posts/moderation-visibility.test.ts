@@ -29,7 +29,7 @@ describe('operator hidden is fixed across every post surface', () => {
   it('a signed-out direct-link viewer still cannot see operator-hidden content', () => {
     const where = visibleSinglePostWhere('p1', null)
     expect(where.moderationHiddenAt).toBeNull()
-    expect(where.author).toEqual({ moderationHiddenAt: null })
+    expect(where.author).toEqual({ moderationHiddenAt: null, dormantAt: null })
   })
 })
 
@@ -51,6 +51,6 @@ describe('operator hidden is fixed across every comment surface', () => {
 describe('visibleAuthorWhere is the single source of the operator-hidden author rule', () => {
   it('always excludes an operator-hidden author, signed in or out', () => {
     expect(visibleAuthorWhere(VIEWER).moderationHiddenAt).toBeNull()
-    expect(visibleAuthorWhere(null)).toEqual({ moderationHiddenAt: null })
+    expect(visibleAuthorWhere(null)).toEqual({ moderationHiddenAt: null, dormantAt: null })
   })
 })
