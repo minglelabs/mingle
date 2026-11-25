@@ -14,6 +14,9 @@ const MODEL_PATH = "/models/human/";
 let humanPromise: Promise<HumanInstance> | null = null;
 
 export function loadHuman(): Promise<HumanInstance> {
+  // Only ever reached through next/dynamic with ssr: false (selfie screen,
+  // SelfiePreloader): for a server the package resolves to its Node build,
+  // which needs @tensorflow/tfjs-node.
   humanPromise ??= import("@vladmandic/human").then(async ({ Human }) => {
     const human = new Human({
       modelBasePath: `${window.location.origin}${MODEL_PATH}`,

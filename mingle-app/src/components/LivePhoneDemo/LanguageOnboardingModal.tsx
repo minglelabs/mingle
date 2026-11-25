@@ -39,6 +39,7 @@ import {
 // The camera and face models load only when the check opens.
 // Client only (like My page): the face library has a Node build that must not reach the server.
 const SelfieVerifyScreen = dynamic(() => import("@/components/selfie-verify-screen"), { ssr: false });
+const SelfiePreloader = dynamic(() => import("@/components/selfie-preloader"), { ssr: false });
 import { Camera, Check, ChevronLeft, Loader2, Mic, Search, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
@@ -220,11 +221,9 @@ export default function LanguageOnboardingModal({
   // The selfie check is for men only (owner, 2026-11-25): women add a photo and go on.
   const selfieAsked = gender !== "female";
   // The face models take 10 s or more to get ready the first time: start as
-  // soon as the selfie check is known to come (a man), not when it opens.
-  useEffect(() => {
-    if (gender !== "male" || faceVerified) return;
-    void import("@/lib/selfie-human").then((module) => module.preloadSelfieModels()).catch(() => undefined);
-  }, [faceVerified, gender]);
+  // soon as the selfie check is known to come (a man), not when it opens
+  // (<SelfiePreloader /> below, browser only).
+  const preloadSelfie = gender === "male" && !faceVerified;
   const [micResult, setMicResult] = useState<MicPermissionResult | null>(null);
   const [micAsking, setMicAsking] = useState(false);
   // A wheel like the birth date, starting at a typical height (no keyboard).
@@ -1548,6 +1547,7 @@ export default function LanguageOnboardingModal({
           </div>
         )}
 
+        {preloadSelfie ? <SelfiePreloader /> : null}
         <footer
           className="shrink-0 border-t border-gray-100 bg-[#fcfbf8] px-4 pt-3"
           style={{ paddingBottom: "max(16px, env(safe-area-inset-bottom, 0px))" }}

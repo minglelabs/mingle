@@ -111,7 +111,10 @@ describe('selfie check steps', () => {
     expect(screen).toContain('<TurnArrows step={step} />')
     // The models moved to @/lib/selfie-human, so the onboarding can start them early.
     expect(read('./selfie-human.ts')).toContain('const MODEL_PATH = "/models/human/"')
-    expect(read('../components/LivePhoneDemo/LanguageOnboardingModal.tsx')).toContain('module.preloadSelfieModels()')
+    // Started early, browser only: never bundled for the server (its Node build needs tfjs-node).
+    const modal = read('../components/LivePhoneDemo/LanguageOnboardingModal.tsx')
+    expect(modal).toContain('dynamic(() => import("@/components/selfie-preloader"), { ssr: false })')
+    expect(modal).not.toContain('import("@/lib/selfie-human")')
     // Only the similarity goes to the server, never a frame or a face description.
     expect(screen).toContain('JSON.stringify({ similarity })')
     for (const model of ['blazeface', 'facemesh', 'faceres']) {
