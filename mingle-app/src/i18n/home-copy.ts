@@ -42,7 +42,7 @@ const COPY: Record<PrimaryUiLocale, HomeCopy> = {
     banStrip: "이번 주 영구 퇴출 {count}명", noticesTitle: "공지", noticesEmpty: "아직 공지가 없어요.", banLabel: "영구 퇴출",
     banCategory: { harassment: "성희롱·괴롭힘", spam: "스팸·도배", scam: "사기", inappropriate: "부적절한 콘텐츠", impersonation: "사칭", other: "규칙 위반" },
     dailyLimit: "오늘은 새로운 사람 {count}명에게만 먼저 말을 걸 수 있어요. 내일 다시 시도해 주세요.",
-    more: "더 보기", postsHeading: "포스팅", back: "뒤로",
+    more: "더 보기", postsHeading: "게시물", back: "뒤로",
   },
   en: {
     tabLabel: "Home", badgeOnline: "Online", empty: "No one to show yet.", loadError: "Couldn't load.", retry: "Try again",

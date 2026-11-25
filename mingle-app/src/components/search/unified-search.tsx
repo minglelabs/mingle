@@ -102,7 +102,8 @@ export default function UnifiedSearch({
   const postingFeedEnabled = clientSupportsPostingFeed;
   const canBrowsePosts = postingFeedEnabled && Boolean(onOpenBrowsePost);
   const canBrowseRooms = Boolean(onOpenLiveRoom);
-  const [exploreTab, setExploreTab] = useState<ExploreTab>("rooms");
+  // Posts first (owner, 2026-11-25): what opens when the search field is tapped.
+  const [exploreTab, setExploreTab] = useState<ExploreTab>("posts");
   useEffect(() => {
     const stored = readStoredExploreTab();
     if (!stored) return;
@@ -404,7 +405,7 @@ export default function UnifiedSearch({
         {/* Nothing typed: Explore is two tabs, open rooms (first) and the posts everyone sees. */}
         {!normalizedQuery && canBrowseRooms && canBrowsePosts ? (
           <div className="sticky top-0 z-10 flex border-b border-gray-100 bg-white px-4" role="tablist" data-qa="explore-tabs">
-            {(["rooms", "posts"] as const).map((tab) => (
+            {(["posts", "rooms"] as const).map((tab) => (
               <button
                 key={tab}
                 type="button"

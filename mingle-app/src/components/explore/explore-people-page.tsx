@@ -7,7 +7,6 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BottomTabBar from "@/components/bottom-tab-bar";
-import MingleWordmark from "@/components/mingle-wordmark";
 import FlagEmoji from "@/components/flag-emoji";
 import HomeNoticeStrip from "@/components/home/home-notices";
 import ProfileStartCard from "@/components/home/profile-start-card";
@@ -205,10 +204,11 @@ export default function ExplorePeoplePage({ dictionary, locale }: ExplorePeopleP
 
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white" data-qa="explore-tab">
-      {/* One row, exactly as tall as the app expects, so its ad banner sits right under it. */}
+      {/* One row (the search field and the filter button), exactly as tall as the app expects, so its ad banner sits right under it. */}
       <header className="relative z-10 shrink-0 bg-white shadow-[inset_0_-1px_0_#e5e7eb]" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
         <div className="flex items-center gap-2 px-4" style={{ height: TAB_BANNER_TOP_BAR_HEIGHT_PX }}>
-          <h1 className="flex shrink-0 items-center" aria-label="HashChat"><MingleWordmark /></h1>
+          {/* No wordmark here (owner, 2026-11-25): the search field takes the row. */}
+          <h1 className="sr-only">{dictionary.titles.connect}</h1>
           <button
             type="button"
             data-qa="explore-open-search"

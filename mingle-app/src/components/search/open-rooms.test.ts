@@ -122,8 +122,8 @@ describe('open rooms hold more people', () => {
 })
 
 describe('explore tabs and the chat list', () => {
-  it('shows Open rooms and Posts as two tabs when nothing is typed, rooms first', () => {
-    expect(searchSource).toContain('const [exploreTab, setExploreTab] = useState<ExploreTab>("rooms")')
+  it('shows Open rooms and Posts as two tabs when nothing is typed, posts first', () => {
+    expect(searchSource).toContain('const [exploreTab, setExploreTab] = useState<ExploreTab>("posts")')
     expect(searchSource).toContain('data-qa="explore-tabs"')
     expect(searchSource).toContain('{!normalizedQuery && onOpenLiveRoom && shownExploreTab === "rooms" ? (')
     expect(searchSource).toContain('shownExploreTab === "posts" ? (')
@@ -147,7 +147,7 @@ describe('explore tabs and the chat list', () => {
       }
     }
     expect(openRoomsCopy('ko').tabRooms).toBe('오픈방')
-    expect(openRoomsCopy('ko').tabPosts).toBe('포스팅')
+    expect(openRoomsCopy('ko').tabPosts).toBe('게시물')
   })
 })
 

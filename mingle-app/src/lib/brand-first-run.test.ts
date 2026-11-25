@@ -51,7 +51,8 @@ describe('first run speaks as the friends app', () => {
     expect(contactSync).not.toContain('blue-')
     expect(contactSync).toContain('bg-[#FBBC32]')
     expect(read('../components/mingle-home.tsx')).toContain('rounded-xl bg-[#FBBC32] px-3 text-[0.96rem] font-bold leading-none text-slate-950')
-    expect(read('../components/explore/explore-people-page.tsx')).toContain('<MingleWordmark />')
+    // The explore tab has no wordmark: its top row is the search field (owner, 2026-11-25).
+    expect(read('../components/explore/explore-people-page.tsx')).not.toContain('MingleWordmark')
     expect(read('../components/conversation-list.tsx')).toContain('useNativeBannerSuppression(showFirstSpeakCard);')
   })
 })
