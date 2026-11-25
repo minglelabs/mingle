@@ -10,6 +10,7 @@ import { generateReservePosts, isKoreaCountry, pickReserveTopics, reservePosterP
 import { drawReservePostImage, PHOTO_NO_REFERENCE } from '@/server/operator-post-reserve/post-image'
 import { loadExistingReserveTexts, loadReservePersona } from '@/server/operator-post-reserve/worker'
 import { canDrawImagesHere } from '@/server/operator-avatars/generate'
+import type { ImageEngine } from '@/server/seedream/client'
 import { runOperatorEngagement, type EngagementRunResult } from '@/server/operator-engagement/engagement'
 import { getAutomationSettings, getAutomationState, saveAutomationState } from './settings'
 
@@ -108,6 +109,8 @@ export async function createNextSeedAccount(
     totalTarget?: number | null; now?: Date; inReview?: boolean
     /** A photo from the reference library to draw the profile photo from (staff pick); else the oldest unused one, when any. */
     referenceId?: string | null
+    /** 'seedream': staff picked Seedream 5.5 for the profile photo (reference library's 계정 만들기 only). */
+    engine?: ImageEngine
   } = {},
 ): Promise<AccountStepResult> {
   const rows = await prisma.operatorAccount.groupBy({
@@ -121,7 +124,8 @@ export async function createNextSeedAccount(
   const byCountry = new Map(rows.flatMap((row) => (row.personaCountry ? [[row.personaCountry, row._count._all] as const] : [])))
 
   // 레퍼런스 짤 저장소: while unused photos are left, each new account's profile photo is drawn from one.
-  const drawsHere = options.inReview === true && canDrawImagesHere()
+  const canDraw = options.engine === 'seedream' || canDrawImagesHere()
+  const drawsHere = options.inReview === true && canDraw
   const reference = drawsHere || options.referenceId
     ? await claimReferencePhoto({ userId: 'pending', kind: 'avatar', id: options.referenceId ?? null }).catch(() => null)
     : null
@@ -148,10 +152,10 @@ export async function createNextSeedAccount(
     if (reference) await assignReferencePhoto(reference.id, account.userId).catch(() => {})
     let referenceUsed = false
     // A new account waiting for review gets its photo now, so staff judge both together.
-    if (options.inReview && canDrawImagesHere()) {
+    if (options.inReview && canDraw) {
       const bytes = reference ? await loadReferenceBytes(reference).catch(() => null) : null
       const libraryReference = reference && bytes ? { reference: bytes, kind: referenceKindOf(reference), note: reference.note, attributes: reference.attributes } : null
-      const drawn = await generateOperatorAvatar(ctx, account.userId, { now: options.now, ...(libraryReference ? { libraryReference } : {}) }).catch(() => null)
+      const drawn = await generateOperatorAvatar(ctx, account.userId, { now: options.now, engine: options.engine, ...(libraryReference ? { libraryReference } : {}) }).catch(() => null)
       // A photo that was not drawn from goes back to the library for the next account.
       referenceUsed = Boolean(reference && libraryReference && drawn?.ok)
       if (reference && !referenceUsed) await releaseReferencePhoto(reference.id).catch(() => {})

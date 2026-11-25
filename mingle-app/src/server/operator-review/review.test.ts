@@ -262,13 +262,19 @@ describe('where this server can draw (the ChatGPT pool)', () => {
     expect(mocks.reserveUpdateMany.mock.calls[1][0].data).toEqual({ state: 'review', error: 'photo_no_reference' })
   })
 
+  it('says the Seedream key is missing before a profile 재제작 with Seedream', async () => {
+    mocks.accountFindUnique.mockResolvedValue(PENDING_ACCOUNT)
+    await expect(reviewOperatorProfile(null, 'op1', 'regenerate', null, { engine: 'seedream' })).resolves.toEqual({ ok: false, error: 'seedream_unconfigured' })
+    expect(mocks.drawAvatar).not.toHaveBeenCalled()
+  })
+
   it('draws a new profile photo in the background on 재제작', async () => {
     mocks.accountFindUnique.mockResolvedValue(PENDING_ACCOUNT)
     mocks.drawAvatar.mockResolvedValue({ ok: true, image: 'https://img.example/b.jpg', spec: {} })
     await expect(reviewOperatorProfile(null, 'op1', 'regenerate', '안경 없이')).resolves.toEqual({ ok: true, state: 'drawing' })
     expect(mocks.accountUpdate.mock.calls[0][0].data).toMatchObject({ reviewState: 'drawing' })
     await vi.waitFor(() => expect(mocks.accountUpdateMany).toHaveBeenCalled())
-    expect(mocks.drawAvatar).toHaveBeenCalledWith(null, 'op1', { feedback: '안경 없이' })
+    expect(mocks.drawAvatar).toHaveBeenCalledWith(null, 'op1', { feedback: '안경 없이', engine: 'pool' })
     expect(mocks.accountUpdateMany.mock.calls[0][0]).toMatchObject({ where: { userId: 'op1', reviewState: 'drawing' }, data: { reviewState: 'pending' } })
     expect(mocks.generateAvatar).not.toHaveBeenCalled()
   })

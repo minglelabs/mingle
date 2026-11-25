@@ -13,6 +13,7 @@ import { filesFromDrop, takeDroppedEntries } from './dropped-files'
 const UPLOAD_CONCURRENCY = 3
 import { ReferenceAttributesView } from './reference-attributes'
 import { reviewImageUrl } from '../review/review-image-url'
+import { ImageEngineToggle, useImageEngine } from '../image-engine'
 
 /** How the page asks about a photo: how many people first, then (for one person) face and gender. */
 type People = 'none' | 'one' | 'many'
@@ -354,7 +355,7 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag, openPhotoId }
       </div>
 
       {!canDraw ? (
-        <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200">이 서버는 사진을 그릴 수 없어 계정 만들기를 쓸 수 없습니다.</p>
+        <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200">이 서버는 ChatGPT로 사진을 그릴 수 없어요. 계정 만들기는 Seedream으로만 됩니다.</p>
       ) : null}
 
       <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
@@ -545,6 +546,8 @@ function ReferenceEditor({ item, canDraw, autoTag, onSave, onRemove, onItems, on
     else setMessage('지우지 못했어요.')
   }
 
+  const [engine] = useImageEngine()
+
   async function createAccount() {
     if (!window.confirm('이 사진으로 새 운영 계정을 만들까요? 계정은 검토 탭에 들어가고, 프사를 그리는 데 몇 분 걸려요.')) return
     setBusy('create')
@@ -552,9 +555,15 @@ function ReferenceEditor({ item, canDraw, autoTag, onSave, onRemove, onItems, on
     try {
       // Tags first, so the account is made from what is on screen.
       await onSave(item.id, { kind: kindFrom(people, faceShown), gender: people === 'one' && gender !== 'unknown' ? gender : null, note: note.trim() || null })
-      const response = await fetch(`/admin/operators/api/references/${encodeURIComponent(item.id)}/create-account`, { method: 'POST' })
+      const response = await fetch(`/admin/operators/api/references/${encodeURIComponent(item.id)}/create-account`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ engine }),
+      })
       const body = await response.json().catch(() => ({})) as { error?: string; referenceUsed?: boolean }
-      if (!response.ok) throw new Error(body.error === 'reference_unavailable' ? '이미 쓴 사진이에요.' : '계정을 만들지 못했어요.')
+      if (!response.ok) {
+        throw new Error(body.error === 'reference_unavailable' ? '이미 쓴 사진이에요.'
+          : body.error === 'seedream_unconfigured' ? 'Seedream API 키가 아직 없어요(Railway SEEDREAM_API_KEY).'
+            : body.error === 'cannot_draw_here' ? '이 서버는 ChatGPT로 그릴 수 없어요. Seedream으로 바꿔 보세요.' : '계정을 만들지 못했어요.')
+      }
       setMessage(body.referenceUsed ? '계정을 만들었어요. 검토 탭에서 확인하세요.' : '계정은 만들었지만 프사를 그리지 못했어요. 사진은 그대로 남아 있어요.')
       const list = await fetch('/admin/operators/api/references', { cache: 'no-store' }).then((response) => response.json()).catch(() => null) as { items?: ReferencePhotoView[] } | null
       if (list?.items) onItems(list.items)
@@ -645,16 +654,21 @@ function ReferenceEditor({ item, canDraw, autoTag, onSave, onRemove, onItems, on
             {busy === 'save' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}저장
           </button>
         </div>
-        {!item.usedBy && canDraw ? (
-          <button
-            type="button"
-            onClick={() => void createAccount()}
-            disabled={busy !== null}
-            className="mt-2 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-sky-200 text-sm font-semibold text-sky-700 active:bg-sky-50 disabled:opacity-50"
-          >
-            {busy === 'create' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <UserPlus className="h-4 w-4" aria-hidden="true" />}
-            {busy === 'create' ? '계정 만드는 중…' : '이 사진으로 계정 만들기'}
-          </button>
+        {!item.usedBy && (canDraw || engine === 'seedream') ? (
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void createAccount()}
+              disabled={busy !== null}
+              className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border border-sky-200 text-sm font-semibold text-sky-700 active:bg-sky-50 disabled:opacity-50"
+            >
+              {busy === 'create' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <UserPlus className="h-4 w-4" aria-hidden="true" />}
+              {busy === 'create' ? '계정 만드는 중…' : '이 사진으로 계정 만들기'}
+            </button>
+            <ImageEngineToggle />
+          </div>
+        ) : !item.usedBy ? (
+          <div className="mt-2 flex items-center justify-end gap-2 text-xs text-slate-500">ChatGPT로는 여기서 못 그려요 <ImageEngineToggle /></div>
         ) : null}
       </section>
     </div>,
