@@ -97,6 +97,7 @@ export function buildPostImagePrompt(
       `It shows: ${description}`,
       ...placeLine,
       'It must look like a real, unedited snapshot from an ordinary person\'s phone gallery.',
+      NO_ADDED_PROPS,
       phonePhotoRealism(random, { people: false, lens: 'main', pickTime: true, scene: `${description} ${place ?? ''}` }),
       `No face and no recognizable person in the image; a hand or a person seen from far behind is fine. Not a photo of a phone, tablet or computer screen. ${frame}`,
     ].join('\n')
@@ -124,10 +125,14 @@ export function buildPostImagePrompt(
     ...(stickers ? [stickers] : []),
     ...placeLine,
     'It must look like a real, unedited snapshot, not a photoshoot: an ordinary moment, the outfit the person would really wear there.',
+    NO_ADDED_PROPS,
     realism,
     `Everyone in the image is an adult; no school uniforms. Not a photo of a phone, tablet or computer screen. ${frame}`,
   ].join('\n')
 }
+
+/** The model adds a coffee cup and a laptop to any table; staff saw far too many (2026-11-25). */
+const NO_ADDED_PROPS = 'Do not add a laptop, a coffee cup or a latte to the picture unless the description above names one.'
 
 export type PostImageStyle = 'photo' | 'anime'
 

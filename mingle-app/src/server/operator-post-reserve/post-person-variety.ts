@@ -179,7 +179,6 @@ export const FACE_POSES: ReadonlyArray<readonly [pose: string, posed: boolean, b
   ['trying on a ring, a hat or sunglasses in a shop, looking at it', false, true],
   ['petting a cat or a dog, eyes on the animal', false, true],
   ['tying a shoelace, bent down', false, true],
-  ['typing on a laptop, the screen turned away', false, true],
   ['looking through clothes on a rack', false, true],
   ['taking a photo of the food with their own phone', false, true],
   ['watching something off to one side, chin a little up', false, true],
