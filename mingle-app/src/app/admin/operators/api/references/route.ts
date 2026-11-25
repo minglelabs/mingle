@@ -2,12 +2,12 @@ import { NextResponse } from 'next/server'
 import { requireAdminApi } from '@/server/admin/guard'
 import { writeAdminAudit } from '@/server/admin/audit'
 import { classifyReferencePhoto, referenceAutoTagEnabled } from '@/server/reference-library/classify'
-import { addReferencePhoto, isReferenceKind, REFERENCE_MAX_BYTES, REFERENCE_TYPES, referenceKindHasGender, type ReferenceGender, type ReferenceKind } from '@/server/reference-library/library'
+import { addReferencePhoto, ensureReferenceFingerprints, findSameReference, isReferenceKind, listReferencePhotos, referencePhotoShape, REFERENCE_MAX_BYTES, REFERENCE_TYPES, referenceKindHasGender, type ReferenceGender, type ReferenceKind } from '@/server/reference-library/library'
 import { readableImageBytes } from '@/server/reference-library/decode'
 import { listReferencePhotoViews } from '@/server/reference-library/view'
 import sharp from 'sharp'
 
-type UploadFailure = 'unsupported_type' | 'too_large' | 'decode_failed' | 'store_failed'
+type UploadFailure = 'unsupported_type' | 'too_large' | 'decode_failed' | 'store_failed' | 'duplicate'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -47,6 +47,8 @@ export async function POST(request: Request) {
   if (files.length === 0) return json({ error: 'file_required' }, 400)
   let added = 0
   const failures: Array<{ name: string; reason: UploadFailure }> = []
+  // Older photos get their fingerprint first, so a photo already in the library is caught.
+  await ensureReferenceFingerprints()
   for (const file of files.slice(0, 50)) {
     const name = file.name || '사진'
     const typeOk = (REFERENCE_TYPES as readonly string[]).includes(file.type) || (!file.type && /\.(jpe?g|png|webp|heic|heif)$/i.test(name))
@@ -63,15 +65,20 @@ export async function POST(request: Request) {
       continue
     }
     try {
+      // A photo the library already has is skipped before the AI looks at it.
+      const shape = await referencePhotoShape(bytes).catch(() => null)
+      if (shape && findSameReference(await listReferencePhotos(), shape)) { failures.push({ name, reason: 'duplicate' }); continue }
       const look = autoTag && (fixedKind === undefined || fixedGender === undefined) ? await classifyReferencePhoto(bytes) : null
       const kind = fixedKind ?? look?.kind ?? null
-      await addReferencePhoto(bytes, {
+      const stored = await addReferencePhoto(bytes, {
         kind,
         gender: !referenceKindHasGender(kind) ? null : fixedGender !== undefined ? fixedGender : look?.gender ?? null,
         summary: look?.summary ?? null,
         attributes: look?.attributes ?? null,
         note,
+        fingerprint: shape?.fingerprint ?? null,
       })
+      if ('duplicateOf' in stored) { failures.push({ name, reason: 'duplicate' }); continue }
       added += 1
     } catch (error) {
       console.warn('[reference-library] add_failed', { type: file.type || 'none', size: file.size, error: error instanceof Error ? error.message.slice(0, 120) : 'unknown' })

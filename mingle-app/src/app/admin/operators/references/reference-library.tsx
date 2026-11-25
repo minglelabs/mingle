@@ -28,6 +28,7 @@ const FAILURE_LABEL: Record<string, string> = {
   too_large: '30MB 넘음',
   decode_failed: '읽을 수 없는 사진',
   store_failed: '저장 실패',
+  duplicate: '이미 있는 짤이라 건너뜀',
 }
 const KIND_ORDER: readonly ReferenceKind[] = ['thing', 'face', 'person', 'group']
 
@@ -131,6 +132,7 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag, openPhotoId }
           const current = id
           setQueue((list) => list.map((item) => (item.id === current ? { ...item, status: 'uploading' } : item)))
           let error: string | null = null
+          let skipped = false
           try {
             const form = new FormData()
             form.append('file', await shrinkForUpload(job.file))
@@ -138,14 +140,17 @@ export function ReferenceLibrary({ initialItems, canDraw, autoTag, openPhotoId }
             const response = await fetch('/admin/operators/api/references', { method: 'POST', body: form })
             const body = await response.json().catch(() => ({})) as { added?: number; failures?: Array<{ reason: string }>; error?: string; items?: ReferencePhotoView[] }
             if (body.items) setItems(body.items)
-            if (!response.ok || !body.added) {
+            if (!body.added && body.failures?.[0]?.reason === 'duplicate') {
+              skipped = true
+              error = FAILURE_LABEL.duplicate
+            } else if (!response.ok || !body.added) {
               error = FAILURE_LABEL[body.failures?.[0]?.reason ?? body.error ?? ''] ?? (response.status === 413 ? '파일이 너무 큼' : '올리지 못함')
             }
           } catch {
             error = '연결이 끊겼어요'
           }
-          if (!error) jobsRef.current.delete(current)
-          setQueue((list) => list.map((item) => (item.id === current ? { ...item, status: error ? 'failed' : 'done', error } : item)))
+          if (!error || skipped) jobsRef.current.delete(current)
+          setQueue((list) => list.map((item) => (item.id === current ? { ...item, status: skipped ? 'skipped' : error ? 'failed' : 'done', error } : item)))
         }
       } finally {
         workersRef.current -= 1
