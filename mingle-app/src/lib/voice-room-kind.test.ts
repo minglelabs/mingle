@@ -30,7 +30,11 @@ describe("voice rooms are a kind of their own", () => {
 
   it("shows voice rooms, and the button to make one, on the voice-room tab only", () => {
     const tab = read("src/components/voice-rooms/voice-rooms-page.tsx");
-    expect(tab).toContain("voiceRooms={{ create: copy.createRoom, createTitle: copy.createRoomTitle, heading: copy.roomsHeading }}");
+    expect(tab).toContain("voiceRooms={{ createTitle: copy.createRoomTitle, heading: copy.roomsHeading, createSignal }}");
+    // The button is an icon in the tab's top bar; the list draws none of its own.
+    expect(tab).toContain('data-qa="voice-room-create"');
+    expect(tab).toContain("aria-label={copy.createRoom}");
+    expect(read("src/components/search/open-rooms.tsx")).toContain("{voiceRooms ? null : (");
     const list = read("src/components/search/open-rooms.tsx");
     expect(list).toContain('if (isVoiceList) search.set("kind", "voice");');
     expect(list).toContain("...(voiceRoomTitle ? { voiceRoom: true } : {})");

@@ -1,7 +1,7 @@
 "use client";
 
 import { TAB_BANNER_TOP_BAR_HEIGHT_PX, useTabNativeBanner } from "@/lib/use-tab-native-banner";
-import { Gamepad2, Headphones, Loader2, Phone, UserRound } from "lucide-react";
+import { Gamepad2, Headphones, Loader2, Phone, Plus, UserRound } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -109,13 +109,27 @@ export default function VoiceRoomsPage({ dictionary, locale }: VoiceRoomsPagePro
 
   const excludeIds = useMemo(() => (lounge ? [lounge.id] : []), [lounge]);
   const bannerHeightPx = useTabNativeBanner(sessionStatus === "authenticated");
+  const [createSignal, setCreateSignal] = useState(0);
 
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white" data-qa="voice-tab">
       {/* The top bar is exactly as tall as the app expects, so its ad banner sits right under it. */}
       <header className="relative z-10 shrink-0 bg-white shadow-[inset_0_-1px_0_#e5e7eb]" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
         <div className="flex items-center px-4" style={{ height: TAB_BANNER_TOP_BAR_HEIGHT_PX }}>
-          <h1 className="text-[22px] font-extrabold tracking-[-0.02em] text-slate-950">{copy.title}</h1>
+          <h1 className="min-w-0 flex-1 truncate text-[22px] font-extrabold tracking-[-0.02em] text-slate-950">{copy.title}</h1>
+          {/* Make a voice room: an icon in the top bar, like the feed's write button (owner, 2026-11-25). */}
+          {sessionStatus === "authenticated" ? (
+            <button
+              type="button"
+              data-qa="voice-room-create"
+              onClick={() => setCreateSignal((value) => value + 1)}
+              aria-label={copy.createRoom}
+              title={copy.createRoom}
+              className="-mr-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-950 transition active:bg-black/5"
+            >
+              <Plus size={24} strokeWidth={2.2} aria-hidden="true" />
+            </button>
+          ) : null}
         </div>
       </header>
       {/* The ad banner (drawn by the app) is pinned here; the lounge card and the rooms scroll below it. */}
@@ -158,7 +172,7 @@ export default function VoiceRoomsPage({ dictionary, locale }: VoiceRoomsPagePro
               <OpenRooms
                 locale={locale}
                 excludeIds={excludeIds}
-                voiceRooms={{ create: copy.createRoom, createTitle: copy.createRoomTitle, heading: copy.roomsHeading }}
+                voiceRooms={{ createTitle: copy.createRoomTitle, heading: copy.roomsHeading, createSignal }}
                 onOpenRoom={openRoom}
               />
             ) : null}

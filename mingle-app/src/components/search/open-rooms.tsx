@@ -65,7 +65,12 @@ export default function OpenRooms({
    * open chat rooms, and its "make a room" button makes a voice room. With
    * the words to use for them.
    */
-  voiceRooms?: { create: string; createTitle: string; heading: string };
+  voiceRooms?: {
+    createTitle: string;
+    heading: string;
+    /** Bumped by the tab's own "make a voice room" button (in its top bar): opens the sheet. This list draws no button. */
+    createSignal: number;
+  };
   /** Narrow by title or topic (search results). Empty: the Explore list, with the "make a room" button. */
   query?: string;
   /** Open a room the viewer is (now) a member of. */
@@ -81,6 +86,13 @@ export default function OpenRooms({
   const [error, setError] = useState<string | null>(null);
   const [passwordRoom, setPasswordRoom] = useState<OpenRoomCard | null>(null);
   const [creating, setCreating] = useState(false);
+  // The voice-room tab's button lives in its top bar; a counter, so this runs once per press.
+  const createSignal = voiceRooms?.createSignal ?? 0;
+  const [seenCreateSignal, setSeenCreateSignal] = useState(createSignal);
+  if (createSignal !== seenCreateSignal) {
+    setSeenCreateSignal(createSignal);
+    if (createSignal > 0) setCreating(true);
+  }
   const aliveRef = useRef(true);
   const requestSeqRef = useRef(0);
 
@@ -213,17 +225,19 @@ export default function OpenRooms({
         </>
       ) : (
         <>
-          <div className="flex items-center justify-end px-4 pb-2">
-            <button
-              type="button"
-              data-qa="open-room-create"
-              onClick={() => setCreating(true)}
-              className="flex h-9 items-center gap-1 rounded-full bg-slate-950 px-3.5 text-[13px] font-semibold text-white transition active:bg-slate-800"
-            >
-              <Plus size={15} strokeWidth={2.6} aria-hidden="true" />
-              {voiceRooms?.create ?? copy.create}
-            </button>
-          </div>
+          {voiceRooms ? null : (
+            <div className="flex items-center justify-end px-4 pb-2">
+              <button
+                type="button"
+                data-qa="open-room-create"
+                onClick={() => setCreating(true)}
+                className="flex h-9 items-center gap-1 rounded-full bg-slate-950 px-3.5 text-[13px] font-semibold text-white transition active:bg-slate-800"
+              >
+                <Plus size={15} strokeWidth={2.6} aria-hidden="true" />
+                {copy.create}
+              </button>
+            </div>
+          )}
           {rooms === null ? (
             voiceRooms ? null : <div className="flex justify-center pt-10 text-gray-400"><Loader2 size={22} className="animate-spin" aria-hidden="true" /></div>
           ) : listed.length === 0 ? (
