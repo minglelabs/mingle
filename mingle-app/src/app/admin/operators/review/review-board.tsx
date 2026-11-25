@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import ImageZoomOverlay from '@/components/feed/image-zoom-overlay'
 import { ZoomableImage } from '../../feed/_components/zoomable-image'
@@ -41,6 +41,7 @@ const ERROR_COPY: Record<string, string> = {
   regenerate_failed: '다시 만들지 못했어요. 다시 눌러 주세요.',
   draw_failed: '사진을 그리지 못했어요. 다시 눌러 주세요.',
   no_reference: '이 글에 맞는 안 쓴 레퍼런스 짤이 없어요. 레퍼런스 탭에 올려 주세요.',
+  seedream_unconfigured: 'Seedream API 키가 아직 없어요(Railway SEEDREAM_API_KEY).',
   invalid_image: '사진을 읽지 못했어요. 다른 파일로 해 주세요.',
   file_too_large: '사진이 너무 커요(15MB까지).',
   invalid_photos: '사진 목록이 올바르지 않아요. 새로고침 후 다시 해 주세요.',
@@ -431,14 +432,65 @@ function useDrawPolling(active: boolean, check: () => Promise<boolean>) {
   }, [active])
 }
 
+type ImageEngine = 'pool' | 'seedream'
+const IMAGE_ENGINE_KEY = 'admin.review.imageEngine'
+const IMAGE_ENGINE_EVENT = 'admin-image-engine'
+
+function readImageEngine(): ImageEngine {
+  try {
+    return window.localStorage.getItem(IMAGE_ENGINE_KEY) === 'seedream' ? 'seedream' : 'pool'
+  } catch {
+    return 'pool'
+  }
+}
+
+function subscribeImageEngine(onChange: () => void): () => void {
+  window.addEventListener(IMAGE_ENGINE_EVENT, onChange)
+  return () => window.removeEventListener(IMAGE_ENGINE_EVENT, onChange)
+}
+
+/** Who draws the post photos staff ask for here (ChatGPT pool or Seedream 5.5), remembered on this device and shared by every card. */
+function useImageEngine(): [ImageEngine, (engine: ImageEngine) => void] {
+  const engine = useSyncExternalStore(subscribeImageEngine, readImageEngine, () => 'pool' as const)
+  const change = useCallback((next: ImageEngine) => {
+    try { window.localStorage.setItem(IMAGE_ENGINE_KEY, next) } catch { /* not remembered then */ }
+    window.dispatchEvent(new Event(IMAGE_ENGINE_EVENT))
+  }, [])
+  return [engine, change]
+}
+
+/** ChatGPT ↔ Seedream switch for the photo buttons. */
+function ImageEngineToggle({ dark }: { dark?: boolean }) {
+  const [engine, setEngine] = useImageEngine()
+  const on = engine === 'seedream'
+  return (
+    <button
+      type="button"
+      onClick={() => setEngine(on ? 'pool' : 'seedream')}
+      aria-pressed={on}
+      title="사진을 누가 그릴지: ChatGPT(기본) / Seedream 5.5"
+      className={dark
+        ? `inline-flex h-9 items-center rounded-full px-3 text-xs font-semibold backdrop-blur ${on ? 'bg-violet-600 text-white' : 'bg-black/60 text-white/80'}`
+        : `inline-flex h-8 items-center rounded-full border px-3 text-xs font-semibold ${on ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-300 bg-white text-slate-600'}`}
+    >
+      {on ? 'Seedream' : 'ChatGPT'}
+    </button>
+  )
+}
+
+const DRAW_ACTIONS: readonly Action[] = ['draw', 'redraw_photo', 'redraw_reference']
+
 async function sendReview(kind: 'profile' | 'post', id: string, action: Action, feedback: string, image?: File | null) {
-  let init: RequestInit = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind, id, action, feedback }) }
+  // Photos of posts are drawn by the engine picked on the card (ChatGPT pool unless Seedream).
+  const engine = kind === 'post' && DRAW_ACTIONS.includes(action) ? readImageEngine() : 'pool'
+  let init: RequestInit = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind, id, action, feedback, engine }) }
   if (image) {
     const form = new FormData()
     form.set('kind', kind)
     form.set('id', id)
     form.set('action', action)
     form.set('feedback', feedback)
+    form.set('engine', engine)
     form.set('image', image)
     init = { method: 'POST', body: form }
   }
@@ -605,6 +657,9 @@ function ReviewActions({
         </AdminButton>
       </div>
       {drawAction ? (
+        <div className="flex items-center justify-end gap-2 text-xs text-slate-500">사진 그리는 곳 <ImageEngineToggle /></div>
+      ) : null}
+      {drawAction ? (
         <AdminButton block disabled={busy !== null || inProgress || drawAction.requested || drawAction.drawing} onClick={() => { onAction('draw', feedback, image); reset() }}>
           {busy === 'draw' || drawAction.drawing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <ImageIcon className="h-4 w-4" aria-hidden="true" />}
           {drawAction.drawing ? '사진 그리는 중…' : drawAction.requested ? 'ChatGPT로 그리기 요청됨' : '글은 그대로, 사진만 그리기'}
@@ -769,6 +824,7 @@ function PhotoRedoOverlay({ drawing, disabled, onRedo, onRedoFromReference }: {
         </button>
       ) : null}
       <div className="absolute right-2 top-2 flex gap-1.5">
+        <ImageEngineToggle dark />
         <button
           type="button"
           disabled={disabled}

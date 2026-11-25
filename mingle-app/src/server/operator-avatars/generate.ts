@@ -4,6 +4,7 @@ import { ageOn } from '@/server/operator-auto-reply/generate'
 import { setOperatorAvatarFromBytes } from '@/server/operators/operator-avatar'
 import { storeAvatarCandidate } from '@/server/operators/avatar-candidate'
 import { chatgptPoolImage, chatgptPoolKey } from '@/server/chatgpt-pool/client'
+import { requestSeedreamImage } from '@/server/seedream/client'
 import { AVATAR_SPEC_VERSION, describeAccountFace, describeAccountLook, pickAvatarSpec, seededRandom, type AvatarPersona, type AvatarSpec } from './taxonomy'
 import { referenceRecreateLines, type ReferenceKind } from '@/server/reference-library/library'
 import type { ReferenceAttributes } from '@/server/reference-library/classify'
@@ -34,6 +35,9 @@ const PROXY_UNREACHABLE = 'proxy_unreachable'
 
 /** Drawn by the ChatGPT pool on the home Windows PC (src/server/chatgpt-pool/client.ts). */
 export const CHATGPT_POOL_IMAGE_MODEL = 'chatgpt-pool'
+
+/** Seedream 5.5 (src/server/seedream/client.ts): only when staff pick it for one photo, never configured as the default. */
+export const SEEDREAM_IMAGE_MODEL = 'seedream'
 
 /**
  * OPERATOR_AVATAR_IMAGE_MODEL wins; otherwise a server with CHATGPT_POOL_KEY
@@ -176,6 +180,11 @@ export async function requestAvatarImage(
   const reference = options.reference
   const model = options.model ?? resolveAvatarImageModel()
   if (model === CHATGPT_POOL_IMAGE_MODEL) return requestPoolImage(prompt, options.fetchImpl, reference)
+  if (model === SEEDREAM_IMAGE_MODEL) {
+    const drawn = await requestSeedreamImage(prompt, { references: reference ? [reference] : [], fetchImpl: options.fetchImpl })
+    if (drawn.ok) return { ok: true, bytes: drawn.bytes, model: drawn.model }
+    return { ok: false, error: drawn.error === 'seedream_unconfigured' ? 'image_unavailable' : drawn.error, detail: drawn.detail ?? drawn.error }
+  }
   if (!isProxyImageModel(model)) return { ok: false, error: 'image_unavailable', detail: IMAGE_API_DISABLED }
   const signal = AbortSignal.timeout(isChatgptAppImageModel(model) ? CHATGPT_APP_TIMEOUT_MS : CALL_TIMEOUT_MS)
   try {

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireAdminApi } from '@/server/admin/guard'
 import type { AvatarReference } from '@/server/operator-avatars/generate'
 import { OPERATOR_POST_PHOTO_MAX_BYTES } from '@/server/operator-post-edit/edit'
+import { parseImageEngine } from '@/server/seedream/client'
 import {
   getReviewPost,
   getReviewProfileState,
@@ -24,6 +25,7 @@ const ERROR_STATUS: Record<string, number> = {
   regenerate_failed: 502,
   draw_failed: 502,
   no_reference: 409,
+  seedream_unconfigured: 503,
   invalid_image: 400,
 }
 
@@ -36,7 +38,7 @@ async function readBody(request: Request): Promise<{ body: Record<string, unknow
   }
   const form = await request.formData().catch(() => null)
   if (!form) return { body: null }
-  const body = { kind: form.get('kind'), id: form.get('id'), action: form.get('action'), feedback: form.get('feedback') }
+  const body = { kind: form.get('kind'), id: form.get('id'), action: form.get('action'), feedback: form.get('feedback'), engine: form.get('engine') }
   const file = form.get('image')
   if (!(file instanceof File) || file.size === 0) return { body }
   if (!IMAGE_TYPES.includes(file.type) || file.size > OPERATOR_POST_PHOTO_MAX_BYTES) return { body, invalidImage: true }
@@ -87,7 +89,7 @@ export async function POST(request: Request) {
 
   const result = kind === 'profile'
     ? await reviewOperatorProfile(auth.ctx, id, action, feedback, { reference })
-    : await reviewOperatorPost(auth.ctx, id, action, feedback, new Date(), { reference })
+    : await reviewOperatorPost(auth.ctx, id, action, feedback, new Date(), { reference, engine: parseImageEngine(body?.engine) })
   if (!result.ok) return json({ error: result.error, ...('detail' in result && result.detail ? { detail: result.detail } : {}) }, ERROR_STATUS[result.error] ?? 500)
   return json(result)
 }
