@@ -5,7 +5,8 @@
 // with a password asks for it before a new person gets in. The same list, narrowed
 // by title or topic, is the "Open rooms" part of the search results.
 
-import { Gamepad2, Loader2, Lock, MessageCircle, Phone, Plus, UserRound } from "lucide-react";
+import LiveBars from "@/components/live-bars";
+import { Gamepad2, Loader2, Lock, MessageCircle, Plus, UserRound } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import LanguageFlag from "@/components/language-flag";
 import { buildClientApiPath } from "@/lib/api-contract";
@@ -321,7 +322,7 @@ function StatusChip({ room, copy }: { room: OpenRoomCard; copy: Copy }) {
   if (status === "voice") {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2 py-0.5 text-[11px] font-semibold text-white" data-open-room-status="voice">
-        <Phone size={11} strokeWidth={2.6} aria-hidden="true" />
+        <LiveBars size={10} />
         {copy.voiceTalk(room.voiceCallParticipantCount)}
       </span>
     );

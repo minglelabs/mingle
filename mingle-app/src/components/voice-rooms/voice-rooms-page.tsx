@@ -1,12 +1,13 @@
 "use client";
 
 import { TAB_BANNER_TOP_BAR_HEIGHT_PX, useTabNativeBanner } from "@/lib/use-tab-native-banner";
-import { Gamepad2, Headphones, Loader2, Phone, Plus, UserRound } from "lucide-react";
+import { Gamepad2, Headphones, Loader2, Plus, UserRound } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BottomTabBar from "@/components/bottom-tab-bar";
 import OpenRooms from "@/components/search/open-rooms";
+import LiveBars from "@/components/live-bars";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { fillVoiceRoomsCount, voiceRoomsCopy } from "@/i18n/voice-rooms-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
@@ -219,8 +220,8 @@ function LoungeCard({
           </span>
         ) : inCall > 0 ? (
           <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-white/80 px-2.5 py-1 text-[12px] font-bold text-emerald-700" data-qa="voice-lounge-in-call">
-            <span className="h-[7px] w-[7px] animate-pulse rounded-full bg-emerald-500" aria-hidden="true" />
-            <Phone size={12} aria-hidden="true" />
+            {/* A talk is on: small level bars instead of a dot (owner, 2026-11-25). */}
+            <LiveBars size={12} className="text-emerald-500" />
             {fillVoiceRoomsCount(copy.inCall, inCall)}
           </span>
         ) : null}
@@ -228,11 +229,11 @@ function LoungeCard({
       <p className="mt-2.5 text-[14.5px] font-medium leading-snug text-slate-900/85">{copy.loungeDescription}</p>
       <div className="mt-4 flex min-h-[34px] items-center gap-2">
         {faces.length > 0 ? (
-          <span className="flex -space-x-2">
+          <span className={`relative flex -space-x-2 ${inCall > 0 ? "mingle-live-glow rounded-full" : ""}`}>
             {faces.map((person) => (
               <span
                 key={person.userId}
-                className="flex h-[34px] w-[34px] items-center justify-center overflow-hidden rounded-full bg-white/70 ring-2 ring-[#F9A825]"
+                className={`flex h-[34px] w-[34px] items-center justify-center overflow-hidden rounded-full bg-white/70 ring-2 ${inCall > 0 ? "ring-white" : "ring-[#F9A825]"}`}
                 aria-hidden="true"
               >
                 {person.image ? (

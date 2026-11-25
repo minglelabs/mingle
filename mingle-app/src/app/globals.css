@@ -281,6 +281,59 @@ html[data-hash-rush-open="true"] [data-sonner-toaster] {
 
 /* Voice talk: a soft ripple spreading out from the avatar of whoever is
    speaking. Compositor-only (transform + opacity). */
+/* A live voice talk: level bars that rise and fall in turn (live-bars.tsx),
+   and a slow soft glow behind the faces on the lounge card. Compositor-only. */
+@keyframes mingle-live-bar {
+  0%, 100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.mingle-live-bar {
+  transform-origin: center bottom;
+  animation: mingle-live-bar 0.9s ease-in-out infinite;
+}
+
+@keyframes mingle-live-glow {
+  0%, 100% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(1.12);
+  }
+}
+
+.mingle-live-glow::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.75);
+  animation: mingle-live-glow 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.mingle-live-glow > * {
+  position: relative;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mingle-live-bar {
+    animation: none;
+    transform: scaleY(0.7);
+  }
+
+  .mingle-live-glow::before {
+    animation: none;
+    opacity: 0;
+  }
+}
+
 @keyframes mingle-voice-ripple {
   0% {
     transform: scale(1);

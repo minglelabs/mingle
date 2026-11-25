@@ -3,6 +3,7 @@
 import { ArrowDown, ArrowUp, ChevronUp, Crown, Hand, Headphones, Languages, Loader2, Mic, MicOff, PhoneOff, Plus, Volume2, VolumeX } from 'lucide-react'
 import type { ReactNode } from 'react'
 import LanguageFlag from '@/components/language-flag'
+import LiveBars from '@/components/live-bars'
 
 /**
  * The voice room screen's stage (owner, 2026-11-25): what an open room shows
@@ -171,10 +172,12 @@ export default function VoiceRoomStage(props: VoiceRoomStageProps) {
         className={`flex items-center gap-2 px-4 py-2 ${props.folded ? 'cursor-pointer' : ''}`}
         onClick={props.folded ? props.onToggleFold : undefined}
       >
-        <span className="relative inline-flex h-2 w-2 shrink-0">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-        </span>
+        {/* Someone is on the stage: level bars; an empty stage keeps the quiet dot. */}
+        {seats.length > 0 ? (
+          <LiveBars size={12} className="text-emerald-500" />
+        ) : (
+          <span className="relative inline-flex h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+        )}
         <span className="min-w-0 flex-1 truncate text-[0.86rem] font-bold text-slate-900">{labels.status}</span>
         {props.folded ? (
           <span className="flex shrink-0 -space-x-2">

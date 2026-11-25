@@ -6,6 +6,7 @@ import { useState } from "react";
 import type { PeopleSafetyCopy } from "@/i18n/people-safety-copy";
 import { PRIMARY_UI_LOCALES } from "@/i18n/mingle-locales";
 import { getSttLanguageDisplayName } from "@/lib/stt-languages";
+import AgeRangeSlider from "@/components/explore/age-range-slider";
 
 /** The explore tab's filters (owner, 2026-11-25); the server reads the same names (server/people-discovery). */
 export type ExploreFilters = {
@@ -75,8 +76,6 @@ export function writeExploreFilters(filters: ExploreFilters): void {
   }
 }
 
-const AGES = Array.from({ length: EXPLORE_AGE_MAX - EXPLORE_AGE_MIN + 1 }, (_, index) => EXPLORE_AGE_MIN + index);
-
 export default function ExploreFilterSheet({
   copy,
   locale,
@@ -99,12 +98,6 @@ export default function ExploreFilterSheet({
     { key: "female", label: copy.filterWomen },
     { key: "male", label: copy.filterMen },
   ];
-  const ageLabel = (age: number, end: "min" | "max") => (
-    (end === "min" && age === EXPLORE_AGE_MIN) || (end === "max" && age === EXPLORE_AGE_MAX)
-      ? `${age}${end === "max" ? "+" : ""}`
-      : String(age)
-  );
-
   return (
     <div className="fixed inset-0 z-[230] flex items-end bg-slate-950/40" role="dialog" aria-modal="true" aria-label={copy.filterTitle} onClick={onClose}>
       <div
@@ -136,31 +129,16 @@ export default function ExploreFilterSheet({
           ))}
         </div>
 
-        <p className="mt-5 text-[13px] font-bold text-slate-500">{copy.filterAge}</p>
-        <div className="mt-2 flex items-center gap-2">
-          <select
-            data-qa="explore-filter-age-min"
-            value={draft.ageMin}
-            onChange={(event) => {
-              const ageMin = Number(event.target.value);
-              setDraft((current) => ({ ...current, ageMin, ageMax: Math.max(current.ageMax, ageMin) }));
-            }}
-            className="h-11 flex-1 rounded-xl border border-gray-200 bg-white px-3 text-[15px] font-semibold text-slate-900"
-          >
-            {AGES.map((age) => <option key={age} value={age}>{ageLabel(age, "min")}</option>)}
-          </select>
-          <span className="text-slate-400">–</span>
-          <select
-            data-qa="explore-filter-age-max"
-            value={draft.ageMax}
-            onChange={(event) => {
-              const ageMax = Number(event.target.value);
-              setDraft((current) => ({ ...current, ageMax, ageMin: Math.min(current.ageMin, ageMax) }));
-            }}
-            className="h-11 flex-1 rounded-xl border border-gray-200 bg-white px-3 text-[15px] font-semibold text-slate-900"
-          >
-            {AGES.map((age) => <option key={age} value={age}>{ageLabel(age, "max")}</option>)}
-          </select>
+        {/* Age: one track, two handles (owner, 2026-11-25). The ends mean no limit. */}
+        <div className="mt-5">
+          <AgeRangeSlider
+            min={EXPLORE_AGE_MIN}
+            max={EXPLORE_AGE_MAX}
+            valueMin={draft.ageMin}
+            valueMax={draft.ageMax}
+            label={copy.filterAge}
+            onChange={(range) => setDraft((current) => ({ ...current, ageMin: range.min, ageMax: range.max }))}
+          />
         </div>
 
         {/* Languages (owner, 2026-11-25): each on its own, "all" until picked. */}
