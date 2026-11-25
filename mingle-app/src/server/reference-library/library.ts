@@ -4,6 +4,7 @@ import sharp from 'sharp'
 import { prisma } from '@/lib/prisma'
 import { deletePostImage, getPostImage, putPostImage } from '@/server/posts/post-image-storage'
 import type { ReferenceAttributes } from './classify'
+import { isSamePhoto, referenceFingerprint } from './fingerprint'
 
 /**
  * 레퍼런스 짤 저장소 (staff, 2026-11-24): photos staff pour in so new operator
@@ -53,6 +54,8 @@ export type ReferencePhoto = {
   attributes: ReferenceAttributes | null
   createdAt: string
   usedBy: ReferenceUse | null
+  /** Picture fingerprint (fingerprint.ts), to catch a photo uploaded twice; null until filled in. */
+  fingerprint: string | null
 }
 
 function parseGender(value: unknown): ReferenceGender | null {
@@ -93,6 +96,7 @@ function parseItems(value: unknown): ReferencePhoto[] {
             ...(typeof used.imageKey === 'string' && used.imageKey ? { imageKey: used.imageKey } : {}),
           }
         : null,
+      fingerprint: typeof row.fingerprint === 'string' && /^[0-9a-f]{16}$/.test(row.fingerprint) ? row.fingerprint : null,
     }]
   })
 }
@@ -125,8 +129,66 @@ async function updateLibrary<T>(change: (items: ReferencePhoto[]) => { items: Re
   }, { maxWait: 15_000, timeout: 30_000 })
 }
 
-/** Stores one uploaded photo (re-encoded, at most 1600 px) and adds it to the library. */
-export async function addReferencePhoto(bytes: Buffer, tags: { gender: ReferenceGender | null; kind: ReferenceKind | null; summary?: string | null; note?: string | null; attributes?: ReferenceAttributes | null }): Promise<ReferencePhoto> {
+/** The library photo this one is a copy of (same picture re-saved, resized or recompressed), or null. */
+export function findSameReference(items: readonly ReferencePhoto[], photo: { fingerprint: string; width: number | null; height: number | null }): ReferencePhoto | null {
+  return items.find((item) => isSamePhoto(item, photo)) ?? null
+}
+
+/** Fingerprint and shape of an uploaded photo, as stored (after rotation). */
+export async function referencePhotoShape(bytes: Buffer): Promise<{ fingerprint: string; width: number | null; height: number | null }> {
+  const meta = await sharp(bytes, { limitInputPixels: 80_000_000 }).rotate().metadata()
+  // EXIF orientations 5-8 turn the photo a quarter, which swaps its sides.
+  const turned = (meta.orientation ?? 1) >= 5
+  return {
+    fingerprint: await referenceFingerprint(bytes),
+    width: (turned ? meta.height : meta.width) ?? null,
+    height: (turned ? meta.width : meta.height) ?? null,
+  }
+}
+
+let fillingFingerprints: Promise<void> | null = null
+
+/**
+ * Gives every library photo added before fingerprints existed its
+ * fingerprint, once per server process (a photo that cannot be read is
+ * skipped). Only adds the field; nothing else changes. Never throws.
+ */
+export function ensureReferenceFingerprints(): Promise<void> {
+  fillingFingerprints ??= (async () => {
+    try {
+      const missing = (await listReferencePhotos()).filter((item) => !item.fingerprint)
+      if (!missing.length) return
+      const found = new Map<string, string>()
+      for (const item of missing) {
+        try {
+          found.set(item.id, await referenceFingerprint(Buffer.from(await getPostImage(item.objectKey))))
+        } catch {
+          // Unreadable: it just cannot be matched.
+        }
+      }
+      if (!found.size) return
+      await updateLibrary((items) => ({
+        items: items.map((item) => (!item.fingerprint && found.has(item.id) ? { ...item, fingerprint: found.get(item.id)! } : item)),
+        result: null,
+      }))
+    } catch (error) {
+      console.warn('[reference-library] fingerprint_fill_failed', { error: error instanceof Error ? error.name : 'unknown' })
+      fillingFingerprints = null
+    }
+  })()
+  return fillingFingerprints
+}
+
+/**
+ * Stores one uploaded photo (re-encoded, at most 1600 px) and adds it to the
+ * library. With `fingerprint`, a photo the library already has is not added
+ * (checked under the library lock, so two uploads of one photo at once keep
+ * one): the result is then `{ duplicateOf }`.
+ */
+export async function addReferencePhoto(
+  bytes: Buffer,
+  tags: { gender: ReferenceGender | null; kind: ReferenceKind | null; summary?: string | null; note?: string | null; attributes?: ReferenceAttributes | null; fingerprint?: string | null },
+): Promise<ReferencePhoto | { duplicateOf: ReferencePhoto }> {
   const { data, info } = await sharp(bytes, { limitInputPixels: 80_000_000 })
     .rotate()
     .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
@@ -138,9 +200,16 @@ export async function addReferencePhoto(bytes: Buffer, tags: { gender: Reference
   const photo: ReferencePhoto = {
     id, objectKey, width: info.width ?? null, height: info.height ?? null,
     gender: referenceKindHasGender(tags.kind) ? tags.gender : null, kind: tags.kind, summary: tags.summary ?? null, note: normalizeReferenceNote(tags.note), attributes: tags.attributes ?? null,
-    createdAt: new Date().toISOString(), usedBy: null,
+    createdAt: new Date().toISOString(), usedBy: null, fingerprint: tags.fingerprint ?? null,
   }
-  await updateLibrary((items) => ({ items: [photo, ...items], result: null }))
+  const duplicateOf = await updateLibrary((items) => {
+    const same = photo.fingerprint ? findSameReference(items, { fingerprint: photo.fingerprint, width: photo.width, height: photo.height }) : null
+    return same ? { items, result: same } : { items: [photo, ...items], result: null }
+  })
+  if (duplicateOf) {
+    await deletePostImage(objectKey).catch(() => {})
+    return { duplicateOf }
+  }
   return photo
 }
 

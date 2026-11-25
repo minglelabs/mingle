@@ -2,9 +2,9 @@
 
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
-import { CheckCircle2, ChevronDown, ChevronUp, Clock, ImageIcon, Loader2, RotateCcw, X, XCircle } from 'lucide-react'
+import { CheckCircle2, Copy, ChevronDown, ChevronUp, Clock, ImageIcon, Loader2, RotateCcw, X, XCircle } from 'lucide-react'
 
-export type QueueStatus = 'waiting' | 'uploading' | 'done' | 'failed'
+export type QueueStatus = 'waiting' | 'uploading' | 'done' | 'failed' | 'skipped'
 export type QueueItem = {
   id: string
   name: string
@@ -13,7 +13,7 @@ export type QueueItem = {
   error: string | null
 }
 
-const STATUS_TEXT: Record<QueueStatus, string> = { waiting: '대기', uploading: '분석·올리는 중', done: '완료', failed: '실패' }
+const STATUS_TEXT: Record<QueueStatus, string> = { waiting: '대기', uploading: '분석·올리는 중', done: '완료', failed: '실패', skipped: '이미 있는 짤이라 건너뜀' }
 
 /**
  * Upload progress, the way file-upload panels do it: bottom right on a
@@ -32,7 +32,8 @@ export function UploadQueueOverlay({ items, onRetry, onClear }: {
   const pending = items.filter((item) => item.status === 'waiting' || item.status === 'uploading').length
   const done = items.filter((item) => item.status === 'done').length
   const failed = items.filter((item) => item.status === 'failed').length
-  const title = pending ? `사진 올리는 중 · ${done}/${items.length}` : `${done}장 올림${failed ? ` · ${failed}장 실패` : ''}`
+  const skipped = items.filter((item) => item.status === 'skipped').length
+  const title = pending ? `사진 올리는 중 · ${done}/${items.length}` : `${done}장 올림${skipped ? ` · ${skipped}장 중복` : ''}${failed ? ` · ${failed}장 실패` : ''}`
 
   return createPortal(
     <section
@@ -71,6 +72,7 @@ export function UploadQueueOverlay({ items, onRetry, onClear }: {
               {item.status === 'waiting' ? <Clock className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" /> : null}
               {item.status === 'uploading' ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-sky-600" aria-hidden="true" /> : null}
               {item.status === 'done' ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" /> : null}
+              {item.status === 'skipped' ? <Copy className="h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" /> : null}
               {item.status === 'failed' ? (
                 <button type="button" onClick={() => onRetry(item.id)} aria-label={`${item.name} 다시 올리기`} className="rounded-full p-1.5 text-slate-600 active:bg-slate-100">
                   <RotateCcw className="h-4 w-4" aria-hidden="true" />
