@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
 import { isSameFace } from "@/lib/selfie-liveness";
+import { releaseDormancyIfReady } from "@/server/dormancy";
 
 export const runtime = "nodejs";
 
@@ -33,5 +34,7 @@ export async function POST(request: NextRequest) {
     data: { faceVerifiedAt: new Date() },
   });
   if (updated.count === 0) return NextResponse.json({ error: "photo_required" }, { status: 409 });
+  // A dormant account wakes up here (src/server/dormancy.ts).
+  await releaseDormancyIfReady(userId).catch(() => false);
   return NextResponse.json({ ok: true, faceVerified: true }, { headers: { "Cache-Control": "private, no-store" } });
 }

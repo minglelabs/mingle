@@ -11,6 +11,7 @@ import {
   putProfileImage,
 } from "@/server/profile-image-storage";
 import { parseImageFaceCheck } from "@/server/first-message-gate";
+import { releaseDormancyIfReady } from "@/server/dormancy";
 import {
   serializeUserProfile,
   userProfileSelect,
@@ -127,6 +128,9 @@ export async function POST(request: NextRequest) {
       },
       select: userProfileSelect,
     });
+
+    // A dormant woman wakes up with the photo alone; a man after the selfie check.
+    await releaseDormancyIfReady(userId).catch(() => false);
 
     if (previousObjectKey && previousObjectKey !== objectKey) {
       try {

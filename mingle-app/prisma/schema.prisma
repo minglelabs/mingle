@@ -36,6 +36,10 @@ model User {
   /// A woman's choice (owner, 2026-11-25): men cannot open a new 1:1 room
   /// with her. Rooms that already exist, and her writing first, are untouched.
   blockMaleDms                 Boolean   @default(false) @map("block_male_dms")
+  /// Dormant (owner, 2026-11-25; src/server/dormancy.ts): the account had no
+  /// profile photo. Left out of explore, and its owner sees only the dormant
+  /// screen until a photo is added and the face check passed. Null: awake.
+  dormantAt                    DateTime? @map("dormant_at")
   latestIpAddress              String?   @map("latest_ip_address")
   latestUserAgent              String?   @map("latest_user_agent")
   language                     String?

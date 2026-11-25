@@ -145,6 +145,7 @@ describe("/api/profile route", () => {
       location: null,
       birthDate: null,
       blockMaleDms: false,
+      dormant: false,
       followersCount: 2,
       followingCount: 3,
     });

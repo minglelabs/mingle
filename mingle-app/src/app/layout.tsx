@@ -10,6 +10,7 @@ import CoinHost from "@/components/coins/coin-host";
 import ContactSyncHost from "@/components/contacts/contact-sync-host";
 import ProfileBasicsGate from "@/components/profile-basics-gate";
 import PendingProfileSync from "@/components/pending-profile-sync";
+import DormantAccountGate from "@/components/dormant-account-gate";
 import { FIRST_RUN_COVER_SCRIPT } from "@/lib/first-run-cover";
 import FirstMessageGate from "@/components/first-message-gate";
 import KeyboardInsetVar from "@/components/keyboard-inset-var";
@@ -143,6 +144,7 @@ export default async function RootLayout({
                 <ContactSyncHost />
                 <ProfileBasicsGate />
                 <PendingProfileSync />
+                <DormantAccountGate />
                 <FirstMessageGate />
                 <KeyboardInsetVar />
                 <PushPermissionPrompt />

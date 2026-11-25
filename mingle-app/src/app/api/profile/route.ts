@@ -37,6 +37,7 @@ import {
 } from "@/server/user-profile";
 import { ensureSignupWelcomeOnboarding } from "@/lib/signup-welcome-onboarding";
 import { matchesExpectedAccount } from "@/lib/request-account-guard";
+import { isDormantAccount } from "@/server/dormancy";
 
 import { getPublishedBioText, updateProfileWithBio, runBioVersion } from "@/server/profile-bio";
 
@@ -58,6 +59,7 @@ type PrivateProfileResponse = UserProfile & {
   birthDate?: string | null;
   /** Only on the account's own profile: men cannot open a new 1:1 room with her. */
   blockMaleDms?: boolean;
+  dormant?: boolean;
 };
 
 function profileResponse(profile: PrivateProfileResponse): NextResponse {
@@ -234,12 +236,14 @@ export async function GET() {
 
   const privateFields = await prisma.user.findUnique({
     where: { id: userId },
-    select: { birthDate: true, blockMaleDms: true },
+    select: { birthDate: true, blockMaleDms: true, dormantAt: true, isOperator: true, isOfficial: true, email: true, phoneE164: true },
   });
   return profileResponse({
     ...profile,
     birthDate: serializePrivateBirthDate(privateFields?.birthDate),
     blockMaleDms: privateFields?.blockMaleDms === true,
+    // Dormant account (src/server/dormancy.ts): the app shows only the wake-up screen.
+    dormant: privateFields ? isDormantAccount(privateFields) : false,
   });
 }
 

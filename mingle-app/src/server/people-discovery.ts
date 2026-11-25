@@ -207,6 +207,7 @@ export function buildPeopleDiscoverySql({
         AND u.is_deleted = false
         AND u.moderation_hidden_at IS NULL
         AND u.moderation_restricted_at IS NULL
+        AND u.dormant_at IS NULL
         AND u.id <> ${viewerId}
         AND left(lower(u.handle), ${anonPrefix.length}::int) <> ${anonPrefix}
         AND lower(u.handle) <> ${reserved}
