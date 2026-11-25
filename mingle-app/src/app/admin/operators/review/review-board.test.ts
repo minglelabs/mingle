@@ -34,7 +34,7 @@ const postItem: ReviewItem = {
   post: {
     id: 'p1', text: '오늘 한강 산책', language: 'ko', topic: null, state: 'review', photoKind: null, photoDescription: null,
     imageObjectKey: null, imageWidth: null, imageHeight: null, extraImages: [], reviewFeedback: null, error: null,
-    photoRequested: false, photoDrawing: false, rewriting: false, photoDrawFailed: false, publishAt: null, scheduledAt: null,
+    photoRequested: false, photoDrawing: false, rewriting: false, photoDrawFailed: false, photoNoReference: false, publishAt: null, scheduledAt: null,
   },
 }
 
