@@ -89,7 +89,7 @@ export async function POST(request: Request) {
   const feedback = normalizeReviewFeedback(body?.feedback)
 
   const result = kind === 'profile'
-    ? await reviewOperatorProfile(auth.ctx, id, action, feedback, { reference })
+    ? await reviewOperatorProfile(auth.ctx, id, action, feedback, { reference, engine: parseImageEngine(body?.engine) })
     : await reviewOperatorPost(auth.ctx, id, action, feedback, new Date(), { reference, engine: parseImageEngine(body?.engine) })
   if (!result.ok) return json({ error: result.error, ...('detail' in result && result.detail ? { detail: result.detail } : {}) }, ERROR_STATUS[result.error] ?? 500)
   return json(result)

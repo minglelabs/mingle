@@ -4,7 +4,7 @@ import { ageOn } from '@/server/operator-auto-reply/generate'
 import { setOperatorAvatarFromBytes } from '@/server/operators/operator-avatar'
 import { storeAvatarCandidate } from '@/server/operators/avatar-candidate'
 import { chatgptPoolImage, chatgptPoolKey } from '@/server/chatgpt-pool/client'
-import { requestSeedreamImage } from '@/server/seedream/client'
+import { requestSeedreamImage, type ImageEngine } from '@/server/seedream/client'
 import { AVATAR_SPEC_VERSION, describeAccountFace, describeAccountLook, pickAvatarSpec, seededRandom, type AvatarPersona, type AvatarSpec } from './taxonomy'
 import { referenceRecreateLines, type ReferenceKind } from '@/server/reference-library/library'
 import type { ReferenceAttributes } from '@/server/reference-library/classify'
@@ -259,6 +259,8 @@ export async function generateOperatorAvatar(
     libraryReference?: { reference: AvatarReference; kind: ReferenceKind; note?: string | null; attributes?: ReferenceAttributes | null }
     /** A live account: the photo waits for staff review instead of replacing the current one (avatar-candidate.ts). */
     candidate?: boolean
+    /** 'seedream' when staff picked Seedream 5.5 for this photo (admin switch only, never a default). */
+    engine?: ImageEngine
   } = {},
 ): Promise<AvatarGenerationResult> {
   try {
@@ -292,7 +294,10 @@ export async function generateOperatorAvatar(
       ...(feedback ? [`Staff feedback on the previous photo of this person, to follow: ${feedback}`] : []),
       ...(options.reference ? ['The attached photo is a reference staff added to their feedback: use it the way the feedback says (pose, framing, outfit, place, light, mood or style). The face of anyone in it must not be copied: the person keeps the look described above.'] : []),
     ].join('\n')
-    const image = await requestAvatarImage(prompt, { fetchImpl: options.fetchImpl, reference: library?.reference ?? options.reference })
+    const image = await requestAvatarImage(prompt, {
+      fetchImpl: options.fetchImpl, reference: library?.reference ?? options.reference,
+      ...(options.engine === 'seedream' ? { model: SEEDREAM_IMAGE_MODEL } : {}),
+    })
     if (!image.ok) return image
 
     if (options.candidate) {

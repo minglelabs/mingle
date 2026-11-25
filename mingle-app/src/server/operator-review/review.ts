@@ -495,6 +495,7 @@ async function reviewAvatarCandidate(
   action: ReviewAction,
   feedback: string | null,
   reference?: AvatarReference,
+  engine: ImageEngine = 'pool',
 ): Promise<ProfileReviewResult> {
   const account = await prisma.operatorAccount.findUnique({ where: { userId }, select: { pendingImage: true, pendingDrawingAt: true } })
   const drawing = candidateDrawing(account?.pendingDrawingAt)
@@ -509,7 +510,7 @@ async function reviewAvatarCandidate(
   }
   if (action !== 'regenerate' && action !== 'redraw_reference') return { ok: false, error: 'already_approved' }
   if (drawing) return { ok: false, error: 'busy' }
-  if (!canDrawImagesHere()) return { ok: false, error: 'regenerate_failed' }
+  if (engine === 'seedream' ? !seedreamConfigured() : !canDrawImagesHere()) return { ok: false, error: engine === 'seedream' ? 'seedream_unconfigured' : 'regenerate_failed' }
   const claimed = await claimProfileReference(userId, action === 'redraw_reference')
   if (!claimed.ok) return claimed
   const library = claimed.library
@@ -518,7 +519,7 @@ async function reviewAvatarCandidate(
   void (async () => {
     let drawnOk = false
     try {
-      const drawn = await generateOperatorAvatar(ctx, userId, { feedback, reference, candidate: true, ...(library ? { libraryReference: library.libraryReference } : {}) })
+      const drawn = await generateOperatorAvatar(ctx, userId, { feedback, reference, candidate: true, engine, ...(library ? { libraryReference: library.libraryReference } : {}) })
       drawnOk = drawn.ok
       await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'candidate_regenerate', feedback, drawn: drawn.ok, fromLibrary: Boolean(library) } })
     } catch (error) {
@@ -534,7 +535,7 @@ async function reviewAvatarCandidate(
 
 export type ProfileReviewResult =
   | { ok: true; state: 'approved' | 'deleted' | 'pending' | 'drawing'; image?: string | null }
-  | { ok: false; error: 'not_found' | 'already_approved' | 'busy' | 'regenerate_failed' | 'no_reference'; detail?: string }
+  | { ok: false; error: 'not_found' | 'already_approved' | 'busy' | 'regenerate_failed' | 'no_reference' | 'seedream_unconfigured'; detail?: string }
 
 /** 게시 / 삭제 / 재제작 for a profile waiting for review. */
 export async function reviewOperatorProfile(
@@ -542,7 +543,8 @@ export async function reviewOperatorProfile(
   userId: string,
   action: ReviewAction,
   feedback: string | null,
-  options: { reference?: AvatarReference } = {},
+  /** `engine`: 'seedream' draws the new photo with Seedream 5.5 (staff's pick on the card). */
+  options: { reference?: AvatarReference; engine?: ImageEngine } = {},
 ): Promise<ProfileReviewResult> {
   const account = await prisma.operatorAccount.findUnique({
     where: { userId },
@@ -551,7 +553,9 @@ export async function reviewOperatorProfile(
   if (!account || !account.user.isOperator || account.user.isDeleted) return { ok: false, error: 'not_found' }
   // 사진 재제작 on the photo is the card's 재제작: a profile's redo only redraws the photo.
   if (action === 'redraw_photo' || action === 'draw') action = 'regenerate'
-  if (account.reviewState === 'approved') return reviewAvatarCandidate(ctx, userId, action, feedback, options.reference)
+  const engine = options.engine ?? 'pool'
+  if (engine === 'seedream' && (action === 'regenerate' || action === 'redraw_reference') && !seedreamConfigured()) return { ok: false, error: 'seedream_unconfigured' }
+  if (account.reviewState === 'approved') return reviewAvatarCandidate(ctx, userId, action, feedback, options.reference, engine)
 
   if (action === 'publish') {
     await prisma.$transaction([
@@ -575,8 +579,10 @@ export async function reviewOperatorProfile(
   // open) while the account shows as drawing; the card polls. Once drawn the
   // account is back in review; a failed drawing falls back to drawing by hand.
   const fromLibrary = action === 'redraw_reference'
-  if (fromLibrary && !canDrawImagesHere()) return { ok: false, error: 'regenerate_failed' }
-  if (canDrawImagesHere()) {
+  // Seedream draws from any server; the pool only where it is reachable.
+  const drawsHere = engine === 'seedream' || canDrawImagesHere()
+  if (fromLibrary && !drawsHere) return { ok: false, error: 'regenerate_failed' }
+  if (drawsHere) {
     const claimed = await claimProfileReference(userId, fromLibrary)
     if (!claimed.ok) return claimed
     const library = claimed.library
@@ -590,7 +596,7 @@ export async function reviewOperatorProfile(
     }
     void (async () => {
       try {
-        const drawn = await generateOperatorAvatar(ctx, userId, { feedback, reference: options.reference, ...(library ? { libraryReference: library.libraryReference } : {}) })
+        const drawn = await generateOperatorAvatar(ctx, userId, { feedback, reference: options.reference, engine, ...(library ? { libraryReference: library.libraryReference } : {}) })
         // The library photo it was drawn from is now this account's; one that was not drawn goes back.
         if (library) await (drawn.ok ? releaseOtherAvatarReferences(userId, library.id) : releaseReferencePhoto(library.id)).catch(() => {})
         if (drawn.ok) {

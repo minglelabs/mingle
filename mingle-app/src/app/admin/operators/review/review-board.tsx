@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import ImageZoomOverlay from '@/components/feed/image-zoom-overlay'
 import { ZoomableImage } from '../../feed/_components/zoomable-image'
@@ -20,6 +20,7 @@ import { withBack } from '../../_lib/back-path'
 import { adminProfileHref } from '../../_lib/profile-href'
 import { OperatorAvatar } from '../_components/operator-ui'
 import { PhotoRedrawPanel } from '../../feed/_components/photo-redraw-panel'
+import { ImageEngineToggle, readImageEngine } from '../image-engine'
 import { buildLanguageOptions, koreanLanguageName } from '../_lib/options'
 import { reviewImageUrl } from './review-image-url'
 import { pastedImage } from '../_lib/pasted-image'
@@ -437,57 +438,12 @@ function useDrawPolling(active: boolean, check: () => Promise<boolean>) {
   }, [active])
 }
 
-type ImageEngine = 'pool' | 'seedream'
-const IMAGE_ENGINE_KEY = 'admin.review.imageEngine'
-const IMAGE_ENGINE_EVENT = 'admin-image-engine'
-
-function readImageEngine(): ImageEngine {
-  try {
-    return window.localStorage.getItem(IMAGE_ENGINE_KEY) === 'seedream' ? 'seedream' : 'pool'
-  } catch {
-    return 'pool'
-  }
-}
-
-function subscribeImageEngine(onChange: () => void): () => void {
-  window.addEventListener(IMAGE_ENGINE_EVENT, onChange)
-  return () => window.removeEventListener(IMAGE_ENGINE_EVENT, onChange)
-}
-
-/** Who draws the post photos staff ask for here (ChatGPT pool or Seedream 5.5), remembered on this device and shared by every card. */
-function useImageEngine(): [ImageEngine, (engine: ImageEngine) => void] {
-  const engine = useSyncExternalStore(subscribeImageEngine, readImageEngine, () => 'pool' as const)
-  const change = useCallback((next: ImageEngine) => {
-    try { window.localStorage.setItem(IMAGE_ENGINE_KEY, next) } catch { /* not remembered then */ }
-    window.dispatchEvent(new Event(IMAGE_ENGINE_EVENT))
-  }, [])
-  return [engine, change]
-}
-
-/** ChatGPT ↔ Seedream switch for the photo buttons. */
-function ImageEngineToggle({ dark }: { dark?: boolean }) {
-  const [engine, setEngine] = useImageEngine()
-  const on = engine === 'seedream'
-  return (
-    <button
-      type="button"
-      onClick={() => setEngine(on ? 'pool' : 'seedream')}
-      aria-pressed={on}
-      title="사진을 누가 그릴지: ChatGPT(기본) / Seedream 5.5"
-      className={dark
-        ? `inline-flex h-9 items-center rounded-full px-3 text-xs font-semibold backdrop-blur ${on ? 'bg-violet-600 text-white' : 'bg-black/60 text-white/80'}`
-        : `inline-flex h-8 items-center rounded-full border px-3 text-xs font-semibold ${on ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-300 bg-white text-slate-600'}`}
-    >
-      {on ? 'Seedream' : 'ChatGPT'}
-    </button>
-  )
-}
-
 const DRAW_ACTIONS: readonly Action[] = ['draw', 'redraw_photo', 'redraw_reference']
 
 async function sendReview(kind: 'profile' | 'post', id: string, action: Action, feedback: string, image?: File | null) {
-  // Photos of posts are drawn by the engine picked on the card (ChatGPT pool unless Seedream).
-  const engine = kind === 'post' && DRAW_ACTIONS.includes(action) ? readImageEngine() : 'pool'
+  // Photos are drawn by the engine picked on the card (ChatGPT pool unless Seedream).
+  // A profile's 재제작 only redraws its photo, so it follows the switch too.
+  const engine = DRAW_ACTIONS.includes(action) || (kind === 'profile' && action === 'regenerate') ? readImageEngine() : 'pool'
   let init: RequestInit = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind, id, action, feedback, engine }) }
   if (image) {
     const form = new FormData()
@@ -1405,7 +1361,6 @@ function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDelete
           <PhotoRedoOverlay
             drawing={drawing}
             disabled={busy !== null}
-            engineToggle={false}
             onRedo={(feedback, file) => void handle('regenerate', feedback, file)}
             onRedoFromReference={() => void handle('redraw_reference', '')}
           />
