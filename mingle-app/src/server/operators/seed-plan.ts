@@ -8,8 +8,9 @@ import { PERSONA_COUNTRIES } from './persona-countries'
  * these proportions. A country missing here defaults to 0.
  */
 export const DEFAULT_SEED_PLAN: Readonly<Record<string, number>> = {
-  KR: 22, JP: 22, US: 7, CN: 5, TW: 5, VN: 4, ID: 4, IN: 4, BR: 4, TH: 3, PH: 3, TR: 3,
-  MY: 2, GB: 2, FR: 2, DE: 2, ES: 2, IT: 2, RU: 2, SG: 1, MX: 1, CA: 1, AU: 1,
+  // Staff (2026-11-25): far more Korea, Japan, China and Taiwan (about two thirds together).
+  KR: 25, JP: 25, CN: 10, TW: 10, US: 4, VN: 2, ID: 2, IN: 2, BR: 2, TH: 2, PH: 2, TR: 2,
+  MY: 1, GB: 1, FR: 1, DE: 1, ES: 1, IT: 1, RU: 1, SG: 1, MX: 1, CA: 1, AU: 1,
   // Staff (2026-11-23): a few from Russia, the Middle East and Central Asia, never none.
   SA: 1, AE: 1, KZ: 1, UZ: 1,
 }
