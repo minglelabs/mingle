@@ -19,6 +19,11 @@ describe('a woman can stop new rooms from men', () => {
     expect(blocksNewRoomFrom({ ...man, isOperator: true }, { gender: 'female', blockMaleDms: true })).toBe(false)
     expect(blocksNewRoomFrom(man, { gender: 'male', blockMaleDms: true })).toBe(false)
     expect(blocksNewRoomFrom(null, { gender: 'female', blockMaleDms: true })).toBe(false)
+    // A man she follows may write to her; off by default, nobody is stopped.
+    expect(blocksNewRoomFrom(man, { gender: 'female', blockMaleDms: true }, true)).toBe(false)
+    expect(blocksNewRoomFrom(man, { gender: 'female', blockMaleDms: false }, false)).toBe(false)
+    expect(readFileSync(join(process.cwd(), 'prisma/schema.prisma'), 'utf8')).toContain('blockMaleDms                 Boolean   @default(false)')
+    expect(readFileSync(join(process.cwd(), 'src/server/male-dm-block.ts'), 'utf8')).toContain('where: { followerId: targetUserId, followingId: senderUserId }')
   })
 
   it('is checked before a first room opens, and the client says so', () => {
