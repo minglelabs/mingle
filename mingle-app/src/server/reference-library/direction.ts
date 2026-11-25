@@ -72,10 +72,33 @@ function personDirection(person: ReferencePersonAttributes | undefined): string 
   return line || null
 }
 
-/** The direction lines for a library photo; empty when it has no analysis. */
-export function referenceDirectionLines(attributes: ReferenceAttributes | null | undefined): string[] {
+/** Shots closer than this are, for post photos, mostly redrawn from a few steps back. */
+const WIDEN_CHANCE: Record<string, number> = { extreme_closeup: 0.85, closeup: 0.85, shoulders: 0.85, chest: 0.85, waist: 0.5 }
+/** Who held the phone in a shot that cannot be taken from farther away. */
+const FIXED_DISTANCE_SHOOTERS = new Set(['selfie', 'photo_booth'])
+
+/**
+ * Whether a post photo drawn from this library photo pulls the camera back to
+ * about the knees up, a friend a few steps away with the place around them
+ * (staff, 2026-11-25: too many post photos were close, and the library itself
+ * is mostly waist-up or closer). Selfies, photo-booth shots and collages keep
+ * their distance.
+ */
+export function widenPostShot(attributes: ReferenceAttributes | null | undefined, random: () => number = Math.random): boolean {
+  if (!attributes?.distance) return false
+  if (attributes.shooter && FIXED_DISTANCE_SHOOTERS.has(attributes.shooter)) return false
+  if (attributes.layout && attributes.layout !== 'single') return false
+  const chance = WIDEN_CHANCE[attributes.distance] ?? 0
+  return chance > 0 && random() < chance
+}
+
+/** The camera distance a widened post photo is drawn at (widenPostShot). */
+export const WIDE_POST_DISTANCE = 'knees'
+
+/** The direction lines for a library photo; empty when it has no analysis. `distance` replaces the shot's own. */
+export function referenceDirectionLines(attributes: ReferenceAttributes | null | undefined, options: { distance?: string } = {}): string[] {
   if (!attributes) return []
-  const a = attributes
+  const a = options.distance ? { ...attributes, distance: options.distance } : attributes
   const shot = join([
     phrase(SHOOTER, a.shooter),
     phrase(DISTANCE, a.distance),
