@@ -34,11 +34,27 @@ export type OperatorListItem = {
   reviewState: string | null
 }
 
-/** Which accounts the 계정 tab lists: everyone (default), only operator accounts, or only real users. */
-export type AccountListScope = 'all' | 'operator' | 'user'
+/**
+ * Which accounts the 계정 tab lists: everyone (default), only operator
+ * accounts, operator accounts up in the app (approved and active), operator
+ * accounts still in review (not approved yet), or only real users.
+ */
+export type AccountListScope = 'all' | 'operator' | 'live' | 'review' | 'user'
+
+const SCOPES: readonly AccountListScope[] = ['all', 'operator', 'live', 'review', 'user']
 
 export function parseAccountListScope(value: unknown): AccountListScope {
-  return value === 'operator' || value === 'user' ? value : 'all'
+  return SCOPES.includes(value as AccountListScope) ? (value as AccountListScope) : 'all'
+}
+
+function scopeWhere(scope: AccountListScope): Prisma.UserWhereInput {
+  switch (scope) {
+    case 'operator': return { isOperator: true }
+    case 'live': return { isOperator: true, isActive: true, operatorAccount: { is: { reviewState: 'approved' } } }
+    case 'review': return { isOperator: true, operatorAccount: { is: { reviewState: { not: 'approved' } } } }
+    case 'user': return { isOperator: false }
+    default: return {}
+  }
 }
 
 export type OperatorListPage = {
@@ -59,7 +75,7 @@ export async function listOperatorAccounts(args: { query?: string; page?: number
   const query = normalizeOperatorSearch(args.query)
   const scope = args.scope ?? 'all'
   const where: Prisma.UserWhereInput = {
-    ...(scope === 'operator' ? { isOperator: true } : scope === 'user' ? { isOperator: false } : {}),
+    ...scopeWhere(scope),
     isDeleted: false,
     ...(query
       ? {
