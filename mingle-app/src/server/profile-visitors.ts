@@ -1,22 +1,32 @@
 import { MICRO_PER_COIN } from "@/lib/coin-units";
+import { calculateProfileAge } from "@/server/user-profile";
 import { prisma } from "@/lib/prisma";
 import { resolveUserCoinBillingMode } from "@/server/coins/config";
 import { hasLedgerEntry, takeFromLots, withLockedWallet } from "@/server/coins/ledger";
 
 /**
  * "Who viewed my profile" (owner, 2026-11-25), on My page for everyone.
- * Visits come from ProfileView (recorded when a profile opens). Each visitor
- * shows blurred, with no name or photo sent at all, until the owner pays
- * VISITOR_UNLOCK_COINS Hash to see that person; then that person stays
- * visible. A visitor is addressed by the id of their latest visit row, so the
- * list never gives away who it is.
+ * Visits come from ProfileView (recorded when a profile opens). A locked
+ * visitor shows only age, nationality, own languages and 관심 언어, over a
+ * blurred shape: no photo, name, handle, id or profile is sent at all, until
+ * the owner pays VISITOR_UNLOCK_COINS Hash for that person; then that person
+ * stays visible. A visitor is addressed by the id of their latest visit row,
+ * so the list never gives away who it is.
  */
-export const VISITOR_UNLOCK_COINS = 30;
+export const VISITOR_UNLOCK_COINS = 10;
+
+/** What a locked visitor shows (owner, 2026-11-25): enough to be curious, not enough to find them. */
+export type ProfileVisitorHints = {
+  age: number | null;
+  nationalityCountry: string | null;
+  primaryLanguages: string[];
+  interestLanguages: string[];
+};
 const WINDOW_DAYS = 30;
 const MAX_VISITORS = 50;
 
 export type ProfileVisitorItem =
-  | { token: string; unlocked: false; visitedAt: string }
+  | { token: string; unlocked: false; visitedAt: string; hints: ProfileVisitorHints }
   | {
       token: string;
       unlocked: true;
@@ -51,7 +61,10 @@ export async function listProfileVisitors(userId: string, now: Date = new Date()
   const [viewers, blocks, unlocks] = await Promise.all([
     prisma.user.findMany({
       where: { id: { in: viewerIds }, isActive: true, isDeleted: false, isOfficial: false, moderationHiddenAt: null },
-      select: { id: true, name: true, handle: true, image: true, imageCropScale: true, imageCropX: true, imageCropY: true },
+      select: {
+        id: true, name: true, handle: true, image: true, imageCropScale: true, imageCropX: true, imageCropY: true,
+        birthDate: true, nationalityCountry: true, primaryLanguages: true, interestLanguages: true,
+      },
     }),
     prisma.userBlock.findMany({
       where: { OR: [{ blockerId: userId, blockedId: { in: viewerIds } }, { blockedId: userId, blockerId: { in: viewerIds } }] },
@@ -67,9 +80,16 @@ export async function listProfileVisitors(userId: string, now: Date = new Date()
     const viewer = byId.get(row.viewerId);
     if (!viewer || blocked.has(row.viewerId)) continue;
     const visitedAt = row.createdAt.toISOString();
+    const { birthDate, nationalityCountry, primaryLanguages, interestLanguages, ...user } = viewer;
+    const hints: ProfileVisitorHints = {
+      age: calculateProfileAge(birthDate, now) ?? null,
+      nationalityCountry: nationalityCountry ?? null,
+      primaryLanguages: primaryLanguages.slice(0, 2),
+      interestLanguages: interestLanguages.slice(0, 2),
+    };
     items.push(unlocked.has(row.viewerId)
-      ? { token: row.id, unlocked: true, visitedAt, user: viewer }
-      : { token: row.id, unlocked: false, visitedAt });
+      ? { token: row.id, unlocked: true, visitedAt, user }
+      : { token: row.id, unlocked: false, visitedAt, hints });
     if (items.length >= MAX_VISITORS) break;
   }
   return items;

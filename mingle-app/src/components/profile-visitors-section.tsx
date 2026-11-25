@@ -8,9 +8,15 @@ import HashSeedIcon from "@/components/coins/hash-seed-icon";
 import { fillCoins, resolvePeopleSafetyCopy } from "@/i18n/people-safety-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { buildProfileImageTransform } from "@/lib/profile-image-crop";
+import { countryFlagEmoji, getCountryDisplayName } from "@/lib/nationality";
+import { formatProfileAge } from "@/i18n/profile-age-copy";
+import type { AppLocale } from "@/i18n";
+import LanguageFlag from "@/components/language-flag";
+
+type VisitorHints = { age: number | null; nationalityCountry: string | null; primaryLanguages: string[]; interestLanguages: string[] };
 
 type Visitor =
-  | { token: string; unlocked: false; visitedAt: string }
+  | { token: string; unlocked: false; visitedAt: string; hints?: VisitorHints }
   | {
       token: string;
       unlocked: true;
@@ -53,6 +59,40 @@ function BlurredAvatar({ token }: { token: string }) {
   );
 }
 
+/** Under a locked visitor: flag and age, nothing that tells who it is. */
+function VisitorHintLine({ hints, locale }: { hints?: VisitorHints; locale: string }) {
+  if (!hints) return <span className="h-[16px] w-10 rounded-full bg-gray-100" aria-hidden="true" />;
+  const age = hints.age !== null ? formatProfileAge(hints.age, locale as AppLocale) : null;
+  return (
+    <span className="flex w-full items-center justify-center gap-1 truncate text-[11px] font-semibold text-slate-700">
+      {hints.nationalityCountry ? <span aria-hidden="true">{countryFlagEmoji(hints.nationalityCountry)}</span> : null}
+      {age ? <span className="truncate">{age}</span> : null}
+    </span>
+  );
+}
+
+/** In the unlock sheet: nationality, age, own languages and 관심 언어. */
+function VisitorHintDetail({ hints, locale }: { hints?: VisitorHints; locale: string }) {
+  if (!hints) return null;
+  const age = hints.age !== null ? formatProfileAge(hints.age, locale as AppLocale) : null;
+  return (
+    <div data-qa="profile-visitor-hints" className="mt-3 flex flex-col items-center gap-1.5 text-[13px] text-slate-700">
+      <span className="flex items-center gap-1.5 font-semibold">
+        {hints.nationalityCountry ? <span aria-hidden="true">{countryFlagEmoji(hints.nationalityCountry)}</span> : null}
+        {hints.nationalityCountry ? <span>{getCountryDisplayName(hints.nationalityCountry, locale)}</span> : null}
+        {age ? <span className="text-slate-500">· {age}</span> : null}
+      </span>
+      {hints.primaryLanguages.length > 0 || hints.interestLanguages.length > 0 ? (
+        <span className="flex items-center gap-1.5">
+          {hints.primaryLanguages.map((code) => <LanguageFlag key={`p-${code}`} language={code} className="text-[1.05rem] leading-none" />)}
+          {hints.interestLanguages.length > 0 ? <span className="text-slate-400">→</span> : null}
+          {hints.interestLanguages.map((code) => <LanguageFlag key={`i-${code}`} language={code} className="text-[1.05rem] leading-none" />)}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 /**
  * "Who viewed my profile" on My page (owner, 2026-11-25): everyone gets it.
  * Each visitor is blurred until paid for (see @/server/profile-visitors).
@@ -61,7 +101,7 @@ export default function ProfileVisitorsSection({ locale }: { locale: string }) {
   const router = useRouter();
   const copy = useMemo(() => resolvePeopleSafetyCopy(locale), [locale]);
   const [visitors, setVisitors] = useState<Visitor[] | null>(null);
-  const [unlockCoins, setUnlockCoins] = useState(30);
+  const [unlockCoins, setUnlockCoins] = useState(10);
   const [asking, setAsking] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -155,7 +195,7 @@ export default function ProfileVisitorsSection({ locale }: { locale: string }) {
                     className="flex w-[64px] flex-col items-center gap-1"
                   >
                     <BlurredAvatar token={visitor.token} />
-                    <span className="h-[16px] w-10 rounded-full bg-gray-100" aria-hidden="true" />
+                    <VisitorHintLine hints={visitor.hints} locale={locale} />
                   </button>
                 )}
               </li>
@@ -171,6 +211,10 @@ export default function ProfileVisitorsSection({ locale }: { locale: string }) {
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex justify-center"><BlurredAvatar token={asking} /></div>
+            {(() => {
+              const hints = visitors.find((visitor) => visitor.token === asking && !visitor.unlocked);
+              return hints && !hints.unlocked ? <VisitorHintDetail hints={hints.hints} locale={locale} /> : null;
+            })()}
             <p className="mt-3 text-[1.05rem] font-extrabold text-slate-950">{copy.visitorsTitle}</p>
             <p className="mt-1 text-[13px] text-slate-500">{fillCoins(copy.visitorsHint, unlockCoins)}</p>
             <button

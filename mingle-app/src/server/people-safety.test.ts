@@ -68,10 +68,11 @@ describe('who viewed my profile', () => {
     expect(latestVisitPerVisitor(rows, 'me', 1).map((row) => row.id)).toEqual(['3'])
   })
 
-  it('costs 30 Hash, sends nothing about a locked visitor, and is on My page', () => {
-    expect(VISITOR_UNLOCK_COINS).toBe(30)
+  it('costs 10 Hash, sends only age, nationality and languages for a locked visitor, and is on My page', () => {
+    expect(VISITOR_UNLOCK_COINS).toBe(10)
     const server = read('src/server/profile-visitors.ts')
-    expect(server).toContain(': { token: row.id, unlocked: false, visitedAt });')
+    expect(server).toContain(': { token: row.id, unlocked: false, visitedAt, hints });')
+    expect(server).toContain('const { birthDate, nationalityCountry, primaryLanguages, interestLanguages, ...user } = viewer;')
     expect(server).toContain('if (taken.shortfallMicro > 0n) throw new ProfileVisitorError("insufficient_coins");')
     expect(read('src/components/my-page.tsx')).toContain('<ProfileVisitorsSection locale={locale} />')
     for (const ns of ['ios', 'android']) {
