@@ -180,10 +180,23 @@ describe('generatePersonaDrafts', () => {
 describe('bio styles', () => {
   it('are picked by the server, mostly plain for men, and seldom about learning a language', () => {
     const slots = planPersonaSlots({ ...REQUEST, count: 50, genderMix: 'male' }, { random: seeded(9), now: NOW })
-    const plain = slots.filter((slot) => /no emoji/.test(slot.bioStyle)).length
+    // Plain (no emoji) or a self-introduction (at most one emoji).
+    const plain = slots.filter((slot) => /no emoji|self-introduction/.test(slot.bioStyle)).length
     expect(plain / slots.length).toBeGreaterThan(0.55)
     expect(new Set(slots.map((slot) => slot.bioStyle)).size).toBeGreaterThan(3)
     expect(slots.filter((slot) => slot.bioMentionsLearning).length).toBeLessThan(25)
+  })
+})
+
+describe('self-introductions in bios', () => {
+  it('make about a quarter of bios a real self-introduction, and most say what the person does', () => {
+    const slots = planPersonaSlots({ ...REQUEST, count: 200, countries: ['JP', 'KR', 'US'] }, { random: seeded(5), now: NOW })
+    const intros = slots.filter((slot) => /self-introduction/.test(slot.bioStyle)).length / slots.length
+    expect(intros).toBeGreaterThan(0.15)
+    expect(intros).toBeLessThan(0.4)
+    const jobs = slots.filter((slot) => slot.bioMentionsJob).length / slots.length
+    expect(jobs).toBeGreaterThan(0.45)
+    expect(jobs).toBeLessThan(0.75)
   })
 })
 
