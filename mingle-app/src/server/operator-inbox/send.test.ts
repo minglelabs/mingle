@@ -79,7 +79,7 @@ function member(userId: string, selectedLanguages: string[]) {
   }
 }
 
-function send(overrides: Partial<{ text: string; clientRequestId: string | null; operatorUserId: string }> = {}) {
+function send(overrides: Partial<{ text: string; clientRequestId: string | null; operatorUserId: string; translate: boolean }> = {}) {
   return sendOperatorMessage(ctx, {
     operatorUserId: 'op_1',
     conversationId: 'conv_1',
@@ -360,6 +360,30 @@ describe('sendOperatorMessage', () => {
     })
     await send({ text: 'Oi, tudo bem?' })
     expect(contentRows()[0]).toMatchObject({ contentType: 'SOURCE', language: 'pt', text: 'Oi, tudo bem?' })
+  })
+
+  it('with 자동 번역 off, sends the staff text as typed in its own language and translates it for the room', async () => {
+    await send({ translate: false })
+    const rows = contentRows()
+    expect(rows.filter((row) => row.contentType === 'SOURCE')).toEqual([
+      expect.objectContaining({ contentType: 'SOURCE', language: 'ko', text: '안녕하세요, 반가워요' }),
+    ])
+    expect(rows.filter((row) => row.contentType === 'TRANSLATION_FINAL').map(({ language, text }) => ({ language, text }))).toEqual([
+      { language: 'pt', text: 'Olá, prazer!' },
+      { language: 'en', text: 'Hi, nice to meet you!' },
+    ])
+    expect(m.txMessageCreate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ sourceLanguage: 'ko' }) }))
+  })
+
+  it('keeps the staff text exactly as typed even when the model rewrites it in the same language', async () => {
+    m.translateTexts.mockResolvedValue({
+      translations: { en: 'Hi, how are you?', ko: '안녕, 잘 지내?', pt: 'Oi, tudo bem.' },
+      detectedSourceLanguage: 'pt',
+      provider: 'gemini',
+      model: 'gemini-test',
+    })
+    await send({ text: 'oi tudo bem' })
+    expect(contentRows()[0]).toMatchObject({ contentType: 'SOURCE', language: 'pt', text: 'oi tudo bem' })
   })
 
   it('retries once for room languages the first call missed, and still sends when that fails', async () => {

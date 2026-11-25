@@ -171,6 +171,11 @@ describe('room timeline', () => {
     expect(bubble.speakerUserId).toBe('user_1')
     expect(bubble.serverMessageId).toBe('db_a')
   })
+
+  it('flags the avatar with the sender\'s own language, not the message\'s', () => {
+    expect(toBubbleUtterance(utterance('a', 1), 'ja').speakerFlagLanguage).toBe('ja')
+    expect(toBubbleUtterance(utterance('a', 1)).speakerFlagLanguage).toBeUndefined()
+  })
 })
 
 describe('staff Korean view', () => {

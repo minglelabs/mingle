@@ -1,8 +1,8 @@
 import { SchemaType, type ResponseSchema } from '@google/generative-ai'
 import { getSttLanguageDisplayName } from '@/lib/stt-languages'
-import { generateJson, type GenerateJsonRequest } from '@/server/llm/generate-json'
+import { generateJson, type GenerateJsonRequest, OPERATOR_POST_TEXT_MODEL } from '@/server/llm/generate-json'
 import { hasContactDetails } from '@/server/operators/persona-rules'
-import { encodePostPhoto, pickPostPhoto } from './post-photo'
+import { encodePostPhoto, INTRO_PHOTO_SETUP, PHOTO_BOOTH_MARKER, PHOTO_BOOTH_SETUP, pickPostPhoto, PROFILE_PHOTO_MARKER } from './post-photo'
 import { canonicalizeSttLanguageCode } from '@/lib/stt-languages'
 import { learnerLevelForDots, learnerPlan, posterProfile, type LearnerPlan, type PosterProfile } from './poster-profile'
 
@@ -19,8 +19,8 @@ const IMAGE_PROMPT_MAX_CHARS = 600
 const AVOID_SAMPLE_MAX = 40
 const AVOID_SAMPLE_CHARS = 60
 const CALL_TIMEOUT_MS = 120_000
-/** Post text: Claude Sonnet 5.5 on the Anthropic API, never the ChatGPT pool (staff decided 2026-11-19; photos stay on the pool). */
-export const RESERVE_DEFAULT_MODEL = 'claude-sonnet-5-5'
+/** Post text: Claude Opus 5.5 on the Anthropic API, never the ChatGPT pool (staff decided 2026-11-22; photos stay on the pool). */
+export const RESERVE_DEFAULT_MODEL = OPERATOR_POST_TEXT_MODEL
 
 export function resolveReserveModel(env: NodeJS.ProcessEnv = process.env): string {
   return env.OPERATOR_POST_RESERVE_MODEL?.trim() || RESERVE_DEFAULT_MODEL
@@ -43,19 +43,38 @@ export const RESERVE_TOPICS: ReadonlyArray<{ key: string; weight: number; brief:
   { key: 'question_to_everyone', weight: 3, brief: 'an easy question to everyone that invites replies (preferences, habits, this-or-that)' },
   { key: 'looking_for_friends', weight: 5, brief: 'looking for friends or a language partner: what they want to talk about, what they can teach in return, an invitation to message them' },
   { key: 'self_intro', weight: 4, brief: 'introducing themself: where they are from, what they study or do, what they like; sometimes as a short list of facts on separate lines (age band, city, a personality trait, hobbies)' },
+  // Staff 2026-11-25: hello posts from someone new (and self-introductions) are the posts that may run longer.
+  { key: 'greeting', weight: 3, brief: 'a hello post from someone new here: greeting everyone, where they are from, what they want to do here (make friends, practice a language), and, when they live outside Korea, when they plan to visit Korea or what they want to do there; ends inviting people to say hi' },
   { key: 'place_request', weight: 3, brief: 'asking about real places or plans: where to go, what to eat or see in a named city or neighborhood, or whether anyone wants to study or talk together' },
   { key: 'photo_caption', weight: 4, brief: 'a caption of a few words for the attached photo, nothing more' },
+  // Staff 2026-11-24: a very common post is a good photo of oneself with a two-line intro, mostly without a name.
+  { key: 'photo_intro', weight: 6, brief: 'a photo of themself with a very short self-introduction: only their age and nationality or city, maybe one thing they like or want here, often asking back ("And you?", "where are you from?"); no name; two to five short lines' },
+  { key: 'photo_intro_named', weight: 2.5, brief: 'a photo of themself with a very short self-introduction starting with their first name, then their age and nationality or city, maybe one thing they like, sometimes asking back ("And you?"); two to five short lines' },
   // Only for accounts outside Korea (pickReserveTopics `korea`): the app is where they meet Koreans.
   { key: 'korea_trip', weight: 0, brief: 'a trip to Korea they are on right now or just came back from: a named spot (a Seoul neighborhood, a palace, a market, a café street, a beach in Busan or Jeju), a Korean dish they tried there, something that surprised them; written by someone who loves Korea' },
   { key: 'korean_study', weight: 0, brief: 'studying Korean: one concrete Korean word, expression, ending or 반말/존댓말 nuance that confused or amused them, a K-drama or K-pop line they looked up, or asking Koreans how they really say something; quote the Korean itself' },
   { key: 'korean_friends', weight: 0, brief: 'Korean friends: wanting to make Korean friends or a Korean language partner, or a small concrete moment with a Korean friend (what they ate together, a phrase the friend taught them, a culture gap that made them laugh)' },
 ]
 
-/** Topics of accounts outside Korea, by weight (the others sum to about 62, so these are about a quarter of their posts). */
+/** Topics of accounts outside Korea, by weight (the others sum to about 70, so these are about a fifth of their posts). */
 export const KOREA_TOPIC_WEIGHTS: Readonly<Record<string, number>> = { korea_trip: 8, korean_study: 6, korean_friends: 6 }
 
 /** Topics that always go out with a photo, and the place the photo was taken when it is not the author's city. */
-const PHOTO_TOPICS = new Set(['photo_caption', 'korea_trip', 'korean_friends'])
+const PHOTO_TOPICS = new Set(['photo_caption', 'korea_trip', 'korean_friends', 'photo_intro', 'photo_intro_named'])
+const INTRO_TOPICS = new Set(['photo_intro', 'photo_intro_named'])
+/** Self-introductions and hellos: the only posts that may run longer than three short lines (staff, 2026-11-25). */
+const LONG_TOPICS = new Set(['self_intro', 'greeting', 'photo_intro', 'photo_intro_named'])
+const LONG_SHAPE = 'a self-introduction or hello that may run longer than other posts: three to six short lines with line breaks, casual, never a formal letter'
+/**
+ * Photo-booth prints (인생네컷) of East and Southeast Asian accounts (staff
+ * 2026-11-24: about 3 % of all posts for women, 1 % for men; those accounts
+ * are about 43 % and 30 % of the live ones, so these are their own shares).
+ */
+const PHOTO_BOOTH_SHARE = { female: 0.07, male: 0.033 } as const
+const BOOTH_LANGUAGES = /^(ko|ja|zh|vi|th|id|ms|fil|tl)\b/i
+
+/** Half the photo intros show the account's own profile photo; the other half a new flattering photo. */
+const INTRO_PROFILE_PHOTO_SHARE = 0.5
 const KOREA_TRIP_PLACES: ReadonlyArray<{ place: string; weight: number }> = [
   { place: 'Seoul, South Korea', weight: 6 },
   { place: 'Busan, South Korea', weight: 2 },
@@ -144,8 +163,8 @@ export const RESERVE_SHAPES: ReadonlyArray<{ key: string; weight: number; brief:
   { key: 'one_liner', weight: 4, brief: 'one short blunt sentence' },
   { key: 'reaction', weight: 2.5, brief: 'a complaint, a groan or an excited outburst about one concrete thing that just happened' },
   { key: 'question', weight: 2, brief: 'only a short direct question, with no lead-in before it' },
-  { key: 'few_lines', weight: 3, brief: 'two or three short sentences that include one concrete detail (a number, a dish, a title, a place)' },
-  { key: 'story', weight: 1.5, brief: 'a loose little story of four to six short lines with line breaks, ending flat or with a small joke rather than a lesson' },
+  { key: 'few_lines', weight: 3, brief: 'one or two short sentences that include one concrete detail (a number, a dish, a title, a place)' },
+  { key: 'story', weight: 1, brief: 'a tiny story in two or three short lines with line breaks, ending flat or with a small joke rather than a lesson' },
   { key: 'list', weight: 0.5, brief: 'a tiny list of two to four items on separate lines, with a few words before it' },
 ]
 
@@ -186,6 +205,12 @@ export type GeneratedReservePost = {
   imagePrompt: string | null
 }
 
+/**
+ * Readers must never sense that a post or comment was machine-written: once
+ * they do, the immersion is gone (shared by the post and comment prompts).
+ */
+export const IMMERSION_RULE = 'Absolutely never let it read as AI-written: readers who sense a machine lose their immersion at once and stop trusting everyone here. No polished, balanced, over-helpful or explaining tone, no textbook phrasing, no lists, no stock filler; write it the way this one person would actually thumb it out on their phone, imperfect and casual.'
+
 export function buildReserveInstructions(persona: Pick<ReservePersona, 'language'>): string {
   const languageName = getSttLanguageDisplayName(persona.language, 'en') || persona.language
   return [
@@ -194,13 +219,15 @@ export function buildReserveInstructions(persona: Pick<ReservePersona, 'language
     `Each slot names the language to write in. ${languageName} (${persona.language}) is this person's own language: write those posts exactly the way a native speaker of the persona's age types on their phone to friends, with the slang, abbreviations, sentence endings and written laughter that are normal in that language right now.`,
     'A slot in any other language is written by this person as a learner of it, at the level in "learner". Make the level audible: the mistakes and stiffness that a native speaker of the persona\'s own language really makes in that language, not random errors. Learner posts are simpler and more polite than the person\'s native posts, the poster quirks mostly do not carry over, and a learner may add the same line in their own language underneath.',
     'When a slot has "photo", the post goes out with one phone photo of that kind; when "photo" is false there is no photo and "photo" stays empty. Write the text as a caption or remark that fits the photo, and describe the photo in "photo" in English, in one or two sentences, as a casual phone snapshot: what is in it, where, and how it is framed.',
-    'Photo kinds: "self" shows the poster with their face; "self_faceless" shows the poster but not their face; "self_back" shows the poster from behind; "friends" shows the poster with friends; "scene" shows no recognizable person (a street, a view, a shop front, a pet, an object, a desk, a hand holding something, or food or a drink, which is at most one scene in three). A slot with the poster in it also has a "setup" (who took it, framing, pose): follow it, and pick a concrete place in the persona\'s city and an outfit that fit the post and the person. Refer to the poster as "the poster" and never describe their face, hair or body: that is added later. Everyone is an adult; no school uniforms.',
+    'Photo kinds: "self" shows the poster with their face; "self_faceless" shows the poster but not their face; "self_back" shows the poster from behind; "friends" shows the poster with friends; "scene" shows no recognizable person (a street, a view, a shop front, a pet, an object, a desk, a hand holding something, or food or a drink, which is at most one scene in three). A slot with a photo usually also has a "setup" (who took it, framing, pose; for a scene, how it is framed): follow it, and pick a concrete place in the persona\'s city and an outfit that fit the post and the person. Never a shot looking down at the poster\'s own feet, legs, shoes or lap. Refer to the poster as "the poster" and never describe their face, hair or body: that is added later. Everyone is an adult; no school uniforms.',
     'When a slot has "photoPlace", the poster is on a trip there: the photo was taken in that place, not in the persona\'s city, so pick a concrete real spot there (a named street, palace, market, café, beach or view) and write the post as a visitor.',
     'Get the real world right in the photo: a landmark is only where it really stands as seen from that spot, and anything the description says about the body is anatomically possible. Most photos are taken in ordinary daylight, indoors or at night; a sunset, dusk or evening-sun photo is rare (at most one post in fifteen), and when there is one it faces west (an east-facing beach like Haeundae or Gwangalli has sunrises, not sunsets).',
     'What is on their own screen (notes, a chat, a map, a playlist, a score) is a screenshot, not a "scene": start the description with "Screenshot of", and never describe a photo of a phone or computer screen.',
-    'Never a photo of handwriting or study material (a notebook, handwritten notes, flashcards, a textbook or worksheet page): drawn, they look fake. For a study or language post, show something else around it (the café or desk, a drink, the view) or make the post about something else.',
+    'Never a photo of handwriting or study material (a notebook, handwritten notes, flashcards, a textbook or worksheet page): drawn, they look fake. For a study or language post, show where they are or what they see right now (the street, the subway, their room, a meal, a view) or make the post about something else.',
+    'A café table with a coffee and a laptop is the most overused photo there is (staff, 2026-11-25): never use it for a study, work or language post; at most a rare photo of a café when the post is about that café itself, and then without a laptop.',
     'People post in wildly different ways, and "poster" is how this one does. It comes first: where it conflicts with the general advice below, "poster" wins. Let the type, length and voice show clearly across the set, so that this person could not be mistaken for another account. Register and punctuation hold in every post; each quirk shows in only about one post in three, never in all of them, and never in the same position twice in a row.',
     'Follow each slot\'s "shape" literally. The shapes differ on purpose: the posts must not share one length, one rhythm or one sentence ending.',
+    'Keep every post short (staff, 2026-11-25): most are a few words or one line, and none runs past three short lines, whatever "poster" says about length. The only exception is a self-introduction or hello post, whose shape says it may run longer (up to six short lines).',
     'What makes a post sound human: it is about one specific thing (the actual dish, the actual title, the number of hours, the exact annoying thing), it starts in the middle without setting the scene, and it does not explain how the writer feels about it.',
     'What makes a post sound machine-written, so never do it: a tidy general statement about what is nice, precious or special; describing a mood or an atmosphere; a reflective conclusion or a lesson; balanced, complete, well-formed sentences one after another; addressing "everyone"; asking a survey-like question about preferences in formal wording; words like "truly", "precious", "special", "moment", "time to" used to wrap up a feeling.',
     'Imperfection is welcome: dropped subjects and particles, a run-on, an abrupt stop, a mild typo once in a while. Mild grumbling, laziness, boredom and self-mockery are more common than gratitude.',
@@ -210,6 +237,7 @@ export function buildReserveInstructions(persona: Pick<ReservePersona, 'language
     'The posts are published on unknown future days. Words like "today", "just now", "earlier" and "tonight" are fine. Never mention a date, weekday, month, season, weather, temperature, holiday, exam period or current event.',
     'Use only facts consistent with the persona. Do not invent a specific employer, school or real person. No politics, religion debate, sexual content, or anything about money or selling.',
     'Never include contact details, links, other apps, @mentions or phone numbers, and never mention HashChat or being an AI.',
+    IMMERSION_RULE,
     'Answer with JSON: {"posts": [{"slot": <number>, "text": "<the post>", "photo": "<photo description or empty>"}]} with exactly one entry per slot.',
   ].join('\n')
 }
@@ -272,15 +300,26 @@ export async function generateReservePosts(args: {
   const profile = reservePosterProfile(args.seed ?? `${args.persona.name ?? ''}|${args.persona.city ?? ''}|${args.persona.language}`, args.persona.gender ?? null)
   const seed = args.seed ?? `${args.persona.name ?? ''}|${args.persona.city ?? ''}|${args.persona.language}`
   const learner = reserveLearnerPlan(seed, args.persona.language, args.persona.learning)
+  const boothShare = BOOTH_LANGUAGES.test(args.persona.language)
+    ? args.persona.gender === 'female' ? PHOTO_BOOTH_SHARE.female : args.persona.gender === 'male' ? PHOTO_BOOTH_SHARE.male : 0
+    : 0
   const slots = args.topics.map((topic, index) => {
     const language = random() < learner.share ? learner.language : args.persona.language
+    // Not instead of a photo intro, which shows one good photo of them.
+    const booth = !INTRO_TOPICS.has(topic) && random() < boothShare
     return {
       slot: index + 1,
       topic: briefs.get(topic) ?? topic,
-      shape: pickShape(random, profile.shapeFactors).brief,
+      shape: LONG_TOPICS.has(topic) ? LONG_SHAPE : pickShape(random, profile.shapeFactors).brief,
       language,
-      photo: PHOTO_TOPICS.has(topic) || random() < profile.photoShare ? pickPostPhoto(random) : null,
+      photo: booth
+        ? { kind: 'self' as const, setup: PHOTO_BOOTH_SETUP }
+        : INTRO_TOPICS.has(topic)
+        ? { kind: 'self' as const, setup: INTRO_PHOTO_SETUP }
+        : PHOTO_TOPICS.has(topic) || random() < profile.photoShare ? pickPostPhoto(random) : null,
+      photoBooth: booth,
       photoPlace: topic === 'korea_trip' ? pickKoreaTripPlace(random) : null,
+      profilePhoto: INTRO_TOPICS.has(topic) && random() < INTRO_PROFILE_PHOTO_SHARE,
     }
   })
   const seen = new Set(args.existingTexts.map(reservePostKey))
@@ -294,7 +333,7 @@ export async function generateReservePosts(args: {
       persona: modelPersona(args.persona),
       poster: { type: profile.type.brief, length: profile.length.brief, voice: profile.voice },
       learner: { language: learner.language, level: learner.level.brief },
-      slots: slots.map(({ photoPlace, ...slot }) => ({
+      slots: slots.map(({ photoPlace, profilePhoto: _profilePhoto, photoBooth: _photoBooth, ...slot }) => ({
         ...slot,
         photo: slot.photo ? slot.photo.kind : false,
         ...(slot.photo?.setup ? { setup: slot.photo.setup } : {}),
@@ -317,7 +356,7 @@ export async function generateReservePosts(args: {
     timeoutMs: CALL_TIMEOUT_MS,
   })
 
-  return collectGeneratedPosts(items, slots, args.topics, seen)
+  return collectGeneratedPosts(items, slots, args.topics, seen, args.persona.language)
 }
 
 /**
@@ -359,7 +398,7 @@ export async function rewriteReservePostText(args: {
       'This call rewrites ONE post staff sent back, so "slots" has one slot. Its photo is already decided: "fixedPhoto" describes it. Keep that photo and write a new text that fits it as its caption; copy "fixedPhoto" unchanged into "photo" (empty when there is none).',
       `The input also has "revision": the post's current text ("previousText"). The new text must be clearly different from it in wording and opening${args.feedback ? ', and follow the staff "feedback" first, also where it conflicts with the advice above' : ''}.`,
       'Keep what the post is about (the subject of "previousText" and the photo) unless the staff "feedback" asks for something else; change how it is said.',
-      'Do not copy the register, length or sentence endings of "previousText": staff sent it back, so it may be off. Write it the way this person really posts: usually one to three short lines, not a paragraph.',
+      'Do not copy the register, length or sentence endings of "previousText": staff sent it back, so it may be off. Write it the way this person really posts: usually one to three short lines, not a paragraph (only a self-introduction or hello may run to six short lines).',
       'Register: someone under 40 posting on a social app writes casually. In Korean that means 반말 or short 해요-style endings with ㅋㅋ/ㅠㅠ as the voice allows, never the written -습니다/-ㅂ니다 style; in other languages, the casual phone register of that age.',
       'The input also has "profile": everything on this person\'s profile (gender, age, city and country, bio, the languages they speak and the ones they learn with a level from 1 to 5). The text must be something this exact person would post: their age group\'s everyday register in their own language (a young native speaker types casually to friends, not in polite written style, unless "poster" says otherwise), their life as the bio tells it (job or study, where they live, what they like), their gender, and, when the slot is in a language they learn, that level. Use facts from the bio; never contradict the profile or invent a different life.',
     ].join('\n'),
@@ -400,11 +439,40 @@ export async function rewriteReservePostText(args: {
   return null
 }
 
+/** Letters that mark a language's own script; languages written in Latin letters have none. */
+const SCRIPTS: Record<string, RegExp> = {
+  ko: /\p{Script=Hangul}/u,
+  ja: /[\p{Script=Hiragana}\p{Script=Katakana}]/u,
+  zh: /\p{Script=Han}/u,
+  ru: /\p{Script=Cyrillic}/u, kk: /\p{Script=Cyrillic}/u, uk: /\p{Script=Cyrillic}/u,
+  ar: /\p{Script=Arabic}/u, fa: /\p{Script=Arabic}/u,
+  th: /\p{Script=Thai}/u, hi: /\p{Script=Devanagari}/u,
+}
+const LATIN = /\p{Script=Latin}/u
+
+function writtenIn(text: string, language: string): boolean {
+  const base = (canonicalizeSttLanguageCode(language) || language).split('-')[0]
+  return (SCRIPTS[base] ?? LATIN).test(text)
+}
+
+/**
+ * The language a post is really in. The model now and then writes a learner
+ * slot in the person's own language anyway; it was stored as the slot's
+ * language (a Japanese post marked "한국어로 씀", with no translation offered,
+ * staff 2026-11-24). A post without a single letter of the slot's script is
+ * taken to be in the person's own language when it is written in that one.
+ */
+export function languageOfPost(text: string, planned: string, own: string): string {
+  if (planned === own || writtenIn(text, planned)) return planned
+  return writtenIn(text, own) ? own : planned
+}
+
 function collectGeneratedPosts(
   items: Array<{ slot?: unknown; text?: unknown; photo?: unknown }>,
-  slots: Array<{ language: string; photo: ReturnType<typeof pickPostPhoto> | null; photoPlace: string | null }>,
+  slots: Array<{ language: string; photo: ReturnType<typeof pickPostPhoto> | null; photoPlace: string | null; profilePhoto?: boolean; photoBooth?: boolean }>,
   topics: string[],
   seen: Set<string>,
+  ownLanguage: string,
 ): GeneratedReservePost[] {
   const result: GeneratedReservePost[] = []
   const usedSlots = new Set<number>()
@@ -419,7 +487,7 @@ function collectGeneratedPosts(
     usedSlots.add(slot)
     const plan = slots[slot - 1].photo
     const photo = plan && typeof item.photo === 'string' ? item.photo.replace(/\s+/g, ' ').trim().slice(0, IMAGE_PROMPT_MAX_CHARS) : ''
-    result.push({ topic: topics[slot - 1], text, language: slots[slot - 1].language, imagePrompt: plan && photo ? encodePostPhoto(plan.kind, photo, slots[slot - 1].photoPlace) : null })
+    result.push({ topic: topics[slot - 1], text, language: languageOfPost(text, slots[slot - 1].language, ownLanguage), imagePrompt: plan && photo ? encodePostPhoto(plan.kind, `${slots[slot - 1].profilePhoto ? PROFILE_PHOTO_MARKER : slots[slot - 1].photoBooth ? PHOTO_BOOTH_MARKER : ''}${photo}`, slots[slot - 1].photoPlace) : null })
   }
   return result
 }

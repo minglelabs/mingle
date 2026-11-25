@@ -1,6 +1,6 @@
 import { buildClientApiPath } from '@/lib/api-contract'
 import { isAccountRestrictedBody } from '@/lib/account-restriction'
-import type { CommentImage, CommentListResponse } from './comment-types'
+import type { CommentAuthor, CommentImage, CommentListResponse } from './comment-types'
 
 /**
  * Fetch layer for the comment sheet. Every call returns a discriminated result
@@ -93,6 +93,8 @@ export type CreateCommentResult = {
   bodyVersion: number
   createdAt: string
   image?: CommentImage | null
+  /** The author's current identity (avatar/name/badges); absent on older servers. */
+  author?: CommentAuthor
 }
 
 /** Upload a prepared photo for a comment; same endpoint (and key scope) as post images. */

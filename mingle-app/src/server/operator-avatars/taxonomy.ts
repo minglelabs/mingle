@@ -12,6 +12,7 @@
  * existing character, no text or logo in the image.
  */
 import { phonePhotoRealism } from './photo-realism'
+import { MIRROR_FRAMINGS, MIRROR_PLACES } from './mirror-places'
 import { describeFace, foreheadFringe, HAIRLINE, subtleTraits, type FaceGrade } from './face-anatomy'
 export const AVATAR_SPEC_VERSION = 1
 
@@ -64,16 +65,17 @@ export const AVATAR_CATEGORIES: ReadonlyArray<{ key: AvatarCategory; ko: string;
   { key: 'body', ko: '몸 위주', weight: 10 },
   { key: 'part', ko: '손·발·부분', weight: 2 },
   { key: 'group', ko: '여러 명', weight: 6 },
-  { key: 'object', ko: '사물', weight: 5 },
+  // Staff 2026-11-24: more scenery, solid-color and fan (a singer or actor they like) pictures, a little less anime.
+  { key: 'object', ko: '사물', weight: 7 },
   { key: 'animal', ko: '동물', weight: 4 },
-  { key: 'scenery', ko: '풍경·장소', weight: 2 },
+  { key: 'scenery', ko: '풍경·장소', weight: 9 },
   // Staff like 2D profile pictures (2026-11): about one in five accounts gets an anime-style drawing.
-  { key: 'other', ko: '그림·글자', weight: 45 },
+  { key: 'other', ko: '그림·글자', weight: 40 },
 ]
 
 /** East Asian profiles hide the face more; Western and Latin American ones show it more. */
 const FACE_SHY_COUNTRIES = new Set(['KR', 'JP', 'TW', 'CN'])
-const FACE_FORWARD_COUNTRIES = new Set(['US', 'CA', 'GB', 'AU', 'FR', 'DE', 'ES', 'IT', 'BR', 'MX', 'AR', 'TR'])
+const FACE_FORWARD_COUNTRIES = new Set(['US', 'CA', 'GB', 'AU', 'FR', 'DE', 'ES', 'IT', 'BR', 'MX', 'AR', 'TR', 'RU'])
 
 const CATEGORY_COUNTRY_FACTORS: Record<'shy' | 'forward', Partial<Record<AvatarCategory, number>>> = {
   shy: { face: 0.9, partial: 1.4, back: 1.3, object: 1.2, scenery: 1.2 },
@@ -112,6 +114,8 @@ export const AVATAR_SUBTYPES: Record<AvatarCategory, readonly Subtype[]> = {
     sub('look_back', '뒤돌아보는 순간', 2, 'glancing back over the shoulder toward the camera'),
     sub('laughing', '웃다가 찍힘', 2, 'caught laughing, eyes half closed, not posed'),
     sub('lying_down', '누워서 셀카', 1, 'lying on a bed or sofa, phone held above the face'),
+    // Staff (2026-11-23): many real people use their ID or studio profile photo; almost none here did.
+    sub('id_photo', '증명사진', 3.5, 'a head-and-shoulders ID photo'),
   ],
   partial: [
     sub('mirror_phone', '폰으로 가린 거울 셀카', 5, 'a mirror selfie where the phone covers most of the face'),
@@ -200,6 +204,9 @@ export const AVATAR_SUBTYPES: Record<AvatarCategory, readonly Subtype[]> = {
     sub('single_flower', '꽃 한 송이', 1.5, 'one flower up close (a rose, a tulip or a white peony)'),
     sub('mascot', '마스코트 조형물', 1, 'a big cute mascot statue or costumed character in front of a shop or at a tourist spot, photographed on the street'),
     sub('rain_window', '비 오는 창문', 1.5, 'raindrops on a window with blurred city lights behind'),
+    // A fan's picture of a singer or actor they like. Never a real person's face: the image model
+    // cannot draw one, and it must not, so the performer stays too small, blurred or turned to recognize.
+    sub('fan_goods', '연예인 굿즈', 20, 'a fan\'s things on a desk or held in a hand: a K-pop-style album, a lightstick and a photocard of a performer, the photocard\'s picture small, glare-covered or turned so no face can be made out'),
   ],
   animal: [
     sub('dog', '강아지', 5, 'a pet dog'),
@@ -220,14 +227,16 @@ export const AVATAR_SUBTYPES: Record<AvatarCategory, readonly Subtype[]> = {
     sub('plane_window', '비행기 창밖', 1.5, 'the view out of an airplane window over clouds'),
     sub('alley', '골목', 2, 'a quiet street or alley typical of the persona\'s city'),
     sub('landmark', '여행지', 1.5, 'a famous kind of landmark photographed like a tourist would'),
+    sub('fan_concert', '콘서트·팬캠', 10, 'a concert seen from the crowd on a phone: a big lit stage far away, the performers tiny, blurred and unrecognizable under the stage lights, raised lightsticks glowing in the dark foreground'),
   ],
   other: [
-    sub('anime_icon', '애니풍 그림', 30, 'an anime-style drawing'),
+    sub('anime_icon', '애니풍 그림', 21, 'an anime-style drawing'),
     sub('sticker_char', '캐릭터 스티커', 2.5, 'a cute, simple cartoon animal or blob character in the style of a messenger-app sticker, on a plain white background, with two or three hand-drawn words in a speech bubble in the everyday language of {country}'),
     sub('lettering', '글자 이미지', 1, 'a short word or a name in loose hand-lettered script on a soft pastel background'),
     sub('doodle', '낙서풍 자화상', 2, 'a simple hand-drawn doodle self-portrait on paper, in an original style'),
     sub('watercolor', '수채화', 1, 'a small amateur watercolor painting of a landscape'),
     sub('emoji_plain', '단색 배경', 0.5, 'a plain pastel background with one small simple shape in the center'),
+    sub('solid_color', '단색', 4, 'one flat solid color filling the whole square and nothing else: black, white, grey, beige, navy or a soft pastel'),
   ],
 }
 
@@ -260,6 +269,11 @@ const COUNTRY_PEOPLE: Record<string, ReadonlyArray<readonly [string, AncestryKey
   MX: [['Mexican mestizo', 'latino', 9], ['light-skinned Mexican', 'white', 1]],
   AR: [['Argentine of European descent', 'white', 8], ['Argentine mestizo', 'latino', 2]],
   TR: [['Turkish', 'middle_eastern', 1]],
+  RU: [['Russian', 'white', 9], ['Tatar Russian', 'mixed', 1]],
+  SA: [['Saudi', 'middle_eastern', 1]],
+  AE: [['Emirati', 'middle_eastern', 4], ['Arab expat in the UAE', 'middle_eastern', 3], ['South Asian expat in the UAE', 'south_asian', 3]],
+  KZ: [['Kazakh', 'east_asian', 7], ['Russian Kazakhstani', 'white', 3]],
+  UZ: [['Uzbek', 'mixed', 9], ['Russian Uzbekistani', 'white', 1]],
 }
 
 /**
@@ -377,11 +391,12 @@ const SKIN_FEATURES: readonly Option[] = [
  * typical (90), and one mild trait such as slightly wide-set eyes kept 95
  * while easing the typical look (see STRIKING for where it settled).
  */
-// Staff (2026-11-12): more good-looking accounts; half are now striking.
+// Staff (2026-11-12): more good-looking accounts; half were striking. Staff (2026-11-24): striking
+// faces all came out the idol face, and an everyday pretty East Asian face was rare; now 30 %.
 const ATTRACTIVENESS: readonly Option[] = [
-  ['ordinary', 12, 'an ordinary-looking person'],
-  ['pleasant', 38, 'a likable, pretty face'],
-  ['striking', 50, ''],
+  ['ordinary', 15, 'an ordinary-looking person'],
+  ['pleasant', 55, 'a likable, pretty face'],
+  ['striking', 30, ''],
 ]
 
 /**
@@ -589,15 +604,25 @@ function outfitsFor(options: readonly Option[], gender: 'female' | 'male' | null
 // ─── 4. How it was shot, and where ───────────────────────────────────────────
 
 const SHOOTERS: readonly Option[] = [
-  ['selfie', 5, 'a front-camera selfie held at arm\'s length'], ['friend', 4, 'taken by a friend standing a few steps away'],
-  ['candid', 2.5, 'a candid shot, the subject not posing'], ['timer', 1, 'taken with a timer, the phone propped on something'],
+  // Fewer selfies (staff, 2026-11-25): a selfie cannot be taken from far away.
+  ['selfie', 3, 'a front-camera selfie held at arm\'s length'], ['friend', 5, 'taken by a friend standing a few steps away'],
+  ['candid', 3.5, 'a candid shot, the subject not posing'], ['timer', 1, 'taken with a timer, the phone propped on something'],
   ['group_crop', 1, 'cropped out of a group photo, part of someone else\'s shoulder at the edge'],
 ]
 
+// Spread wide on purpose: nearly every picture came out at the same chest-up distance (staff, 2026-11-23).
 const DISTANCES: readonly Option[] = [
-  ['closeup', 3, 'a close-up of the face'], ['shoulders', 4, 'framed from the shoulders up'], ['chest', 3, 'framed from the chest up'],
-  ['waist', 2.5, 'framed from the waist up'], ['full', 1.5, 'a full-body shot, the face small in the frame'],
+  ['extreme_closeup', 1.5, 'very close: the face fills most of the frame, the top of the head or the chin cut off by the edge'],
+  ['closeup', 2.5, 'a close-up of the face'], ['shoulders', 3, 'framed from the shoulders up'], ['chest', 2.5, 'framed from the chest up'],
+  // Far shots much more often (staff, 2026-11-25: almost every face came out the same size).
+  ['waist', 2, 'framed from the waist up'], ['knees', 2, 'framed from the knees up, taken from a few meters away'],
+  ['full', 3, 'a full-body shot, the face small in the frame'],
+  ['far', 5, 'taken from far away: the person small in a wide view of the place, from across the street or the room, zoomed in a little so the background looks compressed'],
 ]
+/** Distances an arm's length cannot reach. */
+const BEYOND_ARM = new Set(['knees', 'full', 'far'])
+/** Distances that show the body below the waist. */
+const BODY_DISTANCES = new Set(['waist', 'knees', 'full', 'far'])
 
 const COMPOSITIONS: readonly Option[] = [
   ['centered', 4, 'subject centered'], ['off_center', 3, 'subject off to one side'], ['tilted', 1.5, 'the frame slightly tilted'], ['cut_off', 1.5, 'the top of the head cut off by the frame'],
@@ -658,10 +683,8 @@ const LOCATIONS: Record<'indoor' | 'outdoor' | 'mirror', readonly Option[]> = {
     ['campus', 1, 'on a university campus'], ['night_street', 1.5, 'on a city street at night'], ['flower_field', 0.8, 'near flowering trees or a flower field'],
     ['travel_city', 1.5, 'on a street in a foreign city, as a tourist'], ['festival', 0.6, 'at an outdoor festival'], ['stadium', 0.5, 'in stadium stands'],
   ],
-  mirror: [
-    ['hall_mirror', 3, 'in the hallway mirror at home'], ['bedroom_mirror', 3, 'in a bedroom mirror'], ['bathroom_mirror', 2, 'in a bathroom mirror'],
-    ['elevator', 2, 'in an elevator mirror'], ['shop_mirror', 1.5, 'in a clothing-shop mirror'], ['gym_mirror', 1.5, 'in a gym mirror'],
-  ],
+  // Anywhere with a mirror or a reflection, not mostly at home (mirror-places.ts).
+  mirror: MIRROR_PLACES,
 }
 
 const ANIMAL_SHOTS: readonly Option[] = [
@@ -983,7 +1006,7 @@ export function pickAnimeStyle(random: Random): string {
 }
 
 /** Pictures made in an app, not photographed: the phone-photo lines would turn them into photos. */
-const DIGITAL_SUBTYPES = new Set(['anime_icon', 'sticker_char', 'lettering', 'emoji_plain'])
+const DIGITAL_SUBTYPES = new Set(['anime_icon', 'sticker_char', 'lettering', 'emoji_plain', 'solid_color'])
 /** Pictures whose subject is a few words. */
 // Handwriting photos were dropped: drawn writing breaks up and looks fake (staff, 2026-10).
 const LETTER_SUBTYPES = new Set(['sticker_char', 'lettering'])
@@ -993,6 +1016,25 @@ const DIGITAL_RULES = [
   'An original design: no existing character from any anime, game, manga or brand, and not a real or famous person. Any person drawn is an adult.',
   'No text, captions, watermarks, logos, signatures, borders or frames.',
 ].join(' ')
+
+/** 증명사진: how the photo came to be (a studio file, or the printed one photographed). */
+const ID_PHOTO_SOURCES: readonly Option[] = [
+  ['studio_file', 6, 'the digital file from a neighborhood photo studio: shot straight on against a plain seamless background, even soft studio light from the front, sharp focus'],
+  ['studio_profile', 3, 'a slightly more relaxed studio profile shot of the kind people get for a resume or a job application: straight on, plain backdrop, soft even light, shoulders a little turned'],
+  ['phone_of_print', 1.5, 'a phone photo of a small printed ID photo lying on a desk, the print filling most of the frame, a bit of the desk around it, faint reflections on the glossy paper'],
+]
+const ID_PHOTO_BACKDROPS: readonly Option[] = [
+  ['white', 3, 'a white backdrop'], ['light_gray', 2, 'a light gray backdrop'], ['pale_blue', 2, 'a pale blue backdrop'],
+  ['ivory', 1, 'an ivory backdrop'], ['soft_gradient', 1, 'a soft gray gradient backdrop'],
+]
+const ID_PHOTO_EXPRESSIONS: readonly Option[] = [
+  ['neutral', 3, 'a calm, neutral face with the mouth closed'], ['slight_smile', 3, 'a slight closed-lip smile'],
+  ['polite_smile', 2, 'a polite smile just showing the upper teeth'],
+]
+const ID_PHOTO_OUTFITS: readonly Option[] = [
+  ['shirt', 3, 'a plain collared shirt'], ['blouse_knit', 2, 'a plain knit or blouse in a muted color'],
+  ['jacket', 2, 'a dark jacket over a plain top'], ['tee', 1, 'a plain crew-neck top'],
+]
 
 const RULES = [
   'It must look like a real, unedited photo from an ordinary person\'s phone gallery.',
@@ -1018,6 +1060,17 @@ export function describeAccountLook(persona: AvatarPersona, random: Random): str
     return option[2]
   }
   return describePerson(persona, { face: true, body: true, hair: true }, take, random, attributes)
+}
+
+/** The account's face and build without hair, for a reference photo whose hair stays as it is. */
+export function describeAccountFace(persona: AvatarPersona, random: Random): string {
+  const attributes: Record<string, string> = {}
+  const take: Picker = (axis, options) => {
+    const option = pick(options, random)
+    attributes[axis] = option[0]
+    return option[2]
+  }
+  return describePerson(persona, { face: true, body: true, hair: false }, take, random, attributes)
 }
 
 export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.random): AvatarSpec {
@@ -1046,11 +1099,23 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
     take('filter', FILTERS),
     take('flaw', flawsFor(mirrorShot)),
   ].filter(Boolean).join('; ')
+  const idPhoto = category === 'face' && subtype.key === 'id_photo'
   const lines: string[] = [category === 'other' && DIGITAL_SUBTYPES.has(subtype.key)
     ? 'A picture that someone uses as their social media profile picture.'
+    : idPhoto
+    ? 'An ID-style photo (the kind taken for a resume or a document) that someone uses as their social media profile picture.'
     : 'A casual photo that someone uses as their social media profile picture.']
 
-  if (category === 'face' || category === 'partial') {
+  if (idPhoto) {
+    // Its own shot: no phone, shooter or location; the studio decides the frame and the light.
+    lines.push(`Subject: ${describePerson(persona, { face: true, body: false, hair: true }, take, random, attributes)}, hair neatly done.`)
+    lines.push(`Framing: head and shoulders, centered, facing the camera; ${take('idSource', ID_PHOTO_SOURCES)}; ${take('backdrop', ID_PHOTO_BACKDROPS)}.`)
+    lines.push(`Expression and pose: ${take('expression', ID_PHOTO_EXPRESSIONS)}, ${take('headPose', [['straight', 1, 'head upright and straight']])}, eyes looking into the lens.`)
+    lines.push(`Wearing ${take('outfit', ID_PHOTO_OUTFITS)}.`)
+    lines.push('Real studio photo: real skin texture under a light, ordinary studio retouch (not airbrushed or smoothed over), natural colors, no props, nothing else in the frame.')
+    lines.push('Square 1:1 image. No text, captions, watermarks, logos, brand names, borders or frames anywhere in the image.')
+    lines.push('Any person shown is an adult, fully and ordinarily dressed. Not a real, identifiable or famous person, and no existing character.')
+  } else if (category === 'face' || category === 'partial') {
     const mirror = subtype.key === 'mirror_phone'
     // Some angles only a selfie can take, some only someone else can; the rest take either.
     const shooters = SELFIE_SUBTYPES.has(subtype.key)
@@ -1059,14 +1124,16 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
     const shooter = mirror ? 'a mirror selfie' : take('shooter', shooters)
     const selfie = attributes.shooter === 'selfie'
     // An arm's length does not reach a full-body shot.
-    const distance = take('distance', selfie ? DISTANCES.filter((option) => option[0] !== 'full') : DISTANCES)
+    // A covered or cropped face needs the face big enough to see what covers it.
+    const distances = DISTANCES.filter((option) => !(selfie && BEYOND_ARM.has(option[0])) && !(category === 'partial' && option[0] === 'far'))
+    const distance = take('distance', distances)
     lines.push(`Subject: ${describePerson(persona, { face: true, body: false, hair: true }, take, random, attributes)}.`)
     lines.push(`Framing: ${subtype.text}; ${selfie ? (SELFIE_SUBTYPES.has(subtype.key) ? 'a front-camera selfie with the arm stretched out' : 'a front-camera selfie, the phone held up in front at about eye level with the arm stretched out') : shooter}; ${distance}; ${take('composition', COMPOSITIONS)}.`)
     // Covering the face with a hand, an object or a pet already uses the free hand.
     const handsBusy = HANDS_BUSY_SUBTYPES.has(subtype.key)
     const handPoses = handsBusy ? HAND_POSES.filter((option) => option[0] === 'none') : selfie ? HAND_POSES.filter((option) => !TWO_HAND_POSES.has(option[0])) : HAND_POSES
     // A body pose only shows when the frame reaches below the waist.
-    const bodyPose = ['waist', 'full'].includes(attributes.distance) ? take('bodyPose', FRAMED_BODY_POSES) : ''
+    const bodyPose = BODY_DISTANCES.has(attributes.distance) ? take('bodyPose', FRAMED_BODY_POSES) : ''
     // Some angles already fix the head, and "caught laughing" fixes the expression.
     const headPose = HEAD_FIXED_SUBTYPES.has(subtype.key) ? '' : take('headPose', HEAD_POSES)
     const expression = subtype.key === 'laughing' ? '' : take('expression', EXPRESSIONS)
@@ -1079,6 +1146,7 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
       ? (env = 'indoor', take('location', LOCATIONS.indoor.filter((option) => ['bedroom', 'living_room'].includes(option[0]))))
       : takeLocation(mirror ? 'mirror' : random() < 0.55 ? 'indoor' : 'outdoor')
     lines.push(`Setting: ${setting}, consistent with ${place}.`)
+    if (mirror) lines.push(`Mirror framing: ${take('mirrorFraming', MIRROR_FRAMINGS)}.`)
   } else if (category === 'back') {
     lines.push(`Subject: ${describePerson(persona, { face: false, body: true, hair: true }, take, random, attributes)}. The face is not visible at all.`)
     // The subtype already fixes what the body does unless the person is just standing somewhere.
@@ -1156,7 +1224,9 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
     if (LETTER_SUBTYPES.has(subtype.key)) lines.push('The words are the subject: spelled correctly, something a young person there would really write, and nothing else is written anywhere.')
   }
 
-  if (category === 'other' && DIGITAL_SUBTYPES.has(subtype.key)) {
+  if (idPhoto) {
+    // Already complete: phone-photo realism would fight the studio look.
+  } else if (category === 'other' && DIGITAL_SUBTYPES.has(subtype.key)) {
     lines.push(LETTER_SUBTYPES.has(subtype.key) ? DIGITAL_RULES.replace('No text, captions,', 'No other text, captions,') : DIGITAL_RULES)
   } else {
     if (category !== 'other') lines.push(`Camera and light: ${shot()}.`)

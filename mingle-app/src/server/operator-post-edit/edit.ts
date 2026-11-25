@@ -72,6 +72,25 @@ export async function editOperatorPostText(ctx: AdminContext, postId: string, ra
   return { ok: true }
 }
 
+/** No operator post is dated before the app existed. */
+const EARLIEST_POST_AT = new Date('2024-01-01T00:00:00Z')
+
+/**
+ * Moves a published operator post to another time (staff 2026-11-24: two
+ * posts published together showed the same minute). The time is in the past,
+ * since a future one would hide the post until then; the feed and the profile
+ * order by it.
+ */
+export async function editOperatorPostTime(ctx: AdminContext, postId: string, rawAt: unknown, now: Date = new Date()): Promise<OperatorPostEditResult> {
+  const post = await operatorPost(postId)
+  if (!post) return { ok: false, error: 'not_found', status: 404 }
+  const at = typeof rawAt === 'string' ? new Date(rawAt) : new Date(Number.NaN)
+  if (Number.isNaN(at.getTime()) || at.getTime() > now.getTime() || at < EARLIEST_POST_AT) return { ok: false, error: 'invalid_time', status: 400 }
+  await prisma.post.update({ where: { id: postId }, data: { publishedAt: at, createdAt: at } })
+  await writeAdminAudit(ctx, { action: 'operator_post.edit_time', operatorUserId: post.authorId, targetType: 'post', targetId: post.id, metadata: { at: at.toISOString() } })
+  return { ok: true }
+}
+
 /**
  * Any other post (a staff test post, or a real user's): hidden from everyone
  * the way a report would hide it, or shown again. Nothing goes to the review
@@ -155,4 +174,27 @@ export async function setOperatorPostHidden(ctx: AdminContext, postId: string, h
     ...(reserveId ? { metadata: { reserveId } } : {}),
   })
   return { ok: true, ...(reserveId ? { reserveId } : {}) }
+}
+
+/**
+ * Deletes an operator's published post for good (staff, 2026-11-24), the way
+ * its author deletes it from the app (`isDeleted` + `deletedAt`): gone from
+ * every feed, profile and search. A copy of it still waiting in review (from
+ * an earlier 내리고 검토로) is cancelled too, so it never comes back.
+ */
+export async function deleteOperatorPost(ctx: AdminContext, postId: string): Promise<OperatorPostEditResult> {
+  const post = await operatorPost(postId)
+  if (!post) return { ok: false, error: 'not_found', status: 404 }
+  const [, cancelled] = await prisma.$transaction([
+    prisma.post.update({ where: { id: post.id }, data: { isDeleted: true, deletedAt: new Date() } }),
+    prisma.operatorPostReserve.updateMany({ where: { postId: post.id, state: 'review' }, data: { state: 'cancelled', releaseAt: null } }),
+  ])
+  await writeAdminAudit(ctx, {
+    action: 'operator_post.delete',
+    operatorUserId: post.authorId,
+    targetType: 'post',
+    targetId: post.id,
+    metadata: { cancelledReviewCopies: cancelled.count },
+  })
+  return { ok: true }
 }

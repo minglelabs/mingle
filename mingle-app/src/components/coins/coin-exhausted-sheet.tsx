@@ -4,7 +4,11 @@ import HashSeedIcon from "@/components/coins/hash-seed-icon";
 import type { AppLocale } from "@/i18n";
 import { resolveLegalDocumentLocale } from "@/i18n/config";
 import { fillCoinCopy, getCoinCopy } from "@/i18n/coin-copy";
-import { useCoinWallet } from "@/lib/coin-wallet-client";
+import { REFERRAL_REWARD_COINS } from "@/lib/referral-code";
+import { openInviteScreen } from "@/lib/native-invite";
+import { formatCoinCount } from "./coin-balance-chip";
+import { dismissSoftKeyboard, useCoinWallet } from "@/lib/coin-wallet-client";
+import { useEffect } from "react";
 import { useCoinClock } from "./coin-balance-chip";
 
 /**
@@ -25,6 +29,11 @@ export default function CoinExhaustedSheet({
   const copy = getCoinCopy(locale);
   const { wallet } = useCoinWallet();
   const now = useCoinClock(open);
+  // Hash often runs out while typing: with the composer focused, the sheet
+  // would sit under the keyboard where nobody sees it.
+  useEffect(() => {
+    if (open) dismissSoftKeyboard();
+  }, [open]);
 
   if (!open) return null;
 
@@ -66,6 +75,21 @@ export default function CoinExhaustedSheet({
           className="mt-5 flex min-h-12 w-full items-center justify-center rounded-full bg-slate-900 text-[15px] font-bold text-white transition active:bg-slate-700"
         >
           {copy.charge}
+        </button>
+        {/* Free Hash without paying: each friend who joins pays both sides. */}
+        <button
+          type="button"
+          data-qa="coin-exhausted-invite"
+          onClick={() => {
+            onClose();
+            openInviteScreen();
+          }}
+          className="mt-2 flex min-h-12 w-full flex-col items-center justify-center rounded-full border border-amber-300 bg-amber-50 px-4 py-1.5 text-amber-900 transition active:bg-amber-100"
+        >
+          <span className="text-[15px] font-bold">{copy.inviteForFree}</span>
+          <span className="text-[12px] font-semibold text-amber-700">
+            {fillCoinCopy(copy.inviteForFreeNote, { coins: formatCoinCount(REFERRAL_REWARD_COINS, locale) })}
+          </span>
         </button>
         <button
           type="button"

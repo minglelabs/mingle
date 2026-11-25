@@ -93,7 +93,7 @@ export const POSTER_TYPES: readonly PosterType[] = [
 const LENGTHS = [
   { key: 'terse', ko: '짧게', brief: 'keeps everything shorter than the shape suggests; never more than three lines' },
   { key: 'medium', ko: '보통', brief: 'ordinary length for each shape' },
-  { key: 'long', ko: '길게', brief: 'writes longer than the shape suggests, adding one more detail or aside every time' },
+  { key: 'long', ko: '조금 길게', brief: 'adds one more detail or aside than the shape suggests, still never more than three short lines' },
 ] as const
 
 const REGISTERS = [
@@ -183,20 +183,41 @@ export type LearnerPlan = {
 
 export type LearnerLevel = { key: string; ko: string; brief: string; /** 1-5, as on the profile's 관심 언어. */ dots: number }
 
+/**
+ * How each level writes. Staff (2026-11-25): learners read far too good, so
+ * every level is written well below its name; even 유창 still reads foreign.
+ */
 const LEARNER_LEVELS: readonly LearnerLevel[] = [
-  { key: 'starter', ko: '입문', dots: 1, brief: 'just started: only a few memorized phrases and greetings, two to five words, textbook polite form, basic words wrong or spelled the way they sound, often falls back to their own language mid-sentence' },
-  { key: 'beginner', ko: '초급', dots: 2, brief: 'a beginner: very short textbook sentences, the polite form taught first, a wrong particle or word order here and there, sometimes a word left in their own language' },
-  { key: 'intermediate', ko: '중급', dots: 3, brief: 'intermediate: can say what they mean in simple sentences, but the wording is slightly unnatural, mixes stiff written endings with chat endings, and makes an occasional grammar slip' },
-  { key: 'advanced', ko: '고급', dots: 4, brief: 'advanced: nearly natural and uses chat expressions, with only a rare odd word choice' },
-  { key: 'fluent', ko: '유창', dots: 5, brief: 'fluent: natural, with at most a faint foreign touch' },
+  { key: 'starter', ko: '입문', dots: 1, brief: 'barely started: knows only a handful of words and set phrases (hello, thank you, I like ~, delicious). Writes one to four words in it, often misspelled the way they sound or with the wrong word; anything more goes in their own language (or simple English) with one or two learned words dropped in. Never a full correct sentence' },
+  { key: 'beginner', ko: '초급', dots: 2, brief: 'a beginner: two-to-five-word textbook sentences in the polite form taught first, a wrong particle, ending or word order in most of them, only the simplest words, and their own language (or simple English) for any word they do not know. No slang, no chat expressions' },
+  { key: 'intermediate', ko: '중급', dots: 3, brief: 'lower intermediate: short simple sentences that get the point across but sound plainly foreign: a grammar slip in most sentences (particles, endings, tense), odd or too-formal word choice, stiff textbook endings, now and then a word in their own language. No slang' },
+  { key: 'advanced', ko: '고급', dots: 4, brief: 'upper intermediate: understandable and fairly easy to read, but clearly a learner: unnatural phrasing, a wrong word or ending every sentence or two, textbook expressions where a native would use chat ones' },
+  { key: 'fluent', ko: '유창', dots: 5, brief: 'advanced: says what they mean, but still reads as a foreigner: a slightly odd word, ending or spacing now and then, and few of the slang or chat expressions a native would use' },
 ]
 
-/** How well people on the app speak the language they learn: mostly just started (60%, 25%, 10%, 4%, 1%). */
-const LEARNER_LEVEL_WEIGHTS = [60, 25, 10, 4, 1] as const
+/** How well people on the app speak the language they learn: almost all just started (staff 2026-11-25: much lower). */
+const LEARNER_LEVEL_WEIGHTS = [78, 17, 4, 1, 0] as const
 
-function pickLearnerLevel(roll: number): LearnerLevel {
-  let left = roll * LEARNER_LEVEL_WEIGHTS.reduce((sum, weight) => sum + weight, 0)
-  for (const [index, weight] of LEARNER_LEVEL_WEIGHTS.entries()) {
+/**
+ * Korean learners by where they are from (their own language), staff
+ * 2026-11-23 and 11-25: Westerners almost all just started; Japanese and
+ * Chinese mostly too; the rest a little further along.
+ */
+const KOREAN_LEARNER_WEIGHTS: ReadonlyArray<readonly [languages: readonly string[], weights: readonly number[]]> = [
+  [['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'tr', 'ar', 'kk'], [93, 6, 1, 0, 0]],
+  [['ja', 'zh'], [87, 11, 2, 0, 0]],
+]
+const OTHER_KOREAN_LEARNER_WEIGHTS = [82, 14, 3.5, 0.5, 0] as const
+
+function learnerWeights(nativeLanguage: string | null | undefined, learning: string): readonly number[] {
+  if (learning !== 'ko') return LEARNER_LEVEL_WEIGHTS
+  const native = (nativeLanguage ?? '').toLowerCase().split('-')[0]
+  return KOREAN_LEARNER_WEIGHTS.find(([languages]) => languages.includes(native))?.[1] ?? OTHER_KOREAN_LEARNER_WEIGHTS
+}
+
+function pickLearnerLevel(roll: number, weights: readonly number[] = LEARNER_LEVEL_WEIGHTS): LearnerLevel {
+  let left = roll * weights.reduce((sum, weight) => sum + weight, 0)
+  for (const [index, weight] of weights.entries()) {
     left -= weight
     if (left < 0) return LEARNER_LEVELS[index]
   }
@@ -204,8 +225,8 @@ function pickLearnerLevel(roll: number): LearnerLevel {
 }
 
 /** A fresh 1-5 level from the same mix, for staff asking the AI for a new profile. */
-export function randomLearnerDots(random: () => number = Math.random): number {
-  return pickLearnerLevel(random()).dots
+export function randomLearnerDots(random: () => number = Math.random, nativeLanguage: string | null = null, learning = 'ko'): number {
+  return pickLearnerLevel(random(), learnerWeights(nativeLanguage, learning)).dots
 }
 
 /** The level for a stored 1-5 dot count, or null when it is not one. */
@@ -228,7 +249,7 @@ export function learnerPlan(seed: string, nativeLanguage: string): LearnerPlan {
   }
   // Staff review: a foreign account mostly writing Korean reads as fake ("일본인이잖아").
   // Their own language comes first; Korean is the occasional learner post.
-  return { language: 'ko', share: pickOne([0.1, 0.15, 0.2, 0.3]), level: pickLearnerLevel(random()) }
+  return { language: 'ko', share: pickOne([0.1, 0.15, 0.2, 0.3]), level: pickLearnerLevel(random(), learnerWeights(native, 'ko')) }
 }
 
 /**
@@ -239,7 +260,7 @@ export function learnerPlan(seed: string, nativeLanguage: string): LearnerPlan {
 const MALE_PLAIN_SHARE = 0.55
 const MALE_EARNEST_SHARE = 0.15
 const MALE_NO_EMOJI_SHARE = 0.75
-const EARNEST_LENGTH = { key: 'earnest', ko: '진지하게 길게', brief: 'when they post, writes long and earnest: several full sentences that explain what they think and why, no jokes, no emoji' } as const
+const EARNEST_LENGTH = { key: 'earnest', ko: '진지하게 길게', brief: 'when they post, writes earnest: two or three full sentences that say what they think and why, no jokes, no emoji' } as const
 
 function forMen(profile: PosterProfile, seed: string): PosterProfile {
   const random = seeded(`poster-male:${seed}`)

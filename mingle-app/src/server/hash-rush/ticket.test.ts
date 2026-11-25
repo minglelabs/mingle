@@ -36,5 +36,8 @@ describe("hash rush tickets", () => {
   it("makes a game room id the game server accepts", () => {
     expect(hashRushRoomId("cmabc123XYZ")).toBe("mingle-cmabc123xyz");
     expect(hashRushRoomId("a/b c")).toBe("mingle-abc");
+    // One room per game: the session id's first 8 hex digits.
+    expect(hashRushRoomId("cmabc123XYZ", "4D848ED8-ED9B-4799-93C9-2330AF7DA91C")).toBe("mingle-cmabc123xyz-g4d848ed8");
+    expect(hashRushRoomId("cmabc123XYZ", "")).toBe("mingle-cmabc123xyz");
   });
 });

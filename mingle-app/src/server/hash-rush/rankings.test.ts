@@ -30,5 +30,7 @@ describe("hash rush round reports", () => {
     expect(parseHashRushRoundReport({ matchId: "x" })).toBeNull();
     expect(parseHashRushRoundReport({ matchId: "bad id!", players: [] })).toBeNull();
     expect(channelIdOfHashRushRoom("lobby-1")).toBeNull();
+    expect(channelIdOfHashRushRoom("mingle-cmabc123xyz-g4d848ed8")).toBe("cmabc123xyz");
+    expect(channelIdOfHashRushRoom("mingle-cmabc123xyz")).toBe("cmabc123xyz");
   });
 });

@@ -1537,8 +1537,12 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           <p data-qa="login-brand-tagline" className="max-w-[19rem] break-keep text-[1.05rem] font-bold leading-snug text-[#2D2A1E]">
             {resolveBrandTagline(props.locale)}
           </p>
-          {socialSignInFailed ? (
-            <p role="alert" className="text-lg font-bold leading-snug text-[#2D2A1E]">
+          {/* A failed sign-in shows in red on a white pill so it stands out on the orange background. */}
+          {socialSignInFailed || (props.authNotice && props.authNotice === resolveSignInFailedCopy(props.locale)) ? (
+            <p
+              role="alert"
+              className="rounded-2xl bg-white px-4 py-2.5 text-base font-bold leading-snug text-[#E5262D] shadow-sm"
+            >
               {resolveSignInFailedCopy(props.locale)}
             </p>
           ) : props.authNotice && signingInProvider === null && !isSigningIn ? (

@@ -13,6 +13,7 @@ import {
   type CoinPriceQuote,
   type CoinUsageKind,
   type CoinUsageUnits,
+  isFreeCoinQuote,
 } from './pricing'
 
 export type CoinWalletSnapshot = {
@@ -179,6 +180,18 @@ export async function chargeCoinUsage(input: CoinChargeInput): Promise<CoinCharg
       throw error
     }
     return { ...skipped, applied: true, chargedMicro: quote.chargedMicro }
+  }
+
+  // A free period (a rate of zero): the usage is recorded for cost review, the
+  // wallet is not read or locked, and an empty wallet is not reported as a refusal.
+  if (isFreeCoinQuote(quote)) {
+    try {
+      await prisma.appCoinUsageCharge.create({ data: { ...chargeRow(input, quote, now), chargedMicro: 0n } })
+    } catch (error) {
+      if (isUniqueViolation(error)) return { ...skipped, duplicate: true }
+      throw error
+    }
+    return { ...skipped, applied: true }
   }
 
   return withLockedWallet(input.userId, async (ctx) => {

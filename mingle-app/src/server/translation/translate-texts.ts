@@ -26,7 +26,7 @@ import {
 } from '@/app/api/translate/finalize/utils'
 import { sanitizeNonNegativeInt } from '@/lib/app-analytics'
 import { chatgptPoolChat } from '@/server/chatgpt-pool/client'
-import { extractJsonText, resolveJsonProvider } from '@/server/llm/generate-json'
+import { extractJsonText, OPERATOR_TEXT_MODEL } from '@/server/llm/generate-json'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -133,17 +133,18 @@ export type TranslateTextsInput = {
   /** Optional user prompt override */
   userPromptOverride?: string
   /**
-   * `chatgpt-pool`: translate on the ChatGPT pool (home PC) instead of the
-   * live providers. Only operator/staff surfaces pass it (see
-   * operatorTextProvider); a real user's translation never does, since the
-   * pool takes 10-25 s an answer.
+   * `operator`: operator/staff text (operatorTextProvider), translated on
+   * Claude Haiku 5.5 whatever modelSelection says. `chatgpt-pool`: on the
+   * ChatGPT pool (home PC); nothing in the app passes it any more.
    */
-  provider?: 'chatgpt-pool'
+  provider?: TextProvider
 }
 
-/** `chatgpt-pool` for operator and staff text where the server has the pool key, else the default providers. */
-export function operatorTextProvider(env: NodeJS.ProcessEnv = process.env): 'chatgpt-pool' | undefined {
-  return resolveJsonProvider(env) === 'chatgpt-pool' ? 'chatgpt-pool' : undefined
+export type TextProvider = 'chatgpt-pool' | 'operator'
+
+/** Operator and staff text: Claude Haiku 5.5 on the Anthropic API, never the ChatGPT pool (staff decided 2026-11-22). */
+export function operatorTextProvider(): 'operator' {
+  return 'operator'
 }
 
 const POOL_TRANSLATION_SYSTEM_PROMPT = [
@@ -1634,7 +1635,7 @@ export async function requestTranslationFromProvider(
  */
 export async function translateTexts(input: TranslateTextsInput): Promise<TranslateTextsResult> {
   if (input.provider === 'chatgpt-pool') return translateTextsWithPool(input)
-  const providerResolution = resolveTranslationProviderConfig(input.modelSelection)
+  const providerResolution = resolveTranslationProviderConfig(input.provider === 'operator' ? OPERATOR_TEXT_MODEL : input.modelSelection)
   if (!providerResolution.ok) {
     throw new Error(`Translation provider error: ${providerResolution.details}`)
   }

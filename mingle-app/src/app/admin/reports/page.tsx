@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { redirect } from "next/navigation";
+import Link from "next/link";
+import { adminProfileHref } from "../_lib/profile-href";
+import { OperatorAvatar } from "../operators/_components/operator-ui";
 import { EyeOff, FileText, MessageSquare, Send, ShieldBan, ShieldCheck, UserRound } from "lucide-react";
 import type { AccountBadgeFlags } from "@/lib/account-badge";
 import { prisma } from "@/lib/prisma";
@@ -67,7 +70,7 @@ const REPORT_DATE_FORMATTER = new Intl.DateTimeFormat("ko-KR", {
 });
 
 /** Identity fields shown for every person on a report card, badge flags included. */
-const REPORT_PERSON_SELECT = { id: true, name: true, handle: true, email: true, isOfficial: true, isOperator: true } as const;
+const REPORT_PERSON_SELECT = { id: true, name: true, handle: true, email: true, image: true, isOfficial: true, isOperator: true } as const;
 
 function readFormString(value: FormDataEntryValue | null): string {
   return typeof value === "string" ? value : "";
@@ -382,20 +385,24 @@ function resultMessage(result: string): string {
   }
 }
 
-type ReportPerson = AccountBadgeFlags & { id: string; name: string | null; handle: string | null; email: string | null };
+type ReportPerson = AccountBadgeFlags & { id: string; name: string | null; handle: string | null; email: string | null; image: string | null };
 
 function personLabel(person: ReportPerson): string {
   return person.name || (person.handle ? `@${person.handle}` : "") || person.email || person.id;
 }
 
 /** "Label: name" with the account-kind chip, so a report about an operator account is obvious. */
-function PersonLine({ label, person }: { label: string; person: ReportPerson }) {
+/** One person of a report with their profile photo; tapping opens their admin profile. */
+function PersonLine({ label, person, back }: { label: string; person: ReportPerson; back: string }) {
   return (
-    <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-slate-600">
-      <span className="font-semibold text-slate-700">{label}</span>
-      <span className="min-w-0 break-words">{personLabel(person)}</span>
+    <div className="flex items-center gap-2 text-sm text-slate-600">
+      <span className="w-[5.5rem] shrink-0 font-semibold text-slate-700">{label}</span>
+      <Link href={adminProfileHref(person.id, back)} className="flex min-w-0 items-center gap-2 rounded-lg active:bg-slate-50">
+        <OperatorAvatar image={person.image} name={person.name} size={40} />
+        <span className="min-w-0 break-words">{personLabel(person)}{person.handle && person.name ? <span className="ml-1 text-xs text-slate-400">@{person.handle}</span> : null}</span>
+      </Link>
       <AccountBadgeChip flags={person} />
-    </p>
+    </div>
   );
 }
 
@@ -461,8 +468,8 @@ export default async function AdminReportsPage({ searchParams }: AdminReportsPag
                 {report.reportedUser.moderationRestrictedAt ? <AdminChip icon={ShieldBan} tone="danger">이용 제한</AdminChip> : null}
               </div>
               <div className="space-y-1">
-                <PersonLine label="신고자" person={report.reporter} />
-                <PersonLine label={isContent ? "작성자" : report.targetType === "room" ? "방장" : "신고된 사용자"} person={report.reportedUser} />
+                <PersonLine label="신고자" person={report.reporter} back={returnTo} />
+                <PersonLine label={isContent ? "작성자" : report.targetType === "room" ? "방장" : "신고된 사용자"} person={report.reportedUser} back={returnTo} />
               </div>
               <time className="mt-1 block text-xs text-slate-500" dateTime={report.createdAt.toISOString()}>{REPORT_DATE_FORMATTER.format(report.createdAt)}</time>
               {report.targetPostId ? <p className="mt-1 break-all text-xs text-slate-400">게시물 {report.targetPostId}</p> : null}

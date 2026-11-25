@@ -38,13 +38,13 @@ describe('resolveDragAxis — direction lock', () => {
   })
 })
 
-describe('isDismissibleDrag — only downward vertical qualifies', () => {
+describe('isDismissibleDrag — vertical drags, down or up, qualify', () => {
   it('true for a downward vertical drag past the slop', () => {
     expect(isDismissibleDrag({ dx: 3, dy: 60 })).toBe(true)
   })
 
-  it('false for upward drags', () => {
-    expect(isDismissibleDrag({ dx: 3, dy: -60 })).toBe(false)
+  it('true for an upward vertical drag past the slop', () => {
+    expect(isDismissibleDrag({ dx: 3, dy: -60 })).toBe(true)
   })
 
   it('false for horizontal drags', () => {
@@ -56,22 +56,22 @@ describe('isDismissibleDrag — only downward vertical qualifies', () => {
   })
 })
 
-describe('offsetForDrag — upward is resisted', () => {
+describe('offsetForDrag — follows the finger both ways', () => {
   it('follows the finger 1:1 downward', () => {
     expect(offsetForDrag(100)).toBe(100)
     expect(offsetForDrag(0)).toBe(0)
   })
 
-  it('resists upward movement so the viewer does not lift away', () => {
-    expect(offsetForDrag(-100)).toBeCloseTo(-35)
-    expect(Math.abs(offsetForDrag(-100))).toBeLessThan(100)
+  it('follows the finger 1:1 upward', () => {
+    expect(offsetForDrag(-100)).toBe(-100)
   })
 })
 
 describe('dragProgress / opacity / scale mapping', () => {
-  it('is 0 at or below zero offset and clamps to 1', () => {
+  it('is 0 at zero offset, counts both directions, and clamps to 1', () => {
     expect(dragProgress(0)).toBe(0)
-    expect(dragProgress(-50)).toBe(0)
+    expect(dragProgress(-160)).toBeCloseTo(dragProgress(160))
+    expect(dragProgress(-100_000)).toBe(1)
     expect(dragProgress(100_000)).toBe(1)
   })
 
@@ -110,9 +110,18 @@ describe('shouldDismissOnRelease', () => {
     expect(shouldDismissOnRelease({ offsetY: FLICK_MIN_DISTANCE_PX - 1, velocityY: 3, viewportHeight })).toBe(false)
   })
 
-  it('never dismisses when there is no downward offset (upward ignored)', () => {
+  it('never dismisses with no offset', () => {
     expect(shouldDismissOnRelease({ offsetY: 0, velocityY: 5, viewportHeight })).toBe(false)
-    expect(shouldDismissOnRelease({ offsetY: -50, velocityY: 5, viewportHeight })).toBe(false)
+  })
+
+  it('dismisses an upward drag past the threshold or an upward flick', () => {
+    expect(shouldDismissOnRelease({ offsetY: -DISMISS_DISTANCE_MAX_PX, velocityY: 0, viewportHeight })).toBe(true)
+    expect(shouldDismissOnRelease({ offsetY: -50, velocityY: -1, viewportHeight })).toBe(true)
+  })
+
+  it('springs back when the flick goes against the drag', () => {
+    expect(shouldDismissOnRelease({ offsetY: -50, velocityY: 1, viewportHeight })).toBe(false)
+    expect(shouldDismissOnRelease({ offsetY: 50, velocityY: -1, viewportHeight })).toBe(false)
   })
 
   it('uses the smaller of the fractional threshold and the absolute cap', () => {

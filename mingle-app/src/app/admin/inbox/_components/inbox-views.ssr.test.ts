@@ -46,6 +46,7 @@ const roomView: InboxRoomViewData = {
     counterparts: [counterpart],
     isGroup: false,
     blocked: false,
+    blockedByOperator: [],
     replyUnavailableReason: null,
   },
   readReceiptMembers: [],

@@ -88,7 +88,7 @@ export async function commentOnPostAsOperator(
         where: visibleCommentsWhere(post.id, operatorUserId),
         orderBy: { createdAt: 'asc' },
         take: 20,
-        select: { authorId: true, sourceText: true },
+        select: { authorId: true, sourceText: true, author: { select: { isOperator: true } } },
       }),
       prisma.operatorPostReserve.findFirst({ where: { postId: post.id }, select: { imagePrompt: true } }),
     ])
@@ -136,6 +136,19 @@ export async function commentOnPostAsOperator(
  * per account in a thread. Same path as a comment otherwise (detection,
  * translations, the reply notification). Never throws.
  */
+/**
+ * True when an automatic reply would double up: this operator already answered
+ * the thread, or, under a real person's comment, any operator did (staff
+ * answering by hand as an operator counts, whichever account they used).
+ */
+export function threadBlocksAutoReply(
+  thread: ReadonlyArray<{ authorId: string; author?: { isOperator: boolean | null } | null }>,
+  operatorUserId: string,
+  rootIsReal: boolean,
+): boolean {
+  return thread.some((reply) => reply.authorId === operatorUserId || (rootIsReal && reply.author?.isOperator === true))
+}
+
 export async function replyToCommentAsOperator(
   ctx: AdminContext | null,
   input: { operatorUserId: string; commentId: string; now?: Date },
@@ -170,7 +183,8 @@ export async function replyToCommentAsOperator(
     ])
     const language = commenter ? sanitizeSttLanguageSelection(commenter.primaryLanguages)[0] : null
     if (!commenter || !language) return { ok: false, error: 'generation_failed' }
-    if (thread.some((reply) => reply.authorId === operatorUserId)) return { ok: false, error: 'already_replied' }
+    const rootIsReal = root.author?.isOperator !== true
+    if (threadBlocksAutoReply(thread, operatorUserId, rootIsReal)) return { ok: false, error: 'already_replied' }
 
     const generated = await generateOperatorComment({
       commenter: commenterPersona(operatorUserId, commenter, language, now),
@@ -185,6 +199,12 @@ export async function replyToCommentAsOperator(
       toRealUser: root.author?.isOperator !== true,
     })
     if (!generated) return { ok: false, error: 'generation_failed' }
+    // Staff may have answered (as an operator) while the reply was being written.
+    const answeredMeanwhile = await prisma.postComment.findMany({
+      where: { parentId: root.id, OR: [{ isDeleted: null }, { isDeleted: false }] },
+      select: { authorId: true, author: { select: { isOperator: true } } },
+    })
+    if (threadBlocksAutoReply(answeredMeanwhile, operatorUserId, rootIsReal)) return { ok: false, error: 'already_replied' }
 
     const { detected, mixed, translationRows } = await settleCommentText(generated.text, generated.language)
     const reply = await createComment({

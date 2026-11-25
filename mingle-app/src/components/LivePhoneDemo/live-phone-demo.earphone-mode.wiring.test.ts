@@ -27,7 +27,7 @@ describe('earphone mode wiring', () => {
   })
 
   it('shows the controls only when the shell reports audio routes', () => {
-    const voiceBar = between(liveDemoSource, 'key="default-bottom-bar"', 'data-qa="live-demo-mic-button"')
+    const voiceBar = between(liveDemoSource, 'key="default-bottom-bar"', 'data-qa="live-demo-keyboard-mode-button"')
     expect(voiceBar).toContain('{earphoneModeGate.controlVisible && (')
     expect(voiceBar).toContain('data-qa="live-demo-earphone-mode-toggle"')
     expect(voiceBar).toContain('aria-pressed={isEarphoneModeOn}')
@@ -243,7 +243,7 @@ describe('earphone mode wiring', () => {
   it('names it speaker mode without earphones and earphone mode with them (2.3.2+)', () => {
     expect(liveDemoSource).toContain('const speakerModeOnSpeaker = speakerMode && !nativeAudioRoute.earphonesConnected')
     expect(liveDemoSource).toContain('speakerModeOnSpeaker ? { ...earphoneModeBaseCopy, label: earphoneModeBaseCopy.speakerLabel } : earphoneModeBaseCopy')
-    expect(liveDemoSource).toContain('{speakerModeOnSpeaker ? <Volume2 size={18} strokeWidth={2.15} /> : <Headphones size={18} strokeWidth={2.15} />}')
+    expect(liveDemoSource).toContain('{speakerModeOnSpeaker ? <Volume2 size={VOICE_MODE_SIDE_ICON_SIZE_PX} strokeWidth={2} /> : <Headphones size={VOICE_MODE_SIDE_ICON_SIZE_PX} strokeWidth={2} />}')
   })
 
   it('asks about screen recording only with earphones in, and never switches to it unasked', () => {

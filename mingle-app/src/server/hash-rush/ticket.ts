@@ -44,6 +44,13 @@ export function verifyHashRushTicket(ticket: string, secret: string, nowSec = Ma
 }
 
 // Game room ids allow [a-z0-9_-]; channel ids are cuids, so they fit as is.
-export function hashRushRoomId(channelId: string): string {
-  return `mingle-${channelId.toLowerCase().replace(/[^a-z0-9_-]/g, "")}`.slice(0, 64);
+// Each game a chat room starts gets a room of its own (`-g` + 8 hex of its
+// session id): once everybody from the chat room has left, a game can go on
+// with the web players still in it (it is no longer the chat room's), and the
+// chat room's next game starts in a fresh room. Without a session id, the
+// chat room's old single room.
+export function hashRushRoomId(channelId: string, sessionId?: string | null): string {
+  const base = `mingle-${channelId.toLowerCase().replace(/[^a-z0-9_]/g, "")}`.slice(0, 54);
+  const game = (sessionId || "").toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 8);
+  return game.length === 8 ? `${base}-g${game}` : base;
 }

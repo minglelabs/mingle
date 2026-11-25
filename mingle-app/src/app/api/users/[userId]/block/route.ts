@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import { blockUser, unblockUser } from "@/server/user-blocks";
 
 export const runtime = "nodejs";
 
@@ -57,29 +58,7 @@ export async function POST(_request: NextRequest, { params }: BlockRouteProps) {
   const result = await resolveBlockTarget(await getServerSession(getAuthOptions()), params);
   if ("response" in result) return result.response;
 
-  await prisma.$transaction([
-    prisma.userBlock.upsert({
-      where: {
-        blockerId_blockedId: {
-          blockerId: result.blockerId,
-          blockedId: result.blockedId,
-        },
-      },
-      create: {
-        blockerId: result.blockerId,
-        blockedId: result.blockedId,
-      },
-      update: {},
-    }),
-    prisma.userFollow.deleteMany({
-      where: {
-        OR: [
-          { followerId: result.blockerId, followingId: result.blockedId },
-          { followerId: result.blockedId, followingId: result.blockerId },
-        ],
-      },
-    }),
-  ]);
+  await blockUser(result.blockerId, result.blockedId);
 
   return jsonResult(true);
 }
@@ -88,12 +67,7 @@ export async function DELETE(_request: NextRequest, { params }: BlockRouteProps)
   const result = await resolveBlockTarget(await getServerSession(getAuthOptions()), params);
   if ("response" in result) return result.response;
 
-  await prisma.userBlock.deleteMany({
-    where: {
-      blockerId: result.blockerId,
-      blockedId: result.blockedId,
-    },
-  });
+  await unblockUser(result.blockerId, result.blockedId);
 
   return jsonResult(false);
 }

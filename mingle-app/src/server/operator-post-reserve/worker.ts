@@ -11,7 +11,7 @@ import { reviewTranslationsFor } from './review-translations'
 import { drawReservePostImage } from './post-image'
 import { reserveExtraImages } from './extra-images'
 import { generateReservePosts, isKoreaCountry, pickReserveTopics, reservePosterProfile, RESERVE_CHUNK_SIZE, type ReservePersona } from './generate'
-import { nextReleaseAt } from './schedule'
+import { nextReleaseAt, pickBackdatedPublishAt } from './schedule'
 import { getPostReserveSettings, postsPerDay, type PostReserveSettings } from './settings'
 import { operatorTextProvider } from '@/server/translation/translate-texts'
 
@@ -48,6 +48,10 @@ export type ReserveRunSummary = {
 type ClaimedReservePost = {
   id: string
   operatorUserId: string
+  /** When the reserve row was written (a review publish is dated between this and now). */
+  createdAt?: Date
+  /** The time staff set in review for the post to be dated at (review publishes only). */
+  chosenAt?: Date | null
   text: string
   attempts: number
   language: string | null
@@ -73,13 +77,13 @@ export function reserveClientPostId(reserveId: string): string {
   return `rs-${reserveId}`
 }
 
-async function claimDueReservePosts(now: Date, limit: number): Promise<ClaimedReservePost[]> {
+async function claimDueReservePosts(now: Date, limit: number, from: 'queued' | 'scheduled' = 'queued'): Promise<ClaimedReservePost[]> {
   return prisma.$queryRaw<ClaimedReservePost[]>`
     UPDATE app.app_operator_post_reserve
     SET state = 'publishing', attempts = attempts + 1, updated_at = ${sqlUtcTimestamp(now)}
     WHERE id IN (
       SELECT id FROM app.app_operator_post_reserve
-      WHERE state = 'queued' AND release_at IS NOT NULL AND release_at <= ${sqlUtcTimestamp(now)}
+      WHERE state = ${from} AND release_at IS NOT NULL AND release_at <= ${sqlUtcTimestamp(now)}
       ORDER BY release_at ASC, id ASC
       LIMIT ${limit}
       FOR UPDATE SKIP LOCKED
@@ -95,7 +99,29 @@ async function claimDueReservePosts(now: Date, limit: number): Promise<ClaimedRe
  * taken from staff review goes back to review when publishing fails, never
  * into the automatic queue.
  */
-async function releaseOne(row: ClaimedReservePost, now: Date, origin: 'queued' | 'review' = 'queued'): Promise<boolean> {
+async function backdateReviewPost(postId: string, row: ClaimedReservePost, now: Date): Promise<void> {
+  try {
+    const chosen = row.chosenAt ? new Date(row.chosenAt) : null
+    const at = chosen && !Number.isNaN(chosen.getTime())
+      // Staff set the time in review; never later than now.
+      ? new Date(Math.min(chosen.getTime(), now.getTime()))
+      : pickBackdatedPublishAt({
+          createdAt: new Date(row.createdAt as Date),
+          now,
+          personaCountry: (await prisma.operatorAccount.findUnique({ where: { userId: row.operatorUserId }, select: { personaCountry: true } }))?.personaCountry,
+        })
+    await prisma.post.updateMany({ where: { id: postId }, data: { publishedAt: at, createdAt: at } })
+  } catch (error) {
+    // The post is out either way; it just keeps the publish minute.
+    console.warn('[operator-post-reserve] backdate_failed', { postId, error: error instanceof Error ? error.name : 'unknown' })
+  }
+}
+
+/**
+ * `scheduled`: staff scheduled it in review; it goes out at its time (no
+ * backdating) and returns to review, unscheduled, when publishing fails.
+ */
+async function releaseOne(row: ClaimedReservePost, now: Date, origin: 'queued' | 'review' | 'scheduled' = 'queued'): Promise<boolean> {
   const settle = (data: Prisma.OperatorPostReserveUpdateManyMutationInput) =>
     prisma.operatorPostReserve.updateMany({ where: { id: row.id, state: 'publishing', attempts: row.attempts }, data })
   try {
@@ -112,7 +138,7 @@ async function releaseOne(row: ClaimedReservePost, now: Date, origin: 'queued' |
       ? { objectKey: row.imageObjectKey, width: row.imageWidth ?? 0, height: row.imageHeight ?? 0 }
       : row.imagePrompt ? await drawReservePostImage(row.operatorUserId, row.imagePrompt) : null
     if (row.imagePrompt && !image) {
-      await settle({ state: 'review', error: PHOTO_PENDING, releaseAt: null })
+      await settle({ state: 'review', error: PHOTO_PENDING, releaseAt: origin === 'scheduled' ? null : row.chosenAt ?? null })
       return false
     }
     const result = await publishPost({
@@ -136,6 +162,8 @@ async function releaseOne(row: ClaimedReservePost, now: Date, origin: 'queued' |
       await settle({ state: 'failed', error: 'client_post_id_conflict', releaseAt: null })
       return false
     }
+    // Published from review: dated between when it was written and now, not all at this minute.
+    if (origin === 'review' && result.kind === 'created' && row.createdAt) await backdateReviewPost(result.post.id, row, now)
     await settle({ state: 'published', postId: result.post.id, error: null })
     await writeAdminAudit(null, {
       action: 'operator_post.reserve_published',
@@ -147,8 +175,8 @@ async function releaseOne(row: ClaimedReservePost, now: Date, origin: 'queued' |
     return true
   } catch (error) {
     try {
-      await settle(origin === 'review'
-        ? { state: 'review', error: describeError(error), releaseAt: null }
+      await settle(origin === 'review' || origin === 'scheduled'
+        ? { state: 'review', error: describeError(error), releaseAt: origin === 'scheduled' ? null : row.chosenAt ?? null }
         : row.attempts >= RESERVE_MAX_ATTEMPTS
         ? { state: 'failed', error: describeError(error), releaseAt: null }
         // Back in line; retried a few minutes later.
@@ -329,6 +357,11 @@ export async function runOperatorPostReserve(options: { now?: () => Date; random
   const random = options.random ?? Math.random
   const settings = await getPostReserveSettings()
   const summary: ReserveRunSummary = { enabled: settings.enabled, released: 0, releaseFailed: 0, scheduled: 0, refilledAccounts: 0, generated: 0 }
+  // Posts staff scheduled in review go out at their time, whether or not the automatic queue is on.
+  for (const row of await claimDueReservePosts(now(), RESERVE_MAX_RELEASES_PER_RUN, 'scheduled')) {
+    if (await releaseOne(row, now(), 'scheduled')) summary.released += 1
+    else summary.releaseFailed += 1
+  }
   if (!settings.enabled) return summary
 
   await requeueStale(now())
@@ -388,13 +421,23 @@ export async function publishReservePostNow(
   options: { background?: boolean } = {},
 ): Promise<PublishNowResult> {
   // Same atomic claim as the worker, so a tick racing this click cannot publish it twice.
+  // From review, release_at holds the time staff set (if any): it is handed to
+  // the publish and cleared, since a publish taken from review carries none.
   const claimed = await prisma.$queryRaw<ClaimedReservePost[]>`
-    UPDATE app.app_operator_post_reserve
-    SET state = 'publishing', attempts = attempts + 1, updated_at = ${sqlUtcTimestamp(now)}
-    WHERE id = ${reserveId} AND state = ${fromState}
-    RETURNING id, operator_user_id AS "operatorUserId", text, attempts, language, translations, image_prompt AS "imagePrompt",
-      image_object_key AS "imageObjectKey", image_width AS "imageWidth", image_height AS "imageHeight",
-      extra_images AS "extraImages"
+    WITH target AS (
+      SELECT id, release_at FROM app.app_operator_post_reserve
+      WHERE id = ${reserveId} AND state = ${fromState}
+      FOR UPDATE
+    )
+    UPDATE app.app_operator_post_reserve AS reserve
+    SET state = 'publishing', attempts = reserve.attempts + 1, updated_at = ${sqlUtcTimestamp(now)},
+      release_at = CASE WHEN ${fromState}::text = 'review' THEN NULL ELSE reserve.release_at END
+    FROM target
+    WHERE reserve.id = target.id AND reserve.state = ${fromState}
+    RETURNING reserve.id, reserve.operator_user_id AS "operatorUserId", reserve.text, reserve.attempts, reserve.language, reserve.translations,
+      reserve.image_prompt AS "imagePrompt", reserve.image_object_key AS "imageObjectKey", reserve.image_width AS "imageWidth",
+      reserve.image_height AS "imageHeight", reserve.extra_images AS "extraImages", reserve.created_at AS "createdAt",
+      CASE WHEN ${fromState}::text = 'review' THEN target.release_at ELSE NULL END AS "chosenAt"
   `
   if (!claimed[0]) return { ok: false, error: 'reserve_empty' }
   if (options.background) {

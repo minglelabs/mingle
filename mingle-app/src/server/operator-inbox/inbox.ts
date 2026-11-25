@@ -1,5 +1,5 @@
 import type { MessageReadReceiptMember } from '@/lib/message-read-receipts'
-import { MESSAGE_RECALLED_AT_METADATA_KEY } from '@/lib/message-recall'
+import { MESSAGE_RECALLED_AT_METADATA_KEY, readMessageRecalledAtMs } from '@/lib/message-recall'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import {
@@ -11,6 +11,7 @@ import {
 import { sanitizeSttLanguageSelection } from '@/lib/stt-languages'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import { writeAdminAudit } from '@/server/admin/audit'
+import { recallMessageForEveryone } from '@/server/message-recall'
 import type { AdminContext } from '@/server/admin/guard'
 import { USER_IDENTITY_SELECT, identityBadgeFlags, type IdentityBadgeFlags } from '@/server/identity/user-identity-select'
 import { OperatorAccountRequiredError } from '@/server/operators/operator-guard'
@@ -49,6 +50,8 @@ const CURSOR_PATTERN = /^(\d{1,15})\.([\w-]{1,128})$/
 
 export type InboxPerson = IdentityBadgeFlags & {
   userId: string
+  /** primaryLanguages[0]: the person's own language (the avatar flag in the room view). */
+  primaryLanguage?: string | null
   handle: string | null
   name: string | null
   image: string | null
@@ -125,6 +128,8 @@ export type InboxRoomDetail = {
   counterparts: InboxPerson[]
   isGroup: boolean
   blocked: boolean
+  /** Counterparts the acting operator account itself blocked (it can unblock them). */
+  blockedByOperator: string[]
   replyUnavailableReason: InboxReplyUnavailableReason | null
 }
 
@@ -271,7 +276,8 @@ async function operatorMembershipsCte(filter: { operatorUserId?: string | null; 
           AND member.channel_id = ANY(${officialRoomIds}::text[])
         )`
     : Prisma.empty
-  return Prisma.sql`memberships AS (
+  // MATERIALIZED: the short room list is built once, then each query probes messages per room.
+  return Prisma.sql`memberships AS MATERIALIZED (
     SELECT
       member.channel_id,
       member.user_id AS operator_user_id,
@@ -295,24 +301,31 @@ async function operatorMembershipsCte(filter: { operatorUserId?: string | null; 
   )`
 }
 
-/** Unread per (room, operator): visible messages from real users after the operator's lastReadAt. */
+/**
+ * Unread per (room, operator): visible messages from real users after the operator's lastReadAt.
+ * Counted room by room through the (session_key, created_at) index. Written as a plain
+ * join, the planner read the whole app_messages table on every badge poll, which filled
+ * the database's disk budget and stalled every other query (outage 2026-11-22).
+ */
 const UNREAD_CTE = Prisma.sql`unread AS (
   SELECT
     membership.channel_id,
     membership.operator_user_id,
-    COUNT(message.id)::int AS unread_count
+    counted.unread_count
   FROM memberships AS membership
-  LEFT JOIN app.app_messages AS message
-    ON message.session_key = membership.session_key
-    AND (message.is_deleted = false OR message.is_deleted IS NULL)
-    AND message.user_id IS NOT NULL
-    AND message.user_id <> membership.operator_user_id
-    AND (membership.last_read_at IS NULL OR message.created_at > membership.last_read_at)
-    AND message.user_id NOT IN (
-      SELECT staff.id FROM app.app_users AS staff
-      WHERE staff.is_operator = true OR staff.id IN (${STAFF_ANSWERED_OFFICIAL_IDS_SQL})
-    )
-  GROUP BY membership.channel_id, membership.operator_user_id
+  CROSS JOIN LATERAL (
+    SELECT COUNT(*)::int AS unread_count
+    FROM app.app_messages AS message
+    WHERE message.session_key = membership.session_key
+      AND (message.is_deleted = false OR message.is_deleted IS NULL)
+      AND message.user_id IS NOT NULL
+      AND message.user_id <> membership.operator_user_id
+      AND (membership.last_read_at IS NULL OR message.created_at > membership.last_read_at)
+      AND message.user_id NOT IN (
+        SELECT staff.id FROM app.app_users AS staff
+        WHERE staff.is_operator = true OR staff.id IN (${STAFF_ANSWERED_OFFICIAL_IDS_SQL})
+      )
+  ) AS counted
 )`
 
 type UnreadRow = { channelId: string; operatorUserId: string; unreadCount: number | bigint }
@@ -389,6 +402,7 @@ function toInboxPerson(user: InboxMemberUser): InboxPerson {
     imageCropScale: user.imageCropScale ?? null,
     imageCropX: user.imageCropX ?? null,
     imageCropY: user.imageCropY ?? null,
+    primaryLanguage: resolvePersonaLanguage(user),
     ...identityBadgeFlags(user),
   }
 }
@@ -802,6 +816,13 @@ export async function resolveInboxRoomAccess(args: {
     ? { ...actingOperator, personaLanguage: await resolveHamzziStaffReplyLanguage(channel.sessionKey) }
     : actingOperator
   const blocked = blockedRooms.has(channel.id)
+  const counterpartIds = members.filter((member) => !isOperatorMember(member)).map((member) => member.userId)
+  const blockedByOperator = blocked && counterpartIds.length > 0
+    ? (await prisma.userBlock.findMany({
+      where: { blockerId: operator.userId, blockedId: { in: counterpartIds } },
+      select: { blockedId: true },
+    })).map((row) => row.blockedId)
+    : []
   const recipientCount = members.length - 1 + channel.pendingInviteeUserIds.length
   const replyUnavailableReason: InboxReplyUnavailableReason | null = !operator.isActive
     ? 'operator_inactive'
@@ -817,6 +838,7 @@ export async function resolveInboxRoomAccess(args: {
       counterparts: members.filter((member) => !isOperatorMember(member)).map((member) => toInboxPerson(member.user)),
       isGroup: members.length > 2,
       blocked,
+      blockedByOperator,
       replyUnavailableReason,
     },
   }
@@ -916,6 +938,46 @@ export async function markInboxRoomRead(args: {
     targetId: access.room.conversationId,
   })
   return { ok: true, operatorUserId }
+}
+
+export type InboxDeleteMessageError = InboxRoomAccessError | 'message_not_found' | 'not_operator_message'
+
+/**
+ * Staff delete a message an operator account sent in this room, for everyone:
+ * the app's own "전송 취소", done as that operator (staff, 2026-11-24). Only
+ * an operator member's message; a real user's message stays theirs. Already
+ * unsent counts as done. Audited.
+ */
+export async function deleteInboxOperatorMessage(args: {
+  ctx: AdminContext
+  conversationId: string
+  messageId: string
+}): Promise<{ ok: true; messageId: string; rewritePush: (() => Promise<void>) | null } | { ok: false; error: InboxDeleteMessageError }> {
+  const access = await resolveInboxRoomAccess({ conversationId: args.conversationId })
+  if (!access.ok) return access
+  const message = await prisma.appMessage.findFirst({
+    where: { id: args.messageId, sessionKey: access.room.sessionKey },
+    select: { id: true, userId: true, clientMessageId: true, isDeleted: true, metadata: true, createdAt: true },
+  })
+  if (!message) return { ok: false, error: 'message_not_found' }
+  const sender = access.room.operators.find((operator) => operator.userId === message.userId)
+  if (!sender || !message.userId) return { ok: false, error: 'not_operator_message' }
+  if (readMessageRecalledAtMs(message.metadata) !== null) return { ok: true, messageId: message.id, rewritePush: null }
+  if (message.isDeleted) return { ok: false, error: 'message_not_found' }
+
+  const { rewritePush } = await recallMessageForEveryone({
+    message,
+    sessionKey: access.room.sessionKey,
+    senderUserId: message.userId,
+  })
+  await writeAdminAudit(args.ctx, {
+    action: 'inbox.delete_message',
+    operatorUserId: message.userId,
+    targetType: 'conversation',
+    targetId: access.room.conversationId,
+    metadata: { messageId: message.id },
+  })
+  return { ok: true, messageId: message.id, rewritePush }
 }
 
 /** First page of the inbox plus the operator chips and the unread total, for the list page and its API. */

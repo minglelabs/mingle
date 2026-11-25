@@ -84,7 +84,7 @@ describe('native IAP bridge', () => {
     const { bridge, events, library } = fixture();
     library.initConnection.mockRejectedValueOnce(new Error('offline'));
     await bridge.getProducts(['coin_1000']);
-    expect(events[0]).toEqual({ type: 'purchase_error', productId: '', code: 'products_unavailable', requestId: undefined });
+    expect(events[0]).toEqual({ type: 'purchase_error', productId: '', code: 'products_unavailable', requestId: undefined, message: 'offline' });
     await bridge.getProducts(['coin_1000']);
     expect(events[1].type).toBe('products');
   });

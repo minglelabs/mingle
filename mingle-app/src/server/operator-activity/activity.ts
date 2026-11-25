@@ -6,6 +6,13 @@ import type { AdminContext } from '@/server/admin/guard'
 import { USER_IDENTITY_SELECT, identityBadgeFlags, type UserIdentityRecord } from '@/server/identity/user-identity-select'
 import type { InboxPerson } from '@/server/operator-inbox/inbox'
 import { STAFF_TRANSLATION_LANGUAGE, translateForStaff } from '@/server/operator-inbox/staff-translate'
+import {
+  USER_ACTIVITY_FILTER,
+  countUserActivityUnread,
+  listUserActivity,
+  markUserActivityRead,
+  type UserActivityType,
+} from './user-activity'
 
 /**
  * The unified operator activity feed: every in-app notification (follow,
@@ -28,16 +35,20 @@ const ID_PATTERN = /^[\w-]{1,128}$/
 
 export type ActivityItem = {
   id: string
-  type: OperatorActivityType
+  type: OperatorActivityType | UserActivityType
   isRead: boolean
   createdAt: string
-  /** The operator account that received the notification. */
-  operator: InboxPerson
-  /** The real user who followed / liked / commented. */
+  /** The operator account that received the notification; null for real users' own activity (user-activity.ts). */
+  operator: InboxPerson | null
+  /** The real user who posted / followed / liked / commented. */
   actor: InboxPerson
+  /** Real users' activity: whose post / comment / profile it was about. */
+  target?: InboxPerson | null
   postId: string | null
   /** Start of the post's text; null when it has none or the post is gone. */
   postExcerpt: string | null
+  /** The post has a photo (shown as a small thumbnail). */
+  postHasImage?: boolean
   /** The post was deleted, hidden or archived: there is no thread to open. */
   postUnavailable: boolean
   /** comment / comment_reply: the actor's new comment. comment_like: the operator's liked comment. */
@@ -58,8 +69,10 @@ export type ActivityOperatorStat = InboxPerson & {
 export type ActivityListData = {
   items: ActivityItem[]
   nextCursor: string | null
-  /** Unread across every operator account. */
+  /** Unread across every operator account and real users' own activity. */
   unreadTotal: number
+  /** Unread in real users' own activity (the 일반 유저 chip). */
+  userActivityUnread: number
   operators: ActivityOperatorStat[]
   /** Entry snapshot: send it back when marking read so later arrivals stay unread. */
   readBefore: string
@@ -120,6 +133,7 @@ const ACTIVITY_ROW_SELECT = {
   post: {
     select: {
       sourceText: true,
+      imageObjectKey: true,
       isDeleted: true,
       moderationHiddenAt: true,
       archivedAt: true,
@@ -178,6 +192,7 @@ function toActivityItem(row: ActivityRow): ActivityItem {
     actor: toActivityPerson(row.actor!),
     postId: row.postId,
     postExcerpt: post && !postUnavailable ? clipActivityText(post.sourceText) : null,
+    postHasImage: Boolean(post && !postUnavailable && post.imageObjectKey),
     postUnavailable,
     commentId: row.commentId,
     commentText: commentVisible ? commentVisible.sourceText.trim() || null : null,
@@ -224,12 +239,18 @@ export async function listOperatorActivity(args: {
   includeKorean?: boolean
   /** First page only: rows that had arrived by this instant. */
   before?: Date
+  /** Time cursor (merged feed): only rows created before this instant. */
+  olderThan?: Date
 } = {}): Promise<{ items: ActivityItem[]; nextCursor: string | null }> {
   const limit = clampPageSize(args.limit)
+  const createdAt = {
+    ...(!args.cursor && args.before ? { lte: args.before } : {}),
+    ...(args.olderThan ? { lt: args.olderThan } : {}),
+  }
   const rows = await prisma.userNotification.findMany({
     where: {
       ...operatorActivityWhere(args.operatorUserId),
-      ...(!args.cursor && args.before ? { createdAt: { lte: args.before } } : {}),
+      ...(Object.keys(createdAt).length > 0 ? { createdAt } : {}),
     },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     ...(args.cursor ? { cursor: { id: args.cursor }, skip: 1 } : {}),
@@ -247,20 +268,25 @@ export async function listOperatorActivity(args: {
 
 /** Unread activity across every operator account (the 알림 tab badge). */
 export async function countOperatorActivityUnread(): Promise<number> {
-  return prisma.userNotification.count({ where: { ...operatorActivityWhere(), readAt: null } })
+  const [operatorUnread, userUnread] = await Promise.all([
+    prisma.userNotification.count({ where: { ...operatorActivityWhere(), readAt: null } }),
+    countUserActivityUnread(),
+  ])
+  return operatorUnread + userUnread
 }
 
 /** One chip per operator account that has activity, most unread first. */
-export async function getOperatorActivitySummary(): Promise<{ unreadTotal: number; operators: ActivityOperatorStat[] }> {
-  const [totals, unread] = await Promise.all([
+export async function getOperatorActivitySummary(): Promise<{ unreadTotal: number; userActivityUnread: number; operators: ActivityOperatorStat[] }> {
+  const [totals, unread, userActivityUnread] = await Promise.all([
     prisma.userNotification.groupBy({ by: ['recipientId'], where: operatorActivityWhere(), _count: { _all: true } }),
     prisma.userNotification.groupBy({
       by: ['recipientId'],
       where: { ...operatorActivityWhere(), readAt: null },
       _count: { _all: true },
     }),
+    countUserActivityUnread(),
   ])
-  if (totals.length === 0) return { unreadTotal: 0, operators: [] }
+  if (totals.length === 0) return { unreadTotal: userActivityUnread, userActivityUnread, operators: [] }
   const unreadByOperator = new Map(unread.map((row) => [row.recipientId, row._count._all]))
   const users = await prisma.user.findMany({
     where: { id: { in: totals.map((row) => row.recipientId) } },
@@ -284,7 +310,8 @@ export async function getOperatorActivitySummary(): Promise<{ unreadTotal: numbe
     || (a.name ?? a.handle ?? '').localeCompare(b.name ?? b.handle ?? '')
   ))
   return {
-    unreadTotal: operators.reduce((total, operator) => total + operator.unreadCount, 0),
+    unreadTotal: operators.reduce((total, operator) => total + operator.unreadCount, 0) + userActivityUnread,
+    userActivityUnread,
     operators,
   }
 }
@@ -298,10 +325,44 @@ export async function loadActivityList(args: {
 } = {}): Promise<ActivityListData> {
   const readBefore = new Date()
   const [list, summary] = await Promise.all([
-    listOperatorActivity({ ...args, before: readBefore }),
+    args.operatorUserId && args.operatorUserId !== USER_ACTIVITY_FILTER
+      ? listOperatorActivity({ ...args, before: readBefore })
+      : listMergedActivity({ ...args, before: readBefore }),
     getOperatorActivitySummary(),
   ])
   return { ...list, ...summary, readBefore: readBefore.toISOString(), serverNowMs: Date.now() }
+}
+
+const TIME_CURSOR_PATTERN = /^t(\d{1,15})$/
+
+/** The 전체 feed (operator notifications + real users' own activity) or 일반 유저 alone, paged by time. */
+async function listMergedActivity(args: {
+  operatorUserId?: string | null
+  cursor?: string | null
+  limit?: number | null
+  includeKorean?: boolean
+  before: Date
+}): Promise<{ items: ActivityItem[]; nextCursor: string | null }> {
+  const limit = clampPageSize(args.limit)
+  const cursorMs = args.cursor ? Number(TIME_CURSOR_PATTERN.exec(args.cursor)?.[1] ?? Number.NaN) : Number.NaN
+  const window = Number.isFinite(cursorMs) ? { olderThan: new Date(cursorMs) } : { upTo: args.before }
+  const usersOnly = args.operatorUserId === USER_ACTIVITY_FILTER
+  const [operatorPage, userPage] = await Promise.all([
+    usersOnly
+      ? Promise.resolve({ items: [] as ActivityItem[], nextCursor: null })
+      : listOperatorActivity({
+        limit,
+        includeKorean: args.includeKorean,
+        ...(window.olderThan ? { olderThan: window.olderThan } : { before: window.upTo }),
+      }),
+    listUserActivity({ limit, ...window }),
+  ])
+  const merged = [...operatorPage.items, ...userPage.items]
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
+  const items = merged.slice(0, limit)
+  const hasMore = merged.length > limit || operatorPage.nextCursor !== null || userPage.hasMore
+  const last = items[items.length - 1]
+  return { items, nextCursor: hasMore && last ? `t${Date.parse(last.createdAt)}` : null }
 }
 
 /**
@@ -318,6 +379,13 @@ export async function markOperatorActivityRead(ctx: AdminContext | null, args: {
 } = {}): Promise<number> {
   const now = new Date()
   const before = args.before && args.before.getTime() <= now.getTime() ? args.before : now
+  if (!args.postId && (!args.operatorUserId || args.operatorUserId === USER_ACTIVITY_FILTER)) {
+    const moved = await markUserActivityRead(before)
+    if (moved && args.audit !== false && args.operatorUserId === USER_ACTIVITY_FILTER) {
+      await writeAdminAudit(ctx, { action: 'activity.mark_read', operatorUserId: null, targetType: 'user_activity', targetId: null, metadata: {} })
+    }
+    if (args.operatorUserId === USER_ACTIVITY_FILTER) return moved ? 1 : 0
+  }
   const result = await prisma.userNotification.updateMany({
     where: {
       type: { in: [...OPERATOR_ACTIVITY_TYPES] },

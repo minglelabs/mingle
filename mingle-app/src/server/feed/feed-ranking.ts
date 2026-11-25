@@ -142,6 +142,29 @@ export function rankFeed(
   return avoidConsecutiveAuthors(scored, options.avoidFirstAuthorId ?? null)
 }
 
+/**
+ * The feed's order after the starter posts (staff 2026-11-24): unseen posts
+ * first, then by what real people did with each post (`score`, see
+ * real-engagement.ts), newest first on a tie. Followed authors and post age
+ * no longer lift a post. The same author is still not shown twice in a row
+ * where another post can go between.
+ */
+export function rankByRealEngagement(
+  candidates: ReadonlyArray<{ id: string; authorId: string; publishedAt: Date; viewed: boolean; score: number }>,
+  options: RankFeedOptions = {},
+): string[] {
+  const scored = candidates.map((c) => ({
+    id: c.id, authorId: c.authorId, viewed: c.viewed, isFollowed: false, tier: 0, score: c.score, publishedAtMs: c.publishedAt.getTime(),
+  }))
+  scored.sort((a, b) => {
+    if (a.viewed !== b.viewed) return a.viewed ? 1 : -1
+    if (a.score !== b.score) return b.score - a.score
+    if (a.publishedAtMs !== b.publishedAtMs) return b.publishedAtMs - a.publishedAtMs
+    return a.id < b.id ? 1 : a.id > b.id ? -1 : 0
+  })
+  return avoidConsecutiveAuthors(scored, options.avoidFirstAuthorId ?? null)
+}
+
 // ---------------------------------------------------------------------------
 // Consecutive-author avoidance
 // ---------------------------------------------------------------------------

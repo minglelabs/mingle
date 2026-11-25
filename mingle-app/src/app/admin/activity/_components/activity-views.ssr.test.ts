@@ -27,9 +27,15 @@ const listData: ActivityListData = {
       postId: null, postExcerpt: null, postUnavailable: false,
       commentId: null, commentText: null, commentKoText: null, commentHasImage: false, commentUnavailable: false,
     },
+    {
+      id: 'up-p9', type: 'user_post', isRead: false, createdAt: '2026-10-02T08:30:00.000Z', operator: null, actor, target: null,
+      postId: 'p9', postExcerpt: 'Primeiro post', postUnavailable: false,
+      commentId: null, commentText: null, commentKoText: null, commentHasImage: false, commentUnavailable: false,
+    },
   ],
   nextCursor: 'n2',
-  unreadTotal: 1,
+  unreadTotal: 2,
+  userActivityUnread: 1,
   operators: [{ ...operator, isActive: true, itemCount: 2, unreadCount: 1 }],
   readBefore: '2026-10-02T10:00:00.000Z',
   serverNowMs: Date.parse('2026-10-02T10:00:00.000Z'),
@@ -37,17 +43,17 @@ const listData: ActivityListData = {
 
 const thread: OperatorPostThread = {
   post: {
-    id: 'p1', author: operator, text: 'Bom dia', koText: '좋은 아침', hasImage: false,
-    likeCount: 3, commentCount: 2, publishedAt: '2026-10-02T08:00:00.000Z',
+    id: 'p1', author: operator, text: 'Bom dia', koText: '좋은 아침', translations: [{ language: 'en', text: 'Good morning' }], hasImage: false,
+    likeCount: 3, commentCount: 2, publishedAt: '2026-10-02T08:00:00.000Z', createdAt: '2026-10-02T09:30:00.000Z',
   },
   operator: { ...operator, personaLanguage: 'pt', isActive: true },
   operators: [{ ...operator, personaLanguage: 'pt', isActive: true }],
   replyUnavailableReason: null,
   comments: [{
-    id: 'c1', parentId: null, author: actor, replyTo: null, text: 'Que legal!', koText: '멋져요!', hasImage: false,
+    id: 'c1', parentId: null, author: actor, replyTo: null, text: 'Que legal!', koText: '멋져요!', translations: [], hasImage: false,
     isDeleted: false, likeCount: 1, createdAt: '2026-10-02T09:58:00.000Z',
     replies: [{
-      id: 'c2', parentId: 'c1', author: operator, replyTo: { userId: 'user_1', label: 'João' }, text: 'Obrigada!', koText: null,
+      id: 'c2', parentId: 'c1', author: operator, replyTo: { userId: 'user_1', label: 'João' }, text: 'Obrigada!', koText: null, translations: [],
       hasImage: false, isDeleted: false, likeCount: 0, createdAt: '2026-10-02T09:59:00.000Z', replies: [],
     }],
   }],
@@ -70,6 +76,9 @@ describe('admin activity screens', () => {
     expect(html).toContain('모두 읽음')
     expect(html).toContain('href="/admin/activity/posts/p1?as=op_1&amp;comment=c1"')
     expect(html).toContain('더 보기')
+    expect(html).toContain('님이 글을 올렸습니다')
+    expect(html).toContain('href="/admin/activity/posts/p9"')
+    expect(html).toContain('일반 유저')
   })
 
   it('renders the thread with a composer for the operator', () => {
@@ -80,6 +89,20 @@ describe('admin activity screens', () => {
     expect(html).toContain('답글 달기')
     expect(html).toContain('계정으로 게시됩니다')
     expect(html).toContain('id="comment-c1"')
+    expect(html).toContain('번역본 <!-- -->1<!-- -->개 보기')
+    expect(html).toContain('Good morning')
+  })
+
+  it('embeds as just the comments and the reply box (no page header, no post card)', () => {
+    const html = renderToString(createElement(PostThreadView, { initialThread: thread, focusCommentId: null, embedded: true }))
+    expect(html).toContain('Que legal!')
+    expect(html).toContain('Obrigada!')
+    expect(html).toContain('댓글 <!-- -->2<!-- -->개')
+    expect(html).toContain('계정으로 게시됩니다')
+    expect(html).toContain('id="admin-activity-comment-p1"')
+    expect(html).not.toContain('<header')
+    expect(html).not.toContain('글 사진')
+    expect(html).not.toContain('Bom dia')
   })
 
   it('shows no composer for a retired operator', () => {

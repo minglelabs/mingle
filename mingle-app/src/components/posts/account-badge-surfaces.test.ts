@@ -110,6 +110,8 @@ describe('comment author and "replying to" label', () => {
     onToggleTranslation: noop,
     onRetryFailed: noop,
     onDiscardFailed: noop,
+    onOpenAuthor: noop,
+    onPickTranslation: noop,
   }
 
   function renderComment(authorFlags: Flags, replyToFlags: Flags) {

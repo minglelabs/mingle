@@ -19,6 +19,9 @@ import { DEFAULT_LOCALE, isSupportedLocale } from "@/i18n";
 // Only someone who still lacks gender or birth date ever needs these screens.
 const LanguageOnboardingModal = lazy(() => import("@/components/LivePhoneDemo/LanguageOnboardingModal"));
 
+// A tap must not hang on a stalled connection; past this the action goes ahead.
+const PROFILE_READ_TIMEOUT_MS = 4_000;
+
 type PendingRequest = {
   steps: OnboardingStep[];
   resolve: (ok: boolean) => void;
@@ -36,31 +39,51 @@ export default function ProfileBasicsGate() {
   // Once the profile is known to be complete, later actions pass without a fetch.
   const completeRef = useRef(false);
   const statusRef = useRef(status);
+  const missingReadRef = useRef<Promise<OnboardingStep[] | null> | null>(null);
 
   const pathLocale = pathname?.split("/")[1] ?? "";
   const locale = isSupportedLocale(pathLocale) ? pathLocale : DEFAULT_LOCALE;
 
+  // One read of the profile, shared by every action that asks while it is in
+  // flight. `null` means the read failed, which must not stop the action.
+  const readMissing = useCallback((): Promise<OnboardingStep[] | null> => {
+    if (missingReadRef.current) return missingReadRef.current;
+    const read = (async () => {
+      try {
+        const response = await fetch(buildClientApiPath("/profile"), {
+          cache: "no-store",
+          signal: AbortSignal.timeout(PROFILE_READ_TIMEOUT_MS),
+        });
+        if (!response.ok) return null;
+        const missing = resolveMissingProfileBasics(await response.json());
+        if (missing.length === 0) completeRef.current = true;
+        return missing;
+      } catch {
+        return null;
+      } finally {
+        missingReadRef.current = null;
+      }
+    })();
+    missingReadRef.current = read;
+    return read;
+  }, []);
+
   useEffect(() => {
     statusRef.current = status;
-    if (status !== "authenticated") completeRef.current = false;
-  }, [status]);
+    if (status !== "authenticated") {
+      completeRef.current = false;
+      return;
+    }
+    // Read ahead of the first tap, so opening a room or following someone
+    // does not wait on the network before anything happens on screen.
+    if (!completeRef.current) void readMissing();
+  }, [readMissing, status]);
 
   useEffect(() => registerProfileBasicsHandler(async () => {
     // Signed-out actions are stopped by the sign-in gate, not here.
     if (statusRef.current !== "authenticated" || completeRef.current) return true;
-    let missing: OnboardingStep[];
-    try {
-      const response = await fetch(buildClientApiPath("/profile"), { cache: "no-store" });
-      if (!response.ok) return true;
-      missing = resolveMissingProfileBasics(await response.json());
-    } catch {
-      // A failed read must not stop a follow or a comment.
-      return true;
-    }
-    if (missing.length === 0) {
-      completeRef.current = true;
-      return true;
-    }
+    const missing = await readMissing();
+    if (!missing || missing.length === 0) return true;
     captureMingleClientEvent("mingle_profile_basics_step", { step: "shown" });
     return new Promise<boolean>((resolve) => {
       setRequest((current) => {
@@ -72,7 +95,7 @@ export default function ProfileBasicsGate() {
         return { steps: missing, resolve };
       });
     });
-  }), []);
+  }), [readMissing]);
 
   const handleClose = useCallback(() => {
     setRequest((current) => {

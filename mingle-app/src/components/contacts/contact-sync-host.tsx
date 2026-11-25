@@ -3,7 +3,8 @@
 import dynamic from "next/dynamic";
 import { useSession } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { hasConfirmedLanguageOnboarding } from "@/components/LivePhoneDemo/language-onboarding.storage";
 // The config module, not the "@/i18n" barrel (see coin-host.tsx).
@@ -50,7 +51,11 @@ const InviteScreen = dynamic(() => import("@/components/contacts/invite-screen")
  *   (CONTACT_SYNC_OPEN_EVENT), and once by itself in the app for someone who
  *   just signed up without an invite. It links to the invite page, where a code is typed.
  */
+const subscribeNever = () => () => {};
+
 export default function ContactSyncHost() {
+  // The portal target only exists in the browser.
+  const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
   const { status } = useSession();
   const router = useRouter();
   const pathname = usePathname() || "";
@@ -247,8 +252,11 @@ export default function ContactSyncHost() {
     };
   }, [runPostSignup, signedIn, syncKoreanAnswer]);
 
-  if (!signedIn) return null;
-  return (
+  if (!signedIn || !mounted) return null;
+  // Portaled to <body> like the coin store (coin-host.tsx): inside the mobile
+  // canvas frame these screens opened behind a chat room, which lives on
+  // <body>, so "invite a friend" from a room showed nothing.
+  return createPortal(
     <>
       {screenMounted ? (
         <LazyOverlayBoundary onFail={() => { setScreenOpen(false); setScreenMounted(false); }}>
@@ -265,6 +273,7 @@ export default function ContactSyncHost() {
           <InviteScreen open={inviteScreenOpen} onClose={() => setInviteScreenOpen(false)} locale={locale} />
         </LazyOverlayBoundary>
       ) : null}
-    </>
+    </>,
+    document.body,
   );
 }

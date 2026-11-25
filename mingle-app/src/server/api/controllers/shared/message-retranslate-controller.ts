@@ -13,6 +13,7 @@ import {
 } from '@/lib/translation-models'
 import { normalizeChineseContent } from '@/server/chinese-script-conversion'
 import { resolveCoinBillingUserId } from '@/server/coins/request-billing'
+import { isCoinUsageFree } from '@/server/coins/pricing'
 import { canSpendCoins, chargeCoinUsageSafely } from '@/server/coins/wallet'
 import { notifyConversationMessage } from '@/server/conversation-realtime'
 import { isPhotoMessageMetadata } from '@/server/operator-inbox/staff-translate'
@@ -72,7 +73,9 @@ export async function retranslateConversationMessage(request: NextRequest, conve
   }
 
   const coinBillingUserId = await resolveCoinBillingUserId()
-  if (coinBillingUserId && !(await canSpendCoins(coinBillingUserId))) {
+  // While typed-message translation is free (a zero rate), an empty wallet does not stop it.
+  const translationIsFree = Boolean(coinBillingUserId) && await isCoinUsageFree({ kind: 'translation', units: { message: 1 } })
+  if (coinBillingUserId && !translationIsFree && !(await canSpendCoins(coinBillingUserId))) {
     return NextResponse.json({ error: COIN_INSUFFICIENT_ERROR }, { status: 402 })
   }
 

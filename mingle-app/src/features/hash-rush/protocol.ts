@@ -78,6 +78,8 @@ export type HashRushLobby = {
   hosted: boolean
   /** People against computers in a team game: the computers' side, else -1. */
   computersTeam: number
+  /** The host listed the room in the public room list (hash-rush #267 on). */
+  listed: boolean
   /** The host's seat, -1 when the host watches (or there is none). */
   hostSeat: number
   hostName: string
@@ -87,18 +89,24 @@ export type HashRushLobby = {
   botLevel: string
 }
 
-export const HASH_RUSH_BOT_LEVELS = ['easy', 'normal', 'hard', 'ace'] as const
+// 'rl': the learned computer, run by the game server from hash-rush #265 on.
+export const HASH_RUSH_BOT_LEVELS = ['easy', 'normal', 'hard', 'ace', 'rl'] as const
 export const HASH_RUSH_FILL_MIN = 2
 export const HASH_RUSH_FILL_MAX = 8
 /** Sides a player can pick in team play (the server takes 0-3). */
 export const HASH_RUSH_TEAMS = 4
 
-export type HashRushSetup = { teams?: boolean, map?: string, bots?: string, fill?: number }
+/** `bots` with a `seat` sets that computer's own level; without, every computer's. */
+export type HashRushSetup = { teams?: boolean, map?: string, bots?: string, fill?: number, seat?: number, listed?: boolean }
 
 export function setupMessage(patch: HashRushSetup) {
   return { t: 'setup' as const, ...patch }
 }
 export const GO_MESSAGE = { t: 'go' as const }
+/** The host stops the round (or skips the result): everybody goes to the lobby. */
+export const END_MESSAGE = { t: 'end' as const }
+/** The host starts the next round straight from the result. */
+export const AGAIN_MESSAGE = { t: 'again' as const }
 export function handHostMessage(seat: number) {
   return { t: 'host' as const, seat }
 }
@@ -386,6 +394,7 @@ export function readLobby(message: unknown): HashRushLobby | null {
     seasons: readSeasons(m.hist),
     hosted: m.hosted === true,
     computersTeam: Number.isInteger(m.ct) ? m.ct as number : -1,
+    listed: m.listed === true,
     hostSeat: Number.isInteger(m.host) ? m.host as number : -1,
     hostName: text(m.hostName),
     amHost: m.me === true,

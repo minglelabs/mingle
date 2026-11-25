@@ -1,6 +1,13 @@
 export const MOBILE_CANVAS_WIDTH_PX = 400;
 
+/* Phones wider than the canvas (e.g. 402pt iPhone Pro, 412dp Android) would
+   otherwise show the page background as thin strips on both sides. Below this
+   width the canvas widens to the viewport; at or above it (tablet/desktop) the
+   canvas stays a centered 400px column (see the overlay rule in globals.css). */
+export const MOBILE_CANVAS_MAX_STRETCH_WIDTH_PX = 600;
+
 export const MOBILE_CANVAS_CSS_PROPERTIES = {
+  frameWidth: "--mingle-mobile-canvas-frame-width",
   scaledWidth: "--mingle-mobile-canvas-scaled-width",
   frameHeight: "--mingle-mobile-canvas-frame-height",
   transform: "--mingle-mobile-canvas-transform",
@@ -14,7 +21,7 @@ export function buildMobileCanvasBootstrapScript(
     ? canvasWidthPx
     : MOBILE_CANVAS_WIDTH_PX;
 
-  return `(function(){var canvasWidth=${JSON.stringify(normalizedCanvasWidth)};var sync=function(){var root=document.documentElement;var viewportWidth=Math.max(1,Number(window.innerWidth)||Number(root.clientWidth)||canvasWidth);var scale=Math.min(1,viewportWidth/canvasWidth);root.style.setProperty(${JSON.stringify(MOBILE_CANVAS_CSS_PROPERTIES.scaledWidth)},Math.min(canvasWidth,viewportWidth)+"px");root.style.setProperty(${JSON.stringify(MOBILE_CANVAS_CSS_PROPERTIES.frameHeight)},scale<1?(100/scale)+"svh":"100svh");root.style.setProperty(${JSON.stringify(MOBILE_CANVAS_CSS_PROPERTIES.transform)},scale<1?"scale("+scale+")":"none");root.style.setProperty(${JSON.stringify(MOBILE_CANVAS_CSS_PROPERTIES.willChange)},scale<1?"transform":"auto");};if(typeof window.__MINGLE_SYNC_MOBILE_CANVAS__==="function"){window.__MINGLE_SYNC_MOBILE_CANVAS__();return;}window.__MINGLE_SYNC_MOBILE_CANVAS__=sync;sync();window.addEventListener("resize",sync,{passive:true});window.addEventListener("orientationchange",sync,{passive:true});})();`;
+  return `(function(){var canvasWidth=${JSON.stringify(normalizedCanvasWidth)};var sync=function(){var root=document.documentElement;var viewportWidth=Math.max(1,Number(window.innerWidth)||Number(root.clientWidth)||canvasWidth);var scale=Math.min(1,viewportWidth/canvasWidth);var frameWidth=viewportWidth>canvasWidth&&viewportWidth<${MOBILE_CANVAS_MAX_STRETCH_WIDTH_PX}?viewportWidth:canvasWidth;root.style.setProperty(${JSON.stringify(MOBILE_CANVAS_CSS_PROPERTIES.frameWidth)},frameWidth+"px");root.style.setProperty(${JSON.stringify(MOBILE_CANVAS_CSS_PROPERTIES.scaledWidth)},Math.min(frameWidth,viewportWidth)+"px");root.style.setProperty(${JSON.stringify(MOBILE_CANVAS_CSS_PROPERTIES.frameHeight)},scale<1?(100/scale)+"svh":"100svh");root.style.setProperty(${JSON.stringify(MOBILE_CANVAS_CSS_PROPERTIES.transform)},scale<1?"scale("+scale+")":"none");root.style.setProperty(${JSON.stringify(MOBILE_CANVAS_CSS_PROPERTIES.willChange)},scale<1?"transform":"auto");};if(typeof window.__MINGLE_SYNC_MOBILE_CANVAS__==="function"){window.__MINGLE_SYNC_MOBILE_CANVAS__();return;}window.__MINGLE_SYNC_MOBILE_CANVAS__=sync;sync();window.addEventListener("resize",sync,{passive:true});window.addEventListener("orientationchange",sync,{passive:true});})();`;
 }
 
 export const MOBILE_CANVAS_BOOTSTRAP_SCRIPT = buildMobileCanvasBootstrapScript();

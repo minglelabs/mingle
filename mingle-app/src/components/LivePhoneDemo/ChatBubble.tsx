@@ -3,6 +3,8 @@
 import { memo, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type TouchEvent } from 'react'
 import Image from 'next/image'
 import { AnimatePresence, motion } from 'framer-motion'
+import type { AppLocale } from '@/i18n'
+import { getCoinCopy } from '@/i18n/coin-copy'
 import { UserRound } from 'lucide-react'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import {
@@ -163,6 +165,10 @@ function BubbleTtsIndicator({
   return null
 }
 
+// How long a stored message may go without any translation before its empty
+// language rows are dropped instead of showing "…" forever.
+const STALE_UNTRANSLATED_MS = 60_000
+
 export interface Utterance {
   // The sender unsent this message; it renders as a "deleted message"
   // placeholder and carries no text, translations or photo.
@@ -195,6 +201,9 @@ export interface Utterance {
   // what makes a shared room read as "a conversation with a person" rather
   // than a solo interpreter session.
   speakerImage?: string | null
+  // The sender's own language (staff inbox): the avatar's flag shows it
+  // instead of the language this message was written in.
+  speakerFlagLanguage?: string | null
   // The sender's account badge ('operator' = run by HashChat staff, 'official'
   // = the HashChat team's account), shown next to speakerName. Comes from
   // hydration, committed live utterances and live previews (the latter from
@@ -216,7 +225,8 @@ export interface Utterance {
   // change any more (tail translation of an open bubble). Shown like a final
   // translation and read aloud piece by piece.
   translationFixed?: Record<string, string>
-  translationStatus?: 'pending' | 'retrying'
+  // 'unbilled': sent with no Hash, delivered without translations.
+  translationStatus?: 'pending' | 'retrying' | 'unbilled'
   createdAtMs?: number
   serverCreatedAtMs?: number
   serverMessageId?: string
@@ -946,6 +956,7 @@ function ChatBubble({
   const originalDisplayLanguage = displayLanguageResolver.originalLanguage
   const originalDisplayText = resolveOriginalDisplayText(utterance)
   const flag = getSttLanguageFlag(originalDisplayLanguage)
+  const avatarFlagLanguage = utterance.speakerFlagLanguage || originalDisplayLanguage
   const originalLanguageBadgeLabel = getOriginalLanguageBadgeLabel(originalDisplayLanguage)
   const avatar = getSpeakerAvatar(
     utterance.speaker,
@@ -981,7 +992,26 @@ function ChatBubble({
     displayLanguageResolver,
     hiddenLanguages,
   )
-  const translationEntries = targetLangs
+  // Sent with no Hash: delivered without translations, so the empty language
+  // rows are dropped instead of waiting forever on "…".
+  const isUnbilled = utterance.translationStatus === 'unbilled' && !isRecalled
+  // The server does not keep that state: a stored message that still has no
+  // translation a minute after it was sent is never getting one (no Hash, or a
+  // failed provider), for its sender after a reload and for everyone else.
+  const mayGoStaleUntranslated = !isDraft && !isRecalled && !isUnbilled
+    && utterance.translationStatus === undefined
+    && typeof utterance.createdAtMs === 'number'
+    && Object.values(utterance.translations || {}).every((value) => !value?.trim())
+  const [staleCheckAtMs, setStaleCheckAtMs] = useState(() => Date.now())
+  const untranslatedAgeMs = typeof utterance.createdAtMs === 'number' ? staleCheckAtMs - utterance.createdAtMs : 0
+  useEffect(() => {
+    if (!mayGoStaleUntranslated || untranslatedAgeMs > STALE_UNTRANSLATED_MS) return
+    const timer = setTimeout(() => setStaleCheckAtMs(Date.now()), STALE_UNTRANSLATED_MS - untranslatedAgeMs + 50)
+    return () => clearTimeout(timer)
+  }, [mayGoStaleUntranslated, untranslatedAgeMs])
+  const isStaleUntranslated = mayGoStaleUntranslated && untranslatedAgeMs > STALE_UNTRANSLATED_MS
+  const dropsEmptyTranslations = isUnbilled || isStaleUntranslated
+  const allTranslationEntries = targetLangs
     .map((lang) => {
       const found = findDisplayTranslation(utterance, lang, displayLanguageResolver)
       // A translation already on screen never blanks back to "…" while the
@@ -999,6 +1029,9 @@ function ChatBubble({
         state: text && (finalized !== false || isFixed) ? 'final' as const : 'interim' as const,
       }
   })
+  const translationEntries = dropsEmptyTranslations
+    ? allTranslationEntries.filter(({ text }) => Boolean(text))
+    : allTranslationEntries
   const completedTranslationEntries = translationEntries.filter(({ text }) => Boolean(text))
   const languageOptions = buildLanguageOptionsForUtterance(
     displayLanguageResolver,
@@ -1020,9 +1053,14 @@ function ChatBubble({
   const [selectedLanguage, setDisplayLanguage] = useState<{ messageId: string; language: string } | null>(null)
   const selectDisplayLanguage = (language: string) => setDisplayLanguage({ messageId: utterance.id, language })
   const displayLanguage = resolveSelectedBubbleLanguage(utterance.id, automaticDisplayLanguage, selectedLanguage)
-  const activeLanguage = languageOptions.find((language) => (
+  const requestedActiveLanguage = languageOptions.find((language) => (
     displayLanguageKey(language) === displayLanguageKey(displayLanguage)
   )) || originalDisplayLanguage
+  const activeLanguage = dropsEmptyTranslations
+    && displayLanguageKey(requestedActiveLanguage) !== displayLanguageKey(originalDisplayLanguage)
+    && !translationEntries.some((entry) => displayLanguageKey(entry.lang) === displayLanguageKey(requestedActiveLanguage))
+    ? originalDisplayLanguage
+    : requestedActiveLanguage
   const isOriginalLanguageSelected = displayLanguageKey(activeLanguage)
     === displayLanguageKey(originalDisplayLanguage)
   const activeTranslationEntry = isOriginalLanguageSelected
@@ -1344,15 +1382,16 @@ function ChatBubble({
         ) : (
           avatarImage
         )}
-        {originalDisplayLanguage && flag !== '🌐' && !announcementCard ? (
-          // The language this message was spoken in, small at the avatar's bottom-left.
+        {avatarFlagLanguage && getSttLanguageFlag(avatarFlagLanguage) !== '🌐' && !announcementCard ? (
+          // The language this message was spoken in (or, in the staff inbox, the
+          // sender's own language), small at the avatar's bottom-left.
           // A language without a flag of its own shows none.
           <span
             aria-hidden="true"
-            data-speaker-avatar-flag={originalDisplayLanguage}
+            data-speaker-avatar-flag={avatarFlagLanguage}
             className="pointer-events-none absolute -bottom-[3px] -left-[3px] flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-white px-[1px] ring-1 ring-gray-200"
           >
-            <LanguageFlag language={originalDisplayLanguage} className="text-[9px] leading-none" />
+            <LanguageFlag language={avatarFlagLanguage} className="text-[9px] leading-none" />
           </span>
         ) : null}
       </div>
@@ -1435,6 +1474,11 @@ function ChatBubble({
                 />
               ))}
             </div>
+            {isUnbilled ? (
+              <p data-untranslated-no-coins className="mt-0.5 px-1 text-[11px] leading-snug text-gray-400">
+                {getCoinCopy(uiLocale as AppLocale).untranslatedNoCoins}
+              </p>
+            ) : null}
           </div>
         </motion.div>
       ) : (
@@ -1472,6 +1516,11 @@ function ChatBubble({
                 {activeBubbleBody}
               </div>
             </div>
+            {isUnbilled ? (
+              <p data-untranslated-no-coins className="mt-0.5 px-1 text-[11px] leading-snug text-gray-400">
+                {getCoinCopy(uiLocale as AppLocale).untranslatedNoCoins}
+              </p>
+            ) : null}
           </div>
         </motion.div>
       )}

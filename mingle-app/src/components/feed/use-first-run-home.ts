@@ -6,7 +6,7 @@ import { useSession } from "next-auth/react";
 import { hasConfirmedLanguageOnboarding } from "@/components/LivePhoneDemo/language-onboarding.storage";
 import { conversationsHref } from "@/lib/posting-feed-guard";
 import { homeHref } from "@/lib/home-routes";
-import { isFirstSpeakPending, shouldOpenConversationsInsteadOfFeed, speakTrialNeedsSessionCheck } from "@/lib/first-run";
+import { isDocumentLoadedOnFeed, isFirstSpeakPending, shouldOpenConversationsInsteadOfFeed, speakTrialNeedsSessionCheck } from "@/lib/first-run";
 import { readLastSignInMethod } from "@/lib/last-sign-in-method";
 import { isSpeakTrialDone } from "@/lib/speak-trial";
 
@@ -19,6 +19,15 @@ function scheduleMicrotask(callback: () => void): void {
 
 /** The app launch is judged once per page load; later visits to the feed tab stay on the feed. */
 let launchJudged = false;
+
+function readDocumentUrl(): string | null {
+  try {
+    const entry = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+    return entry?.name || null;
+  } catch {
+    return null;
+  }
+}
 
 function isNativeAppRuntime(): boolean {
   const bridge = (window as { ReactNativeWebView?: { postMessage?: unknown } }).ReactNativeWebView;
@@ -51,6 +60,7 @@ export function useFirstRunHome(locale: string, options: { launchHome?: boolean 
       const params = new URLSearchParams(window.location.search);
       const base = {
         isNativeApp: isNativeAppRuntime(),
+        launchedOnFeed: isDocumentLoadedOnFeed(readDocumentUrl(), window.location.pathname),
         onboardingConfirmed: hasConfirmedLanguageOnboarding(),
         firstSpeakPending: isFirstSpeakPending(),
         hasPostTarget: params.has("postId") || params.has("commentId"),

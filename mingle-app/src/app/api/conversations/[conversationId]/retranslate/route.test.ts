@@ -15,6 +15,7 @@ const h = vi.hoisted(() => ({
   billingUser: vi.fn(),
   canSpend: vi.fn(),
   charge: vi.fn(),
+  usageFree: vi.fn(),
 }));
 
 vi.mock("next-auth", () => ({ getServerSession: h.session }));
@@ -26,6 +27,7 @@ vi.mock("@/lib/app-conversations", () => ({
 vi.mock("@/server/conversation-realtime", () => ({ notifyConversationMessage: h.notify }));
 vi.mock("@/server/coins/request-billing", () => ({ resolveCoinBillingUserId: h.billingUser }));
 vi.mock("@/server/coins/wallet", () => ({ canSpendCoins: h.canSpend, chargeCoinUsageSafely: h.charge }));
+vi.mock("@/server/coins/pricing", () => ({ isCoinUsageFree: h.usageFree }));
 vi.mock("@/server/translation/translate-texts", () => ({
   translateTexts: h.translate,
   resolveTranslationProviderConfig: (model: string) => ({
@@ -67,6 +69,7 @@ const message = {
 describe("POST /api/conversations/[conversationId]/retranslate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    h.usageFree.mockResolvedValue(false);
     h.session.mockResolvedValue({ user: { id: "user_2" } });
     h.sessionKey.mockResolvedValue("sess_1");
     h.members.mockResolvedValue(["user_1", "user_2"]);
@@ -116,6 +119,14 @@ describe("POST /api/conversations/[conversationId]/retranslate", () => {
     expect(response.status).toBe(402);
     expect(h.translate).not.toHaveBeenCalled();
     expect(h.upsert).not.toHaveBeenCalled();
+  });
+
+  it("translates with an empty wallet while translation is free", async () => {
+    h.canSpend.mockResolvedValue(false);
+    h.usageFree.mockResolvedValue(true);
+    const response = await retranslate({ messageId: "u-1700000000000-1", language: "en" });
+    expect(response.status).toBe(200);
+    expect(h.translate).toHaveBeenCalled();
   });
 
   it("rejects non-members, recalled messages, photos and the source language", async () => {

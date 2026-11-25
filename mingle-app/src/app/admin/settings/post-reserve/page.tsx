@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { requireAdmin } from '@/server/admin/guard'
-import { resolveAutoReplyModel } from '@/server/operator-auto-reply/generate'
+import { resolveReserveModel } from '@/server/operator-post-reserve/generate'
 import { getPostReserveSettings } from '@/server/operator-post-reserve/settings'
 import { getPostReserveStats } from '@/server/operator-post-reserve/worker'
 import { PostReserveForm } from './post-reserve-form'
@@ -35,7 +35,7 @@ export default async function AdminPostReserveSettingsPage() {
       <p className="mt-2 break-words text-[15px] leading-6 text-slate-600">
         운영 계정마다 글을 미리 써 두고, 매일 그중 일부를 자동으로 올립니다. 줄어든 만큼 계속 다시 채웁니다.
       </p>
-      <PostReserveForm initial={{ settings, stats }} model={resolveAutoReplyModel()} />
+      <PostReserveForm initial={{ settings, stats }} model={resolveReserveModel()} />
     </main>
   )
 }

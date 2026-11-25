@@ -1,9 +1,14 @@
+import { HAMZZI_USER_ID } from '@/lib/hamzzi'
 import { prisma } from '@/lib/prisma'
+import { ROYCE_USER_ID } from '@/lib/signup-welcome-onboarding'
+import { createPostNotification } from '@/server/notifications/create-post-notification'
 import type { AdminContext } from '@/server/admin/guard'
 import { markPostViewed } from '@/server/feed/post-view'
 import { commentOnPostAsOperator, replyToCommentAsOperator } from '@/server/operator-comments/comment'
 import { seededRandom } from '@/server/operator-avatars/taxonomy'
 import { visiblePostWhere } from '@/server/posts/post-visibility'
+import { ensureOperatorTeamFollows } from '@/server/operators/team-follows'
+import { isHostileComment } from './hostile-comment'
 
 /**
  * Reactions on operator posts, the way they build up on a real one: likes come
@@ -16,9 +21,14 @@ import { visiblePostWhere } from '@/server/posts/post-visibility'
  * at what delay), so a run only adds what is due by now and is missing:
  * running it again, or after a restart, never doubles anything. Only operator
  * accounts act. A real person's comment on an operator post gets its own plan
- * (`planRealCommentEngagement`): the operator it was left for likes it and,
- * now and then, answers it (Claude Sonnet 5.5, `operator-comments/generate.ts`).
+ * (`planRealCommentEngagement`): the operator it was left for likes about a
+ * third of them and, now and then, answers it (Claude Sonnet 5.5, `operator-comments/generate.ts`).
  * Comments and replies are AI-written, so each run writes at most a few.
+ *
+ * A real person's own post gets a plan too (`planRealPostEngagement`): a
+ * first like within minutes, more over the day (a photo more than text), and
+ * up to two comments (three on a photo), hours apart, from operators who
+ * already talked with that person first, else ones writing its language.
  */
 
 const HOUR_MS = 60 * 60_000
@@ -29,6 +39,12 @@ export const ENGAGEMENT_WINDOW_MS = 4 * 24 * HOUR_MS
 const MAX_WRITTEN_PER_RUN = 2
 /** Replies to real people's comments per run, on top of `MAX_WRITTEN_PER_RUN`. */
 const MAX_REAL_REPLIES_PER_RUN = 3
+/** Comments on real people's posts per run, on top of the above. */
+const MAX_REAL_POST_COMMENTS_PER_RUN = 1
+/** Real people's posts get operator reactions for this long after they go up. */
+export const REAL_POST_WINDOW_MS = 3 * 24 * HOUR_MS
+/** Team accounts whose posts are not real people's (sign-up auto-follows, the mascot). */
+const TEAM_USER_IDS = [ROYCE_USER_ID, HAMZZI_USER_ID]
 
 type Random = () => number
 const WORKER_CONTEXT: AdminContext = { sessionId: null, ip: null, userAgent: 'operator-engagement' }
@@ -36,6 +52,47 @@ const WORKER_CONTEXT: AdminContext = { sessionId: null, ip: null, userAgent: 'op
 /** A delay between `min` and `max`, mostly near the start (log-uniform), as reactions come in. */
 function delay(random: Random, minMs: number, maxMs: number): number {
   return Math.round(Math.exp(Math.log(minMs) + random() * (Math.log(maxMs) - Math.log(minMs))))
+}
+
+/** [from, to, share]: a reaction lands in a band by its share, log-uniform inside it. */
+type Band = readonly [number, number, number]
+
+/**
+ * When a reaction comes in: a post keeps being found in the feed for days, so
+ * reactions slow down but never stop at once (staff, 2026-11-23: likes all
+ * arrived in the first hour, then nothing, which reads as staged).
+ */
+const LIKE_BANDS: readonly Band[] = [
+  [3 * MINUTE_MS, HOUR_MS, 0.22],
+  [HOUR_MS, 6 * HOUR_MS, 0.28],
+  [6 * HOUR_MS, 24 * HOUR_MS, 0.28],
+  [24 * HOUR_MS, 48 * HOUR_MS, 0.14],
+  [48 * HOUR_MS, 90 * HOUR_MS, 0.08],
+]
+const COMMENT_BANDS: readonly Band[] = [
+  [8 * MINUTE_MS, HOUR_MS, 0.15],
+  [HOUR_MS, 6 * HOUR_MS, 0.3],
+  [6 * HOUR_MS, 24 * HOUR_MS, 0.3],
+  [24 * HOUR_MS, 48 * HOUR_MS, 0.15],
+  [48 * HOUR_MS, 90 * HOUR_MS, 0.1],
+]
+/** Real people's posts: after the fast first like, the rest over about two and a half days. */
+const REAL_LIKE_BANDS: readonly Band[] = [
+  [4 * MINUTE_MS, HOUR_MS, 0.25],
+  [HOUR_MS, 6 * HOUR_MS, 0.3],
+  [6 * HOUR_MS, 24 * HOUR_MS, 0.3],
+  [24 * HOUR_MS, 60 * HOUR_MS, 0.15],
+]
+
+function bandDelay(random: Random, bands: readonly Band[]): number {
+  let roll = random() * bands.reduce((sum, band) => sum + band[2], 0)
+  const inner = random()
+  for (const [min, max, share] of bands) {
+    roll -= share
+    if (roll < 0) return Math.round(Math.exp(Math.log(min) + inner * (Math.log(max) - Math.log(min))))
+  }
+  const [min] = bands[bands.length - 1]
+  return min
 }
 
 function weightedCount(random: Random, weights: readonly number[]): number {
@@ -55,14 +112,26 @@ export type PostEngagementPlan = {
   comments: number[]
 }
 
+/** What a post draws: photos more than text, a striking face (미남미녀) a lot more (staff, 2026-11-23). */
+export type PostAppeal = { photo: boolean; attractive: boolean }
+
+/** Likes: `likesMin` plus up to `likesSpread` more (higher `skew`: big counts rarer). Comments: weights for 0, 1, 2… */
+const APPEAL_REACTIONS: Record<'text' | 'photo' | 'attractiveText' | 'attractivePhoto', { likesMin: number; likesSpread: number; skew: number; comments: readonly number[] }> = {
+  text: { likesMin: 1, likesSpread: 11, skew: 1.8, comments: [40, 35, 17, 6, 2] },
+  photo: { likesMin: 1, likesSpread: 24, skew: 1.7, comments: [22, 36, 25, 12, 5] },
+  attractiveText: { likesMin: 3, likesSpread: 24, skew: 1.5, comments: [18, 32, 27, 14, 6, 3] },
+  attractivePhoto: { likesMin: 8, likesSpread: 40, skew: 1.3, comments: [4, 12, 20, 20, 16, 12, 8, 5, 3] },
+}
+
 /** How a post's reactions build up. */
-export function planPostEngagement(postId: string): PostEngagementPlan {
+export function planPostEngagement(postId: string, appeal: PostAppeal = { photo: true, attractive: false }): PostEngagementPlan {
   const random = seededRandom(`engage-post:${postId}`)
-  // 1-24 likes, most posts around 6-10.
-  const likeCount = 1 + Math.floor(24 * random() ** 1.7)
-  const likes = Array.from({ length: likeCount }, () => delay(random, 3 * MINUTE_MS, 36 * HOUR_MS)).sort((a, b) => a - b)
-  const commentCount = weightedCount(random, [22, 36, 25, 12, 5])
-  const comments = Array.from({ length: commentCount }, () => delay(random, 8 * MINUTE_MS, 30 * HOUR_MS)).sort((a, b) => a - b)
+  const shape = APPEAL_REACTIONS[appeal.attractive ? (appeal.photo ? 'attractivePhoto' : 'attractiveText') : appeal.photo ? 'photo' : 'text']
+  // A photo post by an ordinary account: 1-24 likes, most around 6-10.
+  const likeCount = shape.likesMin + Math.floor(shape.likesSpread * random() ** shape.skew)
+  const likes = Array.from({ length: likeCount }, () => bandDelay(random, LIKE_BANDS)).sort((a, b) => a - b)
+  const commentCount = weightedCount(random, shape.comments)
+  const comments = Array.from({ length: commentCount }, () => bandDelay(random, COMMENT_BANDS)).sort((a, b) => a - b)
   return { likes, comments }
 }
 
@@ -102,11 +171,14 @@ export function planCommentEngagement(commentId: string, isRoot: boolean): Comme
 }
 
 export type RealCommentEngagementPlan = {
-  /** The operator the comment was left for likes it after this delay. */
-  like: number
+  /** The operator the comment was left for likes it after this delay (null: no like, ~65%). */
+  like: number | null
   /** That operator answers it after this delay (null: no answer). Root comments only. */
   reply: number | null
 }
+
+/** Share of real comments the operator likes (liking every one read as staged). */
+export const REAL_COMMENT_LIKE_CHANCE = 0.35
 
 /** How a real person's comment on an operator post is liked and answered. */
 export function planRealCommentEngagement(commentId: string, isRoot: boolean): RealCommentEngagementPlan {
@@ -114,7 +186,43 @@ export function planRealCommentEngagement(commentId: string, isRoot: boolean): R
   const like = delay(random, 3 * MINUTE_MS, 3 * HOUR_MS)
   const replies = random() < 0.6
   const replyAt = delay(random, 10 * MINUTE_MS, 6 * HOUR_MS)
-  return { like, reply: isRoot && replies ? replyAt : null }
+  // Drawn last so the reply rolls stay what they were for existing comments.
+  const likes = random() < REAL_COMMENT_LIKE_CHANCE
+  return { like: likes ? like : null, reply: isRoot && replies ? replyAt : null }
+}
+
+export type RealPostEngagementPlan = {
+  /** Delays after publishing, ascending: one operator comment each (0-2, hours apart). */
+  comments: number[]
+  /** Delays after publishing, ascending: one operator like each. */
+  likes: number[]
+}
+
+/** Real posts: likes `likesMin` plus up to `likesSpread` more (higher `skew`: big counts rarer); comments: weights for 0, 1, 2… */
+const REAL_POST_REACTIONS: Record<'text' | 'photo', { likesMin: number; likesSpread: number; skew: number; comments: readonly number[] }> = {
+  text: { likesMin: 1, likesSpread: 4, skew: 1.6, comments: [30, 55, 15] },
+  photo: { likesMin: 2, likesSpread: 9, skew: 1.4, comments: [10, 45, 33, 12] },
+}
+
+/**
+ * How a real person's own post is liked and commented on: never the same twice
+ * (seeded per post), a photo drawing more than text. The first like comes fast
+ * (1-20 minutes), the rest over about two and a half days; comments come hours apart.
+ */
+export function planRealPostEngagement(postId: string, options: { photo?: boolean } = {}): RealPostEngagementPlan {
+  const random = seededRandom(`engage-real-post:${postId}`)
+  const shape = REAL_POST_REACTIONS[options.photo ? 'photo' : 'text']
+  const commentCount = weightedCount(random, shape.comments)
+  const comments: number[] = []
+  let at = delay(random, 25 * MINUTE_MS, 5 * HOUR_MS)
+  for (let index = 0; index < commentCount; index += 1) {
+    comments.push(at)
+    at += delay(random, 90 * MINUTE_MS, 12 * HOUR_MS)
+  }
+  const likeCount = shape.likesMin + Math.floor((shape.likesSpread + 1) * random() ** shape.skew)
+  const first = delay(random, MINUTE_MS, 20 * MINUTE_MS)
+  const rest = Array.from({ length: likeCount - 1 }, () => first + bandDelay(random, REAL_LIKE_BANDS))
+  return { comments, likes: [first, ...rest].sort((a, b) => a - b) }
 }
 
 /** `ids` in an order fixed by `seed`, so the same accounts are picked again on the next run. */
@@ -128,32 +236,58 @@ export function seededOrder(ids: readonly string[], seed: string): string[] {
   return order
 }
 
-export type EngagementRunResult = { likes: number; comments: number; replies: number; commentLikes: number; realLikes: number; realReplies: number }
+export type EngagementRunResult = {
+  likes: number
+  comments: number
+  replies: number
+  commentLikes: number
+  realLikes: number
+  /** Real comments not liked because they were judged hostile. */
+  hostileSkipped: number
+  /** Follow rows added between operator accounts and the team accounts. */
+  teamFollows: number
+  realReplies: number
+  realPostLikes: number
+  realPostComments: number
+}
 
 type CommentRow = { id: string; postId: string; authorId: string; parentId: string | null; createdAt: Date; likes: Array<{ userId: string }> }
 
 /** One run: adds every reaction that is due and missing on recent operator posts. */
 export async function runOperatorEngagement(now: Date = new Date(), options: { maxWritten?: number } = {}): Promise<EngagementRunResult> {
-  const result: EngagementRunResult = { likes: 0, comments: 0, replies: 0, commentLikes: 0, realLikes: 0, realReplies: 0 }
+  const result: EngagementRunResult = {
+    likes: 0, comments: 0, replies: 0, commentLikes: 0, realLikes: 0, hostileSkipped: 0, teamFollows: 0, realReplies: 0, realPostLikes: 0, realPostComments: 0,
+  }
   let writeBudget = options.maxWritten ?? MAX_WRITTEN_PER_RUN
   const nowMs = now.getTime()
   const since = new Date(nowMs - ENGAGEMENT_WINDOW_MS)
 
-  const operators = (await prisma.user.findMany({
+  const operatorRows = await prisma.user.findMany({
     where: { isOperator: true, isActive: true, isDeleted: false, operatorAccount: { reviewState: 'approved' } },
-    select: { id: true },
-  })).map((user) => user.id)
+    select: { id: true, primaryLanguages: true },
+  })
+  const operators = operatorRows.map((user) => user.id)
   if (operators.length === 0) return result
   const isOperator = new Set(operators)
+  result.teamFollows = await ensureOperatorTeamFollows(operators)
   await engageRealComments(now, isOperator, result)
+  await engageRealPosts(now, operatorRows, result)
   if (operators.length < 2) return result
 
   const posts = await prisma.post.findMany({
     where: { ...visiblePostWhere(null), author: { isOperator: true }, publishedAt: { gte: since, lte: now } },
     orderBy: { publishedAt: 'asc' },
-    select: { id: true, authorId: true, publishedAt: true, likes: { select: { userId: true } } },
+    select: { id: true, authorId: true, publishedAt: true, imageObjectKey: true, likes: { select: { userId: true } } },
   })
   if (posts.length === 0) return result
+  // 미남미녀: accounts whose profile photo was drawn with a striking face.
+  const striking = new Set((await prisma.operatorAccount.findMany({
+    where: { userId: { in: [...new Set(posts.map((post) => post.authorId))] } },
+    select: { userId: true, avatarSpec: true },
+  })).filter((account) => {
+    const spec = account.avatarSpec as { attributes?: { attractiveness?: unknown } } | null
+    return spec?.attributes?.attractiveness === 'striking'
+  }).map((account) => account.userId))
 
   const comments: CommentRow[] = await prisma.postComment.findMany({
     where: { postId: { in: posts.map((post) => post.id) }, moderationHiddenAt: null, OR: [{ isDeleted: null }, { isDeleted: false }] },
@@ -164,7 +298,7 @@ export async function runOperatorEngagement(now: Date = new Date(), options: { m
   for (const comment of comments) commentsByPost.set(comment.postId, [...(commentsByPost.get(comment.postId) ?? []), comment])
 
   for (const post of posts) {
-    const plan = planPostEngagement(post.id)
+    const plan = planPostEngagement(post.id, { photo: Boolean(post.imageObjectKey), attractive: striking.has(post.authorId) })
     const start = post.publishedAt.getTime()
     const others = operators.filter((id) => id !== post.authorId)
 
@@ -265,7 +399,7 @@ async function engageRealComments(now: Date, isOperator: Set<string>, result: En
     },
     orderBy: { createdAt: 'asc' },
     select: {
-      id: true, parentId: true, replyToUserId: true, createdAt: true,
+      id: true, parentId: true, replyToUserId: true, createdAt: true, sourceText: true,
       post: { select: { authorId: true } },
       likes: { select: { userId: true } },
       replies: { where: { OR: [{ isDeleted: null }, { isDeleted: false }] }, select: { authorId: true } },
@@ -277,7 +411,11 @@ async function engageRealComments(now: Date, isOperator: Set<string>, result: En
     const operatorId = comment.replyToUserId && isOperator.has(comment.replyToUserId) ? comment.replyToUserId : comment.post.authorId
     if (!isOperator.has(operatorId)) continue
 
-    if (start + plan.like <= nowMs && !comment.likes.some((like) => like.userId === operatorId)) {
+    const likeDue = plan.like !== null && start + plan.like <= nowMs && !comment.likes.some((like) => like.userId === operatorId)
+    // Never like an insult: judged only once a like is actually due.
+    const hostile = likeDue && await isHostileComment(comment.id, comment.sourceText)
+    if (hostile) result.hostileSkipped += 1
+    if (likeDue && !hostile && plan.like !== null) {
       const createdAt = new Date(Math.min(nowMs, start + plan.like))
       const created = await prisma.postCommentLike.createMany({ data: [{ commentId: comment.id, userId: operatorId, createdAt }], skipDuplicates: true })
       if (created.count) {
@@ -286,10 +424,106 @@ async function engageRealComments(now: Date, isOperator: Set<string>, result: En
       }
     }
 
-    if (replyBudget > 0 && plan.reply !== null && start + plan.reply <= nowMs && !comment.replies.some((reply) => reply.authorId === operatorId)) {
+    // Any operator answer in the thread (staff writing by hand included) ends it: no automatic second one.
+    if (replyBudget > 0 && plan.reply !== null && start + plan.reply <= nowMs && !comment.replies.some((reply) => reply.authorId === operatorId || isOperator.has(reply.authorId))) {
       replyBudget -= 1
       const written = await replyToCommentAsOperator(WORKER_CONTEXT, { operatorUserId: operatorId, commentId: comment.id, now })
       if (written.ok) result.realReplies += 1
     }
   }
+}
+
+/**
+ * Real people's own posts from the last `REAL_POST_WINDOW_MS`: the due operator
+ * likes (each one notifies the author, like a person's like) and, at most one
+ * per run, the due operator comment. Commenters are operators who already
+ * talked with the author (notifications either way) first, then operators whose
+ * persona writes the post's language, then any other.
+ */
+async function engageRealPosts(
+  now: Date,
+  operators: Array<{ id: string; primaryLanguages: string[] }>,
+  result: EngagementRunResult,
+): Promise<void> {
+  const nowMs = now.getTime()
+  let commentBudget = MAX_REAL_POST_COMMENTS_PER_RUN
+  const isOperator = new Set(operators.map((operator) => operator.id))
+  const posts = await prisma.post.findMany({
+    where: {
+      ...visiblePostWhere(null),
+      author: { id: { notIn: TEAM_USER_IDS }, isOperator: { not: true }, isOfficial: { not: true }, isDeleted: { not: true } },
+      publishedAt: { gte: new Date(nowMs - REAL_POST_WINDOW_MS), lte: now },
+    },
+    orderBy: { publishedAt: 'asc' },
+    select: {
+      id: true, authorId: true, sourceLanguage: true, publishedAt: true, imageObjectKey: true,
+      likes: { select: { userId: true } },
+      comments: { where: { parentId: null, OR: [{ isDeleted: null }, { isDeleted: false }] }, select: { authorId: true } },
+    },
+  })
+  for (const post of posts) {
+    const plan = planRealPostEngagement(post.id, { photo: Boolean(post.imageObjectKey) })
+    const start = post.publishedAt.getTime()
+
+    // Likes from operators, in a fixed order per post.
+    const liked = new Set(post.likes.map((like) => like.userId))
+    const operatorLikes = post.likes.filter((like) => isOperator.has(like.userId)).length
+    const dueLikes = plan.likes.filter((at) => start + at <= nowMs)
+    const likers = seededOrder([...isOperator], `real-post-like:${post.id}`)
+      .filter((id) => !liked.has(id))
+      .slice(0, Math.max(0, dueLikes.length - operatorLikes))
+    for (const [index, userId] of likers.entries()) {
+      const createdAt = new Date(Math.min(nowMs, start + dueLikes[operatorLikes + index]))
+      const created = await prisma.postLike.createMany({ data: [{ postId: post.id, userId, createdAt }], skipDuplicates: true })
+      if (!created.count) continue
+      await prisma.post.update({ where: { id: post.id }, data: { likeCount: { increment: created.count } } })
+      await markPostViewed(userId, post.id)
+      await createPostNotification({ type: 'post_like', recipientId: post.authorId, actorId: userId, postId: post.id })
+      result.realPostLikes += 1
+    }
+
+    const commented = new Set(post.comments.map((comment) => comment.authorId))
+    const operatorComments = post.comments.filter((comment) => isOperator.has(comment.authorId)).length
+    const dueComments = plan.comments.filter((at) => start + at <= nowMs).length
+    if (commentBudget <= 0 || dueComments <= operatorComments) continue
+    const commenter = (await realPostCommenters(post, operators)).find((id) => !commented.has(id))
+    if (!commenter) continue
+    commentBudget -= 1
+    const written = await commentOnPostAsOperator(WORKER_CONTEXT, { operatorUserId: commenter, postId: post.id, now })
+    if (written.ok) result.realPostComments += 1
+  }
+}
+
+/** Operators in the order they should comment on a real person's post. */
+async function realPostCommenters(
+  post: { id: string; authorId: string; sourceLanguage: string | null },
+  operators: Array<{ id: string; primaryLanguages: string[] }>,
+): Promise<string[]> {
+  const ids = operators.map((operator) => operator.id)
+  const talked = await prisma.userNotification.findMany({
+    where: {
+      OR: [
+        { actorId: post.authorId, recipientId: { in: ids } },
+        { recipientId: post.authorId, actorId: { in: ids } },
+      ],
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 50,
+    select: { actorId: true, recipientId: true },
+  })
+  const known: string[] = []
+  for (const row of talked) {
+    const id = row.actorId === post.authorId ? row.recipientId : row.actorId
+    if (id && !known.includes(id)) known.push(id)
+  }
+  const language = post.sourceLanguage?.trim().toLowerCase() ?? ''
+  const base = language.split('-')[0]
+  const sameLanguage = operators
+    .filter((operator) => !known.includes(operator.id) && operator.primaryLanguages.some((code) => {
+      const value = code.toLowerCase()
+      return value === language || (base !== '' && value.split('-')[0] === base)
+    }))
+    .map((operator) => operator.id)
+  const rest = ids.filter((id) => !known.includes(id) && !sameLanguage.includes(id))
+  return [...known, ...seededOrder(sameLanguage, `real-post-comment:${post.id}`), ...seededOrder(rest, `real-post-comment:${post.id}`)]
 }

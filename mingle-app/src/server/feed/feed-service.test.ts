@@ -31,6 +31,11 @@ vi.mock('@/server/posts/post-visibility', () => ({
 }))
 
 // No starter list here; its ordering is covered in starter-feed.test.ts.
+// Real-user engagement is read with raw SQL; here every post has none, so the order is unseen first, then newest.
+vi.mock('./real-engagement', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./real-engagement')>()),
+  loadRealEngagement: vi.fn(async () => new Map()),
+}))
 vi.mock('./starter-feed', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./starter-feed')>()),
   loadStarterFeed: async () => null,

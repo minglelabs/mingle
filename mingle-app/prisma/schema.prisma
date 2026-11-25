@@ -1067,6 +1067,13 @@ model OperatorAccount {
   reviewFeedback     String?   @map("review_feedback") @db.Text
   /// Place staff gave the account in the review queue (lower first); null keeps the default order.
   reviewRank         Int?      @map("review_rank")
+  /// A new profile photo of a live account waiting for staff review; the current one stays until staff take it.
+  pendingImage          String?   @map("pending_image")
+  pendingImageObjectKey String?   @map("pending_image_object_key")
+  /// The photo spec of `pendingImage`; becomes `avatarSpec` when staff take it.
+  pendingAvatarSpec     Json?     @map("pending_avatar_spec")
+  /// When a new profile photo for review started drawing; null when none is drawing.
+  pendingDrawingAt      DateTime? @map("pending_drawing_at")
   createdBySessionId String?   @map("created_by_session_id")
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")

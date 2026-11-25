@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { resolveOperatorPostStatsAccess } from '@/server/operator-post-stats/access'
 import { loadOperatorPostStats } from '@/server/operator-post-stats/load'
 import { parseSourcePostId } from '@/server/posts/source-post'
+import { prisma } from '@/lib/prisma'
+import { seedreamImageIds } from '@/server/seedream/drawn-images'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -37,6 +39,19 @@ export async function GET(request: Request) {
   const stats = await loadOperatorPostStats({
     postIds: ids,
     authorId: access.scope === 'own' ? access.operatorUserId : null,
+    // Staff see every post's stats, real users' too; an operator account only its own.
+    anyAuthor: access.scope === 'all',
   })
+  // Staff also see which engine drew an operator post's photo (ChatGPT pool unless listed as Seedream's).
+  if (access.scope === 'all' && stats.size) {
+    const [photos, seedream] = await Promise.all([
+      prisma.post.findMany({ where: { id: { in: [...stats.keys()] }, imageObjectKey: { not: null }, author: { isOperator: true } }, select: { id: true, imageObjectKey: true } }),
+      seedreamImageIds().catch(() => new Set<string>()),
+    ])
+    for (const photo of photos) {
+      const current = stats.get(photo.id)
+      if (current && photo.imageObjectKey) stats.set(photo.id, { ...current, photoEngine: seedream.has(photo.imageObjectKey) ? 'seedream' : 'chatgpt' })
+    }
+  }
   return json({ stats: Object.fromEntries(stats) })
 }

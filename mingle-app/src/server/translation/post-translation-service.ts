@@ -288,13 +288,13 @@ type ProduceTranslationArgs = {
  */
 async function produceTranslation(args: ProduceTranslationArgs): Promise<string | null> {
   const systemPrompt = args.sourceLanguagesMixed ? `${args.systemPrompt}\n${MIXED_SOURCE_RULE}` : args.systemPrompt
-  const callModel = async (extraRule?: string, target: string = args.language): Promise<Record<string, string>> => {
+  const callModel = async (extraRule?: string, target: string = args.language, appDefault = false): Promise<Record<string, string>> => {
     const result = await translateTexts({
       text: args.sourceText,
       sourceLanguage: args.sourceLanguage,
       targetLanguages: [target],
-      modelSelection: args.modelSelection,
-      provider: args.provider,
+      modelSelection: appDefault ? undefined : args.modelSelection,
+      provider: appDefault ? undefined : args.provider,
       isFinal: true,
       systemPromptOverride: extraRule ? `${systemPrompt}\n${extraRule}` : systemPrompt,
       userPromptOverride: buildTranslationUserPrompt(args.sourceText, args.sourceLanguage, [target]),
@@ -306,6 +306,13 @@ async function produceTranslation(args: ProduceTranslationArgs): Promise<string 
   if (!variant || variant !== args.language) {
     const first = (await callModel())[args.language] || null
     if (!isUntranslatedCopy(args.sourceText, args.language, first)) return first
+    // Operator text runs on Claude Haiku, which hands some texts back unchanged
+    // every time (e.g. a Japanese post with a quoted title, 2026-11-23): those go
+    // to the app's own translation model instead of failing.
+    if (args.provider === 'operator') {
+      const fallback = (await callModel(undefined, args.language, true))[args.language] || null
+      return isUntranslatedCopy(args.sourceText, args.language, fallback) ? null : fallback
+    }
     // The model handed the source back. Ask once more; if it still does, there
     // is no translation (the row settles as failed and is retried on the next
     // request) rather than a "ready" copy of the source.
@@ -737,7 +744,7 @@ type TranslateBodySettledArgs = {
   targetLanguages: string[]
   budgetMs?: number
   modelSelection?: TranslateTextsInput['modelSelection']
-  /** `chatgpt-pool` for operator text (operatorTextProvider); the budget then allows for the pool's 10-25 s answers. */
+  /** `operator` for operator text (operatorTextProvider); `chatgpt-pool` gets a longer budget for the pool's 10-25 s answers. */
   provider?: TranslateTextsInput['provider']
   /** The body mixes languages (detection verdict); see MIXED_SOURCE_RULE. */
   sourceLanguagesMixed?: boolean

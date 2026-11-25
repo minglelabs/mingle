@@ -28,6 +28,8 @@ import {
 import FeedPostView from "@/components/feed/feed-post-view";
 import HeartBurst from "@/components/feed/heart-burst";
 import PostLanguageChips, { ORIGINAL_CHIP } from "@/components/feed/post-language-chips";
+import PostReadAloudButton from "@/components/feed/post-read-aloud-button";
+import { stopReadAloud, usePostReadAloud } from "@/components/feed/post-read-aloud";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { isScrolledToEnd, READ_DWELL_MS, readClockRunning, readVerdict } from "@/components/feed/feed-read";
 import { readOnlyPostKind } from "@/components/feed/read-only-post";
@@ -576,6 +578,25 @@ export default function FeedPostCard({
   );
   const showLanguageChips = post.sourceText.trim().length > 0 && chipLanguages.length > 0;
 
+  // ── Read aloud: the text on screen, in the language its flag shows ──
+  const { status: readAloudStatus, playingLanguage, toggle: toggleReadAloud } = usePostReadAloud(post.id, isActive);
+  const readAloudLanguage = selectedChip === ORIGINAL_CHIP ? post.sourceLanguage : selectedChip;
+  const canReadAloud =
+    post.sourceText.trim().length > 0 &&
+    Boolean(readAloudLanguage) &&
+    !loadingLanguage &&
+    translate.mode !== "loading";
+  const handleReadAloud = useCallback(() => {
+    if (!readAloudLanguage) return;
+    void toggleReadAloud(displayText, readAloudLanguage).then((ok) => {
+      if (!ok) onToast(copy.readAloudFailed);
+    });
+  }, [toggleReadAloud, displayText, readAloudLanguage, onToast, copy.readAloudFailed]);
+  // Another flag picked while a clip plays: stop it rather than read the old text.
+  useEffect(() => {
+    if (playingLanguage && playingLanguage !== readAloudLanguage) stopReadAloud();
+  }, [playingLanguage, readAloudLanguage]);
+
   const ariaLabel = `${authorLabel}: ${previewText}`;
 
   const iconStyle = fg.iconFilter ? { filter: fg.iconFilter } : undefined;
@@ -717,8 +738,8 @@ export default function FeedPostCard({
       </button>
     ) : null;
   const controlSlot =
-    showLanguageChips ? (
-      <div className="mt-1 flex items-center gap-4">
+    showLanguageChips || canReadAloud ? (
+      <div className="mt-1 flex items-center gap-1.5">
         {showLanguageChips ? (
           <PostLanguageChips
             sourceLanguage={post.sourceLanguage}
@@ -730,6 +751,14 @@ export default function FeedPostCard({
             locale={locale}
             originalLabel={copy.translateHide}
             onSelect={handleSelectLanguage}
+          />
+        ) : null}
+        {canReadAloud ? (
+          <PostReadAloudButton
+            status={readAloudStatus}
+            label={copy.readAloud}
+            stopLabel={copy.stopReadAloud}
+            onPress={handleReadAloud}
           />
         ) : null}
       </div>

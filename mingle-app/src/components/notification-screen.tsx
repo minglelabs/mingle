@@ -4,7 +4,7 @@ import NotificationPanel from "@/components/notification-panel";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { feedHref } from "@/lib/feed-routes";
 import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
-import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
+import { buildNativeAwareTabHref, buildNativeAwareTabPath } from "@/lib/tab-navigation";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback } from "react";
@@ -49,11 +49,14 @@ export default function NotificationScreen({ dictionary, locale }: NotificationS
 
     // feedHref opens the feed at this post; with a commentId the feed opens the
     // comment sheet on that comment and expands its collapsed replies.
-    const postHref = buildNativeAwareTabPath(
+    // The feed is the home tab root: replace, so the home tab never gets a
+    // "back" into this screen or an older feed.
+    const postHref = buildNativeAwareTabHref(
       feedHref(locale, { postId: normalizedPostId, commentId: commentId?.trim() || null }),
       searchParams,
+      { tabRoot: true },
     );
-    router.push(postHref);
+    router.replace(postHref);
   }, [locale, router, searchParams]);
 
   useNativeBannerSuppression();

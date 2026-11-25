@@ -30,10 +30,10 @@ import { resolveVoiceStage, voiceStageTransition, type VoiceStageRole } from './
 import { useNativeBannerSuppression } from '@/lib/use-native-banner-suppression'
 import { VOICE_TALK_MAX_SEATS, voiceTalkCopy } from '@/i18n/voice-talk-copy'
 import { readDeclinedInvite, writeDeclinedInvite } from '@/lib/declined-invites'
-import { DEFAULT_LOCALE } from '@/i18n'
-import { resolveAppSupportedLocaleTag } from '@/i18n/mingle-locales'
-import { getCoinDetailCopy } from '@/i18n/coin-detail-copy'
-import { isCoinBillingActive, useCoinWallet } from '@/lib/coin-wallet-client'
+import { ensureCoinsForPaidFeature, isCoinBillingActive, notifyCoinsExhausted, refreshCoinWallet, useCoinWallet } from '@/lib/coin-wallet-client'
+
+// How often the wallet is read while paid interpretation is on.
+const INTERPRET_WALLET_POLL_MS = 15_000
 
 export const NATIVE_VOICE_EVENT = 'mingle:native-voice'
 const MAX_SEATS = VOICE_TALK_MAX_SEATS
@@ -169,15 +169,21 @@ export function setVoiceTalkMic(on: boolean) {
  * joins for it, and this phone listens to its language's track) and on the
  * server (it decides who reads each caption).
  */
-export async function setVoiceTalkInterpret(conversationId: string, on: boolean): Promise<void> {
+export async function setVoiceTalkInterpret(conversationId: string, on: boolean): Promise<boolean> {
   // The call at once (its reports then agree with the button), the server
   // right after.
   post({ type: 'native_voice_set', payload: { interpret: on } })
-  await fetch(buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/voice/interpret`), {
+  const response = await fetch(buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/voice/interpret`), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ on }),
-  }).catch(() => undefined)
+  }).catch(() => null)
+  // 402: no Hash. The call's switch goes back off; the caller opens the sheet.
+  if (on && response?.status === 402) {
+    post({ type: 'native_voice_set', payload: { interpret: false } })
+    return false
+  }
+  return true
 }
 
 /** The language the call reads translations aloud in (the room's speaker mode pick). */
@@ -254,23 +260,24 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   const listenOn = props.listenOn !== false
   const viewerUserId = props.viewerUserId ?? null
   const copy = voiceTalkCopy(props.uiLocale)
-  const coinDetailCopy = getCoinDetailCopy(resolveAppSupportedLocaleTag(props.uiLocale) ?? DEFAULT_LOCALE)
   const coinWallet = useCoinWallet().wallet
-  const [costTip, setCostTip] = useState<string | null>(null)
+  // Interpretation is paid. While it is on the wallet is read more often than
+  // the app's usual minute, and when the Hash run out the switch goes off and
+  // the "out of Hash" sheet opens (the server stops the captions on its side).
+  const interpretingOnHash = props.interpretOn === true && isCoinBillingActive(coinWallet)
   useEffect(() => {
-    if (!costTip) return
-    const timer = window.setTimeout(() => setCostTip(null), 10_000)
-    return () => window.clearTimeout(timer)
-  }, [costTip])
-  // The first time a paid switch is turned on, say what it costs.
-  const offerCostTip = useCallback((kind: 'interpret' | 'listen', listenOnNow: boolean) => {
-    if (!isCoinBillingActive(coinWallet) || costTipSeen(kind)) return
-    const tip = voiceTalkCostTip({ kind, listenOn: listenOnNow, rates: coinWallet.rates, copy: coinDetailCopy })
-    if (!tip) return
-    markCostTipSeen(kind)
-    if (kind === 'interpret' && listenOnNow) markCostTipSeen('listen')
-    setCostTip(tip)
-  }, [coinDetailCopy, coinWallet])
+    if (!interpretingOnHash) return
+    const timer = window.setInterval(() => { void refreshCoinWallet() }, INTERPRET_WALLET_POLL_MS)
+    return () => window.clearInterval(timer)
+  }, [interpretingOnHash])
+  const outOfHashWhileInterpreting = interpretingOnHash && coinWallet?.exhausted === true
+  useEffect(() => {
+    if (!outOfHashWhileInterpreting) return
+    props.onInterpretChange?.(false)
+    notifyCoinsExhausted({ userInitiated: true })
+    // Only the transition matters; the handler identity does not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outOfHashWhileInterpreting])
   const [call, setCall] = useState<StatusCall>(null)
   const [phase, setPhase] = useState<Phase>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -960,7 +967,8 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
                     aria-label={interpretOn ? copy.interpretOnState : copy.interpretOffState}
                     title={interpretOn ? copy.interpretOnState : copy.interpretOffState}
                     onClick={() => {
-                      if (!interpretOn) offerCostTip('interpret', listenOn)
+                      // No Hash: the switch stays off and the "out of Hash" sheet opens.
+                      if (!interpretOn && !ensureCoinsForPaidFeature()) return
                       onInterpretChange?.(!interpretOn)
                     }}
                     className={`inline-flex h-12 w-16 items-center justify-center rounded-full transition-colors ${
@@ -978,7 +986,6 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
                     title={listenOn ? copy.listenOnState : copy.listenOffState}
                     disabled={!interpretOn}
                     onClick={() => {
-                      if (!listenOn) offerCostTip('listen', true)
                       onListenChange?.(!listenOn)
                     }}
                     className={`inline-flex h-12 w-16 items-center justify-center rounded-full transition-colors disabled:opacity-40 ${
@@ -1004,22 +1011,6 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
                   </button>
                 </div>
               ) : null}
-              {joined && costTip ? (
-                <div
-                  data-qa="voice-talk-cost-tip"
-                  role="status"
-                  className="mx-3 mb-3 flex items-start gap-2 rounded-2xl bg-amber-50 px-3 py-2.5 text-[12.5px] leading-snug text-amber-900 ring-1 ring-amber-200"
-                >
-                  <span className="min-w-0 flex-1">{costTip}</span>
-                  <button
-                    type="button"
-                    onClick={() => setCostTip(null)}
-                    className="shrink-0 rounded-full px-2 py-0.5 text-[12px] font-semibold text-amber-700 active:bg-amber-100"
-                  >
-                    {coinDetailCopy.gotIt}
-                  </button>
-                </div>
-              ) : null}
             </motion.div>
           ) : null}
         </AnimatePresence>
@@ -1029,19 +1020,9 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   )
 }
 
-const COST_TIP_SEEN_KEY = 'mingle_voice_talk_cost_tip_seen:'
-
-function costTipSeen(kind: 'interpret' | 'listen'): boolean {
-  try { return window.localStorage.getItem(COST_TIP_SEEN_KEY + kind) === '1' } catch { return false }
-}
-
-function markCostTipSeen(kind: 'interpret' | 'listen'): void {
-  try { window.localStorage.setItem(COST_TIP_SEEN_KEY + kind, '1') } catch { /* private mode: shown again next time */ }
-}
 
 /**
- * What a switch costs, the first time it is turned on (once per device per
- * switch), while Hash are being charged. Null when there is nothing to say.
+ * What a voice talk switch costs, in a sentence. Null when there is nothing to say.
  */
 export function voiceTalkCostTip(input: {
   kind: 'interpret' | 'listen'

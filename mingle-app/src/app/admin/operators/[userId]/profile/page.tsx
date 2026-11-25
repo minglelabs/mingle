@@ -1,3 +1,4 @@
+import { StaffToggleButton } from './staff-toggle-button'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -14,14 +15,21 @@ import { safeBackPath, withBack } from '../../../_lib/back-path'
 import { OperatorPostStatsRow } from '../../../_components/operator-post-stats-row'
 import { OperatorPostEditor } from '../../../feed/_components/operator-post-editor'
 import { PostTakedownButton } from '../../../feed/_components/post-takedown-button'
-import { OperatorAvatar, OperatorsMain } from '../../_components/operator-ui'
-import { ReviewBoard, ReviewPhotos } from '../../review/review-board'
-import { reviewImageUrl } from '../../review/review-image-url'
+import { PublishedPostText } from './published-post-text'
+import { ProfileShareButton } from './profile-share-button'
+import { ApproveAccountButton } from './approve-account-button'
+import { ensureReferralCode } from '@/server/referral'
+import { resolveDefaultInviteMessageLocale } from '@/i18n/invite-ticket-copy'
+import { InlinePostComments } from '../../../activity/_components/inline-post-comments'
+import { OperatorsMain } from '../../_components/operator-ui'
+import { ZoomableAvatar } from '../../_components/zoomable-avatar'
+import { ReviewBoard, ReviewPhotos, StaffBio } from '../../review/review-board'
+import { adminPostImageUrl, reviewImageUrl } from '../../review/review-image-url'
 
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: '운영 계정 프로필 · HashChat Admin',
+  title: '프로필 · HashChat Admin',
   robots: { index: false, follow: false },
 }
 
@@ -72,32 +80,38 @@ function Tile({ href, image, text, badge, dimmed }: { href: string; image: strin
 }
 
 /**
- * An operator account seen as the app's My Page shows it: the profile on top,
+ * Anyone's profile as staff see it. An operator account is seen as the app's My Page shows it: the profile on top,
  * then its published posts and the ones waiting in review, as a grid or as
- * full cards (review cards keep their review actions).
+ * full cards (review cards keep their review actions). A real person's
+ * profile is read-only: their posts, no editing and no review tab.
  */
 export default async function OperatorProfilePage({ params, searchParams }: ProfilePageProps) {
   const { userId: rawUserId } = await params
   const userId = decodeSegment(rawUserId).trim()
   await requireAdmin(`/admin/operators/${rawUserId}/profile`)
   const query = await searchParams
-  const tab: Tab = query.tab === 'review' ? 'review' : 'published'
   const view: View = query.view === 'list' ? 'list' : 'grid'
 
   const user = await prisma.user.findFirst({
-    where: { id: userId, isOperator: true },
+    where: { id: userId },
     select: {
-      id: true, name: true, handle: true, image: true, bio: true, birthDate: true, locationCity: true, locationCountry: true,
-      primaryLanguages: true, interestLanguages: true, interestLanguageLevels: true, isDeleted: true,
+      id: true, name: true, handle: true, image: true, bio: true, birthDate: true, locationCity: true, locationCountry: true, gender: true, isOperator: true,
+      primaryLanguages: true, interestLanguages: true, interestLanguageLevels: true, isDeleted: true, referralCode: true,
       operatorAccount: { select: { personaGender: true, reviewState: true } },
       _count: { select: { followerRelations: true, followingRelations: true } },
     },
   })
   if (!user) notFound()
+  // Like a real person's share screen, the shared link carries the account's own invite code (made on first share).
+  const shareInviteCode = user.isOperator ? await ensureReferralCode(user.id).catch(() => user.referralCode) : user.referralCode
+  const operator = user.isOperator
+  // 운영진: a real user on the staff list (알림 설정), toggled from here.
+  const isStaff = !operator && Boolean(await prisma.adminNotifyTarget.findUnique({ where: { userId: user.id }, select: { userId: true } }))
+  const tab: Tab = operator && query.tab === 'review' ? 'review' : 'published'
 
   const [publishedCount, reviewCount, published, queue] = await Promise.all([
     prisma.post.count({ where: { authorId: user.id, ...NOT_DELETED } }),
-    prisma.operatorPostReserve.count({ where: { operatorUserId: user.id, state: { in: ['review', 'regenerating'] } } }),
+    operator ? prisma.operatorPostReserve.count({ where: { operatorUserId: user.id, state: { in: ['review', 'regenerating'] } } }) : Promise.resolve(0),
     tab === 'published'
       ? prisma.post.findMany({
         where: { authorId: user.id, ...NOT_DELETED },
@@ -107,12 +121,8 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
           id: true, sourceText: true, sourceLanguage: true, publishedAt: true, likeCount: true, commentCount: true, bodyVersion: true,
           imageObjectKey: true, imageWidth: true, imageHeight: true, moderationHiddenAt: true,
           extraImages: { orderBy: { position: 'asc' }, select: { imageObjectKey: true, imageWidth: true, imageHeight: true } },
-          comments: {
-            where: { moderationHiddenAt: null },
-            orderBy: { createdAt: 'asc' },
-            take: 5,
-            select: { id: true, sourceText: true, author: { select: { name: true, isOperator: true } } },
-          },
+          likes: { orderBy: { createdAt: 'desc' }, select: { user: { select: { id: true, name: true, handle: true, isOperator: true } } } },
+          translations: { where: { status: 'ready' }, select: { language: true, text: true, bodyVersion: true } },
         },
       })
       : Promise.resolve([]),
@@ -135,7 +145,7 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
   const age = ageOn(user.birthDate, new Date())
   const facts = [
     age ? `${age}세` : null,
-    user.operatorAccount?.personaGender === 'female' ? '여성' : user.operatorAccount?.personaGender === 'male' ? '남성' : null,
+    (user.operatorAccount?.personaGender ?? user.gender) === 'female' ? '여성' : (user.operatorAccount?.personaGender ?? user.gender) === 'male' ? '남성' : null,
     [user.locationCity, user.locationCountry].filter(Boolean).join(', ') || null,
   ].filter(Boolean)
   const reviewState = user.operatorAccount?.reviewState ?? 'approved'
@@ -147,14 +157,31 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
     <OperatorsMain>
       <div className="mx-auto w-full max-w-[520px]">
         <div className="mb-3 flex items-center justify-between text-sm">
-          <AdminBackLink href={back ?? '/admin/operators/review'} className="font-semibold text-sky-700">‹ 검토</AdminBackLink>
-          <Link href={withBack(`/admin/operators/${encodeURIComponent(user.id)}?from=review`, href({}))} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-700">프로필 편집</Link>
+          <AdminBackLink href={back ?? '/admin/operators/review'} className="font-semibold text-sky-700">{!back || back.startsWith('/admin/operators/review') ? '‹ 검토' : '‹ 뒤로'}</AdminBackLink>
+          {operator ? (
+            <div className="flex items-center gap-2">
+              <ProfileShareButton
+                userId={user.id}
+                name={user.name ?? user.handle}
+                handle={user.handle}
+                origin={(process.env.NEXT_PUBLIC_SITE_URL ?? '').trim().replace(/\/+$/, '')}
+                inviteCode={shareInviteCode}
+                messageLocale={resolveDefaultInviteMessageLocale(user.primaryLanguages[0] ?? 'en')}
+              />
+              <Link href={withBack(`/admin/operators/${encodeURIComponent(user.id)}?from=review`, href({}))} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-700">프로필 편집</Link>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">실제 유저</span>
+              <StaffToggleButton userId={user.id} handle={user.handle} initialStaff={isStaff} />
+            </div>
+          )}
         </div>
 
         {/* Profile header, laid out like the app's My Page. */}
         <section className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-4">
-            <OperatorAvatar image={user.image} name={user.name} size={84} languages={primaryLanguages} />
+            <ZoomableAvatar image={user.image} name={user.name} size={84} languages={primaryLanguages} />
             <div className="grid flex-1 grid-cols-3 text-center">
               <div><p className="text-lg font-bold text-slate-900">{publishedCount}</p><p className="text-xs text-slate-500">게시물</p></div>
               <div><p className="text-lg font-bold text-slate-900">{user._count.followerRelations}</p><p className="text-xs text-slate-500">팔로워</p></div>
@@ -163,16 +190,19 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
           </div>
           <p className="mt-3 text-base font-bold text-slate-900">{user.name ?? '(이름 없음)'}</p>
           <p className="text-sm text-slate-500">@{user.handle}{facts.length ? ` · ${facts.join(' · ')}` : ''}</p>
-          {reviewState !== 'approved' || user.isDeleted ? (
-            <p className="mt-2 inline-block rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">{user.isDeleted ? '삭제된 계정' : REVIEW_STATE[reviewState] ?? reviewState}</p>
+          {(operator && reviewState !== 'approved') || user.isDeleted ? (
+            <div className="mt-2 flex flex-wrap items-center">
+              <p className="inline-block rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">{user.isDeleted ? '삭제된 계정' : REVIEW_STATE[reviewState] ?? reviewState}</p>
+              {operator && !user.isDeleted && reviewState === 'pending' ? <ApproveAccountButton userId={user.id} /> : null}
+            </div>
           ) : null}
-          {user.bio ? <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-800">{user.bio}</p> : null}
+          {user.bio ? <StaffBio userId={user.id} bio={user.bio} sourceLanguage={primaryLanguages[0] ?? null} className="mt-2" /> : null}
           <ProfileLanguageLevels primaryLanguages={primaryLanguages} interestLanguages={interestLanguages} locale="ko" className="mt-3" />
         </section>
 
         <div className="mt-3 flex items-center gap-2 border-b border-slate-200 bg-white">
           <Link href={href({ tab: 'published', after: undefined })} className={tabClass(tab === 'published')}>올라간 글 {publishedCount}</Link>
-          <Link href={href({ tab: 'review', after: undefined })} className={tabClass(tab === 'review')}>검토 대기 {reviewCount}</Link>
+          {operator ? <Link href={href({ tab: 'review', after: undefined })} className={tabClass(tab === 'review')}>검토 대기 {reviewCount}</Link> : null}
           <div className="flex gap-1 pr-2">
             <Link href={href({ view: 'grid' })} className={viewClass(view === 'grid')} aria-label="격자로 보기"><Grid3x3 size={18} /></Link>
             <Link href={href({ view: 'list' })} className={viewClass(view === 'list')} aria-label="글로 보기"><List size={18} /></Link>
@@ -188,7 +218,7 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
                 <Tile
                   key={post.id}
                   href={href({ view: 'list' }, `post-${post.id}`)}
-                  image={post.imageObjectKey ? `/admin/api/posts/${post.id}/image` : null}
+                  image={post.imageObjectKey ? adminPostImageUrl(post.id) : null}
                   text={post.sourceText ?? ''}
                   badge={post.moderationHiddenAt ? '내림' : post.extraImages.length ? `${post.extraImages.length + 1}장` : null}
                   dimmed={post.moderationHiddenAt !== null}
@@ -200,7 +230,11 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
               {published.map((post) => (
                 <article key={post.id} id={`post-${post.id}`} className="scroll-mt-4 rounded-xl border border-slate-200 bg-white p-3">
                   {post.moderationHiddenAt ? <p className="mb-2 text-xs font-semibold text-rose-700">앱에서 내린 글</p> : null}
-                  <p className="whitespace-pre-wrap break-words text-[15px] leading-6 text-slate-900">{post.sourceText || '(내용 없음)'}</p>
+                  <PublishedPostText
+                    text={post.sourceText ?? ''}
+                    sourceLanguage={post.sourceLanguage}
+                    translations={post.translations.filter((row) => row.bodyVersion === post.bodyVersion && row.text?.trim()).map((row) => ({ language: row.language, text: row.text as string }))}
+                  />
                   {post.imageObjectKey ? (
                     <ReviewPhotos
                       photos={[
@@ -213,20 +247,26 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
                     {DATE_FORMAT.format(post.publishedAt)} · {post.sourceLanguage ?? '?'} · 좋아요 {post.likeCount} · 댓글 {post.commentCount}
                   </p>
                   <OperatorPostStatsRow stats={statsByPost.get(post.id)} className="mt-2" />
-                  {post.comments.length ? (
-                    <ul className="mt-2 space-y-1 rounded-lg bg-slate-50 p-2 text-sm">
-                      {post.comments.map((comment) => (
-                        <li key={comment.id} className="break-words text-slate-700">
-                          <span className="font-semibold text-slate-900">{comment.author.name ?? '?'}{comment.author.isOperator ? ' (운영)' : ''}</span> {comment.sourceText}
-                        </li>
-                      ))}
-                    </ul>
+                  {post.likes.length ? (
+                    <details className="mt-2 rounded-lg bg-slate-50 p-2 text-sm">
+                      <summary className="cursor-pointer text-xs font-semibold text-slate-600">좋아요 누른 사람 {post.likes.length}</summary>
+                      <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                        {post.likes.map(({ user: liker }) => (
+                          <li key={liker.id}>
+                            <Link href={withBack(`/admin/operators/${encodeURIComponent(liker.id)}/profile`, href({}, `post-${post.id}`))} className="font-semibold text-sky-700">
+                              {liker.name ?? `@${liker.handle}`}{liker.isOperator ? ' (운영)' : ''}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
                   ) : null}
+                  <InlinePostComments postId={post.id} operatorUserId={operator ? user.id : null} commentCount={post.commentCount} />
                   {post.moderationHiddenAt ? (
                     <div className="mt-3"><PostTakedownButton postId={post.id} hidden /></div>
-                  ) : (
-                    <OperatorPostEditor key={`${post.id}:${post.bodyVersion}`} postId={post.id} text={post.sourceText} hasPhoto={Boolean(post.imageObjectKey)} />
-                  )}
+                  ) : operator ? (
+                    <OperatorPostEditor key={`${post.id}:${post.bodyVersion}`} postId={post.id} text={post.sourceText} hasPhoto={Boolean(post.imageObjectKey)} publishedAt={post.publishedAt?.toISOString() ?? null} />
+                  ) : null}
                 </article>
               ))}
             </div>
@@ -246,17 +286,12 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
             </div>
           ) : (
             <div className="mt-3">
-              <ReviewBoard key={`${user.id}:${query.after ?? ''}:${queue.items.map((item) => item.key).join(',')}`} items={queue.items} />
+              <ReviewBoard key={`${user.id}:${query.after ?? ''}:${queue.items.map((item) => item.key).join(',')}`} items={queue.items} more={{ cursor: queue.nextCursor, userId: user.id }} />
             </div>
           )
         ) : (
           <p className="py-10 text-center text-sm text-slate-500">검토 대기 중인 글이 없어요.</p>
         )}
-        {tab === 'review' && queue?.nextCursor ? (
-          <Link href={href({ after: queue.nextCursor })} className="mt-4 block rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm font-semibold text-sky-700">
-            다음 글 더 보기
-          </Link>
-        ) : null}
       </div>
     </OperatorsMain>
   )

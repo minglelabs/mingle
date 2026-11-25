@@ -1,6 +1,8 @@
 import { Suspense, type ReactNode } from "react";
 import { ShieldCheck } from "lucide-react";
 import { AdminNavTracker } from "./admin-nav";
+import { AdminPullRefresh } from "./admin-pull-refresh";
+import { AdminPhotoSaver } from "./admin-photo-saver";
 import { AdminTabBar } from "./admin-tab-bar";
 import type { AdminTabBadges } from "./admin-tabs";
 import { ADMIN_SCROLL_CONTAINER_ID } from "./ui";
@@ -23,6 +25,7 @@ export function AdminShell({
 }) {
   return (
     <div className="flex h-svh w-full flex-col bg-slate-50 text-slate-900">
+      {signedIn ? <AdminPhotoSaver /> : null}
       <header className="shrink-0 border-b border-slate-200 bg-white pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] pt-[env(safe-area-inset-top)]">
         <div className="mx-auto flex h-12 w-full max-w-6xl items-center gap-2 px-4 sm:px-6">
           <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-sky-100 text-sky-700">
@@ -31,7 +34,8 @@ export function AdminShell({
           <span className="text-[15px] font-semibold tracking-tight text-slate-900">HashChat Admin</span>
         </div>
       </header>
-      <div className="flex min-h-0 w-full flex-1 flex-col lg:flex-row">
+      <div className="relative flex min-h-0 w-full flex-1 flex-col lg:flex-row">
+        {signedIn ? <AdminPullRefresh /> : null}
         <main
           className="min-h-0 w-full min-w-0 flex-1 overflow-y-auto overscroll-contain pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
           id={ADMIN_SCROLL_CONTAINER_ID}

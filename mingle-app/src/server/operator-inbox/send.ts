@@ -17,7 +17,7 @@ import { notifyConversationMessage } from '@/server/conversation-realtime'
 import { notifyOperatorInboxActivity } from '@/server/operator-inbox/notify'
 import { requireOperatorAccount, type OperatorAccountRecord } from '@/server/operators/operator-guard'
 import { sendPushNotificationForConversationMessage } from '@/server/push-notifications'
-import { operatorTextProvider, translateTexts, type TranslateTextsResult, type TranslationUsage } from '@/server/translation/translate-texts'
+import { operatorTextProvider, translateTexts, type TextProvider, type TranslateTextsResult, type TranslationUsage } from '@/server/translation/translate-texts'
 
 /**
  * Operator replies from the admin inbox (contract §5 "Reply language"):
@@ -110,6 +110,12 @@ export type SendOperatorMessageInput = {
   text: string
   /** Client id of this composed message; a retry with the same id never sends twice. */
   clientRequestId?: string | null
+  /**
+   * False: staff turned 자동 번역 off. The text goes out exactly as typed, in
+   * the language it was typed in, instead of being converted to the persona
+   * language; room members still get the usual translations. Default true.
+   */
+  translate?: boolean
 }
 
 export type SendOperatorMessageResult = {
@@ -214,7 +220,9 @@ async function translateStaffReply(args: {
    * person is waiting for it to send). Only the AI's replies go through the
    * ChatGPT pool, which takes 10-25 s an answer.
    */
-  provider: 'chatgpt-pool' | undefined
+  provider: TextProvider | undefined
+  /** Staff turned 자동 번역 off: the text itself is the original, in its own language. */
+  keepOriginal?: boolean
 }): Promise<TranslatedReply> {
   const { text, personaLanguage, provider } = args
   const targets = sanitizeSttLanguageUnion([personaLanguage, ...args.roomLanguages])
@@ -231,11 +239,15 @@ async function translateStaffReply(args: {
   let usage = addUsage(null, first.usage)
   const collected = canonicalTranslations(first, text, staffLanguage, targets)
 
-  // Staff already wrote in the persona's language: that text is the persona text.
-  const personaText = collected[personaLanguage] || (staffSttLanguage === personaLanguage ? text : '')
+  // Staff already wrote in the persona's language: their own words go out
+  // exactly as typed, never the model's "translation" into the same language
+  // (staff, 2026-11-23: "AI 아닌데.." came out as "AI가 아닌데..").
+  // With 자동 번역 off the original is the staff text in the language it was typed in.
+  const originalLanguage = args.keepOriginal ? staffSttLanguage || personaLanguage : personaLanguage
+  const personaText = args.keepOriginal || staffSttLanguage === personaLanguage ? text : collected[personaLanguage] || ''
   if (!personaText) throw new OperatorSendError('translation_failed')
 
-  const otherLanguages = targets.filter((language) => language !== personaLanguage)
+  const otherLanguages = targets.filter((language) => language !== originalLanguage)
   const missing = otherLanguages.filter((language) => !collected[language] && language !== staffSttLanguage)
   if (missing.length > 0) {
     try {
@@ -265,15 +277,15 @@ async function translateStaffReply(args: {
   }
 
   const normalized = normalizeChineseContent({
-    sourceLanguage: personaLanguage,
+    sourceLanguage: originalLanguage,
     sourceText: personaText,
     translations: otherTranslations,
     targetLanguages: targets,
     candidates: targets,
-    sourceHint: personaLanguage,
+    sourceHint: originalLanguage,
     sourceScriptIsEvidence: true,
   })
-  const sourceLanguage = normalized.sourceLanguage || personaLanguage
+  const sourceLanguage = normalized.sourceLanguage || originalLanguage
   // Model output, not typed text: store it already in its variant's script.
   const sourceText = (normalized.sourceDisplayText ?? personaText).trim()
   const translations = Object.fromEntries(
@@ -477,6 +489,7 @@ async function composeAndSend(args: {
   members: ConversationMemberSummary[]
   text: string
   clientMessageId: string
+  translate: boolean
 }): Promise<SendOperatorMessageResult> {
   const { sender, operator, channel, text, clientMessageId } = args
   const existing = await loadExistingReply(channel.sessionKey, clientMessageId, operator, sender.badge)
@@ -495,6 +508,7 @@ async function composeAndSend(args: {
     personaLanguage,
     roomLanguages,
     provider: typedByStaff ? undefined : operatorTextProvider(),
+    keepOriginal: !args.translate,
   })
 
   const metadata: Prisma.InputJsonObject = {
@@ -678,7 +692,7 @@ async function sendAsAccount(
   const running = inFlightReplies.get(flightKey)
   if (running) return { ...(await running), duplicate: true }
 
-  const promise = composeAndSend({ sender, operator, channel, members, text, clientMessageId })
+  const promise = composeAndSend({ sender, operator, channel, members, text, clientMessageId, translate: input.translate !== false })
   inFlightReplies.set(flightKey, promise)
   try {
     return await promise

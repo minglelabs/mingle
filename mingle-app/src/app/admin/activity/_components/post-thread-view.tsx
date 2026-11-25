@@ -1,15 +1,19 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { usePathname, useSearchParams } from 'next/navigation'
+import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { ChevronLeft, Heart, Loader2, MessageCircle, SendHorizontal, X } from 'lucide-react'
 import type { OperatorPostStats } from '@/lib/operator-post-stats'
-import type { OperatorPostThread, ThreadComment } from '@/server/operator-activity/thread'
+import type { InboxPerson } from '@/server/operator-inbox/inbox'
+import type { OperatorPostThread, StoredTranslation, ThreadComment } from '@/server/operator-activity/thread'
 import { OperatorPostStatsRow } from '../../_components/operator-post-stats-row'
+import { adminProfileHref } from '../../_lib/profile-href'
 import { InboxAvatar, KoreanViewSwitch } from '../../inbox/_components/inbox-ui'
 import { useAdminInboxRealtime } from '../../inbox/_components/use-admin-inbox-realtime'
 import { useStaffKoreanView } from '../../inbox/_components/use-staff-korean-view'
 import { formatInboxRelativeTime, inboxLanguageName, inboxPersonLabel } from '../../inbox/_lib/inbox-format'
+import { adminPostImageUrl } from '../../operators/review/review-image-url'
 
 const COMMENT_MAX_LENGTH = 500
 const ADMIN_INBOX_UPDATED_EVENT = 'mingle:admin-inbox-updated'
@@ -36,8 +40,102 @@ function threadPath(postId: string): string {
   return `/admin/activity/posts/${encodeURIComponent(postId)}`
 }
 
-function CommentRow({ postId, comment, korean, nowMs, focused, isReply, canReply, onReply }: {
+/** Every stored translation of a post or comment, folded by default. */
+function StoredTranslations({ translations }: { translations: StoredTranslation[] }) {
+  if (translations.length === 0) return null
+  return (
+    <details className="mt-1.5 rounded-lg bg-slate-100/70 px-2.5 py-1 text-sm">
+      <summary className="flex min-h-9 cursor-pointer items-center text-xs font-medium text-slate-600">번역본 {translations.length}개 보기</summary>
+      <ul className="space-y-1.5 pb-1.5">
+        {translations.map((translation) => (
+          <li key={translation.language} className="break-words leading-5 text-slate-800">
+            <span className="mr-1.5 text-xs font-semibold text-slate-500">{inboxLanguageName(translation.language) || translation.language}</span>
+            <span className="whitespace-pre-wrap">{translation.text}</span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  )
+}
+
+/** This thread's address, for the profile screen's back link. */
+function useThreadPath(): string | undefined {
+  const pathname = usePathname()
+  const search = useSearchParams()?.toString() ?? ''
+  return pathname ? `${pathname}${search ? `?${search}` : ''}` : undefined
+}
+
+/** Avatar (or name) that opens the person's profile inside the admin. */
+function ProfileLink({ userId, children, className = 'shrink-0 rounded-full' }: { userId: string; children: ReactNode; className?: string }) {
+  const back = useThreadPath()
+  return (
+    <Link href={adminProfileHref(userId, back)} className={`active:opacity-70 ${className}`}>
+      {children}
+    </Link>
+  )
+}
+
+/** The like count; tapping it lists who liked (each opens their profile). */
+function Likes({ count, likers, size }: { count: number; likers?: InboxPerson[]; size: number }) {
+  const [open, setOpen] = useState(false)
+  const people = likers ?? []
+  return (
+    <span className="inline-flex flex-col">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        disabled={people.length === 0}
+        aria-expanded={open}
+        className="-mx-1 inline-flex min-h-7 items-center gap-1 rounded-full px-1 active:bg-slate-100 disabled:active:bg-transparent"
+      >
+        <Heart size={size} aria-hidden="true" />{count}
+      </button>
+      {open && people.length ? (
+        <ul className="mt-1 w-64 max-w-[80vw] space-y-1 rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+          {people.map((person) => (
+            <li key={person.userId}>
+              <ProfileLink userId={person.userId} className="flex min-w-0 items-center gap-2 rounded-md px-1 py-0.5">
+                <InboxAvatar person={person} size={24} />
+                <span className="min-w-0 truncate text-xs font-semibold text-slate-800">{inboxPersonLabel(person)}</span>
+              </ProfileLink>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </span>
+  )
+}
+
+/** Date and time to the second, Korea time (e.g. 11.24 (월) 15:32:07). */
+function formatExactKst(iso: string): string {
+  const parts = new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', weekday: 'short',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(new Date(iso))
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? ''
+  return `${get('month')}.${get('day')} (${get('weekday')}) ${get('hour')}:${get('minute')}:${get('second')}`
+}
+
+/** The heart under a comment: likes or unlikes it as the operator account. */
+function CommentLikeButton({ liked, pending, onToggle }: { liked: boolean; pending: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={pending}
+      aria-pressed={liked}
+      className={`-mx-1 inline-flex min-h-9 items-center gap-1 rounded-full px-2 font-semibold disabled:opacity-60 ${liked ? 'text-rose-600 active:bg-rose-50' : 'text-slate-500 active:bg-slate-100'}`}
+    >
+      {pending ? <Loader2 size={12} className="animate-spin" aria-hidden="true" /> : <Heart size={12} aria-hidden="true" fill={liked ? 'currentColor' : 'none'} />}
+      {liked ? '좋아요 취소' : '좋아요'}
+    </button>
+  )
+}
+
+function CommentRow({ postId, comment, korean, nowMs, focused, isReply, canReply, onReply, operatorId, onLike }: {
   postId: string
+  operatorId: string
+  onLike: (comment: ThreadComment, liked: boolean) => Promise<void>
   comment: ThreadComment
   korean: boolean
   nowMs: number
@@ -47,25 +145,38 @@ function CommentRow({ postId, comment, korean, nowMs, focused, isReply, canReply
   onReply: (comment: ThreadComment) => void
 }) {
   const text = (korean && comment.koText) || comment.text
+  const liked = (comment.likers ?? []).some((person) => person.userId === operatorId)
+  const [likePending, setLikePending] = useState(false)
+  const toggleLike = useCallback(() => {
+    setLikePending(true)
+    void onLike(comment, !liked).finally(() => setLikePending(false))
+  }, [comment, liked, onLike])
   return (
     <div
       id={`comment-${comment.id}`}
       className={`flex gap-2.5 rounded-xl px-2 py-2 ${focused ? 'bg-sky-50 ring-1 ring-sky-200' : ''} ${isReply ? 'ml-9' : ''}`}
     >
-      <InboxAvatar person={comment.isDeleted ? null : comment.author} size={isReply ? 28 : 36} />
+      {comment.isDeleted ? (
+        <InboxAvatar person={null} size={isReply ? 28 : 36} />
+      ) : (
+        <ProfileLink userId={comment.author.userId}>
+          <InboxAvatar person={comment.author} size={isReply ? 28 : 36} />
+        </ProfileLink>
+      )}
       <div className="min-w-0 flex-1">
         {comment.isDeleted ? (
           <p className="py-1.5 text-sm text-slate-400">삭제된 댓글입니다.</p>
         ) : (
           <>
             <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
-              <span className="min-w-0 truncate text-sm font-semibold text-slate-900">{inboxPersonLabel(comment.author)}</span>
+              <ProfileLink userId={comment.author.userId} className="min-w-0 truncate text-sm font-semibold text-slate-900">{inboxPersonLabel(comment.author)}</ProfileLink>
               <span className="text-xs text-slate-500">{formatInboxRelativeTime(comment.createdAt, nowMs)}</span>
             </p>
             <p className="mt-0.5 whitespace-pre-wrap break-words text-[15px] leading-6 text-slate-800">
               {comment.replyTo ? <span className="mr-1 text-sky-700">@{comment.replyTo.label.replace(/^@/, '')}</span> : null}
               {text || (comment.hasImage ? '' : '(내용 없음)')}
             </p>
+            <StoredTranslations translations={comment.translations ?? []} />
             {comment.hasImage ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -75,9 +186,10 @@ function CommentRow({ postId, comment, korean, nowMs, focused, isReply, canReply
                 className="mt-1 max-h-60 w-auto max-w-full rounded-lg border border-slate-200"
               />
             ) : null}
-            <p className="mt-0.5 flex items-center gap-3 text-xs text-slate-500">
-              {comment.likeCount > 0 ? (
-                <span className="inline-flex items-center gap-1"><Heart size={12} aria-hidden="true" />{comment.likeCount}</span>
+            <div className="mt-0.5 flex items-start gap-3 text-xs text-slate-500">
+              {comment.likeCount > 0 ? <Likes count={comment.likeCount} likers={comment.likers} size={12} /> : null}
+              {canReply && comment.author.userId !== operatorId ? (
+                <CommentLikeButton liked={liked} pending={likePending} onToggle={toggleLike} />
               ) : null}
               {canReply ? (
                 <button
@@ -88,7 +200,7 @@ function CommentRow({ postId, comment, korean, nowMs, focused, isReply, canReply
                   답글 달기
                 </button>
               ) : null}
-            </p>
+            </div>
           </>
         )}
       </div>
@@ -101,9 +213,13 @@ function CommentRow({ postId, comment, korean, nowMs, focused, isReply, canReply
  * that comments or replies as that operator. The draft is converted to the
  * operator's language on the server, like posts and inbox replies.
  */
-export function PostThreadView({ initialThread, focusCommentId, postStats = null }: {
+export function PostThreadView({ initialThread, focusCommentId, postStats = null, backHref = null, embedded = false }: {
   initialThread: OperatorPostThread
   focusCommentId: string | null
+  /** Inside another page (a profile's post card): just the comments and the reply box, no page chrome. */
+  embedded?: boolean
+  /** Where the back arrow returns (e.g. the profile the thread was opened from); the activity list by default. */
+  backHref?: string | null
   /** The post's stats row (operator posts only), as of the page load. */
   postStats?: OperatorPostStats | null
 }) {
@@ -111,6 +227,8 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
   const [korean, setKorean] = useStaffKoreanView()
   const [nowMs, setNowMs] = useState(() => Date.parse(initialThread.post.publishedAt))
   const [draft, setDraft] = useState('')
+  // 자동 번역: on by default; off posts the text exactly as typed. Stays as set between comments.
+  const [translate, setTranslate] = useState(true)
   const [target, setTarget] = useState<ReplyTarget | null>(null)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -140,6 +258,23 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
   }, [korean, operatorId, postId])
 
   useAdminInboxRealtime(reload)
+
+  const likeComment = useCallback(async (comment: ThreadComment, liked: boolean) => {
+    setError(null)
+    try {
+      const response = await fetch(`/admin/activity/api/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(comment.id)}/like`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ operatorUserId: operatorId, liked }),
+      })
+      if (response.status === 401) { goToLogin(); return }
+      if (!response.ok) throw new Error(`like_${response.status}`)
+      await reload()
+    } catch {
+      setError(liked ? '좋아요를 누르지 못했어요.' : '좋아요를 취소하지 못했어요.')
+    }
+  }, [operatorId, postId, reload])
 
   // Korean text is fetched only while the switch is on (the server rendered without it).
   const koreanLoadedRef = useRef(false)
@@ -187,6 +322,7 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
           text,
           parentId: target?.parentId ?? null,
           replyToUserId: target?.replyToUserId ?? null,
+          translate,
         }),
       })
       if (response.status === 401) {
@@ -209,7 +345,7 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
     } finally {
       setSending(false)
     }
-  }, [draft, operatorId, postId, reload, sending, target])
+  }, [draft, operatorId, postId, reload, sending, target, translate])
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault()
@@ -230,13 +366,19 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
   const languageName = inboxLanguageName(operator.personaLanguage)
 
   return (
-    <div className="flex min-h-full flex-col bg-slate-50 text-slate-900">
+    <div className={embedded ? 'text-slate-900' : 'flex min-h-full flex-col bg-slate-50 text-slate-900'}>
+      {embedded ? (
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <p className="min-w-0 truncate text-xs text-slate-500">댓글 {post.commentCount}개</p>
+          <KoreanViewSwitch enabled={korean} onChange={setKorean} />
+        </div>
+      ) : (
       <header className="sticky top-0 z-10 flex items-center gap-1 border-b border-slate-200 bg-white px-1 py-1 lg:px-4">
         <Link
-          href="/admin/activity"
+          href={backHref ?? '/admin/activity'}
           prefetch={false}
-          aria-label="알림으로 돌아가기"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-700 active:bg-slate-100 lg:hidden"
+          aria-label={backHref ? '뒤로' : '알림으로 돌아가기'}
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-700 active:bg-slate-100 ${backHref ? '' : 'lg:hidden'}`}
         >
           <ChevronLeft size={24} aria-hidden="true" />
         </Link>
@@ -246,8 +388,9 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
         </div>
         <KoreanViewSwitch enabled={korean} onChange={setKorean} />
       </header>
+      )}
 
-      {thread.operators.length > 1 ? (
+      {!embedded && thread.operators.length > 1 ? (
         <nav aria-label="댓글을 달 운영 계정" className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-slate-200 bg-white px-3 py-1">
           <span className="shrink-0 text-xs text-slate-500">댓글 계정</span>
           {thread.operators.map((candidate) => (
@@ -267,29 +410,43 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
         </nav>
       ) : null}
 
-      <div className="mx-auto w-full max-w-2xl flex-1 px-3 py-3">
+      <div className={embedded ? 'w-full' : 'mx-auto w-full max-w-2xl flex-1 px-3 py-3'}>
+        {embedded ? null : (
         <article className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <p className="flex min-w-0 items-center gap-2">
-            <InboxAvatar person={post.author} size={36} />
-            <span className="min-w-0 truncate text-sm font-semibold">{inboxPersonLabel(post.author)}</span>
+            <ProfileLink userId={post.author.userId}>
+              <InboxAvatar person={post.author} size={36} />
+            </ProfileLink>
+            <ProfileLink userId={post.author.userId} className="min-w-0 truncate text-sm font-semibold">{inboxPersonLabel(post.author)}</ProfileLink>
             <span className="ml-auto shrink-0 text-xs text-slate-500">{formatInboxRelativeTime(post.publishedAt, nowMs)}</span>
+          </p>
+          <p className="mt-1 text-xs leading-5 text-slate-500">
+            <span className="whitespace-nowrap">앱에 보이는 시각 <b className="font-semibold tabular-nums text-slate-700">{formatExactKst(post.publishedAt)}</b></span>
+            {Math.abs(Date.parse(post.createdAt) - Date.parse(post.publishedAt)) >= 1000 ? (
+              <>
+                <span aria-hidden="true"> · </span>
+                <span className="whitespace-nowrap">실제 게시 <span className="tabular-nums">{formatExactKst(post.createdAt)}</span></span>
+              </>
+            ) : null}
           </p>
           {postText ? (
             <p className="mt-2 whitespace-pre-wrap break-words text-[15px] leading-6 text-slate-800">{postText}</p>
           ) : null}
+          <StoredTranslations translations={post.translations ?? []} />
           {post.hasImage ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={`/admin/api/posts/${postId}/image`} alt="글 사진" loading="lazy" className="mt-2 max-h-[28rem] w-auto max-w-full rounded-xl border border-slate-200" />
+            <img src={adminPostImageUrl(postId)} alt="글 사진" loading="lazy" className="mt-2 max-h-[28rem] w-auto max-w-full rounded-xl border border-slate-200" />
           ) : null}
-          <p className="mt-2 flex items-center gap-3 text-xs text-slate-500">
-            <span className="inline-flex items-center gap-1"><Heart size={13} aria-hidden="true" />{post.likeCount}</span>
-            <span className="inline-flex items-center gap-1"><MessageCircle size={13} aria-hidden="true" />{post.commentCount}</span>
-          </p>
+          <div className="mt-2 flex items-start gap-3 text-xs text-slate-500">
+            <Likes count={post.likeCount} likers={post.likers} size={13} />
+            <span className="inline-flex min-h-7 items-center gap-1"><MessageCircle size={13} aria-hidden="true" />{post.commentCount}</span>
+          </div>
           <OperatorPostStatsRow stats={postStats} className="mt-2" />
         </article>
+        )}
 
         {thread.comments.length === 0 ? (
-          <p className="px-4 py-10 text-center text-sm text-slate-500">아직 댓글이 없습니다.</p>
+          <p className={`px-4 text-center text-sm text-slate-500 ${embedded ? 'py-4' : 'py-10'}`}>아직 댓글이 없습니다.</p>
         ) : (
           <ul className="mt-2 flex flex-col" aria-label="댓글">
             {thread.comments.map((comment) => (
@@ -303,6 +460,8 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
                   isReply={false}
                   canReply={canReply}
                   onReply={startReply}
+                  operatorId={operatorId}
+                  onLike={likeComment}
                 />
                 {comment.replies.map((reply) => (
                   <CommentRow
@@ -315,6 +474,8 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
                     isReply
                     canReply={canReply}
                     onReply={startReply}
+                    operatorId={operatorId}
+                    onLike={likeComment}
                   />
                 ))}
               </li>
@@ -326,7 +487,7 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
       {canReply ? (
         <form
           onSubmit={onSubmit}
-          className="sticky bottom-0 shrink-0 border-t border-slate-200 bg-white px-3 pb-2 pt-2"
+          className={embedded ? 'mt-2 border-t border-slate-200 pt-2' : 'sticky bottom-0 shrink-0 border-t border-slate-200 bg-white px-3 pb-2 pt-2'}
         >
           <div className="mx-auto w-full max-w-2xl">
             {target ? (
@@ -342,13 +503,25 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
                 </button>
               </p>
             ) : null}
-            <p className="mb-1.5 break-words text-xs text-slate-500">
-              {inboxPersonLabel(operator)} 계정으로 게시됩니다. 어떤 언어로 써도 {languageName}(으)로 변환됩니다.
-            </p>
+            <div className="mb-1.5 flex items-start justify-between gap-2">
+              <p className="min-w-0 break-words text-xs text-slate-500">
+                {inboxPersonLabel(operator)} 계정으로 게시됩니다. {translate ? `어떤 언어로 써도 ${languageName}(으)로 변환됩니다.` : '쓴 그대로 게시됩니다 (번역 안 함).'}
+              </p>
+              <label className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-slate-600">
+                <input
+                  type="checkbox"
+                  data-testid="admin-activity-translate"
+                  checked={translate}
+                  onChange={(event) => setTranslate(event.target.checked)}
+                  className="h-4 w-4 accent-sky-500"
+                />
+                자동 번역
+              </label>
+            </div>
             <div className="flex items-end gap-2">
-              <label htmlFor="admin-activity-comment" className="sr-only">댓글 입력</label>
+              <label htmlFor={`admin-activity-comment-${postId}`} className="sr-only">댓글 입력</label>
               <textarea
-                id="admin-activity-comment"
+                id={`admin-activity-comment-${postId}`}
                 ref={textareaRef}
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
@@ -374,7 +547,7 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
           </div>
         </form>
       ) : (
-        <p className="sticky bottom-0 border-t border-slate-200 bg-white px-4 py-3 text-center text-sm text-slate-600">
+        <p className={embedded ? 'mt-2 border-t border-slate-200 pt-2 text-center text-sm text-slate-600' : 'sticky bottom-0 border-t border-slate-200 bg-white px-4 py-3 text-center text-sm text-slate-600'}>
           비활성화된 운영 계정이라 댓글을 달 수 없습니다.
         </p>
       )}

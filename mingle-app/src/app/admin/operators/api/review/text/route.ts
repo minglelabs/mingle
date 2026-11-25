@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
 import { requireAdminApi } from '@/server/admin/guard'
-import { draftReviewPostText, setReviewPostText } from '@/server/operator-review/review'
+import { draftReviewPostText, editReviewPost } from '@/server/operator-review/review'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const ERROR_STATUS: Record<string, number> = { not_found: 404, invalid_text: 400, busy: 409, regenerate_failed: 502 }
+const ERROR_STATUS: Record<string, number> = { not_found: 404, invalid_text: 400, invalid_language: 400, invalid_time: 400, busy: 409, regenerate_failed: 502 }
 
 /**
  * POST /admin/operators/api/review/text — `{ id, feedback? }`: the AI writes a
@@ -24,14 +24,17 @@ export async function POST(request: Request) {
   })
 }
 
-/** PUT /admin/operators/api/review/text — `{ id, text }`: staff rewrite a post's text in review. */
+/**
+ * PUT /admin/operators/api/review/text — `{ id, text?, language?, topic?, publishAt? }`:
+ * staff edit a post in review (everything but its photos); fields left out stay.
+ */
 export async function PUT(request: Request) {
   const auth = await requireAdminApi()
   if (!auth.ok) return auth.response
-  const body = await request.json().catch(() => null) as { id?: unknown; text?: unknown } | null
+  const body = await request.json().catch(() => null) as { id?: unknown; text?: unknown; language?: unknown; topic?: unknown; publishAt?: unknown } | null
   const id = typeof body?.id === 'string' ? body.id.trim() : ''
   if (!/^[\w-]{1,64}$/.test(id)) return NextResponse.json({ error: 'invalid_request' }, { status: 400 })
-  const result = await setReviewPostText(auth.ctx, id, body?.text)
+  const result = await editReviewPost(auth.ctx, id, { text: body?.text, language: body?.language, topic: body?.topic, publishAt: body?.publishAt })
   return NextResponse.json(result.ok ? { post: result.post } : { error: result.error }, {
     status: result.ok ? 200 : ERROR_STATUS[result.error] ?? 500,
     headers: { 'Cache-Control': 'no-store' },

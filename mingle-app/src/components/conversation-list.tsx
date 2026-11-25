@@ -240,7 +240,7 @@ import { useUnreadNotifications } from "@/components/notifications/use-unread-no
 import { feedHref } from "@/lib/feed-routes";
 import { requestProfileBasics } from "@/lib/profile-basics";
 import { feedCopy } from "@/i18n/feed-copy";import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
-import { NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY, buildNativeAwareTabPath } from "@/lib/tab-navigation";
+import { buildNativeAwareTabHref, buildNativeAwareTabPath, clearTopLevelTabSwitch, markTopLevelTabSwitch, NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY } from "@/lib/tab-navigation";
 
 const MingleHome = lazy(() => import("@/components/mingle-home"));
 const SpeakTrial = lazy(() => import("@/components/onboarding/speak-trial"));
@@ -2217,6 +2217,11 @@ export default function ConversationList({
   const [discoveryPromptOpen, setDiscoveryPromptOpen] = useState(false);
   const firstRunCopy = useMemo(() => resolveFirstRunCopy(locale), [locale]);
   const [nativeSttStatus, setNativeSttStatus] = useState<string | null>(null);
+  useEffect(() => {
+    // Back on the conversations page: a later room unmount is a normal
+    // session boundary again, not a tab switch.
+    clearTopLevelTabSwitch();
+  }, []);
   // A mount that starts with a conversation already active (SSR props, a
   // deep link, or a client-side remount after a real route round trip like
   // returning from add-members) isn't the user "opening" a room — it's the
@@ -4444,6 +4449,15 @@ export default function ConversationList({
     setTimeLabelsReady(true);
   }, []);
 
+  // The room screen is a separate, large download. Fetch it while the list is
+  // idle so the first room opened does not wait for it on a slow connection.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void import("@/components/mingle-home").catch(() => {});
+    }, 1_500);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   useEffect(() => {
     if (!rowActionMenu) return;
 
@@ -6458,7 +6472,17 @@ export default function ConversationList({
               onOpenProfile={openConversationProfile}
               onOpenPost={showPostingHeader ? (postId, commentId) => {
                 closeConversationSurface({ id: CONVERSATION_NOTIFICATIONS_SURFACE_ID });
-                router.push(feedHref(locale, { postId, commentId }));
+                // Going to the feed is a switch to the home tab: replace with
+                // the tab-root marker, like the bottom tab bar, so the home tab
+                // has no edge-swipe "back" into the conversations tab.
+                markTopLevelTabSwitch();
+                router.replace(
+                  buildNativeAwareTabHref(
+                    feedHref(locale, { postId, commentId }),
+                    new URL(window.location.href).searchParams,
+                    { tabRoot: true },
+                  ),
+                );
               } : undefined}
               onUnreadCountChange={setUnreadNotificationCount}
             />

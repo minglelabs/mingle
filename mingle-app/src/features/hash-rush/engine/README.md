@@ -84,3 +84,8 @@ folder.
   `test/pickpocket.test.js` runs against this copy as `../pickpocket.test.ts`.
   The game server sends the gauge from hash-rush #239 on; an older server
   leaves it empty (steals still happen and show).
+- 2026-11-20, hash-rush up to `c730cd3`: pickpocketing takes a third of the
+  nibble time instead of half (`sim/constants.js`, #25a21af), and the hard and
+  ace computers swing at a rival rubbing against them and the ace goes in to rub
+  carriers (`ai/bot.js`, 4d82cd5). The RL computers (rl16, rl17) are not copied:
+  the app's rooms play the server's scripted levels only.

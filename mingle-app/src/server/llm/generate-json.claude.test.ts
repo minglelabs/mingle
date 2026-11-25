@@ -60,6 +60,15 @@ describe('generateJson on Claude', () => {
     expect(options.headers).toEqual({ 'anthropic-beta': 'server-side-fallback-2026-07-01' })
   })
 
+  it('sends Haiku without the refusal fallback, which it does not take', async () => {
+    mocks.create.mockResolvedValue({ stop_reason: 'end_turn', content: [{ type: 'text', text: '{"kind":"chat","reply":"Hey!"}' }] })
+    await generateJson({ ...request, model: 'claude-haiku-5-5' })
+    const [body, options] = mocks.create.mock.calls[0]
+    expect(body).toMatchObject({ model: 'claude-haiku-5-5' })
+    expect(body).not.toHaveProperty('fallbacks')
+    expect(options.headers).toBeUndefined()
+  })
+
   it('maps a refusal and a missing key onto LLM error codes', async () => {
     mocks.create.mockResolvedValue({ stop_reason: 'refusal', content: [] })
     await expect(generateJson(request)).rejects.toMatchObject({ code: 'llm_invalid_response' })

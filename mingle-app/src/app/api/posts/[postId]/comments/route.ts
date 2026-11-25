@@ -5,7 +5,7 @@ import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
 import { visibleSinglePostWhere } from '@/server/posts/post-visibility'
 import { visibleCommentsWhere } from '@/server/posts/comment-visibility'
-import { createComment } from '@/server/posts/comment-service'
+import { createComment, settleNewCommentTranslations } from '@/server/posts/comment-service'
 import { createPostNotification } from '@/server/notifications/create-post-notification'
 import { detectSourceLanguageVerdict } from '@/server/translation/detect-source-language'
 import {
@@ -164,6 +164,10 @@ export async function GET(request: NextRequest, context: Ctx) {
     //   are surfaced by the on-demand translate response, not the list read)
     let displayText: string | null = null
     let displayLang: string | null = null
+    // Every OTHER language this body is already translated into (not the
+    // display language, not its own unless it mixes languages): the ⋯ menu
+    // offers them as flags.
+    const otherTranslations: Array<{ language: string; text: string }> = []
     let translationState: 'same_language' | 'ready' | 'none' = 'none'
 
     if (!isDeleted) {
@@ -189,6 +193,18 @@ export async function GET(request: NextRequest, context: Ctx) {
           displayLang = c.sourceLanguage
         }
       }
+      if (c.sourceText.trim()) {
+        const seen = new Set<string>()
+        for (const t of c.translations) {
+          const lang = canonicalizeTranslationLanguageCode(t.language)
+          if (!lang || !t.text || t.bodyVersion !== c.bodyVersion) continue
+          if (lang === canonicalDisplay || seen.has(lang)) continue
+          if (!c.sourceLanguagesMixed && lang === canonicalSource) continue
+          if (isUntranslatedCopy(c.sourceText, lang, t.text)) continue
+          seen.add(lang)
+          otherTranslations.push({ language: lang, text: t.text })
+        }
+      }
     }
 
     return {
@@ -207,6 +223,7 @@ export async function GET(request: NextRequest, context: Ctx) {
       displayText,
       displayLanguage: displayLang,
       translationState,
+      ...(otherTranslations.length > 0 ? { otherTranslations } : {}),
       likeCount: c.likeCount,
       isDeleted,
       // Whether this comment's body was edited after creation (bodyVersion > 1).
@@ -297,38 +314,20 @@ export async function POST(request: NextRequest, context: Ctx) {
   const pId = typeof parentId === 'string' && parentId.trim() ? parentId.trim() : null
   const rUserId = typeof replyToUserId === 'string' && replyToUserId.trim() ? replyToUserId.trim() : null
 
-  // Server detection is authoritative; the client language is only a fallback
-  // hint. Detect, then translate the default languages (minus source) and let
-  // them settle BEFORE the comment is committed (settle-then-commit) so the
-  // comment and its translations become visible together.
-  // A photo-only comment has no body to detect or translate.
-  const verdict = hasText ? await detectSourceLanguageVerdict({ text, clientHint: lang }) : null
-  const detected = verdict?.language ?? null
-  // A mixed body is translated into its own language too.
-  const mixed = Boolean(detected) && verdict?.mixed === true
-  const settledRows =
-    detected && detected.trim().length > 0
-      ? (
-          await translateCommentBodySettled({
-            sourceText: text,
-            sourceLanguage: detected,
-            targetLanguages: resolveDefaultPostTranslationLanguages(detected, null, mixed),
-            sourceLanguagesMixed: mixed,
-          })
-        ).map((r) => ({ language: r.language, status: r.status, text: r.text }))
-      : []
-
+  // The comment is committed right away, without a language: detecting it and
+  // translating it are LLM calls that made posting feel stuck. Both run after
+  // the response (see below); other viewers get the translations once they
+  // land, and the author sees them the next time the sheet loads.
   let comment
   try {
     comment = await createComment({
       postId,
       authorId: userId,
       sourceText: text,
-      sourceLanguage: detected,
-      sourceLanguagesMixed: mixed,
+      sourceLanguage: null,
+      sourceLanguagesMixed: false,
       parentId: pId,
       replyToUserId: rUserId,
-      translationRows: settledRows,
       image,
     })
   } catch (err: unknown) {
@@ -339,7 +338,41 @@ export async function POST(request: NextRequest, context: Ctx) {
   }
 
   // Commenting on a post means the viewer saw it: mark it seen now (73).
-  await markPostViewedQuietly(userId, postId)
+  // The author's CURRENT identity rides back so the new row shows today's
+  // avatar/name (the client's session copy can be stale or missing).
+  const [, authorRow] = await Promise.all([
+    markPostViewedQuietly(userId, postId),
+    prisma.user.findUnique({ where: { id: userId }, select: USER_IDENTITY_SELECT }),
+  ])
+
+  // Server detection is authoritative; the client language is only a fallback
+  // hint. A photo-only comment has no body to detect or translate.
+  if (hasText) {
+    const commentId = comment.id
+    after(async () => {
+      try {
+        const verdict = await detectSourceLanguageVerdict({ text, clientHint: lang })
+        const detected = verdict.language?.trim() ?? ''
+        if (!detected) return
+        // A mixed body is translated into its own language too.
+        const mixed = verdict.mixed === true
+        const rows = await translateCommentBodySettled({
+          sourceText: text,
+          sourceLanguage: detected,
+          targetLanguages: resolveDefaultPostTranslationLanguages(detected, null, mixed),
+          sourceLanguagesMixed: mixed,
+        })
+        await settleNewCommentTranslations({
+          commentId,
+          sourceLanguage: detected,
+          sourceLanguagesMixed: mixed,
+          translationRows: rows.map((r) => ({ language: r.language, status: r.status, text: r.text })),
+        })
+      } catch (error) {
+        console.warn('[comments] late translation failed', { commentId, error: String(error) })
+      }
+    })
+  }
 
   // Notify the right recipient. A reply notifies the person being replied to,
   // which createComment derives from server state (never the client's
@@ -376,6 +409,7 @@ export async function POST(request: NextRequest, context: Ctx) {
       bodyVersion: comment.bodyVersion,
       createdAt: comment.createdAt,
       image: serializeCommentImage(comment),
+      ...(authorRow ? { author: serializeListUserIdentity(authorRow) } : {}),
     },
     { status: 201 },
   )

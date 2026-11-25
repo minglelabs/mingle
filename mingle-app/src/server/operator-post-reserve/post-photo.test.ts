@@ -13,14 +13,27 @@ describe('post photo kinds', () => {
   })
 
   it('round-trips the kind through the stored description', () => {
-    expect(decodePostPhoto(encodePostPhoto('friends', 'three friends at a table'))).toEqual({ kind: 'friends', description: 'three friends at a table', place: null })
+    expect(decodePostPhoto(encodePostPhoto('friends', 'three friends at a table'))).toEqual({ kind: 'friends', description: 'three friends at a table', place: null, profilePhoto: false, photoBooth: false })
     expect(encodePostPhoto('scene', 'a street')).toBe('a street')
     expect(decodePostPhoto('a street').kind).toBe('scene')
   })
 
   it('keeps the place of a photo taken away from home', () => {
     expect(encodePostPhoto('self', 'by the palace gate', 'Seoul, South Korea')).toBe('[self] [at: Seoul, South Korea] by the palace gate')
-    expect(decodePostPhoto('[self] [at: Seoul, South Korea] by the palace gate')).toEqual({ kind: 'self', description: 'by the palace gate', place: 'Seoul, South Korea' })
-    expect(decodePostPhoto('[at: Busan, South Korea] a beach')).toEqual({ kind: 'scene', description: 'a beach', place: 'Busan, South Korea' })
+    expect(decodePostPhoto('[self] [at: Seoul, South Korea] by the palace gate')).toEqual({ kind: 'self', description: 'by the palace gate', place: 'Seoul, South Korea', profilePhoto: false, photoBooth: false })
+    expect(decodePostPhoto('[at: Busan, South Korea] a beach')).toEqual({ kind: 'scene', description: 'a beach', place: 'Busan, South Korea', profilePhoto: false, photoBooth: false })
+    expect(decodePostPhoto(encodePostPhoto('self', '(the profile photo) a clear photo of them smiling'))).toEqual({ kind: 'self', description: 'a clear photo of them smiling', place: null, profilePhoto: true, photoBooth: false })
+  })
+})
+
+describe('scene photos', () => {
+  it('each get a framing, the table spread among them', async () => {
+    const { pickPostPhoto, SCENE_SETUPS } = await import('./post-photo')
+    expect(SCENE_SETUPS.some((setup) => setup.includes('the whole table from where they sit'))).toBe(true)
+    let seed = 5
+    const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+    const scenes = Array.from({ length: 500 }, () => pickPostPhoto(random)).filter((plan) => plan.kind === 'scene')
+    expect(scenes.length).toBeGreaterThan(50)
+    for (const plan of scenes) expect(SCENE_SETUPS).toContain(plan.setup)
   })
 })

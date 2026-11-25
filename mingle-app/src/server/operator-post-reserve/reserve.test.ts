@@ -29,10 +29,10 @@ vi.mock('@/server/operator-posts/operator-check', () => ({
   checkOperatorForPosting: mocks.checkOperator,
   personaLanguageOf: () => 'ko',
 }))
-vi.mock('@/server/llm/generate-json', () => ({ resolveJsonProvider: () => 'gemini', extractJsonText: (t: string) => t, generateJson: mocks.generateJson }))
+vi.mock('@/server/llm/generate-json', () => ({ OPERATOR_TEXT_OPUS_UNTIL: new Date('2026-12-13T00:00:00+09:00'), operatorTextModel: (now: Date = new Date()) => (now.getTime() < new Date('2026-12-13T00:00:00+09:00').getTime() ? 'claude-opus-5-5' : 'claude-haiku-5-5'), OPERATOR_POST_TEXT_MODEL: 'claude-opus-5-5', OPERATOR_TEXT_MODEL: 'claude-haiku-5-5', resolveJsonProvider: () => 'gemini', extractJsonText: (t: string) => t, generateJson: mocks.generateJson }))
 
 import { DEFAULT_SEED_PLAN, defaultSeedRows, parseSeedCount, seedPlanTotal } from '@/app/admin/operators/seed/seed-plan'
-import { cleanReservePost, generateReservePosts, pickReserveTopics, RESERVE_TOPICS, reservePostKey } from './generate'
+import { cleanReservePost, generateReservePosts, pickReserveTopics, RESERVE_TOPICS, reservePostKey, resolveReserveModel } from './generate'
 import { avoidLocalNight, nextReleaseAt, utcOffsetHoursOf } from './schedule'
 import { normalizePostReserveSettings, parsePostReserveDailyPercent, parsePostReserveTarget, postsPerDay } from './settings'
 import { reserveClientPostId, runOperatorPostReserve } from './worker'
@@ -94,6 +94,10 @@ describe('release schedule', () => {
 })
 
 describe('reserve post generation', () => {
+  it('writes post text with Claude Opus 5.5 unless overridden', () => {
+    expect(resolveReserveModel({} as NodeJS.ProcessEnv)).toBe('claude-opus-5-5')
+  })
+
   beforeEach(() => vi.clearAllMocks())
 
   it('picks varied topics from the catalog', () => {
@@ -146,6 +150,26 @@ describe('reserve post generation', () => {
     expect(request.input.learner.language).toBe('ko')
   })
 
+  it('gives a photo intro a flattering photo of the poster, half of them the profile photo itself', async () => {
+    answer([{ slot: 1, text: '24, Korea 🇰🇷 and you?', photo: 'a clear smiling photo of them at a café' }])
+    const withProfile = await generateReservePosts({ persona, topics: ['photo_intro'], existingTexts: [], random: () => 0 })
+    expect(withProfile[0].imagePrompt).toBe('[self] (the profile photo) a clear smiling photo of them at a café')
+    expect(mocks.generateJson.mock.calls.at(-1)![0].input.slots[0]).toMatchObject({ photo: 'self', setup: expect.stringContaining('best, most flattering') })
+    answer([{ slot: 1, text: '24, Korea 🇰🇷 and you?', photo: 'a clear smiling photo of them at a café' }])
+    const drawn = await generateReservePosts({ persona, topics: ['photo_intro'], existingTexts: [], random: () => 0.99 })
+    expect(drawn[0].imagePrompt).toBe('[self] a clear smiling photo of them at a café')
+  })
+
+  it('makes some posts of Asian accounts photo-booth prints, never of others', async () => {
+    answer([{ slot: 1, text: '인생네컷 찍음', photo: 'a pink backdrop and a white frame' }])
+    const booth = await generateReservePosts({ persona: { ...persona, language: 'ko', gender: 'female' }, topics: ['food'], existingTexts: [], random: () => 0 })
+    expect(booth[0].imagePrompt).toBe('[self] (photo booth) a pink backdrop and a white frame')
+    expect(mocks.generateJson.mock.calls.at(-1)![0].input.slots[0].setup).toContain('photo-booth print')
+    answer([{ slot: 1, text: 'photo', photo: 'a pink backdrop and a white frame' }])
+    const other = await generateReservePosts({ persona: { ...persona, language: 'es', gender: 'female' }, topics: ['food'], existingTexts: [], random: () => 0 })
+    expect(other[0].imagePrompt ?? '').not.toContain('(photo booth)')
+  })
+
   it('drops a photo description the slot did not ask for', async () => {
     answer([{ slot: 1, text: '그냥 글', photo: 'a cat' }])
     const posts = await generateReservePosts({ persona, topics: ['thought'], existingTexts: [], random: () => 0.99 })
@@ -163,13 +187,15 @@ describe('reserve worker', () => {
 
   it('does nothing while the reserve is off', async () => {
     mocks.settingFindUnique.mockResolvedValue(null)
+    mocks.queryRaw.mockResolvedValueOnce([]) // posts staff scheduled still go out
     expect(await runOperatorPostReserve({ now: () => NOW })).toMatchObject({ enabled: false, released: 0, generated: 0 })
-    expect(mocks.queryRaw).not.toHaveBeenCalled()
+    expect(mocks.queryRaw).toHaveBeenCalledTimes(1)
   })
 
   it('releases due posts, schedules the next one and refills an account', async () => {
     mocks.settingFindUnique.mockResolvedValue({ value: { enabled: true, targetPerOperator: 200, dailyPercent: 1 } })
     mocks.queryRaw
+      .mockResolvedValueOnce([]) // scheduled by staff
       .mockResolvedValueOnce([{ id: 'r1', operatorUserId: 'op_1', text: '산책 다녀옴', attempts: 1 }]) // claim
       .mockResolvedValueOnce([{ operatorUserId: 'op_1', personaCountry: 'KR', lastAt: NOW, headId: 'r2' }]) // unscheduled
       .mockResolvedValueOnce([{ operatorUserId: 'op_1', waiting: 40 }]) // refill
@@ -190,10 +216,20 @@ describe('reserve worker', () => {
     expect(mocks.reserveCreateMany.mock.calls[0][0].data).toHaveLength(2)
   })
 
+  it('publishes a post staff scheduled in review at its time, even while the reserve is off', async () => {
+    mocks.settingFindUnique.mockResolvedValue(null)
+    mocks.queryRaw.mockResolvedValueOnce([{ id: 's1', operatorUserId: 'op_1', text: '예약한 글', attempts: 1, createdAt: NOW }])
+    const summary = await runOperatorPostReserve({ now: () => NOW })
+    expect(summary).toMatchObject({ enabled: false, released: 1 })
+    expect(mocks.publishPost).toHaveBeenCalledWith(expect.objectContaining({ authorId: 'op_1', clientPostId: reserveClientPostId('s1') }))
+    expect(mocks.reserveUpdateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ state: 'published' }) }))
+  })
+
   it('fails a post of a retired account instead of publishing it', async () => {
     mocks.settingFindUnique.mockResolvedValue({ value: { enabled: true } })
     mocks.checkOperator.mockResolvedValue({ ok: false, reason: 'operator_inactive' })
     mocks.queryRaw
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ id: 'r1', operatorUserId: 'op_1', text: 'x', attempts: 1 }])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
@@ -204,10 +240,11 @@ describe('reserve worker', () => {
 })
 
 describe('seed plan', () => {
-  it('defaults to 100 accounts centered on Korea and Japan', () => {
+  it('defaults to 103 accounts, about two thirds from Korea, Japan, China and Taiwan, with a few from every region', () => {
     const rows = defaultSeedRows()
-    expect(seedPlanTotal(rows)).toBe(100)
-    expect(DEFAULT_SEED_PLAN.KR + DEFAULT_SEED_PLAN.JP).toBe(44)
+    expect(seedPlanTotal(rows)).toBe(103)
+    for (const code of ['TR', 'RU', 'BR', 'SA', 'AE', 'KZ', 'UZ']) expect(DEFAULT_SEED_PLAN[code]).toBeGreaterThan(0)
+    expect(DEFAULT_SEED_PLAN.KR + DEFAULT_SEED_PLAN.JP + DEFAULT_SEED_PLAN.CN + DEFAULT_SEED_PLAN.TW).toBe(70)
     expect(Object.keys(DEFAULT_SEED_PLAN).every((code) => rows.some((row) => row.code === code))).toBe(true)
   })
 

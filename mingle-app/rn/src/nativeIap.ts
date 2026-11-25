@@ -36,7 +36,7 @@ export type NativeIapEvent =
       restored: boolean;
     }
   | { type: 'purchase_cancelled'; productId: string }
-  | { type: 'purchase_error'; productId: string; code: string; requestId?: string };
+  | { type: 'purchase_error'; productId: string; code: string; requestId?: string; message?: string };
 
 type IapLibrary = Pick<
   typeof import('react-native-iap'),
@@ -96,12 +96,18 @@ export function createNativeIapBridge(options: {
     });
   };
 
+  // Sent to the web side, which logs it (src/lib/coin-store-diagnostics.ts).
+  const describeError = (error: unknown): string | undefined => {
+    const message = (error as { message?: unknown } | null)?.message;
+    return typeof message === 'string' && message ? message.slice(0, 300) : undefined;
+  };
+
   const handleError = (error: PurchaseError) => {
     const productId = error.productId || activeProductId;
     const code = String(error.code || 'unknown');
     if (code === 'user-cancelled') emit({ type: 'purchase_cancelled', productId });
     else if (code === 'pending') emit({ type: 'purchase_pending', productId });
-    else emit({ type: 'purchase_error', productId, code });
+    else emit({ type: 'purchase_error', productId, code, message: describeError(error) });
   };
 
   const connect = (): Promise<IapLibrary> => {
@@ -136,8 +142,8 @@ export function createNativeIapBridge(options: {
             currency: product.currency,
           })),
         });
-      } catch {
-        emit({ type: 'purchase_error', productId: '', code: 'products_unavailable', requestId });
+      } catch (error) {
+        emit({ type: 'purchase_error', productId: '', code: 'products_unavailable', requestId, message: describeError(error) });
       }
     },
     purchase: async (productId) => {

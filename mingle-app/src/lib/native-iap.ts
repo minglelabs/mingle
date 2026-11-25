@@ -18,7 +18,7 @@ export type NativeIapEvent =
       restored: boolean;
     }
   | { type: "purchase_cancelled"; productId: string }
-  | { type: "purchase_error"; productId: string; code: string; requestId?: string };
+  | { type: "purchase_error"; productId: string; code: string; requestId?: string; message?: string };
 
 type NativeIapWindow = Window & { ReactNativeWebView?: { postMessage?: (message: string) => void } };
 

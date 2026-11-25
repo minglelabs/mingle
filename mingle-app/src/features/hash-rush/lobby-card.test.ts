@@ -19,6 +19,7 @@ const hosting = (amHost: boolean, fill: number): HashRushLobbyHosting => ({
   teamChoices: [],
   myTeam: -1,
   computersColor: "",
+  listed: false,
   notice: '',
   words: { start: 'Start', waitingHost: 'Waiting', solo: 'Solo', team: 'Team', map: 'Map' },
 })
@@ -26,8 +27,9 @@ const hosting = (amHost: boolean, fill: number): HashRushLobbyHosting => ({
 const view = (h: HashRushLobbyHosting): HashRushLobbyView => ({
   kind: 'lobby',
   mode: 'Meadow',
-  seats: [{ seat: 0, name: 'Mia', team: -1, color: '#f00', me: h.amHost, winsText: '', fresh: false, host: true, web: false }],
+  seats: [{ seat: 0, name: 'Mia', team: -1, color: '#f00', me: h.amHost, winsText: '', fresh: false, host: true, web: false, said: '' }],
   open: 7,
+  botRows: [],
   bots: Math.max(0, h.fill - 1),
   spectators: '',
   you: h.amHost ? 0 : -1,
@@ -63,5 +65,17 @@ describe('hosted lobby', () => {
     expect(html).not.toContain('data-qa="hash-rush-start"')
     expect(html).not.toContain('data-qa="hash-rush-add-bot"')
     expect(html).toMatch(/data-qa="hash-rush-setup-solo"[^>]*disabled|disabled=""[^>]*data-qa="hash-rush-setup-solo"/)
+  })
+})
+
+describe('lobby talk', () => {
+  it('shows what a seat just said on its row, and nothing once it is gone', () => {
+    const base = view(hosting(true, 1))
+    const said = (text: string) => renderToStaticMarkup(createElement(HashRushLobbyCard, {
+      view: { ...base, seats: base.seats.map((seat) => ({ ...seat, said: text })) },
+      copy: hashRushGameCopy('ko'), art: null, onSit: () => {}, onStand: () => {},
+    }))
+    expect(said('잠만')).toMatch(/data-qa="hash-rush-seat-said"[^>]*>잠만</)
+    expect(said('')).not.toContain('hash-rush-seat-said')
   })
 })

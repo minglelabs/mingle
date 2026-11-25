@@ -98,6 +98,88 @@ export type FeedPostViewProps = {
 };
 
 /** Top and bottom inset of the expanded text body: clears the header and the author row. */
+/** Three lines of `text-sm leading-relaxed`: the collapsed snippet's height. */
+const IMAGE_BODY_COLLAPSED_HEIGHT = "calc(3 * 1.625 * 0.875rem)";
+/** Tallest the expanded image-post body gets before it scrolls. */
+const IMAGE_BODY_EXPANDED_MAX_VH = 40;
+
+function ImageBodyText({
+  text,
+  expanded,
+  colors,
+  previewClampRef,
+  bodyScrollRef,
+  onBodyScroll,
+  bodyTouchAction,
+  toggleSlot,
+}: {
+  text: string;
+  expanded: boolean;
+  colors: FeedPostViewColors;
+  previewClampRef?: React.Ref<HTMLParagraphElement>;
+  bodyScrollRef?: React.Ref<HTMLDivElement>;
+  onBodyScroll?: React.UIEventHandler<HTMLDivElement>;
+  bodyTouchAction?: "pan-y" | "none";
+  toggleSlot?: ReactNode;
+}) {
+  const textBoxRef = useRef<HTMLDivElement | null>(null);
+  // Full height of the unclamped text, so the box animates to exactly where
+  // the text ends (capped at 40vh) instead of racing toward the cap.
+  const [fullHeight, setFullHeight] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    if (!expanded) return;
+    const el = textBoxRef.current;
+    if (!el) return;
+    const measure = () => setFullHeight(el.offsetHeight);
+    measure();
+    if (typeof ResizeObserver !== "function") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [expanded, text]);
+
+  const maxHeight = expanded
+    ? fullHeight
+      ? `min(${IMAGE_BODY_EXPANDED_MAX_VH}vh, ${fullHeight}px)`
+      : `${IMAGE_BODY_EXPANDED_MAX_VH}vh`
+    : IMAGE_BODY_COLLAPSED_HEIGHT;
+
+  return (
+    <div className="relative">
+      <div
+        ref={expanded ? bodyScrollRef : undefined}
+        className={`transition-[max-height] duration-300 ease-out motion-reduce:transition-none ${expanded ? "overflow-y-auto" : "overflow-hidden"}`}
+        style={{
+          maxHeight,
+          overscrollBehavior: expanded ? "contain" : undefined,
+          WebkitOverflowScrolling: expanded ? "touch" : undefined,
+          touchAction: expanded ? bodyTouchAction : undefined,
+        }}
+        onScroll={expanded ? onBodyScroll : undefined}
+      >
+        <div ref={textBoxRef}>
+        <p
+          ref={expanded ? undefined : previewClampRef}
+          // Expanded: room under the last line for the "Collapse" pill.
+          className={`whitespace-pre-wrap text-sm leading-relaxed${expanded ? " pb-7" : " line-clamp-3"}`}
+          style={{
+            color: colors.onImageColor,
+            textShadow: colors.textShadow,
+            wordBreak: "break-word",
+            overflowWrap: "anywhere",
+          }}
+        >
+          {text}
+        </p>
+        </div>
+      </div>
+      {toggleSlot ? (
+        <div className="pointer-events-auto absolute bottom-0 right-0">{toggleSlot}</div>
+      ) : null}
+    </div>
+  );
+}
+
 const EXPANDED_BODY_EDGE_PADDING = "calc(56px + env(safe-area-inset-top, 44px) + 40px)";
 
 /**
@@ -280,56 +362,23 @@ export default function FeedPostView({
         style={{ paddingBottom: "calc(20px + var(--feed-bottom-inset, 0px))" }}
       >
         <div className="min-w-0 flex-1" style={{ maxWidth: "calc(100% - 60px)" }}>
-          {/* Expanded body for image posts opens UPWARD from the author row,
-              so the author row and controls stay exactly where they were. */}
-          {imageUrl && expanded ? (
-            <div
-              ref={bodyScrollRef}
-              className="absolute bottom-full left-4 right-4 mb-1 max-h-[40vh] overflow-y-auto rounded-xl bg-black/35 px-3 py-2 backdrop-blur-[2px]"
-              style={{
-                overscrollBehavior: "contain",
-                WebkitOverflowScrolling: "touch",
-                touchAction: bodyTouchAction,
-              }}
-              onScroll={onBodyScroll}
-            >
-              <p
-                className="whitespace-pre-wrap text-sm leading-relaxed"
-                style={{
-                  color: colors.onImageColor,
-                  textShadow: colors.textShadow,
-                  wordBreak: "break-word",
-                  overflowWrap: "anywhere",
-                }}
-              >
-                {displayText}
-              </p>
-            </div>
-          ) : null}
-
           {authorSlot}
 
-          {/* Body text for image posts (collapsed snippet). Kept, invisible,
-              while expanded so the row below does not shift. */}
+          {/* Body text for image posts. "See more" grows it in place, under the
+              author row: the box gets taller (animated), which pushes the
+              author row and everything above it up, and the rest of the text
+              unrolls below the snippet. Past 40vh the box scrolls. */}
           {imageUrl && displayText ? (
-            <div className="relative">
-            <p
-              ref={expanded ? undefined : previewClampRef}
-              className={`line-clamp-3 text-sm leading-relaxed${expanded ? " invisible" : ""}`}
-              aria-hidden={expanded ? true : undefined}
-              style={{
-                color: colors.onImageColor,
-                textShadow: colors.textShadow,
-                wordBreak: "break-word",
-                overflowWrap: "anywhere",
-              }}
-            >
-              {displayText}
-            </p>
-            {snippetToggleSlot ? (
-              <div className="pointer-events-auto absolute bottom-0 right-0">{snippetToggleSlot}</div>
-            ) : null}
-            </div>
+            <ImageBodyText
+              text={displayText}
+              expanded={expanded}
+              colors={colors}
+              previewClampRef={previewClampRef}
+              bodyScrollRef={bodyScrollRef}
+              onBodyScroll={onBodyScroll}
+              bodyTouchAction={bodyTouchAction}
+              toggleSlot={snippetToggleSlot}
+            />
           ) : null}
 
           {controlSlot}

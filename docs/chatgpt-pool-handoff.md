@@ -150,7 +150,9 @@ unset K
 - The notes below are from the Mac (2026-10-30).
 - All 11 profiles have the extension and connect. Expected `agent` lines in
   the log:
-  - namhk5741
+  - namhk5741 (since 2026-11-21 excluded: `CHATGPT_POOL_EXCLUDE`, default
+    `namhk5741@gmail.com`; the pool gives it no jobs and never opens or closes it,
+    so 10 profiles serve)
   - matchingplanet24
   - minglelabs.dev
   - hyeongkeol@minglelabs.xyz

@@ -113,6 +113,7 @@ import {
 } from './tts-stream-clip'
 import { TtsAgentTextScheduler } from './tts-agent-text'
 import { applyCoinBalanceFromHeaders, isCoinBillingActive, notifyCoinsExhausted, openCoinStore, useCoinWallet } from '@/lib/coin-wallet-client'
+import { showCoinRateToast } from '@/lib/coin-rate-toast'
 import { fillCoinCopy, getCoinCopy } from '@/i18n/coin-copy'
 import { formatCoinCount } from '@/components/coins/coin-balance-chip'
 import HashSeedIcon from '@/components/coins/hash-seed-icon'
@@ -351,6 +352,7 @@ import { hashRushInviteCopy } from '@/features/hash-rush/invite-copy'
 import HashRushMenuPage from '@/features/hash-rush/HashRushMenuPage'
 import HashRushHowToPage from '@/features/hash-rush/HashRushHowToPage'
 import HashRushRankingPage from '@/features/hash-rush/HashRushRankingPage'
+import HashRushRoomsPage from '@/features/hash-rush/HashRushRoomsPage'
 import { HASH_RUSH_PAGE_URL, HASH_RUSH_SERVER } from '@/features/hash-rush/config'
 import { buildVoiceCaptionClientMessageId } from '@/lib/voice-caption'
 import { readDeclinedInvite, writeDeclinedInvite } from '@/lib/declined-invites'
@@ -417,7 +419,6 @@ const VOLUME_THRESHOLD = 0.05
 // How long a "loaded" older-history page may go without changing the list before its loading state is released.
 const OLDER_LOAD_RELEASE_FALLBACK_MS = 1_500
 const HEADER_LANGUAGE_FLAG_LIMIT = 3
-const VOICE_MODE_PLUS_BUTTON_SIZE_PX = 36
 const ACTION_PANEL_KEYBOARD_RETURN_HOLD_MS = 900
 const ACCOUNT_PREFERENCES_API_PATH = buildClientApiPath('/account/preferences')
 const FEEDBACK_API_PATH = buildClientApiPath('/feedback')
@@ -459,6 +460,8 @@ const VOICE_MODE_STT_BUTTON_HEIGHT_PX = 45
 const VOICE_MODE_STT_ICON_SIZE_PX = 20
 const VOICE_MODE_STT_STOP_SIZE_PX = 14
 const VOICE_MODE_SIDE_BUTTON_SIZE_PX = 44
+// One icon size for every side control (+, photo, speaker/earphone, keyboard) so they line up.
+const VOICE_MODE_SIDE_ICON_SIZE_PX = 20
 const COMPOSER_MODE_CONTROL_SIZE_PX = 36
 const VOICE_MODE_STT_BUTTON_RADIUS_PX = 20
 // Intentionally not localized: review requested fixed English CTA labels for the voice-mode STT button.
@@ -665,7 +668,7 @@ type LivePhoneDemoQaUtterance = {
   originalLang: string
   translations: Record<string, string>
   translationFinalized: Record<string, boolean>
-  translationStatus: 'pending' | 'retrying' | null
+  translationStatus: 'pending' | 'retrying' | 'unbilled' | null
   createdAtMs: number | null
 }
 
@@ -1372,7 +1375,7 @@ type LivePhoneDemoMenuScreen = 'root' | 'feedback' | 'conversation-management' |
   // sentence length pages open from it (depth 3).
   | 'voice-settings'
   // The room's Hash Rush page (depth 2) and the two pages it opens (depth 3).
-  | 'hash-rush' | 'hash-rush-ranking' | 'hash-rush-howto'
+  | 'hash-rush' | 'hash-rush-ranking' | 'hash-rush-howto' | 'hash-rush-rooms'
 type LivePhoneDemoMenuTransitionMode = 'animate' | 'instant'
 type LivePhoneDemoMenuScreenDirection = 'forward' | 'back'
 
@@ -1447,6 +1450,7 @@ function isLivePhoneDemoMenuScreen(value: unknown): value is LivePhoneDemoMenuSc
     || value === 'hash-rush'
     || value === 'hash-rush-ranking'
     || value === 'hash-rush-howto'
+    || value === 'hash-rush-rooms'
     || value === 'speech-length'
     || value === 'voice-settings'
 }
@@ -1457,7 +1461,7 @@ function resolveMenuScreenForDepth(
 ): LivePhoneDemoMenuScreen {
   if (depth <= 1) return 'root'
   if (depth >= 3) {
-    if (preferredScreen === 'hash-rush-ranking' || preferredScreen === 'hash-rush-howto') return preferredScreen
+    if (preferredScreen === 'hash-rush-ranking' || preferredScreen === 'hash-rush-howto' || preferredScreen === 'hash-rush-rooms') return preferredScreen
     if (preferredScreen === 'hash-rush') return 'hash-rush'
     if (preferredScreen === 'display-language') return 'display-language'
     if (preferredScreen === 'speech-length') return 'speech-length'
@@ -1469,7 +1473,7 @@ function resolveMenuScreenForDepth(
   // "Invite" on the first screen of the menu opens the picker directly.
   if (preferredScreen === 'invite') return 'invite'
   if (preferredScreen === 'display-language') return 'display-language'
-  if (preferredScreen === 'hash-rush' || preferredScreen === 'hash-rush-ranking' || preferredScreen === 'hash-rush-howto') return 'hash-rush'
+  if (preferredScreen === 'hash-rush' || preferredScreen === 'hash-rush-ranking' || preferredScreen === 'hash-rush-howto' || preferredScreen === 'hash-rush-rooms') return 'hash-rush'
   if (preferredScreen === 'speech-length') return 'speech-length'
   if (preferredScreen === 'conversation-management') return 'conversation-management'
   if (preferredScreen === 'participants') return 'participants'
@@ -2639,6 +2643,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // canceller is on only while it reads aloud without earphones; every other
   // mode, and the same mode with earphones in, keeps it off.
   const speakerModeAecEnabled = speakerModeOnSpeaker && earphoneModeGate.autoReadActive
+  // Reading translations aloud uses Hash. Turning it on opens the mode's own
+  // notice, which states the rates (a toast there sat on its confirm button),
+  // so only turning it off is a toast. Not inside a voice talk, whose own
+  // switches say it.
+  const coinRateReadAloudRef = useRef(earphoneModeGate.autoReadActive)
+  useEffect(() => {
+    if (coinRateReadAloudRef.current === earphoneModeGate.autoReadActive) return
+    coinRateReadAloudRef.current = earphoneModeGate.autoReadActive
+    if (!earphoneModeGate.autoReadActive && !voiceTalkState.joined) showCoinRateToast('read_aloud', false, uiLocale)
+  }, [earphoneModeGate.autoReadActive, uiLocale, voiceTalkState.joined])
   const [earphoneModeNoticeOpen, setEarphoneModeNoticeOpen] = useState(false)
   // Warns, once per earphone-mode session, that Start is about to open the
   // system screen broadcast / sharing prompt, so it does not come as a shock.
@@ -4154,6 +4168,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (!menuOpen || menuScreen !== 'hash-rush') return
     pushMenuHistoryEntry(3, 'hash-rush-ranking')
   }, [menuOpen, menuScreen, pushMenuHistoryEntry])
+  // Somebody else's listed game, joined from the room list: played in this
+  // room's game layer with a ticket for that room, no chat room behind it.
+  const [hashRushPublicRoom, setHashRushPublicRoom] = useState<string | null>(null)
+  const handleHashRushPublicJoin = useCallback((room: string) => {
+    if (hashRushGameActive) return
+    requestCloseMenuPanel()
+    setHashRushPublicRoom(room)
+  }, [hashRushGameActive, requestCloseMenuPanel])
+  const handleHashRushRoomsOpen = useCallback(() => {
+    if (!menuOpen || menuScreen !== 'hash-rush') return
+    pushMenuHistoryEntry(3, 'hash-rush-rooms')
+  }, [menuOpen, menuScreen, pushMenuHistoryEntry])
   const handleHashRushHowToOpen = useCallback(() => {
     if (!menuOpen || menuScreen !== 'hash-rush') return
     pushMenuHistoryEntry(3, 'hash-rush-howto')
@@ -5393,6 +5419,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ? (isNativeSttSessionOwner && (isConnecting || isReady || isActive))
     : (isConnecting || isReady || isActive)
   nativePipSttRunningRef.current = isSttSessionRunning
+  // Speech recognition uses Hash while it runs: say so when it starts and stops.
+  const coinRateSttRunningRef = useRef(isSttSessionRunning)
+  useEffect(() => {
+    if (coinRateSttRunningRef.current === isSttSessionRunning) return
+    coinRateSttRunningRef.current = isSttSessionRunning
+    showCoinRateToast('speech', isSttSessionRunning, uiLocale)
+  }, [isSttSessionRunning, uiLocale])
   const onSttSessionRunningChangeRef = useRef(onSttSessionRunningChange)
 
   useEffect(() => {
@@ -6899,13 +6932,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setVoiceTalkListenOn(on)
     setVoiceTalkListen(on)
     if (on) setVoiceTalkListenNoticeOpen(true)
-  }, [])
+    showCoinRateToast('voice_listen', on, uiLocale)
+  }, [uiLocale])
 
   const handleVoiceTalkInterpretChange = useCallback((on: boolean) => {
     voiceTalkPressedRef.current.interpretOn = { value: on, until: Date.now() + 3000 }
     setVoiceTalkInterpretOn(on)
-    if (conversationId) void setVoiceTalkInterpret(conversationId, on)
-  }, [conversationId])
+    showCoinRateToast('voice_caption', on, uiLocale)
+    if (!conversationId) return
+    void setVoiceTalkInterpret(conversationId, on).then((accepted) => {
+      if (accepted) return
+      // The server refused: no Hash. Back off, and say why.
+      voiceTalkPressedRef.current.interpretOn = { value: false, until: Date.now() + 3000 }
+      setVoiceTalkInterpretOn(false)
+      notifyCoinsExhausted({ userInitiated: true })
+    })
+  }, [conversationId, uiLocale])
 
   // The room's own speech-to-text does not run in a call: one that was on
   // stops on joining (and Start stays locked until the call ends).
@@ -8347,7 +8389,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const actionPanelItems = useMemo<ChatActionPanelItem[]>(() => {
     const items: ChatActionPanelItem[] = []
     const closeThen = (action: () => void) => () => { setActionPanelOpen(false); action() }
-    if (conversationId && viewerUserId) {
+    // Voice mode has the photo and keyboard buttons in the bar itself: its "+" is
+    // just voice talk and PiP.
+    if (composerShown && conversationId && viewerUserId) {
       items.push({
         key: 'photo',
         label: conversationImageCopy.choose,
@@ -8384,22 +8428,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         onSelect: earphoneModeMenuItem.onToggle,
       })
     }
-    items.push(composerShown
-      ? {
-          key: 'voice-mode',
-          label: composerCopy.switchToVoiceModeLabel,
-          icon: <Mic size={21} strokeWidth={2} />,
-          onSelect: closeThen(handleToggleComposer),
-        }
-      : {
-          key: 'keyboard-mode',
-          label: composerCopy.switchToKeyboardModeLabel,
-          icon: <Keyboard size={21} strokeWidth={2} />,
-          onSelect: closeThen(handleToggleComposer),
-        })
+    if (composerShown) {
+      items.push({
+        key: 'voice-mode',
+        label: composerCopy.switchToVoiceModeLabel,
+        icon: <Mic size={21} strokeWidth={2} />,
+        onSelect: closeThen(handleToggleComposer),
+      })
+    }
     return items
   }, [
-    composerCopy.switchToKeyboardModeLabel,
     composerCopy.switchToVoiceModeLabel,
     composerShown,
     conversationId,
@@ -9145,6 +9183,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             onClose={closeHashRushGame}
             onQuit={quitHashRushGame}
             onOthersHere={(count) => { hashRushOthersHereRef.current = count }}
+          />
+        ) : null}
+
+        {hashRushPublicRoom && conversationId && !hashRushGameActive ? (
+          <HashRushRoomLayer
+            key={`public-${hashRushPublicRoom}`}
+            open
+            conversationId={conversationId}
+            publicRoom={hashRushPublicRoom}
+            viewerKey={viewerUserId || 'guest'}
+            playerName={(session?.user?.name || '').trim()}
+            uiLocale={uiLocale}
+            voiceActive={voiceTalkState.connected}
+            onClose={() => setHashRushPublicRoom(null)}
+            onQuit={() => setHashRushPublicRoom(null)}
           />
         ) : null}
 
@@ -10849,7 +10902,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     {conversationId && isHashRushGameConfigured() ? (
                       <>
                         <SlideSurface
-                          open={menuOpen && (menuScreen === 'hash-rush' || menuScreen === 'hash-rush-ranking' || menuScreen === 'hash-rush-howto')}
+                          open={menuOpen && (menuScreen === 'hash-rush' || menuScreen === 'hash-rush-ranking' || menuScreen === 'hash-rush-howto' || menuScreen === 'hash-rush-rooms')}
                           onClose={requestMenuBackStep}
                           onRequestClose={handleMenuSurfaceRequestClose}
                           ariaLabel={hashRushInviteCopy(uiLocale).pageTitle}
@@ -10872,6 +10925,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                               onEnter={handleHashRushPageEnter}
                               onCopyPcLink={HASH_RUSH_PAGE_URL ? () => void handleCopyHashRushPcLink() : undefined}
                               onOpenRanking={handleHashRushRankingOpen}
+                              onOpenRooms={handleHashRushRoomsOpen}
                               onOpenHowTo={handleHashRushHowToOpen}
                             />
                           </div>
@@ -10898,6 +10952,31 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                               conversationId={conversationId}
                               viewerUserId={viewerUserId}
                               active={menuOpen && menuScreen === 'hash-rush-ranking'}
+                            />
+                          </div>
+                        </SlideSurface>
+
+                        <SlideSurface
+                          open={menuOpen && menuScreen === 'hash-rush-rooms'}
+                          onClose={requestMenuBackStep}
+                          onRequestClose={handleMenuSurfaceRequestClose}
+                          ariaLabel={hashRushInviteCopy(uiLocale).rooms}
+                          nativeBackPriority={40}
+                          className="absolute inset-0 z-[80] flex h-full min-w-0 w-full flex-col overflow-hidden bg-white"
+                          style={{ touchAction: 'pan-y' }}
+                          stopPropagation
+                        >
+                          <LivePhoneDemoPanelHeader
+                            title={hashRushInviteCopy(uiLocale).rooms}
+                            backLabel={roomManagementCopy.backButtonLabel}
+                            onBack={requestMenuBackStep}
+                          />
+                          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" style={{ paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)' }}>
+                            <HashRushRoomsPage
+                              uiLocale={uiLocale}
+                              active={menuOpen && menuScreen === 'hash-rush-rooms'}
+                              playing={hashRushGameActive}
+                              onJoin={handleHashRushPublicJoin}
                             />
                           </div>
                         </SlideSurface>
@@ -10982,6 +11061,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   uiLocale={uiLocale}
                   onOpenProfile={handleOpenProfileForBubble}
                 />
+              )}
+              {/* Until the server answers, an empty room is "still loading", not "no messages". */}
+              {conversationId && isInitialServerHydrationPending && timelineItems.length === 0 && (
+                <div className="flex justify-center py-6 text-gray-300" data-qa="live-demo-chat-loading">
+                  <Loader2 size={20} className="animate-spin" aria-hidden="true" />
+                </div>
               )}
               {timelineItems.map((item, index) => {
                 const previousItem = timelineItems[index - 1]
@@ -11584,9 +11669,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   transition={{ duration: 0.11, ease: [0.22, 1, 0.36, 1] }}
                   className="grid items-end"
                   style={{
-                    // minmax(0, 1fr) keeps Start centered once the left cell
-                    // also holds the earphone button; without it the layout
-                    // stays exactly as before.
+                    // minmax(0, 1fr) keeps Start centered whatever the side cells hold.
                     gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)',
                   }}
                 >
@@ -11595,71 +11678,37 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -12 }}
                     transition={{ duration: 0.09, ease: 'easeOut' }}
-                    // This room's talk time and message count on the far left,
-                    // the speaker / earphone button next to Start (voice talk,
-                    // photo and PiP are in the "+").
-                    className="flex w-full min-w-0 items-center justify-between gap-1 self-end pl-1"
+                    // "+" (voice talk, PiP) and photo on the left.
+                    className="flex w-full min-w-0 items-center gap-1 self-end"
                   >
-                    <div data-qa="live-demo-voice-usage" className={`flex min-w-0 flex-col items-start justify-center leading-4 ${trialSpeechLength ? 'invisible' : ''}`}>
-                      {isUsageLimited ? (
-                        <span className="flex min-w-0 max-w-full items-center gap-1.5">
-                          <span className="h-1.5 w-12 shrink-0 overflow-hidden rounded-full bg-gray-200">
-                            <span
-                              className={`block h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
-                              style={{ width: `${usagePercent}%` }}
-                            />
-                          </span>
-                          <span className={`text-[0.78rem] tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}`}>
-                            {formatLivePhoneDemoUsageDuration(remainingSec)}
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="max-w-full truncate text-[0.78rem] tabular-nums text-gray-400">
-                          {formatLivePhoneDemoUsageDuration(usageSec)}
-                        </span>
-                      )}
-                      <span className="max-w-full truncate text-[0.78rem] tabular-nums text-gray-400">
-                        {storedMessageCountLabel}
-                      </span>
-                    </div>
-                    {earphoneModeGate.controlVisible && (
+                    {/* The speak trial: no "+" (owner, 2026-11-25); its keyboard is on the right. */}
+                    {trialSpeechLength ? (
+                      <span aria-hidden="true" className="shrink-0" style={{ width: VOICE_MODE_SIDE_BUTTON_SIZE_PX, height: VOICE_MODE_SIDE_BUTTON_SIZE_PX }} />
+                    ) : (
+                      <ChatActionPlusButton
+                        open={actionPanelOpen}
+                        label={conversationImageCopy.attach}
+                        sizePx={VOICE_MODE_SIDE_BUTTON_SIZE_PX}
+                        iconSizePx={VOICE_MODE_SIDE_ICON_SIZE_PX}
+                        variant="plain"
+                        onToggle={handleActionPanelToggle}
+                      />
+                    )}
+                    {conversationId && viewerUserId ? (
                       <button
                         type="button"
-                        data-qa="live-demo-earphone-mode-toggle"
-                        onPointerDown={(event) => event.preventDefault()}
-                        onClick={handleEarphoneModeToggle}
-                        disabled={voiceTalkState.joined}
-                        aria-label={earphoneModeControlLabel}
-                        aria-pressed={isEarphoneModeOn}
-                        // Dimmed like the mic button while the call decides what is read aloud.
-                        className={`relative inline-flex shrink-0 items-center justify-center transition-all duration-200 active:scale-95 disabled:pointer-events-none disabled:opacity-40 ${
-                          isEarphoneModeOn ? 'text-amber-500' : 'text-gray-500 hover:text-gray-700'
-                        }`}
+                        data-qa="live-demo-photo-button"
+                        onClick={() => photoPickerRef.current?.()}
+                        aria-label={conversationImageCopy.choose}
+                        className="inline-flex shrink-0 items-center justify-center text-gray-500 transition-all duration-200 hover:text-gray-700 active:scale-95"
                         style={{
                           width: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
                           height: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
                         }}
                       >
-                        {speakerModeOnSpeaker ? <Volume2 size={18} strokeWidth={2.15} /> : <Headphones size={18} strokeWidth={2.15} />}
-                        {isEarphoneModeOn && earphoneModeReadLanguage && (
-                          // The language it reads aloud, so a wrong pick is visible at a glance.
-                          <span
-                            aria-hidden="true"
-                            data-earphone-mode-read-language-flag={earphoneModeReadLanguage}
-                            className="pointer-events-none absolute bottom-[6px] right-[3px] flex h-[15px] min-w-[19px] items-center justify-center rounded-full bg-white px-[2px] text-[10px] leading-none ring-1 ring-gray-200"
-                          >
-                            <LanguageFlag language={earphoneModeReadLanguage} className="text-[10px] leading-none" />
-                          </span>
-                        )}
-                        {earphoneModeGate.waitingForEarphones && (
-                          <span
-                            aria-hidden="true"
-                            data-earphone-mode-waiting-dot
-                            className="pointer-events-none absolute right-[10px] top-[10px] h-[7px] w-[7px] rounded-full bg-gray-400 ring-2 ring-white"
-                          />
-                        )}
+                        <ImageIcon size={VOICE_MODE_SIDE_ICON_SIZE_PX} strokeWidth={2} />
                       </button>
-                    )}
+                    ) : null}
                   </motion.div>
 
                   <motion.div className="flex self-end justify-center">
@@ -11741,27 +11790,59 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     </button>
                   </motion.div>
 
-                  <div className="flex items-center gap-1 self-end justify-self-end">
-                    {/* The speak trial: no "+", only the switch to typing (owner, 2026-11-25). */}
-                    {trialSpeechLength ? (
+                  {/* Speaker / earphone next to Start, the keyboard on the far right. */}
+                  <div className="flex w-full min-w-0 items-center justify-end gap-1 self-end">
+                    {earphoneModeGate.controlVisible && (
                       <button
                         type="button"
-                        data-qa="live-demo-trial-keyboard-mode"
-                        aria-label={composerCopy.switchToKeyboardModeLabel}
-                        onClick={handleToggleComposer}
-                        className="inline-flex shrink-0 items-center justify-center self-end rounded-full bg-gray-100 text-gray-600 active:scale-95"
-                        style={{ width: VOICE_MODE_PLUS_BUTTON_SIZE_PX, height: VOICE_MODE_PLUS_BUTTON_SIZE_PX }}
+                        data-qa="live-demo-earphone-mode-toggle"
+                        onPointerDown={(event) => event.preventDefault()}
+                        onClick={handleEarphoneModeToggle}
+                        disabled={voiceTalkState.joined}
+                        aria-label={earphoneModeControlLabel}
+                        aria-pressed={isEarphoneModeOn}
+                        // Dimmed like the mic button while the call decides what is read aloud.
+                        className={`relative inline-flex shrink-0 items-center justify-center transition-all duration-200 active:scale-95 disabled:pointer-events-none disabled:opacity-40 ${
+                          isEarphoneModeOn ? 'text-amber-500' : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                        style={{
+                          width: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
+                          height: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
+                        }}
                       >
-                        <Keyboard size={Math.round(VOICE_MODE_PLUS_BUTTON_SIZE_PX * 0.5)} strokeWidth={2.1} />
+                        {speakerModeOnSpeaker ? <Volume2 size={VOICE_MODE_SIDE_ICON_SIZE_PX} strokeWidth={2} /> : <Headphones size={VOICE_MODE_SIDE_ICON_SIZE_PX} strokeWidth={2} />}
+                        {isEarphoneModeOn && earphoneModeReadLanguage && (
+                          // The language it reads aloud, so a wrong pick is visible at a glance.
+                          <span
+                            aria-hidden="true"
+                            data-earphone-mode-read-language-flag={earphoneModeReadLanguage}
+                            className="pointer-events-none absolute bottom-[6px] right-[3px] flex h-[15px] min-w-[19px] items-center justify-center rounded-full bg-white px-[2px] text-[10px] leading-none ring-1 ring-gray-200"
+                          >
+                            <LanguageFlag language={earphoneModeReadLanguage} className="text-[10px] leading-none" />
+                          </span>
+                        )}
+                        {earphoneModeGate.waitingForEarphones && (
+                          <span
+                            aria-hidden="true"
+                            data-earphone-mode-waiting-dot
+                            className="pointer-events-none absolute right-[10px] top-[10px] h-[7px] w-[7px] rounded-full bg-gray-400 ring-2 ring-white"
+                          />
+                        )}
                       </button>
-                    ) : (
-                      <ChatActionPlusButton
-                        open={actionPanelOpen}
-                        label={conversationImageCopy.attach}
-                        sizePx={VOICE_MODE_PLUS_BUTTON_SIZE_PX}
-                        onToggle={handleActionPanelToggle}
-                      />
                     )}
+                    <button
+                      type="button"
+                      data-qa="live-demo-keyboard-mode-button"
+                      onClick={handleToggleComposer}
+                      aria-label={composerCopy.switchToKeyboardModeLabel}
+                      className="inline-flex shrink-0 items-center justify-center text-gray-500 transition-all duration-200 hover:text-gray-700 active:scale-95"
+                      style={{
+                        width: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
+                        height: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
+                      }}
+                    >
+                      <Keyboard size={VOICE_MODE_SIDE_ICON_SIZE_PX} strokeWidth={2} />
+                    </button>
                   </div>
                 </motion.div>
               )}

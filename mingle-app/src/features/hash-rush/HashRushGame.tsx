@@ -45,7 +45,7 @@ import {
   type HashRushChatFeed,
   type HashRushRoomChat,
 } from './room-chat'
-import { requestHashRushTicket } from './ticket'
+import { requestHashRushPublicTicket, requestHashRushTicket } from './ticket'
 import {
   HashRushBoard,
   HashRushLobbyCard,
@@ -104,6 +104,8 @@ const PAD_KEYS = [
 const cx = (...names: (string | false | null | undefined)[]) => names.filter(Boolean).join(' ')
 
 type Props = {
+  /** Somebody else's listed game (the room list): its own ticket, no chat room behind it. */
+  publicRoom?: string | null
   conversationId: string
   /** Who is playing; entry tickets are kept per viewer and room. */
   viewerKey: string
@@ -122,7 +124,8 @@ type Props = {
   /** How many other people are in the game room (null before it is known), on every change of screen. */
   onOthersHere?: (count: number | null) => void
   /** Quit; `alone`: nobody else is in the game room (so the room's game can end now). */
-  onQuit?: (alone: boolean) => void
+  /** `endRound` is there when this viewer hosts a round in play: it stops the round for everybody. */
+  onQuit?: (alone: boolean, endRound?: () => void) => void
   /** How to play, from the lobby. */
   onHowTo?: () => void
 }
@@ -140,7 +143,7 @@ const typing = () => {
   return node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement || (node instanceof HTMLElement && node.isContentEditable)
 }
 
-export default function HashRushGame({ conversationId, viewerKey, playerName, uiLocale, visible, voiceActive, chat, onBack, onQuit, onHowTo, onOthersHere }: Props) {
+export default function HashRushGame({ conversationId, publicRoom, viewerKey, playerName, uiLocale, visible, voiceActive, chat, onBack, onQuit, onHowTo, onOthersHere }: Props) {
   const copy = hashRushGameCopy(uiLocale)
   const inviteCopy = hashRushInviteCopy(uiLocale)
   const chatOpen = !!chat?.open
@@ -313,11 +316,20 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
         if (cancelled) return
         const latest = latestRef.current
         setArt(hashRushArt)
+        let ticketTaken = false
         client = createHashRushGameClient(elements, {
           server: HASH_RUSH_SERVER,
           language: latest.uiLocale || 'en',
           playerName: latest.playerName,
-          getTicket: (fresh) => requestHashRushTicket({ conversationId, viewerKey: latestRef.current.viewerKey, fresh }),
+          // A game window's first ticket is a fresh one: each game the chat room
+          // starts has a room of its own, and a ticket held from the last game
+          // would lead back into that one. Reconnects in the same window reuse it.
+          getTicket: (fresh) => {
+            const first = !ticketTaken
+            ticketTaken = true
+            if (publicRoom) return requestHashRushPublicTicket(publicRoom)
+            return requestHashRushTicket({ conversationId, viewerKey: latestRef.current.viewerKey, fresh: fresh || first })
+          },
           classes: CLASSES,
           onView: setView,
         })
@@ -342,7 +354,7 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
       client?.destroy()
       if (clientRef.current === client) clientRef.current = null
     }
-  }, [conversationId, loadAttempt])
+  }, [conversationId, publicRoom, loadAttempt])
 
   // The last few lines of the room's talk float up again, crisp for a few
   // seconds however old: the composer went down, the conversation folded, or
@@ -387,7 +399,8 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
     // loading once it is there).
     const client = clientRef.current
     for (const post of step.posts) {
-      client?.hearRoom(post, { quiet: started || post.userId === latestRef.current.viewerKey })
+      const mine = post.userId === latestRef.current.viewerKey
+      client?.hearRoom(post, { quiet: started || mine, mine: mine && !started })
     }
     setFloating((lines) => floatLines(lines, step.posts, now))
     setFloatAt(now)
@@ -835,6 +848,8 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
           nextAt={view.nextAt}
           hosted={view.hosted}
           amHost={view.amHost}
+          onAgain={() => clientRef.current?.again()}
+          onToLobby={() => clientRef.current?.endRound()}
           at={view.at}
           copy={copy}
           scoreView={scoreView}
@@ -912,7 +927,7 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
         <button
           ref={quitRef}
           type="button"
-          onClick={() => onQuit(clientRef.current?.othersHere() === 0)}
+          onClick={() => { const client = clientRef.current; onQuit(client?.othersHere() === 0, client?.canEndRound() ? () => client.endRound() : undefined) }}
           className={styles.quit}
           aria-label={inviteCopy.quit}
           title={inviteCopy.quit}

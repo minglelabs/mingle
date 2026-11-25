@@ -185,7 +185,7 @@
 }
 
 .mobile-canvas-frame {
-  width: 400px;
+  width: var(--mingle-mobile-canvas-frame-width, 400px);
   height: var(--mingle-mobile-canvas-frame-height, 100svh);
   min-height: var(--mingle-mobile-canvas-frame-height, 100svh);
   transform: var(--mingle-mobile-canvas-transform, none);

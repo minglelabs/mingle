@@ -63,20 +63,36 @@ export function buildDefaultHandle(input: DefaultHandleInput): string {
   return candidate.slice(0, HANDLE_MAX_LENGTH) || "user";
 }
 
-export function buildDefaultHandleCandidates(input: DefaultHandleInput): string[] {
+// 8 base-36 characters from the whole address. The tail of an address is no
+// suffix: every @gmail.com (or @mingle.test) account ends in the same 8
+// characters, so two people with one name used to collide on every candidate.
+function emailHandleSuffix(email: string): string {
+  let a = 0x811c9dc5;
+  let b = 0x01000193;
+  for (const char of email.trim().toLowerCase()) {
+    const code = char.codePointAt(0) ?? 0;
+    a = Math.imul(a ^ code, 0x01000193) >>> 0;
+    b = Math.imul(b ^ code, 0x5bd1e995) >>> 0;
+  }
+  return `${a.toString(36)}${b.toString(36)}`.padStart(8, "0").slice(-8);
+}
+
+function randomHandleSuffix(): string {
+  return Math.floor(Math.random() * 36 ** 8).toString(36).padStart(8, "0");
+}
+
+export function buildDefaultHandleCandidates(input: DefaultHandleInput, random: () => string = randomHandleSuffix): string[] {
   const base = buildDefaultHandle(input);
-  const uniqueSource = sanitizeHandleSource(
-    typeof input.id === "string" && input.id.trim()
-      ? input.id
-      : typeof input.email === "string" ? input.email : "",
-  );
-  if (!uniqueSource) return [base];
-
-  const suffix = uniqueSource.slice(-8);
-  const withSource = `${base.slice(0, HANDLE_MAX_LENGTH - suffix.length - 1)}_${suffix}`;
-  const fallback = `user_${suffix}`.slice(0, HANDLE_MAX_LENGTH);
-
-  return [...new Set([base, withSource, fallback])];
+  const id = typeof input.id === "string" ? sanitizeHandleSource(input.id.trim()) : "";
+  const email = typeof input.email === "string" ? input.email.trim() : "";
+  const suffix = id ? id.slice(-8) : email ? emailHandleSuffix(email) : "";
+  const withSuffix = (head: string, tail: string) => `${head.slice(0, HANDLE_MAX_LENGTH - tail.length - 1)}_${tail}`;
+  // A random last resort, so a taken name never fails the sign-up.
+  const last = random();
+  const candidates = suffix
+    ? [base, withSuffix(base, suffix), `user_${suffix}`.slice(0, HANDLE_MAX_LENGTH), withSuffix(base, last)]
+    : [base, withSuffix(base, last)];
+  return [...new Set(candidates)];
 }
 
 export function isHandleUniqueConstraintError(error: unknown): boolean {

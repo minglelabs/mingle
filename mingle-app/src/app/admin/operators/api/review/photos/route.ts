@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { requireAdminApi } from '@/server/admin/guard'
 import { storeReservePostImage } from '@/server/operator-post-reserve/post-image'
 import { setReviewPostPhotos } from '@/server/operator-review/review'
+import { moveReferenceImageKey } from '@/server/reference-library/library'
+import { moveSeedreamImage } from '@/server/seedream/drawn-images'
 import type { ReserveExtraImage } from '@/server/operator-post-reserve/extra-images'
 
 export const runtime = 'nodejs'
@@ -51,5 +53,13 @@ export async function PUT(request: Request) {
   if (!/^[\w-]{1,64}$/.test(id) || !Array.isArray(body?.photos)) return json({ error: 'invalid_request' }, 400)
   const result = await setReviewPostPhotos(auth.ctx, id, body.photos as ReserveExtraImage[])
   if (!result.ok) return json({ error: result.error }, result.error === 'not_found' ? 404 : 400)
+  // A photo staff edited stays the reference-library photo's use (or the library would free it for another post).
+  const replaced = Array.isArray(body?.replaced) ? body.replaced as Array<{ from?: unknown; to?: unknown }> : []
+  for (const swap of replaced.slice(0, 10)) {
+    if (typeof swap.from === 'string' && typeof swap.to === 'string') {
+      await moveReferenceImageKey(swap.from, swap.to).catch(() => {})
+      await moveSeedreamImage(swap.from, swap.to)
+    }
+  }
   return json(result)
 }

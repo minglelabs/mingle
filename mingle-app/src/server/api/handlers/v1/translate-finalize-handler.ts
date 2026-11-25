@@ -61,6 +61,7 @@ import { readPartialJsonStrings } from '@/lib/partial-json-strings'
 
 import { COIN_INSUFFICIENT_ERROR } from '@/lib/coin-units'
 import { coinKeyDigest, estimateTtsAudioSeconds, resolveCoinBillingUserId } from '@/server/coins/request-billing'
+import { isCoinUsageFree } from '@/server/coins/pricing'
 import { canSpendCoins, chargeCoinUsageSafely } from '@/server/coins/wallet'
 
 export const runtime = 'nodejs'
@@ -421,6 +422,11 @@ async function synthesizeTtsInline(args: {
 
 // ─── Main handler ────────────────────────────────────────────────────────────
 
+/** True when the client says this final is a typed message (not a spoken turn). */
+export function isTypedFinalizeRequest(body: { typedMessage?: unknown; sttDurationMs?: unknown }): boolean {
+  return body.typedMessage === true && !(typeof body.sttDurationMs === 'number' && body.sttDurationMs > 0)
+}
+
 export async function handleTranslateFinalizeV1(request: NextRequest) {
   if (request.headers.has(EXPECTED_ACCOUNT_HEADER)
     && !matchesExpectedAccount(request, await getServerSession(getAuthOptions()))) {
@@ -583,14 +589,20 @@ async function runTranslateFinalize(
   // Coins (docs/coin-iap-spec.md 3.5, 4.3): the sender pays for translation, and
   // a sender with no coins gets no translation (the message still goes out untranslated).
   const coinBillingUserId = await resolveCoinBillingUserId()
-  if (coinBillingUserId && !(await canSpendCoins(coinBillingUserId))) {
+  // Only a message the client marks as typed is billed per message. A spoken
+  // final often arrives without an STT duration (the turn-start mark is one
+  // shared ref, cleared by the previous final), so "no duration" must not mean
+  // "typed": that billed spoken turns 0.3 Hash each on top of the voice minute.
+  const isTypedMessage = isFinal && isTypedFinalizeRequest(body)
+  // While typed-message translation is free (a zero rate), an empty wallet does not stop it.
+  const typedTranslationIsFree = Boolean(coinBillingUserId) && isTypedMessage
+    && await isCoinUsageFree({ kind: 'translation', units: { message: 1 } })
+  if (coinBillingUserId && !typedTranslationIsFree && !(await canSpendCoins(coinBillingUserId))) {
     const response = NextResponse.json({ error: COIN_INSUFFICIENT_ERROR, translations: {} }, { status: 402 })
     ensureTrackingContext(request, response, { sessionKeyHint })
     return response
   }
   const coinClientMessageId = typeof body.clientMessageId === 'string' ? body.clientMessageId.trim().slice(0, 128) : ''
-  // Spoken turns carry their STT duration; partials are spoken by definition.
-  const isTypedMessage = isFinal && !(typeof body.sttDurationMs === 'number' && body.sttDurationMs > 0)
   const coinRequestDigest = coinKeyDigest(sessionKeyHint, text, targetLanguages.join(','), isFinal)
 
   const immediatePreviousTurn = parseImmediatePreviousTurn(body.immediatePreviousTurn)
@@ -780,7 +792,10 @@ async function runTranslateFinalize(
         if (charge?.wallet) responsePayload.coinBalance = charge.wallet.balance
       }
 
-      if (enableTts && ttsLanguage && targetLanguages.includes(ttsLanguage) && !coinsExhausted) {
+      // Free translation let an empty wallet through the gate above; read-aloud is still paid.
+      const ttsBlockedByEmptyWallet = Boolean(enableTts && typedTranslationIsFree && coinBillingUserId)
+        && !(await canSpendCoins(coinBillingUserId))
+      if (enableTts && ttsLanguage && targetLanguages.includes(ttsLanguage) && !coinsExhausted && !ttsBlockedByEmptyWallet) {
         const ttsText = (translations[ttsLanguage] || '').trim()
         if (ttsText) {
           const ttsResult = await synthesizeTtsInline({

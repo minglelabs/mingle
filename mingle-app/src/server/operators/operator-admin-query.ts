@@ -18,7 +18,15 @@ export type OperatorListItem = {
   personaCountry: string | null
   primaryLanguage: string | null
   isActive: boolean
+  isOperator: boolean
   createdAt: string
+}
+
+/** Which accounts the 계정 tab lists: everyone (default), only operator accounts, or only real users. */
+export type AccountListScope = 'all' | 'operator' | 'user'
+
+export function parseAccountListScope(value: unknown): AccountListScope {
+  return value === 'operator' || value === 'user' ? value : 'all'
 }
 
 export type OperatorListPage = {
@@ -27,19 +35,29 @@ export type OperatorListPage = {
   page: number
   pageCount: number
   query: string
+  scope: AccountListScope
 }
 
 export function normalizeOperatorSearch(value: unknown): string {
   return typeof value === 'string' ? value.trim().replace(/^@+/, '').slice(0, 60) : ''
 }
 
-export async function listOperatorAccounts(args: { query?: string; page?: number } = {}): Promise<OperatorListPage> {
+/** The 계정 tab's list: every account (operator or real user) by default, newest first, searchable. */
+export async function listOperatorAccounts(args: { query?: string; page?: number; scope?: AccountListScope } = {}): Promise<OperatorListPage> {
   const query = normalizeOperatorSearch(args.query)
+  const scope = args.scope ?? 'all'
   const where: Prisma.UserWhereInput = {
-    isOperator: true,
+    ...(scope === 'operator' ? { isOperator: true } : scope === 'user' ? { isOperator: false } : {}),
     isDeleted: false,
     ...(query
-      ? { OR: [{ name: { contains: query, mode: 'insensitive' } }, { handle: { contains: query.toLowerCase() } }] }
+      ? {
+          OR: [
+            { name: { contains: query, mode: 'insensitive' } },
+            { handle: { contains: query.toLowerCase() } },
+            // Real users are often found by their sign-in email.
+            ...(query.includes('@') || query.includes('.') ? [{ email: { contains: query, mode: 'insensitive' as const } }] : []),
+          ],
+        }
       : {}),
   }
   const total = await prisma.user.count({ where })
@@ -57,7 +75,9 @@ export async function listOperatorAccounts(args: { query?: string; page?: number
       image: true,
       primaryLanguages: true,
       isActive: true,
+      isOperator: true,
       createdAt: true,
+      locationCountry: true,
       operatorAccount: { select: { personaCountry: true } },
     },
   })
@@ -67,15 +87,17 @@ export async function listOperatorAccounts(args: { query?: string; page?: number
       handle: row.handle,
       name: row.name,
       image: row.image,
-      personaCountry: row.operatorAccount?.personaCountry ?? null,
+      personaCountry: row.operatorAccount?.personaCountry ?? row.locationCountry ?? null,
       primaryLanguage: row.primaryLanguages[0] ?? null,
       isActive: row.isActive,
+      isOperator: row.isOperator,
       createdAt: row.createdAt.toISOString(),
     })),
     total,
     page,
     pageCount,
     query,
+    scope,
   }
 }
 

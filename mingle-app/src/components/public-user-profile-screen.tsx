@@ -32,6 +32,7 @@ import { getCoinCopy } from "@/i18n/coin-copy";
 import { isCoinBillingActive, useCoinWallet } from "@/lib/coin-wallet-client";
 import ProfileLocation from "@/components/profile-location";
 import ProfilePostGrid from "@/components/search/profile-post-grid";
+import StaffUserStats from "@/components/staff-user-stats";
 import AccountBadge from "@/components/posts/account-badge";
 import { resolveAccountBadge, withAccountBadgeLabel } from "@/lib/account-badge";
 import { isDuplicateReportBody } from "@/components/reports/report-response";
@@ -284,6 +285,7 @@ export default function PublicUserProfileScreen({
   // The profile's real scroller; the post grid restores its offset on return.
   const profileScrollRef = useRef<HTMLDivElement | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLeavingRoute, setIsLeavingRoute] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [isActionPending, setIsActionPending] = useState(false);
   const [actionError, setActionError] = useState(false);
@@ -409,6 +411,7 @@ export default function PublicUserProfileScreen({
       onClose();
       return;
     }
+    setIsLeavingRoute(true);
     if (window.history.length > 1) {
       router.back();
       return;
@@ -645,6 +648,19 @@ export default function PublicUserProfileScreen({
 
   return (
     <>
+      {onClose ? null : (
+        // As its own route the profile has no screen under it: once it slides
+        // away, the page is bare until the router commits the previous route
+        // (a server round-trip on a slow network). Keep a loading layer there.
+        <div
+          aria-hidden="true"
+          className="fixed inset-0 z-[105] flex items-center justify-center bg-white text-gray-400"
+        >
+          {/* Only once the profile has left: a spinner in the page from the
+              start reads as "still loading" to the native startup splash. */}
+          {isLeavingRoute ? <Loader2 size={26} className="animate-spin" /> : null}
+        </div>
+      )}
       <SlideSurface
         open={open}
         onClose={navigateBack}
@@ -858,6 +874,7 @@ export default function PublicUserProfileScreen({
                   </button>
                 </div>
               ) : null}
+              <StaffUserStats userId={profile.id} />
               {actionError ? (
                 <p className="mt-2 text-center text-[13px] text-red-500" role="alert">{copy.blockError}</p>
               ) : null}

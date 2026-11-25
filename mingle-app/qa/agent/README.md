@@ -39,6 +39,9 @@ Scripts in `mingle-app/scripts/`:
    ```
    The phone then reaches it at `https://mingle-app-devbox-<slot>.minglelabs.app` on any network. The device profile
    uses a remote database, so the agent reads app data through the app's API.
+   Vault `secret/mingle/dev` carries the coin keys (`COIN_BILLING_ENABLED=shadow`, `IAP_ALLOW_SANDBOX=1`, store
+   keys), so the Hash store and sandbox purchases work on devbox for accounts listed in `COIN_ENFORCE_USER_IDS`
+   (see `scenarios/hash-store-purchase.md`).
 2. Connect the iPhone by USB, unlocked and trusted, with Developer Mode and Settings → Developer → Enable UI Automation on.
 3. In Claude Code: `/qa` (scenarios for the current diff), `/qa all`, `/qa P0`, or `/qa <scenario-id>`.
 4. Open the published report. Work through the manual checklist. Tell Claude where you disagree.

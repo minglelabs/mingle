@@ -10,7 +10,8 @@ const { mockGetServerSession, mockGetAdminContext, mockUserFindUnique, mockLoadS
 vi.mock('next-auth', () => ({ getServerSession: mockGetServerSession }))
 vi.mock('@/lib/auth-options', () => ({ getAuthOptions: () => ({}) }))
 vi.mock('@/server/admin/guard', () => ({ getAdminContext: mockGetAdminContext }))
-vi.mock('@/lib/prisma', () => ({ prisma: { user: { findUnique: mockUserFindUnique } } }))
+vi.mock('@/lib/prisma', () => ({ prisma: { user: { findUnique: mockUserFindUnique }, post: { findMany: async () => [{ id: 'op_post', imageObjectKey: 'post-images/u/k.jpg' }] } } }))
+vi.mock('@/server/seedream/drawn-images', () => ({ seedreamImageIds: async () => new Set(['post-images/u/k.jpg']) }))
 vi.mock('@/server/operator-post-stats/load', () => ({ loadOperatorPostStats: mockLoadStats }))
 
 import { GET } from './route'
@@ -64,8 +65,8 @@ describe('GET /admin/api/post-stats', () => {
     const response = await get('op_post,user_post')
     expect(response.status).toBe(200)
     expect(response.headers.get('cache-control')).toBe('private, no-store')
-    expect(await response.json()).toEqual({ stats: { op_post: STATS } })
-    expect(mockLoadStats).toHaveBeenCalledWith({ postIds: ['op_post', 'user_post'], authorId: null })
+    expect(await response.json()).toEqual({ stats: { op_post: { ...STATS, photoEngine: 'seedream' } } })
+    expect(mockLoadStats).toHaveBeenCalledWith({ postIds: ['op_post', 'user_post'], authorId: null, anyAuthor: true })
   })
 
   it('answers an admin session without an app account', async () => {
@@ -73,13 +74,13 @@ describe('GET /admin/api/post-stats', () => {
     const response = await get('op_post')
     expect(response.status).toBe(200)
     expect(mockUserFindUnique).not.toHaveBeenCalled()
-    expect(mockLoadStats).toHaveBeenCalledWith({ postIds: ['op_post'], authorId: null })
+    expect(mockLoadStats).toHaveBeenCalledWith({ postIds: ['op_post'], authorId: null, anyAuthor: true })
   })
 
   it("limits an operator account to its own posts", async () => {
     signedIn('operator_1', { isOperator: true })
     await get('op_post')
-    expect(mockLoadStats).toHaveBeenCalledWith({ postIds: ['op_post'], authorId: 'operator_1' })
+    expect(mockLoadStats).toHaveBeenCalledWith({ postIds: ['op_post'], authorId: 'operator_1', anyAuthor: false })
   })
 
   it('needs 1 to 20 well-formed ids', async () => {
@@ -89,6 +90,6 @@ describe('GET /admin/api/post-stats', () => {
     expect((await get(Array.from({ length: 21 }, (_, index) => `p${index}`).join(','))).status).toBe(400)
     const deduped = await get('p1,p1, p2 ,')
     expect(deduped.status).toBe(200)
-    expect(mockLoadStats).toHaveBeenLastCalledWith({ postIds: ['p1', 'p2'], authorId: null })
+    expect(mockLoadStats).toHaveBeenLastCalledWith({ postIds: ['p1', 'p2'], authorId: null, anyAuthor: true })
   })
 })

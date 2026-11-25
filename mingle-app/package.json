@@ -61,6 +61,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.34.0",
+    "heic-convert": "2.1.0",
     "lucide-react": "^0.563.0",
     "next": "16.1.6",
     "next-auth": "^4.24.13",
@@ -79,6 +80,7 @@
   "devDependencies": {
     "@react-native/typescript-config": "0.84.0",
     "@tailwindcss/postcss": "^4",
+    "@types/heic-convert": "2.1.0",
     "@types/node": "^20",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19",

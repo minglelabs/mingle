@@ -3,6 +3,7 @@
 import { parseCoinPriceList, type CoinPriceList } from "@/lib/coin-price-list";
 import { useSyncExternalStore } from "react";
 import { buildClientApiPath, detectRuntimePlatform } from "@/lib/api-contract";
+import { reportCoinStoreEvent } from "@/lib/coin-store-diagnostics";
 import { getCoinWalletState, refreshCoinWallet } from "@/lib/coin-wallet-client";
 import {
   isNativeIapBridgeAvailable,
@@ -96,7 +97,11 @@ export async function loadCoinProducts(): Promise<void> {
     const nativePlatform = isNativeIapBridgeAvailable() ? detectRuntimePlatform() : null;
     const query = nativePlatform ? `?platform=${nativePlatform}` : "";
     const response = await fetch(buildClientApiPath(`/coins/products${query}`), { cache: "no-store" });
-    if (!response.ok) throw new Error("coin_products_load_failed");
+    if (!response.ok) {
+      reportCoinStoreEvent("products_http_error", { status: response.status, nativePlatform });
+      setState({ status: "error" });
+      return;
+    }
     const data = await response.json() as {
       platform: string | null;
       products: Omit<CoinProduct, "displayPrice">[];
@@ -122,8 +127,12 @@ export async function loadCoinProducts(): Promise<void> {
     }
     const requestId = `p${++requestSequence}`;
     activeRequestId = requestId;
-    if (!data.platform || !products.length
-      || !postNativeIapGetProducts(products.map((product) => product.productId), requestId)) {
+    const unavailableReason = !data.platform ? "no_platform"
+      : !products.length ? "no_products"
+        : !postNativeIapGetProducts(products.map((product) => product.productId), requestId) ? "no_native_bridge"
+          : null;
+    if (unavailableReason) {
+      reportCoinStoreEvent("store_unavailable", { reason: unavailableReason, platform: data.platform, nativePlatform });
       setState({ channel: "store", status: "unavailable", products, sttCoinsPerMinute });
       return;
     }
@@ -131,11 +140,19 @@ export async function loadCoinProducts(): Promise<void> {
     if (priceTimer) clearTimeout(priceTimer);
     // An app build from before the store never answers: tell the user to update.
     priceTimer = setTimeout(() => {
-      if (activeRequestId === requestId && state.status === "loading") setState({ status: "unavailable" });
+      if (activeRequestId === requestId && state.status === "loading") {
+        reportCoinStoreEvent("store_unavailable", { reason: "store_price_timeout", platform: data.platform });
+        setState({ status: "unavailable" });
+      }
     }, STORE_PRICE_TIMEOUT_MS);
-  } catch {
+  } catch (error) {
+    reportCoinStoreEvent("products_exception", { message: errorMessage(error) });
     setState({ status: "error" });
   }
+}
+
+function errorMessage(error: unknown): string {
+  return (error instanceof Error ? error.message : String(error)).slice(0, 300);
 }
 
 function applyStorePrices(prices: NativeIapProduct[]) {
@@ -146,6 +163,13 @@ function applyStorePrices(prices: NativeIapProduct[]) {
   const products = state.products
     .map((product) => ({ ...product, displayPrice: byId.get(product.productId) ?? null }))
     .filter((product) => product.displayPrice);
+  if (products.length < state.products.length) {
+    // The store did not sell some of our products (not approved, wrong id, region).
+    reportCoinStoreEvent(products.length ? "store_prices_partial" : "store_prices_empty", {
+      requested: state.products.map((product) => product.productId),
+      returned: prices.map((price) => price.productId),
+    });
+  }
   setState({ status: products.length ? "ready" : "error", products });
 }
 
@@ -160,10 +184,15 @@ async function startWebCheckout(productId: string) {
       body: JSON.stringify({ productId, returnPath: `${window.location.pathname}${window.location.search}` }),
     });
     const data = response.ok ? await response.json() as { url?: string } : null;
-    if (!data?.url) throw new Error("coin_checkout_failed");
+    if (!data?.url) {
+      reportCoinStoreEvent("web_checkout_failed", { productId, status: response.status });
+      setState({ purchasingProductId: null, lastResult: { kind: "failed" } });
+      return;
+    }
     // Leaves the app for Polar's hosted checkout; it returns to this page with ?coin_checkout=success.
     window.location.assign(data.url);
-  } catch {
+  } catch (error) {
+    reportCoinStoreEvent("web_checkout_failed", { productId, message: errorMessage(error) });
     setState({ purchasingProductId: null, lastResult: { kind: "failed" } });
   }
 }
@@ -199,9 +228,11 @@ export function startCoinPurchase(productId: string) {
     return;
   }
   if (!postNativeIapPurchase(productId)) {
+    reportCoinStoreEvent("purchase_no_native_bridge", { productId });
     setState({ status: "unavailable" });
     return;
   }
+  reportCoinStoreEvent("purchase_started", { productId });
   setState({ purchasingProductId: productId, lastResult: null });
 }
 
@@ -228,6 +259,14 @@ async function verifyWithServer(event: Extract<NativeIapEvent, { type: "purchase
       return;
     }
     if (!response.ok) {
+      const body = await response.json().catch(() => null) as { error?: unknown } | null;
+      reportCoinStoreEvent("verify_failed", {
+        productId: event.productId,
+        platform: event.platform,
+        restored: event.restored,
+        status: response.status,
+        error: typeof body?.error === "string" ? body.error : null,
+      });
       // 4xx: the server will never grant this transaction (invalid proof, or already
       // granted to another account), so finishing it is the only way to stop the
       // replay and unblock the product. 5xx/network: keep it for the next restore.
@@ -243,7 +282,13 @@ async function verifyWithServer(event: Extract<NativeIapEvent, { type: "purchase
       lastResult: data.status === "granted" ? { kind: "success", coins: data.grantedCoins } : state.lastResult,
     });
     await refreshCoinWallet({ force: true });
-  } catch {
+  } catch (error) {
+    reportCoinStoreEvent("verify_exception", {
+      productId: event.productId,
+      platform: event.platform,
+      restored: event.restored,
+      message: errorMessage(error),
+    });
     setState({ purchasingProductId: null, lastResult: event.restored ? state.lastResult : { kind: "failed" } });
   } finally {
     verifying.delete(event.transactionId);
@@ -269,16 +314,19 @@ export function startCoinPurchaseListener(): () => void {
       return;
     }
     if (event.type === "purchase_cancelled") {
+      reportCoinStoreEvent("purchase_cancelled", { productId: event.productId });
       setState({ purchasingProductId: null });
       return;
     }
     if (event.code === "products_unavailable") {
       if (!event.requestId || event.requestId === activeRequestId) {
+        reportCoinStoreEvent("store_products_unavailable", { message: event.message ?? null });
         if (priceTimer) clearTimeout(priceTimer);
         setState({ status: "error" });
       }
       return;
     }
+    reportCoinStoreEvent("purchase_error", { productId: event.productId, code: event.code, message: event.message ?? null });
     setState({ purchasingProductId: null, lastResult: { kind: "failed" } });
   });
 }

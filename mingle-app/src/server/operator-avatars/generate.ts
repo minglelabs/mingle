@@ -2,8 +2,14 @@ import { prisma } from '@/lib/prisma'
 import type { AdminContext } from '@/server/admin/guard'
 import { ageOn } from '@/server/operator-auto-reply/generate'
 import { setOperatorAvatarFromBytes } from '@/server/operators/operator-avatar'
+import { storeAvatarCandidate } from '@/server/operators/avatar-candidate'
 import { chatgptPoolImage, chatgptPoolKey } from '@/server/chatgpt-pool/client'
-import { pickAvatarSpec, seededRandom, type AvatarPersona, type AvatarSpec } from './taxonomy'
+import { requestSeedreamImage, type ImageEngine } from '@/server/seedream/client'
+import { markSeedreamImage } from '@/server/seedream/drawn-images'
+import { AVATAR_SPEC_VERSION, describeAccountFace, describeAccountLook, pickAvatarSpec, seededRandom, type AvatarPersona, type AvatarSpec } from './taxonomy'
+import { referenceRecreateLines, type ReferenceKind } from '@/server/reference-library/library'
+import type { ReferenceAttributes } from '@/server/reference-library/classify'
+import { referenceDirectionLines, referencePersonaLine } from '@/server/reference-library/direction'
 
 /**
  * AI profile photos for operator accounts: pick a photo spec from the
@@ -30,6 +36,9 @@ const PROXY_UNREACHABLE = 'proxy_unreachable'
 
 /** Drawn by the ChatGPT pool on the home Windows PC (src/server/chatgpt-pool/client.ts). */
 export const CHATGPT_POOL_IMAGE_MODEL = 'chatgpt-pool'
+
+/** Seedream 5.5 (src/server/seedream/client.ts): only when staff pick it for one photo, never configured as the default. */
+export const SEEDREAM_IMAGE_MODEL = 'seedream'
 
 /**
  * OPERATOR_AVATAR_IMAGE_MODEL wins; otherwise a server with CHATGPT_POOL_KEY
@@ -172,6 +181,11 @@ export async function requestAvatarImage(
   const reference = options.reference
   const model = options.model ?? resolveAvatarImageModel()
   if (model === CHATGPT_POOL_IMAGE_MODEL) return requestPoolImage(prompt, options.fetchImpl, reference)
+  if (model === SEEDREAM_IMAGE_MODEL) {
+    const drawn = await requestSeedreamImage(prompt, { references: reference ? [reference] : [], fetchImpl: options.fetchImpl })
+    if (drawn.ok) return { ok: true, bytes: drawn.bytes, model: drawn.model }
+    return { ok: false, error: drawn.error === 'seedream_unconfigured' ? 'image_unavailable' : drawn.error, detail: drawn.detail ?? drawn.error }
+  }
   if (!isProxyImageModel(model)) return { ok: false, error: 'image_unavailable', detail: IMAGE_API_DISABLED }
   const signal = AbortSignal.timeout(isChatgptAppImageModel(model) ? CHATGPT_APP_TIMEOUT_MS : CALL_TIMEOUT_MS)
   try {
@@ -240,23 +254,65 @@ export async function planOperatorAvatar(
 export async function generateOperatorAvatar(
   ctx: AdminContext | null,
   userId: string,
-  options: { nonce?: string; now?: Date; fetchImpl?: typeof fetch; feedback?: string | null } = {},
+  options: {
+    nonce?: string; now?: Date; fetchImpl?: typeof fetch; feedback?: string | null; reference?: AvatarReference
+    /** A photo from the reference library: the photo is that shot redrawn (a person with this account's own face; a thing as another photo of its kind). */
+    libraryReference?: { reference: AvatarReference; kind: ReferenceKind; note?: string | null; attributes?: ReferenceAttributes | null }
+    /** A live account: the photo waits for staff review instead of replacing the current one (avatar-candidate.ts). */
+    candidate?: boolean
+    /** 'seedream' when staff picked Seedream 5.5 for this photo (admin switch only, never a default). */
+    engine?: ImageEngine
+  } = {},
 ): Promise<AvatarGenerationResult> {
   try {
     const now = options.now ?? new Date()
     const persona = await loadAvatarPersona(userId, now)
     if (!persona) return { ok: false, error: 'not_operator' }
 
-    const spec = pickAvatarSpec(persona, seededRandom(`${userId}:${options.nonce ?? now.getTime()}`))
+    const look = describeAccountLook(persona, seededRandom(`${userId}:look`))
+    const library = options.libraryReference
+    const spec: AvatarSpec = library
+      ? {
+        version: AVATAR_SPEC_VERSION,
+        // face: later post photos keep this face (post-image.ts); body/object: the profile shows no face.
+        category: library.kind === 'face' ? 'face' : library.kind === 'person' ? 'body' : library.kind === 'group' ? 'group' : 'object',
+        subtype: 'reference',
+        labelKo: `레퍼런스 사진 · ${{ face: '1명 얼굴', person: '1명 얼굴 없음', group: '여러 명', thing: '사람 없음' }[library.kind]}`,
+        attributes: { source: 'reference_library', referenceKind: library.kind },
+        prompt: [
+          // Hair stays as in the reference: only the face and visible body become the persona's.
+          ...referenceRecreateLines({
+            kind: library.kind, look: describeAccountFace(persona, seededRandom(`${userId}:look`)), note: library.note,
+            direction: referenceDirectionLines(library.attributes), persona: referencePersonaLine(persona),
+          }),
+          'Vertical 3:4 image, one single photo. No watermarks, logos, borders or frames.',
+        ].join('\n'),
+      }
+      : pickAvatarSpec(persona, seededRandom(`${userId}:${options.nonce ?? now.getTime()}`))
     const feedback = options.feedback?.trim()
-    const prompt = feedback ? `${spec.prompt}\nStaff feedback on the previous photo of this person, to follow: ${feedback}` : spec.prompt
-    const image = await requestAvatarImage(prompt, { fetchImpl: options.fetchImpl })
+    const prompt = library ? spec.prompt : [
+      spec.prompt,
+      ...(feedback ? [`Staff feedback on the previous photo of this person, to follow: ${feedback}`] : []),
+      ...(options.reference ? ['The attached photo is a reference staff added to their feedback: use it the way the feedback says (pose, framing, outfit, place, light, mood or style). The face of anyone in it must not be copied: the person keeps the look described above.'] : []),
+    ].join('\n')
+    const image = await requestAvatarImage(prompt, {
+      fetchImpl: options.fetchImpl, reference: library?.reference ?? options.reference,
+      ...(options.engine === 'seedream' ? { model: SEEDREAM_IMAGE_MODEL } : {}),
+    })
     if (!image.ok) return image
+
+    if (options.candidate) {
+      const candidate = await storeAvatarCandidate(userId, image.bytes, spec)
+      if (!candidate.ok) return { ok: false, error: 'image_storage_failed', detail: candidate.error }
+      if (options.engine === 'seedream') await markSeedreamImage(candidate.image)
+      return { ok: true, image: candidate.image, spec }
+    }
 
     const stored = await setOperatorAvatarFromBytes(ctx, userId, image.bytes, {
       generated: true, category: spec.category, subtype: spec.subtype, model: image.model,
     })
     if (!stored.ok) return { ok: false, error: 'image_storage_failed', detail: stored.error }
+    if (options.engine === 'seedream') await markSeedreamImage(stored.image)
 
     await prisma.operatorAccount.updateMany({
       where: { userId },

@@ -1,15 +1,23 @@
+import type { OperatorPostStats } from '@/lib/operator-post-stats'
+import { loadOperatorPostStats } from '@/server/operator-post-stats/load'
+import { listReferencePhotos, releaseReferenceForImage, releaseReferencePhoto } from '@/server/reference-library/library'
+import { avatarReferencesByUser, claimAvatarReference, releaseOtherAvatarReferences, type AvatarLibraryReference } from '@/server/reference-library/avatar-reference'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { zipInterestLanguages, type InterestLanguage } from '@/lib/interest-languages'
+import { canonicalizeSttLanguageCode } from '@/lib/stt-languages'
 import { writeAdminAudit } from '@/server/admin/audit'
 import type { AdminContext } from '@/server/admin/guard'
 import { ageOn } from '@/server/operator-auto-reply/generate'
-import { canDrawImagesHere, generateOperatorAvatar, planOperatorAvatar } from '@/server/operator-avatars/generate'
+import { canDrawImagesHere, generateOperatorAvatar, planOperatorAvatar, type AvatarReference } from '@/server/operator-avatars/generate'
 import { generateReservePosts, isKoreaCountry, pickReserveTopics, reservePosterProfile, rewriteReservePostText } from '@/server/operator-post-reserve/generate'
-import { drawReservePostImage } from '@/server/operator-post-reserve/post-image'
+import { drawReservePostImage, libraryPhotoForPost, PHOTO_NO_REFERENCE, type RedrawContext } from '@/server/operator-post-reserve/post-image'
 import { MAX_RESERVE_EXTRA_IMAGES, reserveExtraImages, type ReserveExtraImage } from '@/server/operator-post-reserve/extra-images'
 import { decodePostPhoto } from '@/server/operator-post-reserve/post-photo'
+import { pickScheduledPublishAt } from '@/server/operator-post-reserve/schedule'
 import { loadExistingReserveTexts, loadReservePersona, PHOTO_REQUESTED, publishReservePostNow } from '@/server/operator-post-reserve/worker'
+import { applyAvatarCandidate, candidateDrawing, discardAvatarCandidate } from '@/server/operators/avatar-candidate'
+import { seedreamConfigured, type ImageEngine } from '@/server/seedream/client'
 
 /**
  * Staff review of operator profiles and their pre-written posts. A profile
@@ -24,6 +32,8 @@ export const REVIEW_ITEMS_PER_PAGE = 20
 const PHOTO_DRAW_FAILED = 'photo_draw_failed'
 /** The pool is drawing the photo in the background (the row is `regenerating`). */
 const PHOTO_DRAWING = 'photo_drawing'
+/** 재제작 is rewriting the text (the row is `regenerating`); the photo is drawn after. */
+const TEXT_REWRITING = 'text_rewriting'
 
 /**
  * The 재제작 / drawing jobs this process is running right now. A row marked
@@ -31,7 +41,9 @@ const PHOTO_DRAWING = 'photo_drawing'
  * and nothing will ever finish it, so it is put back instead of answering
  * "busy": busy means a job is really running.
  */
-const runningHere = new Set<string>()
+// On globalThis: every route and page module of this process sees the same jobs,
+// so a page or poll served by another bundle never mistakes a running job for a cut-off one.
+const runningHere: Set<string> = ((globalThis as { __operatorReviewJobs?: Set<string> }).__operatorReviewJobs ??= new Set<string>())
 const postJob = (reserveId: string) => `post:${reserveId}`
 const profileJob = (userId: string) => `profile:${userId}`
 
@@ -44,7 +56,7 @@ async function releaseIfCutOff(reserveId: string): Promise<boolean> {
   })
   const rewriting = await prisma.operatorPostReserve.updateMany({
     where: { id: reserveId, state: 'regenerating' },
-    data: { state: 'review' },
+    data: { state: 'review', error: null },
   })
   return drawing.count + rewriting.count > 0
 }
@@ -61,14 +73,15 @@ async function releaseProfileIfCutOff(userId: string): Promise<boolean> {
  * puts the row back in review with the photo, or marked failed so the draw
  * button stays. Never throws.
  */
-async function drawPostPhotoInBackground(reserveId: string, operatorUserId: string, description: string, onDrawn: () => Promise<unknown>, onFailed: () => Promise<unknown>): Promise<void> {
+async function drawPostPhotoInBackground(reserveId: string, operatorUserId: string, description: string, onDrawn: () => Promise<unknown>, onFailed: () => Promise<unknown>, staffReference?: AvatarReference, context?: RedrawContext, drawOptions?: { fromLibrary?: boolean; engine?: ImageEngine }): Promise<void> {
   try {
-    const image = await drawReservePostImage(operatorUserId, description)
+    let noReference = false
+    const image = await drawReservePostImage(operatorUserId, description, staffReference, context, { ...drawOptions, onNoReference: () => { noReference = true } })
     await prisma.operatorPostReserve.updateMany({
       where: { id: reserveId, state: 'regenerating' },
       data: image
         ? { state: 'review', imageObjectKey: image.objectKey, imageWidth: image.width, imageHeight: image.height, error: null }
-        : { state: 'review', error: PHOTO_DRAW_FAILED },
+        : { state: 'review', error: noReference ? PHOTO_NO_REFERENCE : PHOTO_DRAW_FAILED },
     })
     await (image ? onDrawn() : onFailed())
   } catch (error) {
@@ -92,7 +105,7 @@ export async function releaseOrphanedDrawings(): Promise<number> {
       data: { state: 'review', error: PHOTO_DRAW_FAILED },
     })
     // A rewrite cut off mid-way keeps its old text; it only goes back to review.
-    const rewrites = await prisma.operatorPostReserve.updateMany({ where: { state: 'regenerating' }, data: { state: 'review' } })
+    const rewrites = await prisma.operatorPostReserve.updateMany({ where: { state: 'regenerating' }, data: { state: 'review', error: null } })
     // 게시 runs in the background too (publishReservePostNow); one cut off by a
     // restart goes back to review. Queued posts always carry a releaseAt, so
     // only posts taken from review match. A post that did go out is matched by
@@ -119,20 +132,43 @@ export async function getReviewPost(reserveId: string): Promise<ReviewPost | nul
   return row ? toReviewPost(row) : null
 }
 
+/** The reference-library photo a post photo was drawn from, for its card to show after a redraw. */
+export async function reviewPostReference(imageObjectKey: string | null | undefined): Promise<ReviewReference | null> {
+  if (!imageObjectKey) return null
+  const photo = (await listReferencePhotos().catch(() => [])).find((item) => item.usedBy?.imageKey === imageObjectKey)
+  return photo ? { id: photo.id, objectKey: photo.objectKey } : null
+}
+
 /** A profile's review state and photo, for its card to poll while a new photo is drawn. */
-export async function getReviewProfileState(userId: string): Promise<{ profileState: string; image: string | null } | null> {
-  const account = await prisma.operatorAccount.findUnique({ where: { userId }, select: { reviewState: true, user: { select: { image: true } } } })
+export async function getReviewProfileState(userId: string): Promise<{ profileState: string; image: string | null; reference: ReviewReference | null } | null> {
+  const state = await readReviewProfileState(userId)
+  if (!state) return null
+  const reference = (await avatarReferencesByUser([userId])).get(userId)
+  return { ...state, reference: reference ? { id: reference.id, objectKey: reference.objectKey } : null }
+}
+
+async function readReviewProfileState(userId: string): Promise<{ profileState: string; image: string | null } | null> {
+  const account = await prisma.operatorAccount.findUnique({ where: { userId }, select: { reviewState: true, pendingImage: true, pendingDrawingAt: true, user: { select: { image: true } } } })
   if (!account) return null
+  // A live account's new photo: the card shows the photo waiting for review.
+  if (account.reviewState === 'approved') {
+    if (account.pendingDrawingAt && !candidateDrawing(account.pendingDrawingAt)) {
+      await prisma.operatorAccount.updateMany({ where: { userId, pendingDrawingAt: account.pendingDrawingAt }, data: { pendingDrawingAt: null } })
+    }
+    return { profileState: candidateDrawing(account.pendingDrawingAt) ? 'drawing' : 'pending', image: account.pendingImage }
+  }
   const cutOff = account.reviewState === 'drawing' && (await releaseProfileIfCutOff(userId))
   return { profileState: cutOff ? 'pending' : account.reviewState, image: account.user.image }
 }
 const MAX_FEEDBACK_LENGTH = 1000
 
 /** `draw`: have the post's photo drawn by hand (in ChatGPT) without changing the text. */
-export type ReviewAction = 'publish' | 'delete' | 'regenerate' | 'draw'
+/** `redraw_photo`: draw the photo again (text untouched), with the text, persona and the photo it replaces. */
+/** `redraw_reference`: the same, drawn from an unused reference-library photo that fits the post. */
+export type ReviewAction = 'publish' | 'delete' | 'regenerate' | 'draw' | 'redraw_photo' | 'redraw_reference'
 
 export function parseReviewAction(value: unknown): ReviewAction | null {
-  return value === 'publish' || value === 'delete' || value === 'regenerate' || value === 'draw' ? value : null
+  return value === 'publish' || value === 'delete' || value === 'regenerate' || value === 'draw' || value === 'redraw_photo' || value === 'redraw_reference' ? value : null
 }
 
 export function normalizeReviewFeedback(value: unknown): string | null {
@@ -160,8 +196,16 @@ export type ReviewPost = {
   photoRequested: boolean
   /** The pool is drawing the photo right now (the card polls). */
   photoDrawing: boolean
+  /** Scheduled by staff: the post goes out by itself at this time. */
+  scheduledAt: string | null
+  /** 재제작 is rewriting the text right now (the card polls; the photo follows). */
+  rewriting: boolean
   /** The pool's last try at the photo failed; drawing it again is allowed. */
   photoDrawFailed: boolean
+  /** The automatic photo waits for a fitting reference-library photo (none was left to draw it from). */
+  photoNoReference: boolean
+  /** The time staff set for the post to be dated at when published (ISO); null: a random time between writing and 게시. */
+  publishAt: string | null
 }
 
 export type ReviewProfile = {
@@ -178,6 +222,10 @@ export type ReviewProfile = {
   personaGender: string | null
   profileState: string
   profileFeedback: string | null
+  /** A live account's new profile photo waiting for review (`image` = the current one); null for a new account. */
+  candidate: { image: string | null; drawing: boolean } | null
+  /** The reference-library photo the profile photo (or the new one under review) was drawn from. */
+  reference: ReviewReference | null
 }
 
 export type ReviewAuthor = {
@@ -188,7 +236,10 @@ export type ReviewAuthor = {
 /** One card of the review timeline: a new account (at sign-up) or a post (at creation). `pinned`: staff moved it up. */
 export type ReviewItem =
   | { kind: 'profile'; key: string; at: string; pinned: boolean; profile: ReviewProfile }
-  | { kind: 'post'; key: string; at: string; pinned: boolean; post: ReviewPost; author: ReviewAuthor }
+  | { kind: 'post'; key: string; at: string; pinned: boolean; fromReference: boolean; reference: ReviewReference | null; pastStats: OperatorPostStats | null; post: ReviewPost; author: ReviewAuthor }
+
+/** The reference-library photo a post photo was drawn from, for staff to compare. */
+export type ReviewReference = { id: string; objectKey: string }
 
 export type ReviewQueue = {
   items: ReviewItem[]
@@ -200,13 +251,13 @@ export type ReviewQueue = {
 
 const POST_SELECT = {
   id: true, text: true, language: true, topic: true, state: true, imagePrompt: true,
-  imageObjectKey: true, imageWidth: true, imageHeight: true, extraImages: true, reviewFeedback: true, error: true,
+  imageObjectKey: true, imageWidth: true, imageHeight: true, extraImages: true, reviewFeedback: true, error: true, releaseAt: true,
 } as const
 
 function toReviewPost(row: {
   id: string; text: string; language: string | null; topic: string | null; state: string; imagePrompt: string | null
   imageObjectKey: string | null; imageWidth: number | null; imageHeight: number | null; extraImages: unknown
-  reviewFeedback: string | null; error: string | null
+  reviewFeedback: string | null; error: string | null; releaseAt?: Date | null
 }): ReviewPost {
   const photo = row.imagePrompt ? decodePostPhoto(row.imagePrompt) : null
   return {
@@ -225,9 +276,17 @@ function toReviewPost(row: {
     error: row.error,
     photoRequested: !row.imageObjectKey && row.error === PHOTO_REQUESTED,
     photoDrawing: row.state === 'regenerating' && row.error === PHOTO_DRAWING,
+    rewriting: row.state === 'regenerating' && row.error !== PHOTO_DRAWING,
     photoDrawFailed: !row.imageObjectKey && row.error === PHOTO_DRAW_FAILED,
+    photoNoReference: !row.imageObjectKey && row.error === PHOTO_NO_REFERENCE,
+    // In review, release_at only holds the (past) time staff set; once scheduled, it is when the post goes out.
+    publishAt: row.state !== 'scheduled' && row.releaseAt ? row.releaseAt.toISOString() : null,
+    scheduledAt: row.state === 'scheduled' && row.releaseAt ? row.releaseAt.toISOString() : null,
   }
 }
+
+/** For tests: how a row shows on its card. */
+export const toReviewPostForTest = toReviewPost
 
 const REVIEW_POST_STATES = ['review', 'regenerating']
 
@@ -239,40 +298,45 @@ const REVIEW_POST_STATES = ['review', 'regenerating']
  * of the same group, so the queue deals one post per account in turn.
  * `authorAt`: the author's sign-up time, the order within a round.
  */
-type TimelineRow = { rank: number; late: boolean; round: number; authorAt: Date; kindOrder: number; kind: 'profile' | 'post'; id: string; at: Date; userId: string }
+type TimelineRow = { rank: number; ref: number; late: boolean; round: number; authorAt: Date; kindOrder: number; kind: 'profile' | 'post'; id: string; at: Date; userId: string }
 
 /** Rank of an item staff did not move: after every ranked one. */
 const UNRANKED = 2147483647
 
 // A post's round counts every reserve row of its author (any state), so it
 // does not shift when staff answer other posts and paging stays stable.
+/** Post photos drawn from the reference library (library.ts, markReferenceImage). */
+const REFERENCE_IMAGE_KEYS_SQL = `SELECT e->'usedBy'->>'imageKey' FROM app.app_admin_settings s, jsonb_array_elements(s.value->'items') e WHERE s.key = 'reference_library' AND e->'usedBy'->>'imageKey' IS NOT NULL`
+
 const TIMELINE_SQL = `
-  SELECT rank, late, round, "authorAt", "kindOrder", kind, id, at, "userId" FROM (
-    SELECT COALESCE(o.review_rank, ${UNRANKED})::bigint AS rank, false AS late, 1::bigint AS round, u.created_at AS "authorAt", 0 AS "kindOrder", 'profile' AS kind, u.id, u.created_at AS at, u.id AS "userId"
+  SELECT rank, ref, late, round, "authorAt", "kindOrder", kind, id, at, "userId" FROM (
+    SELECT COALESCE(o.review_rank, ${UNRANKED})::bigint AS rank, 1 AS ref, false AS late, 1::bigint AS round, u.created_at AS "authorAt", 0 AS "kindOrder", 'profile' AS kind, u.id, u.created_at AS at, u.id AS "userId"
     FROM app.app_users u JOIN app.app_operator_accounts o ON o.user_id = u.id
-    WHERE u.is_operator AND NOT u.is_deleted AND o.review_state <> 'approved'
+    WHERE u.is_operator AND NOT u.is_deleted AND (o.review_state <> 'approved' OR o.pending_image IS NOT NULL OR o.pending_drawing_at IS NOT NULL)
     UNION ALL
-    SELECT rank, late, round, "authorAt", 1 AS "kindOrder", 'post' AS kind, id, at, "userId" FROM (
-      SELECT COALESCE(r.review_rank, ${UNRANKED})::bigint AS rank, r.image_object_key IS NULL AS late,
+    SELECT rank, ref, late, round, "authorAt", 1 AS "kindOrder", 'post' AS kind, id, at, "userId" FROM (
+      SELECT COALESCE(r.review_rank, ${UNRANKED})::bigint AS rank,
+        CASE WHEN r.image_object_key IN (${REFERENCE_IMAGE_KEYS_SQL}) THEN 0 ELSE 1 END AS ref,
+        r.image_object_key IS NULL AS late,
         ROW_NUMBER() OVER (PARTITION BY r.operator_user_id, r.image_object_key IS NULL ORDER BY r.created_at, r.id) AS round,
         u.created_at AS "authorAt", r.id, r.created_at AS at, r.state, u.is_deleted, r.operator_user_id AS "userId"
       FROM app.app_operator_post_reserve r JOIN app.app_users u ON u.id = r.operator_user_id
     ) p
-    WHERE state IN ('review', 'regenerating') AND NOT is_deleted
+    WHERE state IN ('review', 'regenerating', 'scheduled') AND NOT is_deleted
   ) t`
 
-/** Cursor = `<rank>|<0|1 late>|<round>|<author iso time>|<0 profile, 1 post>|<id>` of the last item shown. */
+/** Cursor = `<rank>|<0 reference, 1 other>|<0|1 late>|<round>|<author iso time>|<0 profile, 1 post>|<id>` of the last item shown. */
 export function encodeReviewCursor(row: TimelineRow): string {
-  return `${row.rank}|${row.late ? 1 : 0}|${row.round}|${row.authorAt.toISOString()}|${row.kindOrder}|${row.id}`
+  return `${row.rank}|${row.ref}|${row.late ? 1 : 0}|${row.round}|${row.authorAt.toISOString()}|${row.kindOrder}|${row.id}`
 }
 
-export function decodeReviewCursor(value: string | undefined): Pick<TimelineRow, 'rank' | 'late' | 'round' | 'authorAt' | 'kindOrder' | 'id'> | null {
-  const [rank, late, round, iso, kindOrder, id] = (value ?? '').split('|')
+export function decodeReviewCursor(value: string | undefined): Pick<TimelineRow, 'rank' | 'ref' | 'late' | 'round' | 'authorAt' | 'kindOrder' | 'id'> | null {
+  const [rank, ref, late, round, iso, kindOrder, id] = (value ?? '').split('|')
   const authorAt = new Date(iso ?? '')
   const rankNumber = Number(rank)
   const roundNumber = Number(round)
-  if (!id || !Number.isInteger(rankNumber) || (late !== '0' && late !== '1') || (kindOrder !== '0' && kindOrder !== '1') || !Number.isInteger(roundNumber) || roundNumber < 0 || Number.isNaN(authorAt.getTime())) return null
-  return { rank: rankNumber, late: late === '1', round: roundNumber, authorAt, kindOrder: Number(kindOrder), id }
+  if (!id || !Number.isInteger(rankNumber) || (ref !== '0' && ref !== '1') || (late !== '0' && late !== '1') || (kindOrder !== '0' && kindOrder !== '1') || !Number.isInteger(roundNumber) || roundNumber < 0 || Number.isNaN(authorAt.getTime())) return null
+  return { rank: rankNumber, ref: Number(ref), late: late === '1', round: roundNumber, authorAt, kindOrder: Number(kindOrder), id }
 }
 
 /**
@@ -284,49 +348,72 @@ export function decodeReviewCursor(value: string | undefined): Pick<TimelineRow,
  * Paged by cursor, so items answered on one page never push unseen ones
  * past the next.
  */
-export async function listReviewQueue(options: { cursor?: string; now?: Date; userId?: string } = {}): Promise<ReviewQueue> {
+export async function listReviewQueue(options: { cursor?: string; now?: Date; userId?: string; kind?: ReviewItem['kind'] } = {}): Promise<ReviewQueue> {
   const now = options.now ?? new Date()
   const after = decodeReviewCursor(options.cursor)
-  const order = `ORDER BY rank, late, round, "authorAt", "kindOrder", id`
+  // Posts drawn from the reference library come first of all, then everything with its photo
+  // ready before posts still waiting for one, pinned ones first within each (staff, 2026-11-25).
+  const order = `ORDER BY ref, late, rank, round, "authorAt", "kindOrder", id`
   // `userId`: one account's own items only (its profile page).
   const conditions: string[] = []
   const params: unknown[] = []
   if (after) {
-    conditions.push(`(rank, late, round, "authorAt", "kindOrder", id) > ($1::bigint, $2::boolean, $3::bigint, $4::timestamp, $5::int, $6::text)`)
-    params.push(after.rank, after.late, after.round, after.authorAt, after.kindOrder, after.id)
+    conditions.push(`(ref, late, rank, round, "authorAt", "kindOrder", id) > ($2::int, $3::boolean, $1::bigint, $4::bigint, $5::timestamp, $6::int, $7::text)`)
+    params.push(after.rank, after.ref, after.late, after.round, after.authorAt, after.kindOrder, after.id)
   }
   if (options.userId) {
     params.push(options.userId)
     conditions.push(`"userId" = $${params.length}::text`)
   }
+  // `kind`: only accounts or only posts (the review page's two tabs).
+  if (options.kind) {
+    params.push(options.kind)
+    conditions.push(`kind = $${params.length}::text`)
+  }
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
   const rows = (await prisma.$queryRawUnsafe<TimelineRow[]>(`${TIMELINE_SQL} ${where} ${order} LIMIT ${REVIEW_ITEMS_PER_PAGE + 1}`, ...params))
-    .map((row) => ({ ...row, rank: Number(row.rank), round: Number(row.round), kindOrder: Number(row.kindOrder) }))
+    .map((row) => ({ ...row, rank: Number(row.rank), ref: Number(row.ref), round: Number(row.round), kindOrder: Number(row.kindOrder) }))
   const page = rows.slice(0, REVIEW_ITEMS_PER_PAGE)
 
   const profileIds = page.filter((row) => row.kind === 'profile').map((row) => row.id)
   const postIds = page.filter((row) => row.kind === 'post').map((row) => row.id)
   const [totalProfiles, totalPosts, users, posts] = await Promise.all([
-    prisma.operatorAccount.count({ where: { reviewState: { not: 'approved' }, user: { isOperator: true, isDeleted: false } } }),
-    prisma.operatorPostReserve.count({ where: { state: { in: REVIEW_POST_STATES }, operatorUser: { isDeleted: false } } }),
+    prisma.operatorAccount.count({ where: { OR: [{ reviewState: { not: 'approved' } }, { pendingImage: { not: null } }, { pendingDrawingAt: { not: null } }], user: { isOperator: true, isDeleted: false } } }),
+    prisma.operatorPostReserve.count({ where: { state: { in: [...REVIEW_POST_STATES, 'scheduled'] }, operatorUser: { isDeleted: false } } }),
     prisma.user.findMany({
       where: { id: { in: profileIds } },
       select: {
         id: true, name: true, handle: true, image: true, bio: true, birthDate: true,
         locationCity: true, locationCountry: true, primaryLanguages: true, interestLanguages: true, interestLanguageLevels: true,
-        operatorAccount: { select: { personaGender: true, reviewState: true, reviewFeedback: true } },
+        operatorAccount: { select: { personaGender: true, reviewState: true, reviewFeedback: true, pendingImage: true, pendingDrawingAt: true } },
       },
     }),
     prisma.operatorPostReserve.findMany({
       where: { id: { in: postIds } },
       select: {
         ...POST_SELECT,
+        postId: true,
         operatorUser: { select: { id: true, name: true, handle: true, image: true, primaryLanguages: true, interestLanguages: true, interestLanguageLevels: true, operatorAccount: { select: { reviewState: true } } } },
       },
     }),
   ])
   const usersById = new Map(users.map((user) => [user.id, user]))
   const postsById = new Map(posts.map((post) => [post.id, post]))
+  // A post taken down back into review keeps what it did while it was up (조회, 좋아요 …).
+  const publishedIds = posts.flatMap((post) => (post.postId ? [post.postId] : []))
+  const pastStats = publishedIds.length
+    ? await loadOperatorPostStats({ postIds: publishedIds }).catch(() => new Map<string, OperatorPostStats>())
+    : new Map<string, OperatorPostStats>()
+  // The library photo behind each reference-drawn post photo on this page.
+  const referenceByImage = new Map<string, ReviewReference>()
+  if (page.some((row) => row.kind === 'post' && Number(row.ref) === 0)) {
+    for (const photo of await listReferencePhotos().catch(() => [])) {
+      if (photo.usedBy?.imageKey) referenceByImage.set(photo.usedBy.imageKey, { id: photo.id, objectKey: photo.objectKey })
+    }
+  }
+
+  // The library photo behind each profile photo on this page.
+  const avatarReferences = profileIds.length ? await avatarReferencesByUser(profileIds) : new Map<string, ReviewReference>()
 
   const items: ReviewItem[] = []
   for (const row of page) {
@@ -351,6 +438,13 @@ export async function listReviewQueue(options: { cursor?: string; now?: Date; us
           personaGender: user.operatorAccount?.personaGender ?? null,
           profileState: user.operatorAccount?.reviewState ?? 'approved',
           profileFeedback: user.operatorAccount?.reviewFeedback ?? null,
+          candidate: user.operatorAccount?.reviewState === 'approved'
+            ? { image: user.operatorAccount.pendingImage, drawing: candidateDrawing(user.operatorAccount.pendingDrawingAt, now) }
+            : null,
+          reference: (() => {
+            const found = avatarReferences.get(user.id)
+            return found ? { id: found.id, objectKey: found.objectKey } : null
+          })(),
         },
       })
     } else {
@@ -358,7 +452,9 @@ export async function listReviewQueue(options: { cursor?: string; now?: Date; us
       if (!post) continue
       const author = post.operatorUser
       items.push({
-        kind: 'post', key, at, pinned: row.rank !== UNRANKED,
+        kind: 'post', key, at, pinned: row.rank !== UNRANKED, fromReference: row.ref === 0,
+        reference: post.imageObjectKey ? referenceByImage.get(post.imageObjectKey) ?? null : null,
+        pastStats: post.postId ? pastStats.get(post.postId) ?? null : null,
         post: toReviewPost(post),
         author: {
           userId: author.id, name: author.name, handle: author.handle, image: author.image, primaryLanguages: author.primaryLanguages,
@@ -378,9 +474,68 @@ export async function listReviewQueue(options: { cursor?: string; now?: Date; us
   }
 }
 
+/**
+ * A live account's profile photo: 재제작 draws a new one for review (also how
+ * the account page sends one), 게시 takes it, 삭제 passes on it. The account
+ * and its current photo are never touched until staff take the new one.
+ */
+/** A 레퍼런스로 재제작 of a profile photo: the library photo it is drawn from, or what to upload when none fits. */
+async function claimProfileReference(userId: string, fromLibrary: boolean): Promise<
+  | { ok: true; library: { id: string; libraryReference: AvatarLibraryReference } | null }
+  | { ok: false; error: 'no_reference'; detail: string }
+> {
+  if (!fromLibrary) return { ok: true, library: null }
+  const claimed = await claimAvatarReference(userId)
+  return claimed.ok ? { ok: true, library: claimed } : { ok: false, error: 'no_reference', detail: claimed.need }
+}
+
+async function reviewAvatarCandidate(
+  ctx: AdminContext | null,
+  userId: string,
+  action: ReviewAction,
+  feedback: string | null,
+  reference?: AvatarReference,
+  engine: ImageEngine = 'pool',
+): Promise<ProfileReviewResult> {
+  const account = await prisma.operatorAccount.findUnique({ where: { userId }, select: { pendingImage: true, pendingDrawingAt: true } })
+  const drawing = candidateDrawing(account?.pendingDrawingAt)
+  if (action === 'publish') {
+    if (drawing) return { ok: false, error: 'busy' }
+    const taken = await applyAvatarCandidate(ctx, userId)
+    return taken.ok ? { ok: true, state: 'approved', image: taken.image } : { ok: false, error: 'already_approved' }
+  }
+  if (action === 'delete') {
+    const discarded = await discardAvatarCandidate(ctx, userId)
+    return discarded.ok ? { ok: true, state: 'deleted' } : { ok: false, error: 'already_approved' }
+  }
+  if (action !== 'regenerate' && action !== 'redraw_reference') return { ok: false, error: 'already_approved' }
+  if (drawing) return { ok: false, error: 'busy' }
+  if (engine === 'seedream' ? !seedreamConfigured() : !canDrawImagesHere()) return { ok: false, error: engine === 'seedream' ? 'seedream_unconfigured' : 'regenerate_failed' }
+  const claimed = await claimProfileReference(userId, action === 'redraw_reference')
+  if (!claimed.ok) return claimed
+  const library = claimed.library
+  await prisma.operatorAccount.update({ where: { userId }, data: { pendingDrawingAt: new Date(), reviewFeedback: feedback } })
+  runningHere.add(profileJob(userId))
+  void (async () => {
+    let drawnOk = false
+    try {
+      const drawn = await generateOperatorAvatar(ctx, userId, { feedback, reference, candidate: true, engine, ...(library ? { libraryReference: library.libraryReference } : {}) })
+      drawnOk = drawn.ok
+      await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'candidate_regenerate', feedback, drawn: drawn.ok, fromLibrary: Boolean(library) } })
+    } catch (error) {
+      console.warn('[operator-review] background_candidate_failed', { userId, error: error instanceof Error ? error.name : 'unknown' })
+    } finally {
+      if (library && !drawnOk) await releaseReferencePhoto(library.id).catch(() => {})
+      await prisma.operatorAccount.updateMany({ where: { userId }, data: { pendingDrawingAt: null } }).catch(() => {})
+      runningHere.delete(profileJob(userId))
+    }
+  })()
+  return { ok: true, state: 'drawing' }
+}
+
 export type ProfileReviewResult =
   | { ok: true; state: 'approved' | 'deleted' | 'pending' | 'drawing'; image?: string | null }
-  | { ok: false; error: 'not_found' | 'already_approved' | 'busy' | 'regenerate_failed' }
+  | { ok: false; error: 'not_found' | 'already_approved' | 'busy' | 'regenerate_failed' | 'no_reference' | 'seedream_unconfigured'; detail?: string }
 
 /** 게시 / 삭제 / 재제작 for a profile waiting for review. */
 export async function reviewOperatorProfile(
@@ -388,13 +543,19 @@ export async function reviewOperatorProfile(
   userId: string,
   action: ReviewAction,
   feedback: string | null,
+  /** `engine`: 'seedream' draws the new photo with Seedream 5.5 (staff's pick on the card). */
+  options: { reference?: AvatarReference; engine?: ImageEngine } = {},
 ): Promise<ProfileReviewResult> {
   const account = await prisma.operatorAccount.findUnique({
     where: { userId },
     select: { reviewState: true, user: { select: { isOperator: true, isDeleted: true } } },
   })
   if (!account || !account.user.isOperator || account.user.isDeleted) return { ok: false, error: 'not_found' }
-  if (account.reviewState === 'approved') return { ok: false, error: 'already_approved' }
+  // 사진 재제작 on the photo is the card's 재제작: a profile's redo only redraws the photo.
+  if (action === 'redraw_photo' || action === 'draw') action = 'regenerate'
+  const engine = options.engine ?? 'pool'
+  if (engine === 'seedream' && (action === 'regenerate' || action === 'redraw_reference') && !seedreamConfigured()) return { ok: false, error: 'seedream_unconfigured' }
+  if (account.reviewState === 'approved') return reviewAvatarCandidate(ctx, userId, action, feedback, options.reference, engine)
 
   if (action === 'publish') {
     await prisma.$transaction([
@@ -417,17 +578,27 @@ export async function reviewOperatorProfile(
   // drawn in the background (longer than the hosting proxy keeps a request
   // open) while the account shows as drawing; the card polls. Once drawn the
   // account is back in review; a failed drawing falls back to drawing by hand.
-  if (canDrawImagesHere()) {
+  const fromLibrary = action === 'redraw_reference'
+  // Seedream draws from any server; the pool only where it is reachable.
+  const drawsHere = engine === 'seedream' || canDrawImagesHere()
+  if (fromLibrary && !drawsHere) return { ok: false, error: 'regenerate_failed' }
+  if (drawsHere) {
+    const claimed = await claimProfileReference(userId, fromLibrary)
+    if (!claimed.ok) return claimed
+    const library = claimed.library
     runningHere.add(profileJob(userId))
     try {
       await prisma.operatorAccount.update({ where: { userId }, data: { reviewState: 'drawing', reviewFeedback: feedback } })
     } catch (error) {
       runningHere.delete(profileJob(userId))
+      if (library) await releaseReferencePhoto(library.id).catch(() => {})
       throw error
     }
     void (async () => {
       try {
-        const drawn = await generateOperatorAvatar(ctx, userId, { feedback })
+        const drawn = await generateOperatorAvatar(ctx, userId, { feedback, reference: options.reference, engine, ...(library ? { libraryReference: library.libraryReference } : {}) })
+        // The library photo it was drawn from is now this account's; one that was not drawn goes back.
+        if (library) await (drawn.ok ? releaseOtherAvatarReferences(userId, library.id) : releaseReferencePhoto(library.id)).catch(() => {})
         if (drawn.ok) {
           await prisma.operatorAccount.updateMany({ where: { userId, reviewState: 'drawing' }, data: { reviewState: 'pending' } })
           await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'regenerate', feedback, drawing: false } })
@@ -456,7 +627,7 @@ export async function reviewOperatorProfile(
 
 export type PostReviewResult =
   | { ok: true; state: 'published' | 'deleted' | 'review'; postId?: string | null; post?: ReviewPost }
-  | { ok: false; error: 'not_found' | 'profile_pending' | 'photo_pending' | 'busy' | 'publish_failed' | 'regenerate_failed' | 'draw_failed' }
+  | { ok: false; error: 'not_found' | 'profile_pending' | 'photo_pending' | 'busy' | 'publish_failed' | 'regenerate_failed' | 'draw_failed' | 'no_reference' | 'seedream_unconfigured'; detail?: string }
 
 /** 게시 / 삭제 / 재제작 for a post waiting for review. */
 export async function reviewOperatorPost(
@@ -465,7 +636,13 @@ export async function reviewOperatorPost(
   action: ReviewAction,
   feedback: string | null,
   now: Date = new Date(),
+  /** `engine`: 'seedream' draws this photo with Seedream 5.5 instead of the pool (staff's pick on the card). */
+  options: { reference?: AvatarReference; engine?: ImageEngine } = {},
 ): Promise<PostReviewResult> {
+  const seedream = options.engine === 'seedream'
+  if (seedream && (action === 'redraw_photo' || action === 'redraw_reference' || action === 'draw') && !seedreamConfigured()) return { ok: false, error: 'seedream_unconfigured' }
+  // Seedream draws from any server; the pool only where it is reachable.
+  const drawsHere = seedream || canDrawImagesHere()
   const row = await prisma.operatorPostReserve.findUnique({
     where: { id: reserveId },
     select: { ...POST_SELECT, operatorUserId: true, operatorUser: { select: { isActive: true } } },
@@ -494,14 +671,54 @@ export async function reviewOperatorPost(
   if (action === 'delete') {
     const cancelled = await prisma.operatorPostReserve.updateMany({ where: { id: reserveId, state: 'review' }, data: { state: 'cancelled', releaseAt: null, ...(feedback ? { reviewFeedback: feedback } : {}) } })
     if (cancelled.count === 0) return { ok: false, error: 'busy' }
+    // The reference-library photo it was drawn from goes back to the library.
+    await releaseReferenceForImage(row.imageObjectKey).catch(() => {})
     await audit('delete')
     return { ok: true, state: 'deleted' }
   }
 
+  if (action === 'redraw_photo' || action === 'redraw_reference') {
+    // Only where this server draws (the pool, or Seedream): the old photo stays until the new one is in.
+    if (!drawsHere) return { ok: false, error: 'draw_failed' }
+    if (!row.imagePrompt && !row.imageObjectKey) return { ok: false, error: 'not_found' }
+    const fromLibrary = action === 'redraw_reference'
+    const brief = row.imagePrompt ?? '[self] A casual everyday photo of the poster that fits the post.'
+    const description = feedback ? `${brief}\nStaff feedback on the previous photo, to follow: ${feedback}` : brief
+    // Said right away when the library has nothing that fits this post (kind, gender, season).
+    if (fromLibrary) {
+      const library = await libraryPhotoForPost(row.operatorUserId, description)
+      if (!library.available) return { ok: false, error: 'no_reference', detail: library.need }
+    }
+    // The photo being replaced is never attached: fed back in redraw after redraw, photos
+    // broke up and turned strange (staff 2026-11-24). The brief, the feedback and the post's text are enough.
+    runningHere.add(postJob(reserveId))
+    let claimed: { count: number }
+    try {
+      claimed = await prisma.operatorPostReserve.updateMany({
+        where: { id: reserveId, state: 'review' },
+        data: { state: 'regenerating', error: PHOTO_DRAWING, ...(feedback ? { reviewFeedback: feedback } : {}) },
+      })
+    } catch (error) {
+      runningHere.delete(postJob(reserveId))
+      throw error
+    }
+    if (claimed.count === 0) {
+      runningHere.delete(postJob(reserveId))
+      return { ok: false, error: 'busy' }
+    }
+    void drawPostPhotoInBackground(
+      reserveId, row.operatorUserId, description,
+      () => audit('redraw_photo', { photo: true, fromLibrary, engine: options.engine ?? 'pool' }), () => audit('redraw_photo', { photo: false, fromLibrary, engine: options.engine ?? 'pool' }),
+      fromLibrary ? undefined : options.reference, { postText: row.text }, { fromLibrary, engine: options.engine },
+    )
+    const drawing = await prisma.operatorPostReserve.findUnique({ where: { id: reserveId }, select: POST_SELECT })
+    return { ok: true, state: 'review', post: toReviewPost(drawing ?? { ...row, state: 'regenerating', error: PHOTO_DRAWING }) }
+  }
+
   if (action === 'draw') {
     if (!row.imagePrompt || row.imageObjectKey) return { ok: false, error: 'not_found' }
-    if (canDrawImagesHere()) {
-      // Drawn right here (the ChatGPT pool), the text untouched, in the
+    if (drawsHere) {
+      // Drawn right here (the ChatGPT pool, or Seedream), the text untouched, in the
       // background: a photo of a person takes over two minutes, longer than
       // the hosting proxy keeps a request open. The card polls until it is in.
       runningHere.add(postJob(reserveId))
@@ -520,7 +737,11 @@ export async function reviewOperatorPost(
         return { ok: false, error: 'busy' }
       }
       const description = feedback ? `${row.imagePrompt}\nStaff feedback on this photo, to follow: ${feedback}` : row.imagePrompt
-      void drawPostPhotoInBackground(reserveId, row.operatorUserId, description, () => audit('draw', { photo: true }), () => audit('draw', { photo: false }))
+      void drawPostPhotoInBackground(
+        reserveId, row.operatorUserId, description,
+        () => audit('draw', { photo: true, engine: options.engine ?? 'pool' }), () => audit('draw', { photo: false, engine: options.engine ?? 'pool' }),
+        options.reference, undefined, { engine: options.engine },
+      )
       const drawing = await prisma.operatorPostReserve.findUnique({ where: { id: reserveId }, select: POST_SELECT })
       return { ok: true, state: 'review', post: toReviewPost(drawing ?? { ...row, state: 'regenerating', error: PHOTO_DRAWING }) }
     }
@@ -538,7 +759,7 @@ export async function reviewOperatorPost(
   try {
     const claimed = await prisma.operatorPostReserve.updateMany({
       where: { id: reserveId, state: 'review' },
-      data: { state: 'regenerating', reviewFeedback: feedback },
+      data: { state: 'regenerating', error: TEXT_REWRITING, reviewFeedback: feedback },
     })
     if (claimed.count === 0) return { ok: false, error: 'busy' }
     const persona = await loadReservePersona(row.operatorUserId, now, { includeInactive: true })
@@ -572,7 +793,7 @@ export async function reviewOperatorPost(
     })
     if (drawHere) {
       handedToDraw = true
-      void drawPostPhotoInBackground(reserveId, row.operatorUserId, generated.imagePrompt!, () => audit('regenerate', { photo: true }), () => audit('regenerate', { photo: false }))
+      void drawPostPhotoInBackground(reserveId, row.operatorUserId, generated.imagePrompt!, () => audit('regenerate', { photo: true }), () => audit('regenerate', { photo: false }), options.reference)
     } else {
       await audit('regenerate', { photo: generated.imagePrompt ? false : null })
     }
@@ -648,6 +869,100 @@ export async function setReviewPostPhotos(
   return { ok: true, post: toReviewPost(updated) }
 }
 
+/** Earliest time staff may date a post at. */
+const EARLIEST_PUBLISH_AT = Date.parse('2024-01-01T00:00:00Z')
+
+/**
+ * Staff set the time a post in review is dated at when it is published
+ * (`value` an ISO time, not in the future), or clear it (null: a random time
+ * between writing and 게시). Kept in release_at, which a row in review
+ * otherwise never holds.
+ */
+export async function setReviewPostPublishAt(
+  ctx: AdminContext,
+  id: string,
+  value: unknown,
+  now: Date = new Date(),
+): Promise<{ ok: true; post: ReviewPost } | { ok: false; error: 'not_found' | 'invalid_time' }> {
+  let at: Date | null = null
+  if (value !== null) {
+    if (typeof value !== 'string') return { ok: false, error: 'invalid_time' }
+    at = new Date(value)
+    const ms = at.getTime()
+    if (Number.isNaN(ms) || ms < EARLIEST_PUBLISH_AT || ms > now.getTime() + 60_000) return { ok: false, error: 'invalid_time' }
+    if (ms > now.getTime()) at = now
+  }
+  const row = await prisma.operatorPostReserve.findUnique({ where: { id }, select: { operatorUserId: true } })
+  if (!row) return { ok: false, error: 'not_found' }
+  const updated = await prisma.operatorPostReserve.updateMany({ where: { id, state: { in: REVIEW_POST_STATES } }, data: { releaseAt: at } })
+  if (updated.count === 0) return { ok: false, error: 'not_found' }
+  const saved = await prisma.operatorPostReserve.findUnique({ where: { id }, select: POST_SELECT })
+  await writeAdminAudit(ctx, {
+    action: 'operator_post.review',
+    operatorUserId: row.operatorUserId,
+    targetType: 'reserve',
+    targetId: id,
+    metadata: { decision: 'set_publish_at', publishAt: at?.toISOString() ?? null },
+  })
+  return saved ? { ok: true, post: toReviewPost(saved) } : { ok: false, error: 'not_found' }
+}
+
+/** Longest topic label staff may set. */
+const MAX_TOPIC_LENGTH = 60
+
+export type ReviewPostEdit = { text?: unknown; language?: unknown; topic?: unknown; publishAt?: unknown }
+
+/**
+ * Staff edit everything of a post in review but its photos, in one save:
+ * text, the language it is written in, its topic and the time it is dated at
+ * (see setReviewPostPublishAt). Fields left out stay as they are.
+ */
+export async function editReviewPost(
+  ctx: AdminContext,
+  id: string,
+  edit: ReviewPostEdit,
+  now: Date = new Date(),
+): Promise<{ ok: true; post: ReviewPost } | { ok: false; error: 'not_found' | 'invalid_text' | 'invalid_language' | 'invalid_time' | 'busy' }> {
+  const data: Prisma.OperatorPostReserveUpdateManyMutationInput = {}
+  if (edit.text !== undefined) {
+    const text = typeof edit.text === 'string' ? edit.text.trim() : ''
+    if (!text || text.length > MAX_REVIEW_TEXT_LENGTH) return { ok: false, error: 'invalid_text' }
+    data.text = text
+  }
+  if (edit.language !== undefined) {
+    const language = edit.language === null || edit.language === '' ? null : canonicalizeSttLanguageCode(String(edit.language))
+    if (edit.language && !language) return { ok: false, error: 'invalid_language' }
+    data.language = language
+  }
+  if (edit.topic !== undefined) {
+    const topic = typeof edit.topic === 'string' ? edit.topic.trim().slice(0, MAX_TOPIC_LENGTH) : ''
+    data.topic = topic || null
+  }
+  if (edit.publishAt !== undefined) {
+    if (edit.publishAt === null || edit.publishAt === '') data.releaseAt = null
+    else {
+      const at = typeof edit.publishAt === 'string' ? new Date(edit.publishAt) : null
+      const ms = at?.getTime() ?? Number.NaN
+      if (!at || Number.isNaN(ms) || ms < EARLIEST_PUBLISH_AT || ms > now.getTime() + 60_000) return { ok: false, error: 'invalid_time' }
+      data.releaseAt = ms > now.getTime() ? now : at
+    }
+  }
+  const row = await prisma.operatorPostReserve.findUnique({ where: { id }, select: { state: true, operatorUserId: true } })
+  if (!row || !REVIEW_POST_STATES.includes(row.state)) return { ok: false, error: 'not_found' }
+  // The text only while no rewrite runs; the rest also during a photo redraw.
+  const updated = await prisma.operatorPostReserve.updateMany({ where: { id, state: data.text !== undefined ? 'review' : { in: REVIEW_POST_STATES } }, data })
+  if (updated.count === 0) return { ok: false, error: 'busy' }
+  const saved = await prisma.operatorPostReserve.findUnique({ where: { id }, select: POST_SELECT })
+  await writeAdminAudit(ctx, {
+    action: 'operator_post.review',
+    operatorUserId: row.operatorUserId,
+    targetType: 'reserve',
+    targetId: id,
+    metadata: { decision: 'edit', fields: Object.keys(data).join(','), length: typeof data.text === 'string' ? data.text.length : null },
+  })
+  return saved ? { ok: true, post: toReviewPost(saved) } : { ok: false, error: 'not_found' }
+}
+
 /** Longest post text staff may write in review (same cap as a published post). */
 const MAX_REVIEW_TEXT_LENGTH = 1000
 
@@ -680,8 +995,8 @@ export async function setReviewPostText(
 }
 
 /**
- * A new text for a post in review, written by the model (the ChatGPT pool
- * where the server has its key) for the same person, language and photo,
+ * A new text for a post in review, written by the model (Claude Opus 5.5,
+ * never the ChatGPT pool) for the same person, language and photo,
  * with optional staff feedback. Nothing is saved: staff read it in the editor
  * and save it with setReviewPostText.
  */
@@ -728,4 +1043,45 @@ export async function draftReviewPostText(
     console.warn('[operator-review] draft_text_failed', { id, error: error instanceof Error ? error.message.slice(0, 60) : 'unknown' })
     return { ok: false, error: 'regenerate_failed' }
   }
+}
+
+export type ScheduleResult =
+  | { ok: true; post: ReviewPost }
+  | { ok: false; error: 'not_found' | 'busy' | 'profile_pending' | 'photo_pending' | 'invalid_time' }
+
+/** A scheduled time must be at least a minute ahead and at most this far. */
+export const SCHEDULE_LATEST_MS = 30 * 24 * 60 * 60_000
+
+/**
+ * 예약 게시: the post goes out by itself at `at` (the worker publishes it).
+ * Without `at`, a time 2-30 hours ahead outside the persona's night. A
+ * scheduled post takes a new time the same way.
+ */
+export async function scheduleReviewPost(ctx: AdminContext | null, id: string, at: Date | null, now: Date = new Date()): Promise<ScheduleResult> {
+  const row = await prisma.operatorPostReserve.findUnique({
+    where: { id },
+    select: { state: true, imagePrompt: true, imageObjectKey: true, operatorUserId: true, operatorUser: { select: { isActive: true, operatorAccount: { select: { personaCountry: true } } } } },
+  })
+  if (!row) return { ok: false, error: 'not_found' }
+  if (row.state === 'regenerating') return { ok: false, error: 'busy' }
+  if (row.state !== 'review' && row.state !== 'scheduled') return { ok: false, error: 'not_found' }
+  if (!row.operatorUser.isActive) return { ok: false, error: 'profile_pending' }
+  if (row.imagePrompt && !row.imageObjectKey) return { ok: false, error: 'photo_pending' }
+  const when = at ?? pickScheduledPublishAt({ now, personaCountry: row.operatorUser.operatorAccount?.personaCountry })
+  if (Number.isNaN(when.getTime()) || when.getTime() < now.getTime() + 60_000 || when.getTime() > now.getTime() + SCHEDULE_LATEST_MS) return { ok: false, error: 'invalid_time' }
+  const updated = await prisma.operatorPostReserve.updateMany({ where: { id, state: { in: ['review', 'scheduled'] } }, data: { state: 'scheduled', releaseAt: when, error: null } })
+  if (updated.count === 0) return { ok: false, error: 'busy' }
+  await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: row.operatorUserId, targetType: 'reserve', targetId: id, metadata: { decision: 'schedule', at: when.toISOString() } })
+  const post = await getReviewPost(id)
+  return post ? { ok: true, post } : { ok: false, error: 'not_found' }
+}
+
+/** 예약 취소: back to review, with no time set. */
+export async function unscheduleReviewPost(ctx: AdminContext | null, id: string): Promise<ScheduleResult> {
+  const row = await prisma.operatorPostReserve.findUnique({ where: { id }, select: { operatorUserId: true } })
+  const updated = await prisma.operatorPostReserve.updateMany({ where: { id, state: 'scheduled' }, data: { state: 'review', releaseAt: null } })
+  if (!row || updated.count === 0) return { ok: false, error: 'not_found' }
+  await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: row.operatorUserId, targetType: 'reserve', targetId: id, metadata: { decision: 'unschedule' } })
+  const post = await getReviewPost(id)
+  return post ? { ok: true, post } : { ok: false, error: 'not_found' }
 }

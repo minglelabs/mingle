@@ -699,6 +699,9 @@ const NATIVE_CONVERSATION_BOTTOM_BAR_VISUAL_TOP_OFFSET_PX = 64;
 const IOS_NATIVE_CONVERSATION_BOTTOM_BANNER_NUDGE_PX = 4;
 const NATIVE_APP_UPDATE_EVENT = 'mingle:native-app-update';
 const NATIVE_HISTORY_BACK_ANIMATE_FLAG = '__MINGLE_NATIVE_HISTORY_CLOSE_ANIMATE__';
+const NATIVE_TAB_ROOT_QUERY_KEY = 'nativeTabRoot';
+/** Web → native: Android back reached a tab root with nothing left to close. */
+const NATIVE_BACK_AT_TAB_ROOT_MESSAGE = 'native_back_at_tab_root';
 const CONVERSATION_HISTORY_ROUTE_STATE_KEY = '__MINGLE_CONVERSATION_HISTORY_ROUTE__';
 // Marks that a restored iOS room has received a synthetic list history entry.
 const IOS_CONVERSATION_ROOM_HISTORY_SEEDED_FLAG = '__MINGLE_IOS_ROOM_HISTORY_SEEDED__';
@@ -955,6 +958,10 @@ type NativeShareTargetCommand = {
   payload?: unknown;
 };
 
+type NativeBackAtTabRootCommand = {
+  type: 'native_back_at_tab_root';
+};
+
 type NativeNavigationStateCommand = {
   type: 'native_navigation_state';
   payload?: {
@@ -1117,6 +1124,7 @@ type WebViewCommand =
   | NativeFaceCheckCommand
   | NativePushRegisterCommand
   | NativeNavigationStateCommand
+  | NativeBackAtTabRootCommand
   | NativeHistoryDebugCommand
   | NativeOpenUpdateStoreCommand
   | NativeUiOverlayStateCommand
@@ -3009,6 +3017,17 @@ function AppInner(): React.JSX.Element {
             // Fall through to the browser history path.
           }
 
+          // A tab root (tab switch or notification landing) is a fresh start:
+          // never step back into the history underneath it; leave the app.
+          try {
+            if (new URLSearchParams(window.location.search).get(${JSON.stringify(NATIVE_TAB_ROOT_QUERY_KEY)}) === '1') {
+              window.ReactNativeWebView.postMessage(JSON.stringify({ type: ${JSON.stringify(NATIVE_BACK_AT_TAB_ROOT_MESSAGE)} }));
+              return true;
+            }
+          } catch (error) {
+            // Fall through to the browser history path.
+          }
+
           if (window.history.length > 1) {
             window[${JSON.stringify(NATIVE_HISTORY_BACK_ANIMATE_FLAG)}] = true;
             window.history.back();
@@ -4759,6 +4778,11 @@ function AppInner(): React.JSX.Element {
         }
         return;
       }
+    }
+
+    if (parsed.type === NATIVE_BACK_AT_TAB_ROOT_MESSAGE) {
+      if (Platform.OS === 'android') BackHandler.exitApp();
+      return;
     }
 
     if (parsed.type === 'native_navigation_state') {

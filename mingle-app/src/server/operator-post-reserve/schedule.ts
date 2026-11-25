@@ -16,6 +16,7 @@ const MORNING_SPREAD_HOURS = 3
 const UTC_OFFSET_HOURS: Record<string, number> = {
   KR: 9, JP: 9, TW: 8, CN: 8, VN: 7, TH: 7, ID: 7, PH: 8, MY: 8, SG: 8, IN: 5.5,
   US: -6, CA: -5, GB: 0, AU: 10, FR: 1, DE: 1, ES: 1, IT: 1, BR: -3, MX: -6, AR: -3, TR: 3,
+  RU: 3, SA: 3, AE: 4, KZ: 5, UZ: 5,
 }
 
 export function utcOffsetHoursOf(personaCountry: string | null | undefined): number {
@@ -51,4 +52,41 @@ export function nextReleaseAt(args: {
   // An account that fell behind (server was down, reserve was empty) resumes soon, not all at once.
   const earliest = args.now.getTime() + 5 * 60_000 * random()
   return avoidLocalNight(new Date(Math.max(candidate, earliest)), utcOffsetHoursOf(args.personaCountry), random)
+}
+
+/**
+ * When a post staff publish from review shows as posted (staff 2026-11-23):
+ * a random moment between the post's creation and now, so a batch published
+ * at once does not all land on the same minute, and a post written days ago
+ * is neither dated today nor dated at its creation. Never in the future;
+ * a moment in the persona's local night is drawn again (a few tries).
+ */
+export function pickBackdatedPublishAt(args: { createdAt: Date; now: Date; personaCountry: string | null | undefined; random?: () => number }): Date {
+  const random = args.random ?? Math.random
+  const latest = args.now.getTime() - 60_000
+  const earliest = Math.min(args.createdAt.getTime(), latest)
+  if (latest <= earliest) return args.now
+  const offsetMs = utcOffsetHoursOf(args.personaCountry) * HOUR_MS
+  let pick = earliest
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    pick = earliest + random() * (latest - earliest)
+    const msIntoLocalDay = (((pick + offsetMs) % DAY_MS) + DAY_MS) % DAY_MS
+    if (msIntoLocalDay >= WAKE_HOUR * HOUR_MS) break
+  }
+  return new Date(Math.round(pick))
+}
+
+/** How far ahead a post staff schedule from review goes out, when they leave the time to us. */
+export const SCHEDULE_MIN_AHEAD_MS = 2 * HOUR_MS
+export const SCHEDULE_MAX_AHEAD_MS = 30 * HOUR_MS
+
+/**
+ * A publish time for a post staff schedule in review without naming one: 2 to
+ * 30 hours ahead, out of the persona country's night, on a whole minute.
+ */
+export function pickScheduledPublishAt(args: { now: Date; personaCountry: string | null | undefined; random?: () => number }): Date {
+  const random = args.random ?? Math.random
+  const ahead = SCHEDULE_MIN_AHEAD_MS + random() * (SCHEDULE_MAX_AHEAD_MS - SCHEDULE_MIN_AHEAD_MS)
+  const at = avoidLocalNight(new Date(args.now.getTime() + ahead), utcOffsetHoursOf(args.personaCountry), random)
+  return new Date(Math.round(at.getTime() / 60_000) * 60_000)
 }

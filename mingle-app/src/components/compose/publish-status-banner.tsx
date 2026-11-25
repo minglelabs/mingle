@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Loader2, CheckCircle2, AlertCircle, X } from "lucide-react";
-import { feedHref } from "@/lib/feed-routes";
+import { homeFeedRootHref } from "@/lib/home-feed-href";
 import { composeCopy, formatComposeCopy } from "@/i18n/compose-copy";
 import { moderationCopy } from "@/i18n/moderation-copy";
 import { composeGapCopy } from "./compose-gap-copy";
@@ -83,7 +83,7 @@ export default function PublishStatusBanner({ locale }: PublishStatusBannerProps
             onClick={() => {
               const target = job.postId;
               clearPublishJob();
-              if (target) router.push(feedHref(locale, { postId: target }));
+              if (target) router.replace(homeFeedRootHref(locale, { postId: target }));
             }}
             className="inline-flex h-8 items-center rounded-full bg-slate-900 px-3.5 text-[13px] font-semibold text-white transition active:scale-95"
           >

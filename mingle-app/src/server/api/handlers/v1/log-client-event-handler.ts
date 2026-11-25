@@ -36,6 +36,7 @@ import { verifyVoiceOrderReceipt } from '@/lib/voice-order-receipt'
 import { sendPushNotificationForConversationMessage } from '@/server/push-notifications'
 import { claimConversationMessagePush, MESSAGE_PUSH_TRANSLATION_WAIT_MS, readMessageFinalTranslations } from '@/server/conversation-message-push'
 import { notifyOperatorInboxActivity } from '@/server/operator-inbox/notify'
+import { BACKFILL_DELAY_MS, backfillMessageTranslations, needsTranslationBackfill } from '@/server/translation/backfill-message-translations'
 import {
   isMessageSenderBlockedInConversation,
   listChannelMemberUserIdsBySessionKey,
@@ -52,6 +53,8 @@ const ALLOWED_EVENT_TYPES = new Set([
   'conversation_hydration_order_preserved',
   // Temporary field diagnostics, see src/lib/ui-diagnostics.ts.
   'ui_diagnostic',
+  // Coin store and purchase failures, see src/lib/coin-store-diagnostics.ts.
+  'coin_store_event',
 ])
 
 // This is a defensive ceiling for a client-reported single-turn duration, not a
@@ -584,6 +587,21 @@ export async function handleLogClientEventV1(request: NextRequest) {
           } else if (claimConversationMessagePush(messageId)) {
             await sendMessagePush(translations)
           }
+        }
+        // A message stored without some translations (the app's translation request was
+        // cut off or failed) gets them from the server shortly after, unless the app's
+        // own translationUpdate lands first. A translationUpdate itself never schedules one.
+        if (messageId && !voiceCaption && body.translationUpdate !== true
+          && needsTranslationBackfill({ targetLanguages: committedTargetLanguages, sourceLanguage, translations })) {
+          const backfill = { messageId, sessionKey: tracking.sessionKey, targetLanguages: committedTargetLanguages }
+          after(async () => {
+            await new Promise((resolve) => setTimeout(resolve, BACKFILL_DELAY_MS))
+            try {
+              await backfillMessageTranslations(backfill)
+            } catch (error) {
+              console.error('Message translation backfill failed:', error instanceof Error ? error.name : 'unknown')
+            }
+          })
         }
         // The AI title can take minutes (the ChatGPT pool waits up to 120s and retries),
         // so it runs after the response and never holds the sender's write.

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, type ChangeEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { ArrowLeft, Camera, Check, Copy, ExternalLink, Loader2, Plus, RefreshCw, Sparkles, X } from 'lucide-react'
 import LanguageLevelPicker from '@/components/language-level-picker'
 import { MAX_INTEREST_LANGUAGES, type InterestLanguage } from '@/lib/interest-languages'
@@ -12,6 +12,7 @@ import { InactiveChip, Notice, OperatorChip } from '../_components/operator-ui'
 import { ZoomableAvatar } from '../_components/zoomable-avatar'
 import { PersonaFields, type PersonaFieldValues } from '../_components/persona-fields'
 import { AVATAR_ACCEPT, getJson, sendJson, uploadOperatorAvatar } from '../_lib/client-api'
+import { pastedImage } from '../_lib/pasted-image'
 import { bioStatusLabel, fieldErrorMessage, requestErrorMessage } from '../_lib/copy'
 import { koreanLanguageName, type CountryOption, type LanguageOption } from '../_lib/options'
 
@@ -101,7 +102,7 @@ export function OperatorEditor({
   const [message, setMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
   const [photo, setPhoto] = useState<{ status: 'idle' | 'uploading' | 'failed'; error?: string }>({ status: 'idle' })
   const [copied, setCopied] = useState(false)
-  const [aiBusy, setAiBusy] = useState<ProfileAiScope | 'photo' | null>(null)
+  const [aiBusy, setAiBusy] = useState<ProfileAiScope | 'photo' | 'review' | null>(null)
 
   const baseline = useMemo(() => detailToValues(account), [account])
   const patch = useMemo(
@@ -163,7 +164,83 @@ export function OperatorEditor({
   const changePhoto = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     event.target.value = ''
-    if (!file) return
+    if (file) await uploadPhoto(file)
+  }
+
+  // A photo pasted anywhere on the page (⌘V / Ctrl+V) becomes the profile photo, after a confirm.
+  const uploadPhotoRef = useRef<(file: File) => Promise<void>>(async () => {})
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      const file = pastedImage(event.clipboardData)
+      if (!file) return
+      event.preventDefault()
+      if (window.confirm('붙여넣은 사진으로 프로필 사진을 바꿀까요?')) void uploadPhotoRef.current(file)
+    }
+    document.addEventListener('paste', onPaste)
+    return () => document.removeEventListener('paste', onPaste)
+  }, [])
+
+  // A photo dropped anywhere on the page does the same: a file from Finder, or a
+  // photo dragged from another tab (Chrome then hands over only its address, so it is fetched).
+  const [dropping, setDropping] = useState(false)
+  useEffect(() => {
+    let depth = 0
+    const carriesPhoto = (event: DragEvent) => {
+      const types = Array.from(event.dataTransfer?.types ?? [])
+      return types.includes('Files') || types.includes('text/uri-list')
+    }
+    const onEnter = (event: DragEvent) => {
+      if (!carriesPhoto(event)) return
+      depth += 1
+      setDropping(true)
+    }
+    const onOver = (event: DragEvent) => {
+      if (!carriesPhoto(event)) return
+      event.preventDefault()
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+    }
+    const onLeave = () => {
+      depth = Math.max(0, depth - 1)
+      if (depth === 0) setDropping(false)
+    }
+    const onDrop = async (event: DragEvent) => {
+      if (!carriesPhoto(event)) return
+      event.preventDefault()
+      depth = 0
+      setDropping(false)
+      const data = event.dataTransfer
+      let file = Array.from(data?.files ?? []).find(item => /^image\/(jpeg|png|webp)$/.test(item.type)) ?? null
+      const address = data?.getData('text/uri-list').split('\n').find(line => line && !line.startsWith('#'))?.trim()
+      if (!file && address) {
+        try {
+          const response = await fetch(address, { credentials: 'same-origin' })
+          const blob = await response.blob()
+          if (response.ok && /^image\/(jpeg|png|webp)$/.test(blob.type)) file = new File([blob], 'dropped-photo', { type: blob.type })
+        } catch {
+          file = null
+        }
+      }
+      if (!file) {
+        setPhoto({ status: 'failed', error: '이 사진은 바로 가져올 수 없어요. 저장한 뒤 파일을 끌어다 놓아 주세요.' })
+        return
+      }
+      if (window.confirm('끌어다 놓은 사진으로 프로필 사진을 바꿀까요?')) void uploadPhotoRef.current(file)
+    }
+    const onDropEvent = (event: DragEvent) => { void onDrop(event) }
+    document.addEventListener('dragenter', onEnter)
+    document.addEventListener('dragover', onOver)
+    document.addEventListener('dragleave', onLeave)
+    document.addEventListener('drop', onDropEvent)
+    return () => {
+      document.removeEventListener('dragenter', onEnter)
+      document.removeEventListener('dragover', onOver)
+      document.removeEventListener('dragleave', onLeave)
+      document.removeEventListener('drop', onDropEvent)
+    }
+  }, [])
+
+  async function uploadPhoto(file: File) {
+    if (photo.status === 'uploading') return
     setPhoto({ status: 'uploading' })
     const result = await uploadOperatorAvatar(account.id, file)
     if (result.ok) {
@@ -173,6 +250,7 @@ export function OperatorEditor({
       setPhoto({ status: 'failed', error: requestErrorMessage(result.error) })
     }
   }
+  useEffect(() => { uploadPhotoRef.current = uploadPhoto })
 
   const requestDraft = async (scope: ProfileAiScope): Promise<ProfileAiDraft | null> => {
     const result = await sendJson<{ draft: ProfileAiDraft }>(`${endpoint}/ai`, { scope })
@@ -225,6 +303,21 @@ export function OperatorEditor({
     if (done) setMessage({ tone: 'success', text: '새 프로필 사진으로 바꿨습니다.' })
   }
 
+  /** A live account: a new photo is drawn and waits in the review queue; the current one stays until staff take it there. */
+  const photoToReview = async () => {
+    if (aiBusy || saving) return
+    if (!window.confirm('새 프사를 AI로 그려서 검수에 올립니다. 검수에서 \'새 프사로\'를 누를 때까지 지금 프사는 그대로입니다.')) return
+    setAiBusy('review')
+    setMessage(null)
+    const started = await sendJson<{ state: string }>('/admin/operators/api/review', { kind: 'profile', id: account.id, action: 'regenerate' })
+    setAiBusy(null)
+    if (!started.ok) {
+      setMessage({ tone: 'error', text: requestErrorMessage(started.error) })
+      return
+    }
+    setMessage({ tone: 'success', text: '새 프사를 그리는 중입니다(30초~2분). 다 그려지면 검수 화면의 계정 탭에 올라옵니다.' })
+  }
+
   /** 전체: a new profile and bio, saved right away, then a photo drawn for the new profile. */
   const remakeAll = async () => {
     if (aiBusy || saving) return
@@ -270,6 +363,11 @@ export function OperatorEditor({
 
   return (
     <div>
+      {dropping ? (
+        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-sky-600/20 p-6">
+          <p className="rounded-2xl border-2 border-dashed border-sky-600 bg-white/95 px-6 py-4 text-base font-semibold text-sky-800 shadow-lg">여기에 놓으면 프로필 사진으로 바꿔요</p>
+        </div>
+      ) : null}
       <div className="flex items-center gap-2">
         <AdminBackLink href={backHref} className="-ml-2 inline-flex h-11 w-11 items-center justify-center rounded-xl text-slate-600 active:bg-slate-200" aria-label="이전 화면으로">
           <ArrowLeft className="h-5 w-5" aria-hidden="true" />
@@ -313,7 +411,7 @@ export function OperatorEditor({
         </div>
         {photo.status === 'failed' && photo.error ? <div className="mt-3"><Notice tone="error">{photo.error}</Notice></div> : null}
         <p className="mt-3 break-words text-xs leading-5 text-slate-500">
-          이 계정은 로그인할 수 없고, 앱에서 이름 옆에 항상 &lsquo;운영 계정&rsquo; 표시가 붙습니다. 사진은 정사각형으로 잘리고 위치 정보는 지워집니다.
+          이 계정은 로그인할 수 없고, 앱에서 이름 옆에 항상 &lsquo;운영 계정&rsquo; 표시가 붙습니다. 사진은 정사각형으로 잘리고 위치 정보는 지워집니다. 복사한 사진을 이 화면에 붙여넣거나(⌘V) 끌어다 놓아도 프로필 사진이 바뀝니다.
         </p>
       </section>
 
@@ -336,8 +434,14 @@ export function OperatorEditor({
             </button>
           ))}
         </div>
+        {account.isActive ? (
+          <button type="button" className={`${SECONDARY_BUTTON} mt-2 w-full px-2`} onClick={photoToReview} disabled={Boolean(aiBusy) || saving}>
+            {aiBusy === 'review' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+            새 프사 그려서 검수에 올리기
+          </button>
+        ) : null}
         <p className="mt-2 text-xs leading-5 text-slate-500">
-          소개글만·소개글·프사 빼고는 칸만 채우고 저장은 직접 누릅니다. 프사만·전체는 바로 반영됩니다(저장 안 한 수정이 있으면 먼저 저장).
+          소개글만·소개글·프사 빼고는 칸만 채우고 저장은 직접 누릅니다. 프사만·전체는 바로 반영됩니다(저장 안 한 수정이 있으면 먼저 저장). 검수에 올린 새 프사는 검수에서 고를 때까지 지금 프사가 그대로입니다.
         </p>
       </section>
 
@@ -369,12 +473,13 @@ export function OperatorEditor({
           <ul className="space-y-2">
             {interest.map((entry, index) => (
               <li key={index} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 p-2">
+                {/* Phone width: the language gets its own line (it was squeezed to just the arrows); level and ✕ go below. */}
                 <select
                   value={entry.code}
                   onChange={event => editInterest(interest.map((item, at) => (at === index ? { ...item, code: event.target.value as InterestLanguage['code'] } : item)))}
                   disabled={saving}
                   aria-label="관심 언어"
-                  className="h-11 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2 text-base"
+                  className="h-11 w-full min-w-0 basis-full rounded-lg border border-slate-300 bg-white px-2 text-base sm:basis-0 sm:flex-1"
                 >
                   <option value="">언어 고르기</option>
                   {languages
@@ -382,7 +487,7 @@ export function OperatorEditor({
                     .map(option => <option key={option.code} value={option.code}>{option.label}</option>)}
                 </select>
                 <LanguageLevelPicker level={entry.level} locale="ko" disabled={saving} onChange={level => editInterest(interest.map((item, at) => (at === index ? { ...item, level } : item)))} />
-                <button type="button" onClick={() => editInterest(interest.filter((_, at) => at !== index))} disabled={saving} className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 active:bg-slate-100" aria-label="관심 언어 빼기">
+                <button type="button" onClick={() => editInterest(interest.filter((_, at) => at !== index))} disabled={saving} className="ml-auto inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 active:bg-slate-100" aria-label="관심 언어 빼기">
                   <X className="h-4 w-4" aria-hidden="true" />
                 </button>
               </li>

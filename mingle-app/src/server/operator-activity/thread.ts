@@ -7,14 +7,14 @@ import { USER_IDENTITY_SELECT } from '@/server/identity/user-identity-select'
 import { createPostNotification } from '@/server/notifications/create-post-notification'
 import type { InboxPerson } from '@/server/operator-inbox/inbox'
 import { STAFF_TRANSLATION_LANGUAGE, translateForStaff } from '@/server/operator-inbox/staff-translate'
+import { convertStaffCommentDraft } from '@/server/operator-activity/comment-conversion'
 import {
-  convertToPersonaLanguage,
   PersonaConversionFailedError,
   PersonaLanguageMissingError,
 } from '@/server/operator-posts/convert'
 import { checkOperatorForPosting } from '@/server/operator-posts/operator-check'
 import { createComment } from '@/server/posts/comment-service'
-import { visibleCommentsWhere } from '@/server/posts/comment-visibility'
+import { visibleCommentsWhere, visibleSingleCommentWhere } from '@/server/posts/comment-visibility'
 import { visibleSinglePostWhere } from '@/server/posts/post-visibility'
 import { detectSourceLanguageVerdict } from '@/server/translation/detect-source-language'
 import {
@@ -43,6 +43,8 @@ export type ThreadOperator = InboxPerson & {
   isActive: boolean
 }
 
+export type StoredTranslation = { language: string; text: string }
+
 export type ThreadComment = {
   id: string
   parentId: string | null
@@ -52,9 +54,13 @@ export type ThreadComment = {
   /** Null for a deleted comment kept only for its replies. */
   text: string | null
   koText: string | null
+  /** Every stored translation of the current text, for staff to check. */
+  translations: StoredTranslation[]
   hasImage: boolean
   isDeleted: boolean
   likeCount: number
+  /** Who liked it, newest first (staff only). */
+  likers?: InboxPerson[]
   createdAt: string
   replies: ThreadComment[]
 }
@@ -65,10 +71,16 @@ export type OperatorPostThread = {
     author: InboxPerson
     text: string | null
     koText: string | null
+    translations: StoredTranslation[]
     hasImage: boolean
     likeCount: number
+    /** Who liked it, newest first (staff only). */
+    likers?: InboxPerson[]
     commentCount: number
+    /** The time the app shows (staff may date a post earlier than they publish it). */
     publishedAt: string
+    /** When the post was actually created. */
+    createdAt: string
   }
   /** The operator the thread is read and answered as. */
   operator: ThreadOperator
@@ -107,6 +119,21 @@ function toThreadOperator(user: ThreadUser): ThreadOperator {
   }
 }
 
+type TranslationRow = { bodyVersion: number; language: string; text: string | null }
+
+/** Ready translations of the current body version, source language excluded. */
+function currentTranslations(rows: TranslationRow[], bodyVersion: number, sourceLanguage: string | null): StoredTranslation[] {
+  const source = canonicalizeTranslationLanguageCode(sourceLanguage || '') || ''
+  return rows
+    .filter((row) => row.bodyVersion === bodyVersion && row.text?.trim() && row.language !== source)
+    .map((row) => ({ language: row.language, text: (row.text as string).trim() }))
+    .sort((a, b) => a.language.localeCompare(b.language))
+}
+
+function koreanRows(rows: TranslationRow[]): TranslationRow[] {
+  return rows.filter((row) => row.language === STAFF_TRANSLATION_LANGUAGE)
+}
+
 function isKorean(language: string | null | undefined): boolean {
   return (canonicalizeTranslationLanguageCode(language || '') || '') === STAFF_TRANSLATION_LANGUAGE
 }
@@ -130,6 +157,7 @@ export async function loadOperatorPostThread(args: {
   const base = await prisma.post.findFirst({
     where: { id: args.postId, OR: [{ isDeleted: null }, { isDeleted: false }] },
     select: {
+      sourceLanguage: true,
       author: { select: THREAD_USER_SELECT },
       comments: {
         where: { author: { isOperator: true, isDeleted: false }, OR: [{ isDeleted: null }, { isDeleted: false }] },
@@ -156,6 +184,23 @@ export async function loadOperatorPostThread(args: {
     operatorsById.set(named.id, toThreadOperator(named))
   }
   if (!viewerId) viewerId = operatorsById.keys().next().value ?? null
+  if (!viewerId) {
+    // A thread between real users only (일반 유저 activity): read it as an active operator
+    // who writes in the post's language when there is one, else the oldest active operator.
+    const activeOperator = { isOperator: true, isDeleted: false, isActive: true }
+    const postLanguage = base.sourceLanguage?.trim()
+    const fallback = (postLanguage
+      ? await prisma.user.findFirst({
+        where: { ...activeOperator, primaryLanguages: { has: postLanguage } },
+        orderBy: { createdAt: 'asc' },
+        select: THREAD_USER_SELECT,
+      })
+      : null) ?? await prisma.user.findFirst({ where: activeOperator, orderBy: { createdAt: 'asc' }, select: THREAD_USER_SELECT })
+    if (fallback) {
+      operatorsById.set(fallback.id, toThreadOperator(fallback))
+      viewerId = fallback.id
+    }
+  }
   const operator = viewerId ? operatorsById.get(viewerId) : undefined
   if (!viewerId || !operator) return { ok: false, error: 'operator_required' }
 
@@ -170,10 +215,12 @@ export async function loadOperatorPostThread(args: {
       likeCount: true,
       commentCount: true,
       publishedAt: true,
+      createdAt: true,
       author: { select: USER_IDENTITY_SELECT },
+      likes: { orderBy: { createdAt: 'desc' }, select: { user: { select: USER_IDENTITY_SELECT } } },
       translations: {
-        where: { status: 'ready', language: STAFF_TRANSLATION_LANGUAGE },
-        select: { bodyVersion: true, text: true },
+        where: { status: 'ready' },
+        select: { bodyVersion: true, language: true, text: true },
       },
     },
   })
@@ -193,10 +240,11 @@ export async function loadOperatorPostThread(args: {
       likeCount: true,
       createdAt: true,
       author: { select: USER_IDENTITY_SELECT },
+      likes: { orderBy: { createdAt: 'desc' }, select: { user: { select: USER_IDENTITY_SELECT } } },
       replyToUser: { select: { id: true, name: true, handle: true } },
       translations: {
-        where: { status: 'ready', language: STAFF_TRANSLATION_LANGUAGE },
-        select: { bodyVersion: true, text: true },
+        where: { status: 'ready' },
+        select: { bodyVersion: true, language: true, text: true },
       },
     },
   })
@@ -206,7 +254,7 @@ export async function loadOperatorPostThread(args: {
   if (postText) {
     postKoText = isKorean(post.sourceLanguage)
       ? postText
-      : post.translations.find((row) => row.bodyVersion === post.bodyVersion && row.text?.trim())?.text?.trim() ?? null
+      : koreanRows(post.translations).find((row) => row.bodyVersion === post.bodyVersion && row.text?.trim())?.text?.trim() ?? null
   }
 
   const flat = rows.map((row) => {
@@ -218,10 +266,12 @@ export async function loadOperatorPostThread(args: {
       author: toActivityPerson(row.author),
       replyTo: row.replyToUser ? { userId: row.replyToUser.id, label: personLabel(row.replyToUser) } : null,
       text,
-      koText: text ? storedCommentKorean(row) : null,
+      koText: text ? storedCommentKorean({ ...row, translations: koreanRows(row.translations) }) : null,
+      translations: text ? currentTranslations(row.translations, row.bodyVersion, row.sourceLanguage) : [],
       hasImage: !isDeleted && Boolean(row.imageObjectKey),
       isDeleted,
       likeCount: row.likeCount,
+      likers: row.likes.map((like) => toActivityPerson(like.user)),
       createdAt: row.createdAt.toISOString(),
       replies: [],
     }
@@ -273,10 +323,13 @@ export async function loadOperatorPostThread(args: {
         author: toActivityPerson(post.author),
         text: postText,
         koText: postKoText,
+        translations: postText ? currentTranslations(post.translations, post.bodyVersion, post.sourceLanguage) : [],
         hasImage: Boolean(post.imageObjectKey),
         likeCount: post.likeCount,
+        likers: post.likes.map((like) => toActivityPerson(like.user)),
         commentCount: post.commentCount,
         publishedAt: post.publishedAt.toISOString(),
+        createdAt: post.createdAt.toISOString(),
       },
       operator,
       operators: [...operatorsById.values()],
@@ -333,6 +386,8 @@ export async function commentAsOperator(ctx: AdminContext, input: {
   text: string
   parentId?: string | null
   replyToUserId?: string | null
+  /** False: staff turned 자동 번역 off; the text is posted exactly as typed. Default true. */
+  translate?: boolean
 }): Promise<OperatorCommentResult> {
   const draft = typeof input.text === 'string' ? input.text.trim() : ''
   if (!draft) throw new OperatorCommentError('text_required')
@@ -348,20 +403,29 @@ export async function commentAsOperator(ctx: AdminContext, input: {
   })
   if (!post) throw new OperatorCommentError('not_found')
 
-  let conversion: Awaited<ReturnType<typeof convertToPersonaLanguage>>
-  try {
-    conversion = await convertToPersonaLanguage({ operatorUserId, text: draft })
-  } catch (error) {
-    if (error instanceof PersonaLanguageMissingError) throw new OperatorCommentError('persona_language_missing')
-    if (error instanceof PersonaConversionFailedError) throw new OperatorCommentError('conversion_failed')
-    throw error
+  let conversion: Awaited<ReturnType<typeof convertStaffCommentDraft>>
+  if (input.translate === false) {
+    // 자동 번역 off: the staff's own words, in whatever language they typed.
+    conversion = { text: draft, language: '', converted: false, sourceLanguage: null }
+  } else {
+    try {
+      // Casual comment language, with the post, thread and people as context.
+      conversion = await convertStaffCommentDraft({
+        operatorUserId, postId: post.id, text: draft, parentId: input.parentId ?? null, replyToUserId: input.replyToUserId ?? null,
+      })
+    } catch (error) {
+      if (error instanceof PersonaLanguageMissingError) throw new OperatorCommentError('persona_language_missing')
+      if (error instanceof PersonaConversionFailedError) throw new OperatorCommentError('conversion_failed')
+      throw error
+    }
   }
   const text = conversion.text.trim()
   if (!text) throw new OperatorCommentError('conversion_failed')
   if (text.length > OPERATOR_COMMENT_MAX_LENGTH) throw new OperatorCommentError('text_too_long')
 
-  const verdict = await detectSourceLanguageVerdict({ text, clientHint: conversion.language, provider: operatorTextProvider() })
+  const verdict = await detectSourceLanguageVerdict({ text, clientHint: conversion.language || null, provider: operatorTextProvider() })
   const detected = verdict.language
+  const postedLanguage = conversion.language || detected || ''
   const mixed = Boolean(detected) && verdict.mixed
   const translationRows = detected && detected.trim()
     ? (
@@ -402,7 +466,7 @@ export async function commentAsOperator(ctx: AdminContext, input: {
     operatorUserId,
     targetType: 'comment',
     targetId: comment.id,
-    metadata: { postId: post.id, parentId: comment.parentId, converted: conversion.converted, language: conversion.language },
+    metadata: { postId: post.id, parentId: comment.parentId, converted: conversion.converted, language: postedLanguage, translate: input.translate !== false },
   })
 
   // Answering is reading: this operator's activity on the post is no longer new.
@@ -414,5 +478,66 @@ export async function commentAsOperator(ctx: AdminContext, input: {
     })
   }
 
-  return { commentId: comment.id, parentId: comment.parentId, text, language: conversion.language, converted: conversion.converted }
+  return { commentId: comment.id, parentId: comment.parentId, text, language: postedLanguage, converted: conversion.converted }
+}
+
+export type OperatorCommentLikeError = 'not_operator' | 'operator_inactive' | 'not_found' | 'own_comment'
+
+/**
+ * Staff like (or unlike) a comment AS an operator account, the way a user
+ * taps the heart in the app: one like row, the comment's count, and the
+ * author's in-app notification (staff, 2026-11-24). Idempotent. Audited.
+ */
+export async function setOperatorCommentLike(ctx: AdminContext, input: {
+  operatorUserId: string
+  postId: string
+  commentId: string
+  liked: boolean
+}): Promise<{ ok: true; liked: boolean; likeCount: number } | { ok: false; error: OperatorCommentLikeError }> {
+  const operator = await prisma.user.findFirst({
+    where: { id: input.operatorUserId, isOperator: true, isDeleted: false },
+    select: { id: true, isActive: true },
+  })
+  if (!operator) return { ok: false, error: 'not_operator' }
+  if (!operator.isActive) return { ok: false, error: 'operator_inactive' }
+  const comment = await prisma.postComment.findFirst({
+    where: {
+      ...visibleSingleCommentWhere(input.commentId, operator.id),
+      postId: input.postId,
+      OR: [{ isDeleted: null }, { isDeleted: false }],
+    },
+    select: { id: true, authorId: true, postId: true, likeCount: true },
+  })
+  if (!comment) return { ok: false, error: 'not_found' }
+  if (comment.authorId === operator.id) return { ok: false, error: 'own_comment' }
+
+  let changed = false
+  if (input.liked) {
+    const created = await prisma.postCommentLike.createMany({ data: [{ commentId: comment.id, userId: operator.id }], skipDuplicates: true })
+    if (created.count) {
+      await prisma.postComment.update({ where: { id: comment.id }, data: { likeCount: { increment: created.count } } })
+      changed = true
+    }
+  } else {
+    const removed = await prisma.postCommentLike.deleteMany({ where: { commentId: comment.id, userId: operator.id } })
+    if (removed.count) {
+      await prisma.postComment.updateMany({ where: { id: comment.id, likeCount: { gt: 0 } }, data: { likeCount: { decrement: removed.count } } })
+      changed = true
+    }
+  }
+  if (changed && input.liked) {
+    await createPostNotification({ type: 'comment_like', recipientId: comment.authorId, actorId: operator.id, postId: comment.postId, commentId: comment.id })
+      .catch((error: unknown) => console.warn('[operator-activity] comment_like_notify_failed', { error: error instanceof Error ? error.name : 'unknown' }))
+  }
+  if (changed) {
+    await writeAdminAudit(ctx, {
+      action: input.liked ? 'activity.comment_like' : 'activity.comment_unlike',
+      operatorUserId: operator.id,
+      targetType: 'comment',
+      targetId: comment.id,
+      metadata: { postId: comment.postId },
+    })
+  }
+  const fresh = await prisma.postComment.findUnique({ where: { id: comment.id }, select: { likeCount: true } })
+  return { ok: true, liked: input.liked, likeCount: fresh?.likeCount ?? comment.likeCount }
 }

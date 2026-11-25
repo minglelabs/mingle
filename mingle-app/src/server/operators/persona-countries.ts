@@ -127,6 +127,27 @@ export const PERSONA_COUNTRIES: readonly PersonaCountry[] = [
     code: 'TR', nameKo: '튀르키예', nameEn: 'Türkiye', languages: ['tr'],
     cities: [city('Istanbul', 41.01, 28.98, 5), city('Ankara', 39.93, 32.86, 2), city('Izmir', 38.42, 27.14), city('Antalya', 36.9, 30.7)],
   },
+  {
+    code: 'RU', nameKo: '러시아', nameEn: 'Russia', languages: ['ru'],
+    cities: [city('Moscow', 55.76, 37.62, 5), city('Saint Petersburg', 59.93, 30.34, 3), city('Kazan', 55.79, 49.12), city('Novosibirsk', 55.01, 82.93), city('Yekaterinburg', 56.84, 60.61), city('Vladivostok', 43.12, 131.89)],
+  },
+  {
+    code: 'SA', nameKo: '사우디아라비아', nameEn: 'Saudi Arabia', languages: ['ar'],
+    cities: [city('Riyadh', 24.71, 46.68, 4), city('Jeddah', 21.49, 39.19, 3), city('Dammam', 26.43, 50.1)],
+  },
+  {
+    code: 'AE', nameKo: '아랍에미리트', nameEn: 'United Arab Emirates', languages: ['ar', 'en'],
+    cities: [city('Dubai', 25.2, 55.27, 4), city('Abu Dhabi', 24.45, 54.38, 2), city('Sharjah', 25.35, 55.42)],
+  },
+  {
+    code: 'KZ', nameKo: '카자흐스탄', nameEn: 'Kazakhstan', languages: ['ru', 'kk'],
+    cities: [city('Almaty', 43.24, 76.89, 4), city('Astana', 51.17, 71.45, 3), city('Shymkent', 42.34, 69.59)],
+  },
+  {
+    // Uzbek is not an app language; young city people there write Russian too.
+    code: 'UZ', nameKo: '우즈베키스탄', nameEn: 'Uzbekistan', languages: ['ru'],
+    cities: [city('Tashkent', 41.3, 69.24, 4), city('Samarkand', 39.65, 66.96), city('Bukhara', 39.77, 64.42)],
+  },
 ]
 
 export type PersonaCountryPreset = { id: string; label: string; codes: string[] }
@@ -138,6 +159,7 @@ export const PERSONA_COUNTRY_PRESETS: readonly PersonaCountryPreset[] = [
   { id: 'english', label: '영어권', codes: ['US', 'CA', 'GB', 'AU'] },
   { id: 'europe', label: '유럽', codes: ['FR', 'DE', 'ES', 'IT'] },
   { id: 'latin-america', label: '중남미', codes: ['BR', 'MX', 'AR'] },
+  { id: 'middle-east-central-asia', label: '중동·러시아·중앙아시아', codes: ['TR', 'RU', 'SA', 'AE', 'KZ', 'UZ'] },
 ]
 
 const COUNTRY_BY_CODE = new Map(PERSONA_COUNTRIES.map(country => [country.code, country]))

@@ -51,6 +51,8 @@ type Props = {
   /** Up over the room. Lowered, the game keeps running out of sight. */
   open: boolean
   conversationId: string
+  /** Somebody else's listed game (the room list), played here with a ticket for that room. */
+  publicRoom?: string | null
   /** Who is playing; entry tickets are kept per viewer and room. */
   viewerKey: string
   playerName: string
@@ -67,10 +69,10 @@ type Props = {
   onOthersHere?: (count: number | null) => void
 }
 
-export default function HashRushRoomLayer({ open, conversationId, viewerKey, playerName, uiLocale, voiceActive, chat, onClose, onQuit, onOthersHere }: Props) {
+export default function HashRushRoomLayer({ open, conversationId, publicRoom, viewerKey, playerName, uiLocale, voiceActive, chat, onClose, onQuit, onOthersHere }: Props) {
   const copy = hashRushGameCopy(uiLocale)
   const inviteCopy = hashRushInviteCopy(uiLocale)
-  const [confirmQuit, setConfirmQuit] = useState<{ alone: boolean } | null>(null)
+  const [confirmQuit, setConfirmQuit] = useState<{ alone: boolean, endRound?: () => void } | null>(null)
   const [howTo, setHowTo] = useState(false)
   if (confirmQuit && !open) setConfirmQuit(null)
   if (howTo && !open) setHowTo(false)
@@ -122,6 +124,7 @@ export default function HashRushRoomLayer({ open, conversationId, viewerKey, pla
     >
       <HashRushGame
         conversationId={conversationId}
+        publicRoom={publicRoom}
         viewerKey={viewerKey}
         playerName={playerName}
         uiLocale={uiLocale}
@@ -129,7 +132,7 @@ export default function HashRushRoomLayer({ open, conversationId, viewerKey, pla
         voiceActive={voiceActive}
         chat={chat}
         onBack={onClose}
-        onQuit={onQuit ? (alone: boolean) => setConfirmQuit({ alone }) : undefined}
+        onQuit={onQuit ? (alone: boolean, endRound?: () => void) => setConfirmQuit({ alone, endRound }) : undefined}
         onOthersHere={onOthersHere}
         onHowTo={() => setHowTo(true)}
       />
@@ -160,7 +163,18 @@ export default function HashRushRoomLayer({ open, conversationId, viewerKey, pla
           >
             <p className="text-center text-[1.02rem] font-semibold text-gray-900">{inviteCopy.quitTitle}</p>
             <p className="mt-1.5 text-center text-[0.86rem] text-gray-500">{confirmQuit.alone ? inviteCopy.quitBody : inviteCopy.quitBodyOthers}</p>
-            <div className="mt-4 grid grid-cols-2 gap-3">
+            {/* The host, mid-round: stop it and take everybody to the lobby, staying in the game. */}
+            {confirmQuit.endRound ? (
+              <button
+                type="button"
+                data-qa="hash-rush-stop-round"
+                onClick={() => { const end = confirmQuit.endRound; setConfirmQuit(null); end?.() }}
+                className="mt-4 h-12 w-full rounded-xl bg-amber-400 text-[0.95rem] font-semibold text-gray-900 active:bg-amber-500"
+              >
+                {copy.stopRound}
+              </button>
+            ) : null}
+            <div className={`${confirmQuit.endRound ? 'mt-3' : 'mt-4'} grid grid-cols-2 gap-3`}>
               <button
                 type="button"
                 data-qa="hash-rush-quit-cancel"

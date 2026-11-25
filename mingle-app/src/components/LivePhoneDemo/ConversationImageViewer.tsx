@@ -91,7 +91,7 @@ const CHROME_BUTTON_CLASS = 'pointer-events-auto flex h-11 w-11 items-center jus
 
 /**
  * The full-screen photo viewer: the tapped photo with the rest of the room's photos on either side,
- * so a horizontal swipe turns the page. Pinch and double-tap zoom, swipe down to close (the backdrop
+ * so a horizontal swipe turns the page. Pinch and double-tap zoom, swipe down or up to close (the backdrop
  * and the controls fade with the drag and nothing is left behind), and the photo text translation
  * pill and overlay for the photo on screen.
  */

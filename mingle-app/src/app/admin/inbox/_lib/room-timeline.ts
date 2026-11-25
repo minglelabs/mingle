@@ -40,8 +40,9 @@ export function isRevealedUnsent(utterance: RoomUtterance): boolean {
 }
 
 /** ChatBubble's optional-field shape (it uses undefined where hydration uses null). */
-export function toBubbleUtterance(utterance: RoomUtterance): Utterance {
+export function toBubbleUtterance(utterance: RoomUtterance, speakerFlagLanguage?: string | null): Utterance {
   return {
+    ...(speakerFlagLanguage ? { speakerFlagLanguage } : {}),
     // Staff still get an unsent message's content (see isRevealedUnsent); without any, it is the app's placeholder.
     ...(utterance.recalled && !isRevealedUnsent(utterance) ? { recalled: true } : {}),
     ...(utterance.replyTo ? { replyTo: utterance.replyTo } : {}),

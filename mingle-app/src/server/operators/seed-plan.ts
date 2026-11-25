@@ -1,15 +1,18 @@
 import { PERSONA_COUNTRIES } from './persona-countries'
 
 /**
- * Default mix for seeding 100 operator accounts: Korea and Japan carry the
+ * Default mix for seeding 108 operator accounts: Korea and Japan carry the
  * weight (22 each), the rest are spread over the large-population and
  * major-language countries of the persona table. Staff edit the numbers
  * before a manual run; automatic creation keeps the account pool close to
  * these proportions. A country missing here defaults to 0.
  */
 export const DEFAULT_SEED_PLAN: Readonly<Record<string, number>> = {
-  KR: 22, JP: 22, US: 7, CN: 5, TW: 5, VN: 4, ID: 4, IN: 4, TH: 3, PH: 3, BR: 3,
-  MY: 2, GB: 2, FR: 2, DE: 2, ES: 2, IT: 2, TR: 2, SG: 1, MX: 1, CA: 1, AU: 1,
+  // Staff (2026-11-25): far more Korea, Japan, China and Taiwan (about two thirds together).
+  KR: 25, JP: 25, CN: 10, TW: 10, US: 4, VN: 2, ID: 2, IN: 2, BR: 2, TH: 2, PH: 2, TR: 2,
+  MY: 1, GB: 1, FR: 1, DE: 1, ES: 1, IT: 1, RU: 1, SG: 1, MX: 1, CA: 1, AU: 1,
+  // Staff (2026-11-23): a few from Russia, the Middle East and Central Asia, never none.
+  SA: 1, AE: 1, KZ: 1, UZ: 1,
 }
 
 export const SEED_MAX_PER_COUNTRY = 200
@@ -41,12 +44,15 @@ export function parseSeedCount(raw: string): number {
  * The country furthest below its share of the plan, given how many accounts
  * each country has now. Ties go to the larger planned share.
  */
-export function mostUnderrepresentedCountry(currentByCountry: ReadonlyMap<string, number>): string {
+export function mostUnderrepresentedCountry(currentByCountry: ReadonlyMap<string, number>, allowed?: readonly string[] | null): string {
   const planTotal = Object.values(DEFAULT_SEED_PLAN).reduce((sum, count) => sum + count, 0)
   const currentTotal = [...currentByCountry.values()].reduce((sum, count) => sum + count, 0)
   let best = 'KR'
   let bestDeficit = Number.NEGATIVE_INFINITY
-  for (const [code, planned] of Object.entries(DEFAULT_SEED_PLAN)) {
+  const plan = Object.entries(DEFAULT_SEED_PLAN).filter(([code]) => !allowed?.length || allowed.includes(code))
+  // Only countries the caller allows (e.g. ones a reference photo's person suits).
+  if (plan.length && allowed?.length) best = plan[0][0]
+  for (const [code, planned] of plan.length ? plan : Object.entries(DEFAULT_SEED_PLAN)) {
     // Expected count if one more account were added, minus what exists.
     const deficit = (planned / planTotal) * (currentTotal + 1) - (currentByCountry.get(code) ?? 0)
     if (deficit > bestDeficit + 1e-9 || (Math.abs(deficit - bestDeficit) <= 1e-9 && planned > (DEFAULT_SEED_PLAN[best] ?? 0))) {

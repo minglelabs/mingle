@@ -57,10 +57,21 @@ describe("handles", () => {
   });
 
   it("provides deterministic collision candidates", () => {
-    expect(buildDefaultHandleCandidates({ name: "Mina Song", id: "user_12345678" })).toEqual([
+    expect(buildDefaultHandleCandidates({ name: "Mina Song", id: "user_12345678" }, () => "r0000000")).toEqual([
       "minasong",
       "minasong_12345678",
       "user_12345678",
+      "minasong_r0000000",
     ]);
+  });
+
+  it("gives two same-name accounts on one email domain different fallback handles", () => {
+    const first = buildDefaultHandleCandidates({ name: "QA Agent", email: "qa-agent+one@mingle.test" }, () => "r0000000");
+    const second = buildDefaultHandleCandidates({ name: "QA Agent", email: "qa-agent+two@mingle.test" }, () => "r0000000");
+    expect(first[0]).toBe(second[0]);
+    expect(first[1]).not.toBe(second[1]);
+    expect(first[2]).not.toBe(second[2]);
+    expect(first[1]).toMatch(/^qaagent_[0-9a-z]{8}$/);
+    expect(first.at(-1)).toBe("qaagent_r0000000");
   });
 });

@@ -5,6 +5,7 @@ import {
   isDiscoveryPromptDue,
   isFirstSpeakPending,
   markFirstSpeakPending,
+  isDocumentLoadedOnFeed,
   shouldOpenConversationsInsteadOfFeed,
   speakTrialNeedsSessionCheck,
 } from '@/lib/first-run'
@@ -50,7 +51,7 @@ describe('first run flags', () => {
 })
 
 describe('shouldOpenConversationsInsteadOfFeed', () => {
-  const base = { isNativeApp: true, onboardingConfirmed: false, firstSpeakPending: false, hasPostTarget: false }
+  const base = { isNativeApp: true, launchedOnFeed: true, onboardingConfirmed: false, firstSpeakPending: false, hasPostTarget: false }
 
   it('sends a brand-new app install to the conversation list', () => {
     expect(shouldOpenConversationsInsteadOfFeed(base)).toBe(true)
@@ -81,6 +82,23 @@ describe('shouldOpenConversationsInsteadOfFeed', () => {
   it('does not move a post launch or the web for the speak trial either', () => {
     expect(shouldOpenConversationsInsteadOfFeed({ ...base, onboardingConfirmed: true, speakTrialDue: true, hasPostTarget: true })).toBe(false)
     expect(shouldOpenConversationsInsteadOfFeed({ ...base, onboardingConfirmed: true, speakTrialDue: true, isNativeApp: false })).toBe(false)
+  })
+
+  it('never moves the Home tab or a back step during the first run', () => {
+    expect(shouldOpenConversationsInsteadOfFeed({ ...base, firstSpeakPending: true, launchedOnFeed: false })).toBe(false)
+  })
+})
+
+describe('isDocumentLoadedOnFeed', () => {
+  it('is true only for a page that was loaded on the feed', () => {
+    expect(isDocumentLoadedOnFeed('https://x.app/ko/feed?nativeUi=1', '/ko/feed')).toBe(true)
+    expect(isDocumentLoadedOnFeed('https://x.app/ko/conversations?nativeUi=1', '/ko/feed')).toBe(false)
+    expect(isDocumentLoadedOnFeed('https://x.app/ko/users/abc', '/ko/feed')).toBe(false)
+  })
+
+  it('falls back to the current path without a navigation entry', () => {
+    expect(isDocumentLoadedOnFeed(null, '/ko/feed')).toBe(true)
+    expect(isDocumentLoadedOnFeed(null, '/ko/posts/1')).toBe(false)
   })
 })
 

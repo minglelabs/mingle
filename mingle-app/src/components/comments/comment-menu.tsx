@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MoreHorizontal } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Check, MoreHorizontal } from "lucide-react";
+import LanguageFlag from "@/components/language-flag";
+import { getSttLanguageDisplayName } from "@/lib/stt-languages";
 import { cn } from "@/lib/utils";
 import { commentsCopy } from "@/i18n/comments-copy";
 import type { CommentNode } from "./comment-types";
@@ -15,12 +18,16 @@ type Props = {
   onEdit: () => void;
   onDelete: () => void;
   onReport: () => void;
+  /** Pick one of the comment's other ready translations; the same one again = original. */
+  onPickLanguage: (language: string | null) => void;
 };
 
 /**
  * The comment ⋯ menu.
  * - own comment: Edit, Delete
  * - other's comment: Report, plus Delete when the viewer owns the post
+ * - any comment already translated into other languages: one flag row per
+ *   language ("view in another language"), like the post's flag chips
  */
 export default function CommentMenu({
   comment,
@@ -30,6 +37,7 @@ export default function CommentMenu({
   onEdit,
   onDelete,
   onReport,
+  onPickLanguage,
 }: Props) {
   const copy = commentsCopy(locale);
   const [open, setOpen] = useState(false);
@@ -39,13 +47,13 @@ export default function CommentMenu({
   const editable = canEdit(comment, viewerId);
   const deletable = canDelete(comment, viewerId, postAuthorId);
   const reportable = canReport(comment, viewerId);
+  const languages = comment.isDeleted ? [] : (comment.otherTranslations ?? []).map((t) => t.language);
 
   useEffect(() => {
     if (!open) return;
     const onDocClick = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false);
-        setConfirming(false);
       }
     };
     document.addEventListener("mousedown", onDocClick);
@@ -53,7 +61,7 @@ export default function CommentMenu({
   }, [open]);
 
   // Nothing to offer (e.g. signed-out, or own deleted comment).
-  if (!editable && !deletable && !reportable) return null;
+  if (!editable && !deletable && !reportable && languages.length === 0) return null;
 
   return (
     <div ref={ref} className="relative">
@@ -73,6 +81,32 @@ export default function CommentMenu({
           role="menu"
           className="absolute right-0 z-10 mt-1 min-w-32 overflow-hidden rounded-lg border border-gray-100 bg-white py-1 shadow-lg"
         >
+          {languages.length > 0 && (
+            <>
+              <p className="px-3 pb-1 pt-1.5 text-[12px] font-medium text-muted-foreground">{copy.viewInLanguage}</p>
+              {languages.map((language) => {
+                const selected = comment.pickedLanguage === language;
+                return (
+                  <button
+                    key={language}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={selected}
+                    onClick={() => {
+                      setOpen(false);
+                      onPickLanguage(selected ? null : language);
+                    }}
+                    className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-[14px] text-foreground hover:bg-gray-100"
+                  >
+                    <LanguageFlag language={language} className="text-[16px] leading-none" />
+                    <span className="flex-1">{getSttLanguageDisplayName(language, locale) || language}</span>
+                    {selected && <Check className="size-4 text-primary" aria-hidden />}
+                  </button>
+                );
+              })}
+              {(editable || reportable || deletable) && <div className="my-1 border-t border-gray-100" />}
+            </>
+          )}
           {editable && (
             <MenuItem
               label={copy.edit}
@@ -91,36 +125,64 @@ export default function CommentMenu({
               }}
             />
           )}
-          {deletable && !confirming && (
-            <MenuItem destructive label={copy.delete} onClick={() => setConfirming(true)} />
-          )}
-          {deletable && confirming && (
-            <div className="px-3 py-2">
-              <p className="mb-1.5 text-[13px] text-muted-foreground">{copy.deleteConfirm}</p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpen(false);
-                    setConfirming(false);
-                    onDelete();
-                  }}
-                  className="rounded-md bg-destructive px-2.5 py-1 text-[13px] font-medium text-destructive-foreground"
-                >
-                  {copy.deleteConfirmYes}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirming(false)}
-                  className="rounded-md bg-gray-100 px-2.5 py-1 text-[13px] font-medium"
-                >
-                  {copy.cancel}
-                </button>
-              </div>
-            </div>
+          {deletable && (
+            <MenuItem
+              destructive
+              label={copy.delete}
+              onClick={() => {
+                setOpen(false);
+                setConfirming(true);
+              }}
+            />
           )}
         </div>
       )}
+
+      {confirming &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[140] flex items-center justify-center bg-black/40 px-6"
+            // The portal still bubbles React events up the comment sheet
+            // (drag handle, swipe); keep them inside the modal.
+            onPointerDown={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              setConfirming(false);
+            }}
+          >
+            <div
+              role="alertdialog"
+              aria-modal="true"
+              aria-label={copy.deleteConfirm}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-[18rem] rounded-2xl bg-white p-5 text-center shadow-xl"
+            >
+              <p className="text-[15px] font-semibold text-gray-900">{copy.deleteConfirm}</p>
+              <div className="mt-5 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirming(false)}
+                  className="h-10 rounded-xl bg-gray-100 text-[14px] font-medium text-gray-700"
+                >
+                  {copy.cancel}
+                </button>
+                <button
+                  type="button"
+                  autoFocus
+                  onClick={() => {
+                    setConfirming(false);
+                    onDelete();
+                  }}
+                  className="h-10 rounded-xl bg-destructive text-[14px] font-semibold text-destructive-foreground"
+                >
+                  {copy.deleteConfirmYes}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

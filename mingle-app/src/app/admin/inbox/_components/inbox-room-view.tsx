@@ -12,7 +12,7 @@ import {
   type ChangeEvent,
   type FormEvent,
 } from 'react'
-import { ArrowDown, ChevronLeft, Loader2, SendHorizontal, Trash2 } from 'lucide-react'
+import { ArrowDown, ChevronLeft, Loader2, MoreVertical, SendHorizontal, Trash2 } from 'lucide-react'
 import ChatBubble from '@/components/LivePhoneDemo/ChatBubble'
 import {
   ConversationImageSrcProvider,
@@ -46,6 +46,7 @@ import {
 } from '../_lib/room-timeline'
 import { MessageReadReceiptsStaticProvider } from '@/components/LivePhoneDemo/MessageReadReceipts'
 import { InboxAvatar, KoreanViewSwitch } from './inbox-ui'
+import { InboxModerationSheet } from './inbox-moderation-sheet'
 import { useAdminInboxRealtime } from './use-admin-inbox-realtime'
 import { useStaffKoreanView } from './use-staff-korean-view'
 import { useVisualViewportBox } from './use-visual-viewport-box'
@@ -136,6 +137,49 @@ type MessageListProps = {
   displayLanguage: string | undefined
   languageOrder: readonly string[]
   viewerUserId: string
+  /** userId -> the member's own language, for the avatar flag. */
+  ownLanguages: Readonly<Record<string, string>>
+  /** Operator accounts of the room: their messages get a 삭제 button. */
+  operatorIds: ReadonlySet<string>
+  onDeleteMessage: (messageId: string) => Promise<boolean>
+}
+
+/** 삭제 under an operator's message: tap, then tap again within 4 s to delete it for everyone. */
+function DeleteMessageButton({ messageId, alignRight, onDelete }: {
+  messageId: string
+  alignRight: boolean
+  onDelete: (messageId: string) => Promise<boolean>
+}) {
+  const [state, setState] = useState<'idle' | 'confirm' | 'pending' | 'failed'>('idle')
+  useEffect(() => {
+    if (state !== 'confirm' && state !== 'failed') return
+    const timer = window.setTimeout(() => setState('idle'), 4000)
+    return () => window.clearTimeout(timer)
+  }, [state])
+  const onClick = useCallback(() => {
+    if (state === 'pending') return
+    if (state !== 'confirm') { setState('confirm'); return }
+    setState('pending')
+    void onDelete(messageId).then((ok) => setState(ok ? 'idle' : 'failed'))
+  }, [messageId, onDelete, state])
+  const label = state === 'confirm' ? '한 번 더 눌러 모두에게서 삭제'
+    : state === 'pending' ? '삭제하는 중…'
+      : state === 'failed' ? '삭제하지 못했어요 · 다시 누르기' : '삭제'
+  return (
+    <div className={`mt-0.5 flex ${alignRight ? 'justify-end pr-1' : 'pl-12'}`}>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={state === 'pending'}
+        className={`inline-flex min-h-8 items-center gap-1 rounded-full px-2 text-xs ${
+          state === 'confirm' || state === 'failed' ? 'bg-rose-50 font-semibold text-rose-600 ring-1 ring-rose-200' : 'text-slate-400 active:bg-slate-100'
+        }`}
+      >
+        {state === 'pending' ? <Loader2 size={12} className="animate-spin" aria-hidden="true" /> : <Trash2 size={12} aria-hidden="true" />}
+        {label}
+      </button>
+    </div>
+  )
 }
 
 /** The bubbles, through the app's own ChatBubble with the operator as viewer. Memoized: typing never re-renders it. */
@@ -146,6 +190,9 @@ const RoomMessageList = memo(function RoomMessageList({
   displayLanguage,
   languageOrder,
   viewerUserId,
+  ownLanguages,
+  operatorIds,
+  onDeleteMessage,
 }: MessageListProps) {
   return (
     <ConversationImageSrcProvider resolve={resolveInboxImageSrc}>
@@ -153,7 +200,8 @@ const RoomMessageList = memo(function RoomMessageList({
         if (item.kind === 'notice') {
           return <p key={item.key} className="px-6 py-2 text-center text-xs text-slate-500 break-words">{item.text}</p>
         }
-        const bubble = toBubbleUtterance(item.utterance)
+        const speakerId = item.utterance.speakerUserId
+        const bubble = toBubbleUtterance(item.utterance, speakerId ? ownLanguages[speakerId] : null)
         const koId = korean ? staffKoreanCandidateId(item.utterance) : null
         return (
           <div key={item.key} className="px-3 py-1">
@@ -174,6 +222,13 @@ const RoomMessageList = memo(function RoomMessageList({
               shouldAnimateEntrance={false}
               bubbleTextClassName="text-[15px]"
             />
+            {speakerId && operatorIds.has(speakerId) && item.utterance.serverMessageId && !item.utterance.recalled ? (
+              <DeleteMessageButton
+                messageId={item.utterance.serverMessageId}
+                alignRight={speakerId === viewerUserId}
+                onDelete={onDeleteMessage}
+              />
+            ) : null}
           </div>
         )
       })}
@@ -185,9 +240,11 @@ const RoomMessageList = memo(function RoomMessageList({
 function ReplyComposer({ hint, keyboardOpen, onSend }: {
   hint: string
   keyboardOpen: boolean
-  onSend: (text: string) => void
+  onSend: (text: string, translate: boolean) => void
 }) {
   const [draft, setDraft] = useState('')
+  // 자동 번역: on by default; off sends the text exactly as typed. Stays as set between messages.
+  const [translate, setTranslate] = useState(true)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const trimmedLength = draft.trim().length
   const tooLong = trimmedLength > REPLY_MAX_LENGTH
@@ -195,11 +252,11 @@ function ReplyComposer({ hint, keyboardOpen, onSend }: {
   const submit = useCallback(() => {
     const text = draft.trim()
     if (!text || text.length > REPLY_MAX_LENGTH) return
-    onSend(text)
+    onSend(text, translate)
     setDraft('')
     const textarea = textareaRef.current
     if (textarea) textarea.style.height = ''
-  }, [draft, onSend])
+  }, [draft, onSend, translate])
 
   const onChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
     setDraft(event.target.value)
@@ -219,7 +276,19 @@ function ReplyComposer({ hint, keyboardOpen, onSend }: {
       className="shrink-0 border-t border-slate-200 bg-white px-3 pt-2"
       style={{ paddingBottom: keyboardOpen ? 8 : 'max(env(safe-area-inset-bottom), 8px)' }}
     >
-      <p className="mb-1.5 break-words text-xs text-slate-500">{hint}</p>
+      <div className="mb-1.5 flex items-start justify-between gap-2">
+        <p className="min-w-0 break-words text-xs text-slate-500">{hint}</p>
+        <label className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-slate-600">
+          <input
+            type="checkbox"
+            data-testid="admin-inbox-translate"
+            checked={translate}
+            onChange={(event) => setTranslate(event.target.checked)}
+            className="h-4 w-4 accent-sky-500"
+          />
+          자동 번역
+        </label>
+      </div>
       <div className="flex items-end gap-2">
         <label htmlFor="admin-inbox-reply" className="sr-only">답장 입력</label>
         <textarea
@@ -235,7 +304,7 @@ function ReplyComposer({ hint, keyboardOpen, onSend }: {
             }
           }}
           rows={1}
-          placeholder="어떤 언어로 써도 번역해서 보냅니다"
+          placeholder={translate ? '어떤 언어로 써도 번역해서 보냅니다' : '쓴 그대로 보냅니다 (번역 안 함)'}
           className="max-h-36 min-h-11 flex-1 resize-none rounded-2xl border border-slate-300 bg-white px-3 py-2.5 text-base leading-6 text-slate-900 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200"
         />
         <button
@@ -500,7 +569,7 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ text: reply.text, as: operatorId, clientRequestId: reply.requestId }),
+        body: JSON.stringify({ text: reply.text, as: operatorId, clientRequestId: reply.requestId, translate: reply.translate !== false }),
       })
       const payload = await response.json().catch(() => null) as { message?: SendOperatorMessageResult; error?: string } | null
       if (!response.ok || !payload?.message) {
@@ -516,9 +585,9 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
     }
   }, [conversationId, operatorId])
 
-  const onSend = useCallback((text: string) => {
+  const onSend = useCallback((text: string, translate: boolean) => {
     scrollToBottomRef.current = true
-    void sendReply({ requestId: createReplyRequestId(), text, createdAtMs: Date.now(), status: 'sending', error: null })
+    void sendReply({ requestId: createReplyRequestId(), text, createdAtMs: Date.now(), status: 'sending', error: null, translate })
   }, [sendReply])
 
   const discardReply = useCallback((requestId: string) => {
@@ -530,6 +599,53 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
   }, [sendReply])
 
   const counterpartTitle = inboxCounterpartTitle(room.counterparts)
+  const ownLanguages = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const person of [...room.operators, ...room.counterparts]) {
+      const language = person.primaryLanguage ?? (person as { personaLanguage?: string | null }).personaLanguage
+      if (language) map[person.userId] = language
+    }
+    return map
+  }, [room.operators, room.counterparts])
+  const operatorIds = useMemo(() => new Set(room.operators.map((candidate) => candidate.userId)), [room.operators])
+  const deleteMessage = useCallback(async (messageId: string) => {
+    try {
+      const response = await fetch(`/admin/inbox/api/rooms/${encodeURIComponent(conversationId)}/delete-message`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ messageId }),
+      })
+      if (response.status === 401) { goToLogin(); return false }
+      if (!response.ok) return false
+    } catch {
+      return false
+    }
+    await refresh().catch(() => {})
+    dispatchAdminInboxUpdated()
+    return true
+  }, [conversationId, refresh])
+  const [moderationOpen, setModerationOpen] = useState(false)
+  const moderate = useCallback(async (body: Record<string, unknown>) => {
+    try {
+      const response = await fetch(`/admin/inbox/api/rooms/${encodeURIComponent(conversationId)}/moderate`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...body, as: operatorId }),
+      })
+      if (response.status === 401) { goToLogin(); return { ok: false } }
+      if (!response.ok) return { ok: false }
+      const payload = await response.json() as { status?: string }
+      if (body.action !== 'report') {
+        await refresh().catch(() => {})
+        dispatchAdminInboxUpdated()
+      }
+      return { ok: true, status: payload.status }
+    } catch {
+      return { ok: false }
+    }
+  }, [conversationId, operatorId, refresh])
   const operatorName = inboxPersonLabel(operator)
   const personaLanguageName = inboxLanguageName(operator.personaLanguage)
   const unavailable = roomGone
@@ -556,7 +672,7 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
           <ChevronLeft size={24} aria-hidden="true" />
         </Link>
         <Link
-          href={`/admin/operators/${encodeURIComponent(operator.userId)}`}
+          href={`/admin/operators/${encodeURIComponent(operator.userId)}${operator.isOfficial ? '/profile' : ''}`}
           prefetch={false}
           aria-label={`${operatorName} 운영 계정 상세`}
           className="shrink-0 rounded-full active:opacity-70"
@@ -575,7 +691,26 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
           </p>
         </div>
         <KoreanViewSwitch enabled={korean} onChange={toggleKorean} />
+        {room.counterparts.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => setModerationOpen(true)}
+            aria-label="차단·신고"
+            className="flex h-11 w-9 shrink-0 items-center justify-center rounded-full text-slate-600 active:bg-slate-100"
+          >
+            <MoreVertical size={20} aria-hidden="true" />
+          </button>
+        ) : null}
       </header>
+      {moderationOpen ? (
+        <InboxModerationSheet
+          counterparts={room.counterparts}
+          blockedIds={room.blockedByOperator ?? []}
+          operatorName={operatorName}
+          onModerate={moderate}
+          onClose={() => setModerationOpen(false)}
+        />
+      ) : null}
 
       {room.operators.length > 1 ? (
         <nav aria-label="답장할 운영 계정" className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-slate-200 bg-white px-3 py-1">
@@ -633,6 +768,9 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
             displayLanguage={displayLanguage}
             languageOrder={languageOrder}
             viewerUserId={operatorId}
+            ownLanguages={ownLanguages}
+            operatorIds={operatorIds}
+            onDeleteMessage={deleteMessage}
           />
           </MessageReadReceiptsStaticProvider>
           {pending.map((reply) => (

@@ -6,6 +6,8 @@ const appRoot = dirname(fileURLToPath(import.meta.url));
 /** @type {import("next").NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // heic-convert (libheif-js) loads its decoder at run time: keep it out of the server bundle.
+  serverExternalPackages: ["heic-convert", "heic-decode", "libheif-js"],
   devIndicators: false,
   outputFileTracingRoot: appRoot,
   // The Railway image ships only the traced standalone server, not the full
@@ -16,6 +18,9 @@ const nextConfig = {
     ignoreBuildErrors: process.env.MINGLE_SKIP_BUILD_TYPECHECK === "1",
   },
   experimental: {
+    // The proxy cuts request bodies at 10MB by default, which broke uploads of
+    // big reference photos (/admin/operators/api/references, up to 30MB).
+    proxyClientMaxBodySize: "32mb",
     staleTimes: {
       // How long a fully prefetched route stays usable without a server
       // round-trip. The native tab bar prefetches its tab roots (which carry no

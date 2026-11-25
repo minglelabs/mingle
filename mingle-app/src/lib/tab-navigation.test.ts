@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildNativeAwareTabHref,
   buildNativeAwareTabPath,
   clearTopLevelTabSwitch,
   isNativeTabRootHref,
@@ -12,6 +13,15 @@ import {
 } from "@/lib/tab-navigation";
 
 describe("tab navigation", () => {
+  it("keeps native keys and the tab-root marker on an href with its own query", () => {
+    const searchParams = new URLSearchParams("nativeUi=1&postId=old&commentId=old&nativeTabRoot=1");
+
+    expect(
+      buildNativeAwareTabHref("/ko/feed?postId=p1&commentId=c1", searchParams, { tabRoot: true }),
+    ).toBe(`/ko/feed?nativeUi=1&${NATIVE_TAB_ROOT_QUERY_KEY}=1&postId=p1&commentId=c1`);
+    expect(buildNativeAwareTabHref("/ko/feed", new URLSearchParams(""))).toBe("/ko/feed");
+  });
+
   it("builds a tab-root URL without carrying a conversation route", () => {
     const searchParams = new URLSearchParams(
       "nativeUi=1&nativeStt=1&conversation=conv-1&nativeSkipConversationRestore=1",
