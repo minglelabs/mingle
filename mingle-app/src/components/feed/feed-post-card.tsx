@@ -30,7 +30,7 @@ import HeartBurst from "@/components/feed/heart-burst";
 import PostLanguageChips, { ORIGINAL_CHIP } from "@/components/feed/post-language-chips";
 import { buildLanguageChips } from "@/lib/language-chips";
 import { useViewerLanguages } from "@/lib/use-viewer-languages";
-import { resolveMoreLanguagesCopy } from "@/i18n/more-languages-copy";
+import { resolveLanguageSearchCopy, resolveMoreLanguagesCopy } from "@/i18n/more-languages-copy";
 import PostReadAloudButton from "@/components/feed/post-read-aloud-button";
 import { stopReadAloud, usePostReadAloud } from "@/components/feed/post-read-aloud";
 import { buildClientApiPath } from "@/lib/api-contract";
@@ -530,10 +530,16 @@ export default function FeedPostCard({
     sourceLanguage: post.sourceLanguage,
     // A mixed body has a real translation into its own language: keep that chip.
     sourceLanguagesMixed: post.sourceLanguagesMixed,
-    comfortableLanguage: viewerChipLanguage ?? viewerLanguages.comfortable,
+    comfortableLanguages: [viewerChipLanguage, ...viewerLanguages.comfortable],
     interestLanguages: viewerLanguages.interest,
     translatedLanguages: post.translationLanguages,
   }), [viewerChipLanguage, viewerLanguages, post.translationLanguages, post.sourceLanguage, post.sourceLanguagesMixed]);
+  // What can be shown at once; any other flag is faded and translated on its tap.
+  const readyChipLanguages = useMemo(() => [
+    ...(post.translationLanguages ?? []),
+    ...Object.keys(otherTranslations ?? {}),
+    ...(viewerChipLanguage && translate.translatedText ? [viewerChipLanguage] : []),
+  ], [otherTranslations, post.translationLanguages, translate.translatedText, viewerChipLanguage]);
   const selectedChip = pickedText
     ? (pickedLanguage as string)
     : viewerChipLanguage && translate.showingTranslation
@@ -771,6 +777,8 @@ export default function FeedPostCard({
             onSelect={handleSelectLanguage}
             moreLanguages={moreChipLanguages}
             moreLabel={resolveMoreLanguagesCopy(locale)}
+            readyLanguages={readyChipLanguages}
+            searchLabel={resolveLanguageSearchCopy(locale)}
           />
         ) : null}
         {canReadAloud ? (

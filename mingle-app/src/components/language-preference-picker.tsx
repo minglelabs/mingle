@@ -33,6 +33,8 @@ type LanguagePreferencePickerProps = {
   maxLanguages?: number;
   minLanguages?: number;
   disabled?: boolean;
+  /** One language is picked and the screen closes: no row of selected languages. */
+  hideSelection?: boolean;
 };
 
 function LanguageOptionButton({
@@ -91,6 +93,7 @@ export default function LanguagePreferencePicker({
   maxLanguages = MAX_STT_LANGUAGE_SELECTION,
   minLanguages = 1,
   disabled = false,
+  hideSelection = false,
 }: LanguagePreferencePickerProps) {
   const headingId = useId();
   const languageLocaleInfo = useMemo(() => resolveLanguageSelectorLocale(uiLocale), [uiLocale]);
@@ -147,7 +150,8 @@ export default function LanguagePreferencePicker({
   return (
     <div className="min-w-0 w-full max-w-full space-y-3">
       <div
-        className="flex min-h-14 items-center gap-2 overflow-x-auto rounded-[18px] border border-gray-200 bg-white px-3 py-2 shadow-sm"
+        hidden={hideSelection}
+        className={hideSelection ? "hidden" : "flex min-h-14 items-center gap-2 overflow-x-auto rounded-[18px] border border-gray-200 bg-white px-3 py-2 shadow-sm"}
         aria-labelledby={headingId}
       >
         <span id={headingId} className="sr-only">{resolveAccessibilityCopy(uiLocale).selectedLanguages}</span>

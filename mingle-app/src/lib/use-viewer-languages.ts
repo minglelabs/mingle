@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { buildClientApiPath } from "@/lib/api-contract";
 
 /** The signed-in reader's own language and 관심 언어, for the language flags on posts and bios. */
-export type ViewerLanguages = { comfortable: string | null; interest: string[] };
+export type ViewerLanguages = { comfortable: string[]; interest: string[] };
 
-const EMPTY: ViewerLanguages = { comfortable: null, interest: [] };
+const EMPTY: ViewerLanguages = { comfortable: [], interest: [] };
 // One read per account for the whole visit: every post card asks for the same thing.
 const cache = new Map<string, Promise<ViewerLanguages>>();
 const resolved = new Map<string, ViewerLanguages>();
@@ -24,7 +24,7 @@ function load(userId: string): Promise<ViewerLanguages> {
             .map((entry) => (typeof entry === "string" ? entry : (entry as { code?: unknown } | null)?.code))
             .filter((code): code is string => typeof code === "string" && code.length > 0)
           : [];
-        const languages = { comfortable: primary[0] ?? null, interest };
+        const languages = { comfortable: primary, interest };
         resolved.set(userId, languages);
         return languages;
       })

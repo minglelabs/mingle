@@ -495,17 +495,17 @@ function ProfileSettingsPanel({
     defaultLanguagesSaveError: managementCopy.defaultLanguagesSaveError,
     primaryLanguages: dictionary.profile.primaryLanguagesLabel
       ?? dictionary.profile.nationalityLabel
-      ?? (locale === "ko" ? "주 사용 언어" : "Primary languages"),
+      ?? (locale === "ko" ? "편한 언어" : "Primary languages"),
     primaryLanguagesTitle: dictionary.profile.primaryLanguagesTitle
       ?? dictionary.profile.primaryLanguagesLabel
       ?? dictionary.profile.nationalityLabel
-      ?? (locale === "ko" ? "주 사용 언어" : "Primary languages"),
+      ?? (locale === "ko" ? "편한 언어" : "Primary languages"),
     primaryLanguagesDescription: dictionary.profile.primaryLanguagesDescription
       ?? (locale === "ko"
-        ? "프로필에 표시할 주 사용 언어를 원하는 순서대로 최대 5개 선택하세요."
+        ? "프로필에 표시할 편한 언어를 원하는 순서대로 최대 5개 선택하세요."
         : "Choose up to five primary languages in the order they should appear on your profile."),
     primaryLanguagesSaveError: dictionary.profile.primaryLanguagesSaveError
-      ?? (locale === "ko" ? "주 사용 언어를 저장하지 못했습니다." : "Could not save your primary languages."),
+      ?? (locale === "ko" ? "편한 언어를 저장하지 못했습니다." : "Could not save your primary languages."),
     usage: managementCopy.usage,
     noBlocked: dictionary.profile.noBlockedUsers ?? (locale === "ko" ? "차단한 사용자가 없습니다." : "You have not blocked anyone."),
     noReports: dictionary.profile.noReports ?? (locale === "ko" ? "신고 내역이 없습니다." : "You have not submitted any reports."),
@@ -1704,7 +1704,7 @@ function ProfileEditPanel({
       ?? "Primary languages",
     primaryLanguagesDescription: dictionary.profile.primaryLanguagesDescription
       ?? (locale === "ko"
-        ? "프로필에 표시할 주 사용 언어를 원하는 순서대로 최대 5개 선택하세요."
+        ? "프로필에 표시할 편한 언어를 원하는 순서대로 최대 5개 선택하세요."
         : "Choose up to five primary languages in the order they should appear on your profile."),
     saveAction: dictionary.profile.saveAction ?? "Save",
     cancelAction: dictionary.profile.cancelAction ?? "Cancel",

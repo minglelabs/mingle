@@ -731,7 +731,7 @@ export default function PublicUserProfileScreen({
               bio={bio}
               bioUserId={profile.id}
               locale={locale}
-              languageLabel={dictionary.profile.primaryLanguagesLabel ?? dictionary.profile.nationalityLabel ?? (locale === "ko" ? "주 사용 언어" : "Primary language")}
+              languageLabel={dictionary.profile.primaryLanguagesLabel ?? dictionary.profile.nationalityLabel ?? (locale === "ko" ? "편한 언어" : "Primary language")}
               languageName={languageName}
               closeLabel={dictionary.profile.settingsCloseLabel ?? copy.back}
               onClose={() => setShowProfileImagePreview(false)}

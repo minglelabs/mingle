@@ -136,7 +136,9 @@ export async function getBioSnapshot(userId: string, viewerId: string, locale: s
   const translation = version ? await prisma.profileBioTranslation.findUnique({ where: { versionId_language: { versionId: version.id, language } } }) : null
   const sourceTask = version ? await prisma.profileBioTranslation.findUnique({ where: { versionId_language: { versionId: version.id, language: SOURCE_TASK } } }) : null
   const draftVersion = state?.currentVersionId ? await prisma.profileBioVersion.findUnique({ where: { id: state.currentVersionId }, include: { translations: true } }) : null
+  const translatedRows = version ? await prisma.profileBioTranslation.findMany({ where: { versionId: version.id, status: 'succeeded', text: { not: null }, NOT: { language: SOURCE_TASK } }, select: { language: true }, orderBy: { language: 'asc' } }) : []
   return {
+    translatedLanguages: translatedRows.map(row => row.language),
     versionId: version?.id ?? null, original: state ? version?.sourceText ?? '' : user.bio ?? '', sourceLanguage: version?.sourceLanguage ?? null,
     detecting: !version?.sourceLanguage && (sourceTask?.status === 'running' || Boolean(version && version.status !== 'complete')),
     language, translation: translation?.status === 'succeeded' ? translation.text : null,

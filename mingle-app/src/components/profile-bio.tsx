@@ -7,7 +7,7 @@ import { BIO_CHANGED_EVENT, BIO_DEFAULT_LANGUAGES, DISPLAY_LANGUAGE_CHANGED_EVEN
 import { profileBioCopy } from '@/i18n/profile-bio-copy'
 import { buildLanguageChips } from '@/lib/language-chips'
 import { useViewerLanguages } from '@/lib/use-viewer-languages'
-import { resolveMoreLanguagesCopy } from '@/i18n/more-languages-copy'
+import { resolveLanguageSearchCopy, resolveMoreLanguagesCopy } from '@/i18n/more-languages-copy'
 
 export default function ProfileBio({ userId, initialBio, locale, dark = false, editing = false, expectTranslate = false }: {
   userId: string; initialBio?: string | null; locale: string; dark?: boolean; editing?: boolean
@@ -129,10 +129,13 @@ export default function ProfileBio({ userId, initialBio, locale, dark = false, e
   const source = snapshot?.sourceLanguage ?? null
   const { main: chipLanguages, more: moreChipLanguages } = buildLanguageChips({
     sourceLanguage: source,
-    comfortableLanguage: readerLanguage ?? viewerLanguages.comfortable,
+    comfortableLanguages: [readerLanguage, ...viewerLanguages.comfortable],
     interestLanguages: viewerLanguages.interest,
+    translatedLanguages: snapshot?.translatedLanguages,
   })
-  const showChips = Boolean(snapshot && !snapshot.detecting && source && chipLanguages.length + moreChipLanguages.length > 0)
+  // What can be shown at once; any other flag is faded and translated on its tap.
+  const readyChipLanguages = [...(snapshot?.translatedLanguages ?? []), ...(translated && snapshot ? [snapshot.language] : [])]
+  const showChips = Boolean(snapshot && !snapshot.detecting && source)
   return <div className={`mt-1 min-w-0 ${dark ? 'text-white/85' : 'text-slate-700'}`}>
     <p dir="auto" className="whitespace-pre-wrap break-words text-[14px] leading-relaxed [overflow-wrap:anywhere]">{translated && !showOriginal && !requesting ? translated : original}</p>
     {showChips && <div className="mt-1" data-qa="profile-bio-language-chips">
@@ -145,6 +148,8 @@ export default function ProfileBio({ userId, initialBio, locale, dark = false, e
         originalLabel={copy.original}
         moreLanguages={moreChipLanguages}
         moreLabel={resolveMoreLanguagesCopy(locale)}
+        readyLanguages={readyChipLanguages}
+        searchLabel={resolveLanguageSearchCopy(locale)}
         onSelect={(chip) => {
           if (chip === ORIGINAL_CHIP) { setShowOriginal(true); return }
           setShowOriginal(false)
