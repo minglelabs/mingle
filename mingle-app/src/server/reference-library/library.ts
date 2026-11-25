@@ -294,6 +294,17 @@ export async function claimReferencePhoto(args: {
   })
 }
 
+/** A post photo staff edited: the library photo it was drawn from now points at the edited file. */
+export async function moveReferenceImageKey(from: string, to: string): Promise<void> {
+  if (from === to) return
+  const items = await listReferencePhotos()
+  if (!items.some((item) => item.usedBy?.imageKey === from)) return
+  await updateLibrary((current) => ({
+    items: current.map((item) => (item.usedBy?.imageKey === from ? { ...item, usedBy: { ...item.usedBy, imageKey: to } } : item)),
+    result: null,
+  }))
+}
+
 /** Records the post photo drawn from a claimed library photo. */
 export async function markReferenceImage(id: string, imageKey: string): Promise<void> {
   await updateLibrary((items) => ({
