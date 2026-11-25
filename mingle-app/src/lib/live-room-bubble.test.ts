@@ -64,7 +64,7 @@ describe('live room bubble: when it shows', () => {
     expect(getLiveRoomBubbleForTests()).toMatchObject({ kind: 'stt', conversationId: 's1', title: 'Notes', face: null })
   })
 
-  it('shows the host of the room while they are in the call, and how many people are in it', () => {
+  it('shows the host of the room, in the call or not, and how many people are in it', () => {
     applyNativeVoiceEvent({ type: 'state', phase: 'connected', conversationId: 'r9' })
     applyNativeVoiceEvent({ type: 'status', conversationId: 'r9', call: { participants: [{ userId: 'h', image: 'h.jpg' }], stage: { hostUserId: 'h' } } })
     applyNativeVoiceEvent({ type: 'room', conversationId: 'r9', snapshot: { members: [
@@ -73,19 +73,27 @@ describe('live room bubble: when it shows', () => {
       { userId: 'h', name: 'Host', isLocal: false, isSpeaking: false },
     ] } })
     expect(getLiveRoomBubbleForTests()).toMatchObject({ count: 3, face: { userId: 'h', name: 'Host', image: 'h.jpg', speaking: false } })
-    // The host left the call: back to whoever is speaking.
+    // The host is not in the call: still the host's photo.
     applyNativeVoiceEvent({ type: 'room', conversationId: 'r9', snapshot: { members: [
       { userId: 'me', name: 'Me', isLocal: true, isSpeaking: false },
       { userId: 'b', name: 'Bo', isLocal: false, isSpeaking: true },
     ] } })
-    expect(getLiveRoomBubbleForTests()).toMatchObject({ count: 2, face: { userId: 'b', speaking: true } })
+    expect(getLiveRoomBubbleForTests()).toMatchObject({ count: 2, face: { userId: 'h', image: 'h.jpg', speaking: false } })
   })
 
   it('is a rounded square with a leave button tall enough to hit', () => {
     const source = readFileSync(join(process.cwd(), 'src/components/live-room-bubble.tsx'), 'utf8')
-    expect(source).toContain('const BOX = { width: 124, height: 148 };')
-    expect(source).toContain('const LEAVE_HEIGHT_PX = 42;')
-    expect(source).toContain('data-qa="live-room-bubble-count"')
+    expect(source).toContain('const BOX = { width: 124, height: 150 };')
+    expect(source).toContain('const LEAVE_HEIGHT_PX = 40;')
+    // The photo, then one line (the count and the name, one size), then the leave button.
+    const photo = source.indexOf('h-[72px] w-[72px]')
+    const line = source.indexOf('data-qa="live-room-bubble-line"')
+    const leave = source.indexOf('data-qa="live-room-bubble-leave"')
+    expect(photo).toBeGreaterThan(0)
+    expect(line).toBeGreaterThan(photo)
+    expect(leave).toBeGreaterThan(line)
+    expect(source.indexOf('data-qa="live-room-bubble-count"')).toBeGreaterThan(line)
+    expect(source.indexOf('data-qa="live-room-bubble-title"')).toBeGreaterThan(line)
     applyNativeVoiceEvent(room('r1', [member('me', { isLocal: true })]))
     expect(getLiveRoomBubbleForTests()?.kind).toBe('voice')
     publishLiveStt(null)

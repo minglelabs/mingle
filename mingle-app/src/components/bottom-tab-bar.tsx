@@ -165,12 +165,13 @@ export default function BottomTabBar({
     || pathname === conversationsPath
     || pathname.startsWith(`${conversationsPath}/`);
   const isConnectActive = activeRoute === "connect"
+    // Home is the explore tab.
+    || activeRoute === "home"
     || pathname === explorePath
     || pathname.startsWith(`${explorePath}/`)
     || pathname === connectPath
     || pathname.startsWith(`${connectPath}/`);
   const isVoiceActive = activeRoute === "voice"
-    || activeRoute === "home"
     || pathname === voicePath
     || pathname.startsWith(`${voicePath}/`);
   const isMypageActive = activeRoute === "mypage"
@@ -351,26 +352,7 @@ export default function BottomTabBar({
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
       }}
     >
-      <button
-        type="button"
-        data-qa="tab-voice"
-        onClick={() => {
-          if (isOnTabRoute(voicePath)) return;
-          markTopLevelTabSwitch();
-          router.replace(voiceHref);
-        }}
-        className="flex flex-1 items-center justify-center transition active:opacity-60"
-        aria-label={voiceRoomsCopy(locale).tabLabel}
-        aria-current={isVoiceActive ? "page" : undefined}
-      >
-        <Mic
-          size={26}
-          fill={isVoiceActive ? activeColor : "none"}
-          stroke={isVoiceActive ? activeColor : inactiveColor}
-          strokeWidth={isVoiceActive ? activeStroke - 0.4 : 1.9}
-          aria-hidden="true"
-        />
-      </button>
+      {/* Order (owner, 2026-11-25): feed, chats, explore (where the app lands), voice rooms, my. */}
       {showFeedTab ? (
         <button
           type="button"
@@ -393,31 +375,6 @@ export default function BottomTabBar({
           />
         </button>
       ) : null}
-      <button
-        type="button"
-        onClick={() => {
-          if (isOnTabRoute(explorePath)) return;
-          markTopLevelTabSwitch();
-          router.replace(connectHref);
-        }}
-        className="flex flex-1 items-center justify-center transition active:opacity-60"
-        aria-label={dictionary.titles.connect}
-        aria-current={isConnectActive ? "page" : undefined}
-      >
-        {isConnectActive ? (
-          // Selected: a filled disc with the needle cut out in the opposite ink, so it
-          // stands out on the one-ink glass bar the way the filled Home and Chats icons do.
-          <svg width={26} height={26} viewBox="0 0 24 24" aria-hidden="true" data-qa="tab-explore-active">
-            <circle cx="12" cy="12" r="10" fill={activeColor} stroke={activeColor} strokeWidth={activeStroke - 0.6} />
-            <path
-              d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"
-              fill={glass ? (glyphTone === "dark" ? "#ffffff" : "#0f172a") : "#ffffff"}
-            />
-          </svg>
-        ) : (
-          <Compass size={26} stroke={inactiveColor} strokeWidth={1.9} aria-hidden="true" />
-        )}
-      </button>
       <button
         type="button"
         onClick={() => {
@@ -448,6 +405,51 @@ export default function BottomTabBar({
             </span>
           ) : null}
         </span>
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          if (isOnTabRoute(explorePath)) return;
+          markTopLevelTabSwitch();
+          router.replace(connectHref);
+        }}
+        className="flex flex-1 items-center justify-center transition active:opacity-60"
+        aria-label={dictionary.titles.connect}
+        aria-current={isConnectActive ? "page" : undefined}
+      >
+        {isConnectActive ? (
+          // Selected: a filled disc with the needle cut out in the opposite ink, so it
+          // stands out on the one-ink glass bar the way the filled Home and Chats icons do.
+          <svg width={26} height={26} viewBox="0 0 24 24" aria-hidden="true" data-qa="tab-explore-active">
+            <circle cx="12" cy="12" r="10" fill={activeColor} stroke={activeColor} strokeWidth={activeStroke - 0.6} />
+            <path
+              d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"
+              fill={glass ? (glyphTone === "dark" ? "#ffffff" : "#0f172a") : "#ffffff"}
+            />
+          </svg>
+        ) : (
+          <Compass size={26} stroke={inactiveColor} strokeWidth={1.9} aria-hidden="true" />
+        )}
+      </button>
+      <button
+        type="button"
+        data-qa="tab-voice"
+        onClick={() => {
+          if (isOnTabRoute(voicePath)) return;
+          markTopLevelTabSwitch();
+          router.replace(voiceHref);
+        }}
+        className="flex flex-1 items-center justify-center transition active:opacity-60"
+        aria-label={voiceRoomsCopy(locale).tabLabel}
+        aria-current={isVoiceActive ? "page" : undefined}
+      >
+        <Mic
+          size={26}
+          fill={isVoiceActive ? activeColor : "none"}
+          stroke={isVoiceActive ? activeColor : inactiveColor}
+          strokeWidth={isVoiceActive ? activeStroke - 0.4 : 1.9}
+          aria-hidden="true"
+        />
       </button>
       <button
         type="button"

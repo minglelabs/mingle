@@ -28,9 +28,9 @@ export type LiveRoomBubbleView = {
   conversationId: string
   title: string
   /**
-   * The face to show: the room's host while they are in the call (owner,
-   * 2026-11-25); in a room with no host there, whoever is speaking, else the
-   * last one who spoke, else someone else in the call.
+   * The face to show: the room's host (owner, 2026-11-25), in the call or
+   * not; in a room with no host (a chat room's call), whoever is speaking,
+   * else the last one who spoke, else someone else in the call.
    */
   face: { userId: string; name: string; image: string | null; speaking: boolean } | null
   /** How many people are in the call (0 for speech recognition). */
@@ -67,13 +67,14 @@ export function resolveLiveRoomBubble(input: {
     const speaking = voice.members.find((member) => member.isSpeaking && !member.isLocal)
       ?? voice.members.find((member) => member.isSpeaking)
     const hostId = input.hostOf?.(voice.conversationId) ?? null
-    const host = hostId ? voice.members.find((member) => member.userId === hostId) ?? null : null
-    if (host) {
+    if (hostId) {
+      // The host's photo, whether or not the host is in the call right now.
+      const host = voice.members.find((member) => member.userId === hostId) ?? null
       return {
         kind: 'voice',
         conversationId: voice.conversationId,
         title: input.titleOf(voice.conversationId),
-        face: { userId: host.userId, name: host.name, image: input.imageOf(host.userId), speaking: host.isSpeaking },
+        face: { userId: hostId, name: host?.name ?? '', image: input.imageOf(hostId), speaking: host?.isSpeaking === true },
         count: voice.members.length,
       }
     }
@@ -153,12 +154,35 @@ export function applyNativeVoiceEvent(detail: unknown): void {
       if (typeof entry?.userId === 'string' && typeof entry.image === 'string' && entry.image) images.set(entry.userId, entry.image)
     }
     const hostUserId = event.call?.stage?.hostUserId
-    if (conversationId && typeof hostUserId === 'string' && hostUserId) hosts.set(conversationId, hostUserId)
-    else if (conversationId && event.call) hosts.delete(conversationId)
+    if (conversationId && typeof hostUserId === 'string' && hostUserId) {
+      hosts.set(conversationId, hostUserId)
+      // A host who is not in the call is not in the list above: read the photo once.
+      if (!images.has(hostUserId)) loadHostImage(hostUserId)
+    } else if (conversationId && event.call) hosts.delete(conversationId)
   } else {
     return
   }
   refresh()
+}
+
+const hostImageAsked = new Set<string>()
+let hostImageLoader: ((userId: string) => Promise<string | null>) | null = null
+
+/** How a host's photo is read when the call's list does not have it (set by the bubble; a test may replace it). */
+export function setLiveRoomHostImageLoader(loader: ((userId: string) => Promise<string | null>) | null): void {
+  hostImageLoader = loader
+}
+
+function loadHostImage(userId: string): void {
+  if (!hostImageLoader || hostImageAsked.has(userId)) return
+  hostImageAsked.add(userId)
+  void hostImageLoader(userId).then((image) => {
+    if (!image) return
+    images.set(userId, image)
+    refresh()
+  }).catch(() => {
+    hostImageAsked.delete(userId)
+  })
 }
 
 function startListening(): void {
@@ -222,6 +246,8 @@ export function useLiveRoomBubble(): LiveRoomBubbleView | null {
 }
 
 export function resetLiveRoomBubbleForTests(): void {
+  hosts.clear()
+  hostImageAsked.clear()
   state = { voice: null, stt: null, visibleRoomId: null }
   lastSpeakerId = null
   remembered.clear()

@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { liveRoomBubbleCopy } from "@/i18n/live-room-bubble-copy";
 import { voiceTalkCopy } from "@/i18n/voice-talk-copy";
+import { buildClientApiPath } from "@/lib/api-contract";
 import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";
 import {
   BUBBLE_DROP_RADIUS,
@@ -27,6 +28,7 @@ import {
   getRememberedLiveRoom,
   isOverBubbleDrop,
   restBubble,
+  setLiveRoomHostImageLoader,
   useLiveRoomBubble,
   type BubbleArea,
   type BubbleRest,
@@ -36,8 +38,8 @@ import {
 // A rounded square (owner, 2026-11-25): the host's photo large, the room's
 // name and the number of people small under it, and a leave button tall
 // enough to hit. It was a wide, flat strip.
-const BOX = { width: 124, height: 148 };
-const LEAVE_HEIGHT_PX = 42;
+const BOX = { width: 124, height: 150 };
+const LEAVE_HEIGHT_PX = 40;
 const TOP_CLEAR_PX = 64;
 /** Tab bar plus the home indicator. */
 const BOTTOM_CLEAR_PX = 52 + 34;
@@ -71,6 +73,15 @@ export default function LiveRoomBubble({
   conversationListHref: string;
 }) {
   const bubble = useLiveRoomBubble();
+  // The host of a room may not be in its call: the photo comes from the profile.
+  useEffect(() => {
+    setLiveRoomHostImageLoader(async (userId) => {
+      const response = await fetch(buildClientApiPath(`/users/${encodeURIComponent(userId)}`), { cache: "no-store" });
+      if (!response.ok) return null;
+      const profile = await response.json().catch(() => null) as { image?: unknown } | null;
+      return typeof profile?.image === "string" && profile.image ? profile.image : null;
+    });
+  }, []);
   const router = useRouter();
   const copy = liveRoomBubbleCopy(locale);
   const voiceCopy = voiceTalkCopy(locale);
@@ -221,33 +232,31 @@ export default function LiveRoomBubble({
             <>
               <div className="flex flex-col items-center px-2 pt-2.5" style={{ height: BOX.height - LEAVE_HEIGHT_PX }}>
                 <span
-                  className={`flex h-[58px] w-[58px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/15 text-white/80 ring-2 ${bubble.face?.speaking ? "ring-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.9)]" : "ring-white/25"}`}
+                  className={`flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/15 text-white/80 ring-2 ${bubble.face?.speaking ? "ring-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.9)]" : "ring-white/25"}`}
                   data-live-room-speaking={bubble.face?.speaking ? "1" : "0"}
                 >
                   {bubble.face?.image ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={bubble.face.image} alt="" className="h-full w-full object-cover" draggable={false} />
                   ) : bubble.kind === "stt" ? (
-                    <Mic size={26} strokeWidth={2.2} aria-hidden="true" />
+                    <Mic size={30} strokeWidth={2.2} aria-hidden="true" />
                   ) : bubble.face ? (
-                    <UserRound size={28} strokeWidth={2} aria-hidden="true" />
+                    <UserRound size={34} strokeWidth={2} aria-hidden="true" />
                   ) : (
-                    <Phone size={24} strokeWidth={2.2} aria-hidden="true" />
+                    <Phone size={28} strokeWidth={2.2} aria-hidden="true" />
                   )}
                 </span>
-                {/* The room's name, small, with how many people are in it. */}
-                <span className="mt-1.5 block w-full truncate text-center text-[11.5px] font-semibold leading-tight" data-qa="live-room-bubble-title">
-                  {bubble.title || voiceCopy.start}
-                </span>
-                <span className="mt-0.5 flex w-full items-center justify-center gap-1 text-[10.5px] leading-tight text-white/65" data-qa="live-room-bubble-count">
-                  {bubble.kind === "stt" ? (
-                    <span className="truncate">{copy.sttLive}</span>
-                  ) : (
-                    <>
-                      <UserRound size={11} strokeWidth={2.4} aria-hidden="true" />
+                {/* One line under the photo, one small size: how many people, then the room's name. */}
+                <span className="mt-2 flex w-full items-center justify-center gap-1 text-[11.5px] font-semibold leading-tight text-white/90" data-qa="live-room-bubble-line">
+                  {bubble.kind === "voice" ? (
+                    <span className="flex shrink-0 items-center gap-0.5" data-qa="live-room-bubble-count">
+                      <UserRound size={11} strokeWidth={2.6} aria-hidden="true" />
                       <span className="tabular-nums">{Math.max(1, bubble.count)}</span>
-                    </>
-                  )}
+                    </span>
+                  ) : null}
+                  <span className="min-w-0 truncate" data-qa="live-room-bubble-title">
+                    {bubble.title || (bubble.kind === "stt" ? copy.sttLive : voiceCopy.start)}
+                  </span>
                 </span>
               </div>
               {/* The whole bottom edge leaves. */}

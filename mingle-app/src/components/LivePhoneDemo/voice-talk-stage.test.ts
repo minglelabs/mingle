@@ -73,7 +73,9 @@ describe('voice talk stage: the panel', () => {
   })
 
   it('has a stage only for an open room, and takes the voice away on the media server', () => {
-    expect(controllerSource).toContain('return channel?.isPublic ? { hostUserId: channel.ownerUserId } : null;')
+    expect(controllerSource).toContain('if (!channel?.isPublic) return null;')
+    // The lounge's host is the team account that is always in it; any other open room's is who made it.
+    expect(controllerSource).toContain('return { hostUserId: (await resolveVoiceLoungeHost(conversationId)) ?? channel.ownerUserId };')
     expect(controllerSource).toContain('canPublish: self?.role !== "listener",')
     expect(controllerSource).toContain('canPublish: result.changed.role === "speaker"')
   })

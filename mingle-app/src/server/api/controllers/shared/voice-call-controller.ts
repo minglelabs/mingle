@@ -1,4 +1,5 @@
 import { COIN_INSUFFICIENT_ERROR } from "@/lib/coin-errors";
+import { resolveVoiceLoungeHost } from "@/server/voice-lounge";
 import { canSpendCoins } from "@/server/coins/wallet";
 import { after, NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
@@ -37,13 +38,15 @@ export function setVoiceStoreForTests(next: VoiceStore | null, lookup?: typeof l
 }
 
 // An open room's call has a stage (server/voice/voice-stage.ts): its host is
-// the one who made the room. A chat room's call has none (null).
+// the one who made the room; the lounge's host is the team account that is
+// always in it (server/voice-lounge.ts). A chat room's call has none (null).
 let findStage = async (conversationId: string): Promise<{ hostUserId: string } | null> => {
   const channel = await prisma.appConversationChannel.findUnique({
     where: { id: conversationId },
     select: { isPublic: true, ownerUserId: true },
   });
-  return channel?.isPublic ? { hostUserId: channel.ownerUserId } : null;
+  if (!channel?.isPublic) return null;
+  return { hostUserId: (await resolveVoiceLoungeHost(conversationId)) ?? channel.ownerUserId };
 };
 let updateCanPublish: typeof setRoomParticipantCanPublish = setRoomParticipantCanPublish;
 export function setVoiceStageForTests(next: { findStage?: typeof findStage; updateCanPublish?: typeof setRoomParticipantCanPublish } | null) {

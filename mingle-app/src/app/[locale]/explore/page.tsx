@@ -1,5 +1,6 @@
 import ExplorePeoplePage from "@/components/explore/explore-people-page";
 import HomeFeedLayer from "@/components/home/home-feed-layer";
+import { FirstRunHomeGuard } from "@/components/feed/posting-feed-route-guard";
 import { getDictionary, isSupportedLocale } from "@/i18n";
 import { notFound } from "next/navigation";
 
@@ -20,10 +21,13 @@ export default async function ExploreRoute({ params }: ExploreRouteProps) {
     notFound();
   }
 
+  // Home: a device that owes the first-run speak trial goes to it first.
   return (
-    <div className="relative h-full min-h-0 w-full">
-      <ExplorePeoplePage dictionary={getDictionary(locale)} locale={locale} />
-      <HomeFeedLayer locale={locale} />
-    </div>
+    <FirstRunHomeGuard locale={locale} placeholderClassName="bg-white">
+      <div className="relative h-full min-h-0 w-full">
+        <ExplorePeoplePage dictionary={getDictionary(locale)} locale={locale} />
+        <HomeFeedLayer locale={locale} />
+      </div>
+    </FirstRunHomeGuard>
   );
 }

@@ -2,6 +2,7 @@ import { createOpenRoom, listOpenRooms } from '@/lib/app-conversations'
 import { ensureHamzziAccount, HAMZZI_USER_ID } from '@/lib/hamzzi'
 import type { OpenRoomCard } from '@/lib/open-room'
 import { prisma } from '@/lib/prisma'
+import { ROYCE_USER_ID } from '@/lib/signup-welcome-onboarding'
 
 /**
  * The voice tab's lounge (owner, 2026-11-23): one public room that is always
@@ -15,6 +16,45 @@ import { prisma } from '@/lib/prisma'
  * private is replaced by a new one on the next read.
  */
 export const VOICE_LOUNGE_SETTING_KEY = 'voice_lounge_conversation_id'
+
+/**
+ * The team account that is always in the lounge and is its host (owner,
+ * 2026-11-25): @royce. The room itself is still made by the mascot, who
+ * steps out; the host of the lounge's voice talk (who moves people on and off
+ * the stage, and whose photo the minimized room shows) is this account.
+ */
+export const VOICE_LOUNGE_HOST_USER_ID = ROYCE_USER_ID
+
+let loungeHostReadyFor: string | null = null
+
+/** Puts the host back in the lounge if it is not a member (never left it, was removed, or a new lounge). */
+async function keepHostInLounge(channelId: string): Promise<void> {
+  if (loungeHostReadyFor === channelId) return
+  try {
+    const host = await prisma.user.findFirst({ where: { id: VOICE_LOUNGE_HOST_USER_ID, isDeleted: { not: true } }, select: { id: true } })
+    if (!host) return
+    const member = await prisma.appConversationChannelMember.findUnique({
+      where: { channelId_userId: { channelId, userId: VOICE_LOUNGE_HOST_USER_ID } },
+      select: { leftAt: true },
+    })
+    if (!member) await prisma.appConversationChannelMember.create({ data: { channelId, userId: VOICE_LOUNGE_HOST_USER_ID, role: 'member' } })
+    else if (member.leftAt) await prisma.appConversationChannelMember.update({ where: { channelId_userId: { channelId, userId: VOICE_LOUNGE_HOST_USER_ID } }, data: { leftAt: null } })
+    loungeHostReadyFor = channelId
+  } catch (error) {
+    console.warn('[voice-lounge] host_join_failed', { error: error instanceof Error ? error.name : 'unknown' })
+  }
+}
+
+let loungeIdCache: { id: string | null; at: number } | null = null
+const LOUNGE_ID_CACHE_MS = 60_000
+
+/** The host of this room's voice talk when the room is the lounge, else null (the room's own host applies). */
+export async function resolveVoiceLoungeHost(conversationId: string): Promise<string | null> {
+  if (!loungeIdCache || Date.now() - loungeIdCache.at > LOUNGE_ID_CACHE_MS) {
+    loungeIdCache = { id: await readLoungeId().catch(() => null), at: Date.now() }
+  }
+  return loungeIdCache.id === conversationId ? VOICE_LOUNGE_HOST_USER_ID : null
+}
 export const VOICE_LOUNGE_TITLE = 'Lounge 라운지'
 
 async function readLoungeId(): Promise<string | null> {
@@ -32,6 +72,12 @@ async function stepHostOut(channelId: string): Promise<void> {
 async function loungeCard(id: string, viewerUserId: string | null): Promise<OpenRoomCard | null> {
   let [card] = await listOpenRooms(viewerUserId, { ids: [id] })
   if (!card) return null
+  if (!card.members.some((member) => member.userId === VOICE_LOUNGE_HOST_USER_ID)) {
+    loungeHostReadyFor = null
+    await keepHostInLounge(id)
+    ;[card] = await listOpenRooms(viewerUserId, { ids: [id] })
+    if (!card) return null
+  }
   if (card.members.some((member) => member.userId === HAMZZI_USER_ID)) {
     // A lounge made before the mascot stepped out: take it out now.
     await stepHostOut(id)
