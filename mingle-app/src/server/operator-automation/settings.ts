@@ -32,6 +32,8 @@ export type AutomationSettings = {
   posts: {
     enabled: boolean
     chancePercent: number
+    /** A second, separate roll the same day: with this chance the account writes one more post (0 = never). */
+    secondChancePercent: number
   }
   /**
    * Likes, comments, replies and comment likes on recent operator posts from
@@ -46,7 +48,7 @@ export type AutomationSettings = {
 export const AUTOMATION_DEFAULTS: AutomationSettings = {
   avatars: { enabled: false, intervalMinutes: 10 },
   accounts: { enabled: false, perDay: 5, totalTarget: 100 },
-  posts: { enabled: false, chancePercent: 20 },
+  posts: { enabled: false, chancePercent: 20, secondChancePercent: 0 },
   engagement: { enabled: false },
 }
 
@@ -55,6 +57,7 @@ export const AUTOMATION_LIMITS = {
   perDay: { min: 1, max: 100 },
   totalTarget: { min: 1, max: 2000 },
   chancePercent: { min: 1, max: 100 },
+  secondChancePercent: { min: 0, max: 100 },
 } as const
 
 /** A whole number within the field's limits, or null. */
@@ -88,6 +91,7 @@ export function normalizeAutomationSettings(value: unknown): AutomationSettings 
     posts: {
       enabled: posts.enabled === true,
       chancePercent: parseAutomationInt(posts.chancePercent, 'chancePercent') ?? AUTOMATION_DEFAULTS.posts.chancePercent,
+      secondChancePercent: parseAutomationInt(posts.secondChancePercent, 'secondChancePercent') ?? AUTOMATION_DEFAULTS.posts.secondChancePercent,
     },
     engagement: { enabled: engagement.enabled === true },
   }
@@ -108,6 +112,9 @@ export function parseAutomationSettings(value: unknown): { ok: true; settings: A
   if (typeof posts.enabled !== 'boolean') return { ok: false, error: 'invalid_enabled' }
   const chancePercent = parseAutomationInt(posts.chancePercent, 'chancePercent')
   if (chancePercent === null) return { ok: false, error: 'invalid_chance' }
+  // Optional: a body from before the second roll existed leaves it off.
+  const secondChancePercent = posts.secondChancePercent === undefined ? 0 : parseAutomationInt(posts.secondChancePercent, 'secondChancePercent')
+  if (secondChancePercent === null) return { ok: false, error: 'invalid_chance' }
   // Optional: a body from before this rule existed leaves it off.
   const engagement = record(record(value).engagement)
   if (engagement.enabled !== undefined && typeof engagement.enabled !== 'boolean') return { ok: false, error: 'invalid_enabled' }
@@ -116,7 +123,7 @@ export function parseAutomationSettings(value: unknown): { ok: true; settings: A
     settings: {
       avatars: { enabled: avatars.enabled, intervalMinutes },
       accounts: { enabled: accounts.enabled, perDay, totalTarget },
-      posts: { enabled: posts.enabled, chancePercent },
+      posts: { enabled: posts.enabled, chancePercent, secondChancePercent },
       engagement: { enabled: engagement.enabled === true },
     },
   }
