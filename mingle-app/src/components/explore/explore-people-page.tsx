@@ -206,7 +206,7 @@ export default function ExplorePeoplePage({ dictionary, locale }: ExplorePeopleP
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white" data-qa="explore-tab">
       {/* One row, exactly as tall as the app expects, so its ad banner sits right under it. */}
-      <header className="shrink-0 bg-white" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
+      <header className="relative z-10 shrink-0 bg-white shadow-[inset_0_-1px_0_#e5e7eb]" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
         <div className="flex items-center gap-2 px-4" style={{ height: TAB_BANNER_TOP_BAR_HEIGHT_PX }}>
           <h1 className="flex shrink-0 items-center" aria-label="HashChat"><MingleWordmark /></h1>
           <button
@@ -235,7 +235,7 @@ export default function ExplorePeoplePage({ dictionary, locale }: ExplorePeopleP
       <div
         data-qa="tab-banner-slot"
         aria-hidden="true"
-        className="shrink-0 border-b border-gray-100 bg-white"
+        className={`shrink-0 bg-white ${bannerHeightPx > 0 ? "border-b border-gray-200" : ""}`}
         style={{ height: bannerHeightPx }}
       />
       {filterOpen ? (

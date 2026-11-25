@@ -33,7 +33,11 @@ import {
   type LiveRoomBubbleView,
 } from "@/lib/live-room-bubble";
 
-const BOX = { width: 156, height: 72 };
+// A rounded square (owner, 2026-11-25): the host's photo large, the room's
+// name and the number of people small under it, and a leave button tall
+// enough to hit. It was a wide, flat strip.
+const BOX = { width: 124, height: 148 };
+const LEAVE_HEIGHT_PX = 42;
 const TOP_CLEAR_PX = 64;
 /** Tab bar plus the home indicator. */
 const BOTTOM_CLEAR_PX = 52 + 34;
@@ -215,27 +219,35 @@ export default function LiveRoomBubble({
             </span>
           ) : (
             <>
-              <div className="flex h-[48px] items-center gap-2 px-2.5">
+              <div className="flex flex-col items-center px-2 pt-2.5" style={{ height: BOX.height - LEAVE_HEIGHT_PX }}>
                 <span
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/15 text-white/80 ring-2 ${bubble.face?.speaking ? "ring-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.9)]" : "ring-white/20"}`}
+                  className={`flex h-[58px] w-[58px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/15 text-white/80 ring-2 ${bubble.face?.speaking ? "ring-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.9)]" : "ring-white/25"}`}
                   data-live-room-speaking={bubble.face?.speaking ? "1" : "0"}
                 >
                   {bubble.face?.image ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={bubble.face.image} alt="" className="h-full w-full object-cover" draggable={false} />
                   ) : bubble.kind === "stt" ? (
-                    <Mic size={17} strokeWidth={2.2} aria-hidden="true" />
+                    <Mic size={26} strokeWidth={2.2} aria-hidden="true" />
                   ) : bubble.face ? (
-                    <UserRound size={18} strokeWidth={2} aria-hidden="true" />
+                    <UserRound size={28} strokeWidth={2} aria-hidden="true" />
                   ) : (
-                    <Phone size={16} strokeWidth={2.2} aria-hidden="true" />
+                    <Phone size={24} strokeWidth={2.2} aria-hidden="true" />
                   )}
                 </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] font-semibold leading-tight">{bubble.title || voiceCopy.start}</span>
-                  <span className="mt-0.5 block truncate text-[11px] leading-tight text-white/65">
-                    {bubble.kind === "stt" ? copy.sttLive : bubble.face?.name || voiceCopy.start}
-                  </span>
+                {/* The room's name, small, with how many people are in it. */}
+                <span className="mt-1.5 block w-full truncate text-center text-[11.5px] font-semibold leading-tight" data-qa="live-room-bubble-title">
+                  {bubble.title || voiceCopy.start}
+                </span>
+                <span className="mt-0.5 flex w-full items-center justify-center gap-1 text-[10.5px] leading-tight text-white/65" data-qa="live-room-bubble-count">
+                  {bubble.kind === "stt" ? (
+                    <span className="truncate">{copy.sttLive}</span>
+                  ) : (
+                    <>
+                      <UserRound size={11} strokeWidth={2.4} aria-hidden="true" />
+                      <span className="tabular-nums">{Math.max(1, bubble.count)}</span>
+                    </>
+                  )}
                 </span>
               </div>
               {/* The whole bottom edge leaves. */}
@@ -244,7 +256,8 @@ export default function LiveRoomBubble({
                 data-qa="live-room-bubble-leave"
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={() => leave(bubble)}
-                className="flex h-[24px] w-full items-center justify-center bg-rose-600 text-[11px] font-semibold text-white active:bg-rose-700"
+                className="flex w-full items-center justify-center bg-rose-600 text-[13px] font-bold text-white active:bg-rose-700"
+                style={{ height: LEAVE_HEIGHT_PX }}
               >
                 {leaveLabel}
               </button>

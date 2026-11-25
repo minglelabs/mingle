@@ -27,6 +27,8 @@ describe("the ad banner under the top bar of a tab", () => {
       // The strip the banner sits in comes before the scrolling area.
       expect(page.indexOf('data-qa="tab-banner-slot"')).toBeGreaterThan(0);
       expect(page.indexOf('data-qa="tab-banner-slot"')).toBeLessThan(page.indexOf("overflow-y-auto overscroll-contain"));
+      // The top bar is its own bar (a hairline inside its 56 px closes it); the banner strip is separate, under it.
+      expect(page).toContain('shadow-[inset_0_-1px_0_#e5e7eb]');
     }
   });
 

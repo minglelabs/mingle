@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { LEGAL_DOCUMENT_LOCALES } from '@/i18n/config'
 import { liveRoomBubbleCopy } from '@/i18n/live-room-bubble-copy'
@@ -61,6 +62,30 @@ describe('live room bubble: when it shows', () => {
   it('shows live speech recognition when no call is on, and a call wins over it', () => {
     publishLiveStt({ conversationId: 's1', title: 'Notes' })
     expect(getLiveRoomBubbleForTests()).toMatchObject({ kind: 'stt', conversationId: 's1', title: 'Notes', face: null })
+  })
+
+  it('shows the host of the room while they are in the call, and how many people are in it', () => {
+    applyNativeVoiceEvent({ type: 'state', phase: 'connected', conversationId: 'r9' })
+    applyNativeVoiceEvent({ type: 'status', conversationId: 'r9', call: { participants: [{ userId: 'h', image: 'h.jpg' }], stage: { hostUserId: 'h' } } })
+    applyNativeVoiceEvent({ type: 'room', conversationId: 'r9', snapshot: { members: [
+      { userId: 'me', name: 'Me', isLocal: true, isSpeaking: false },
+      { userId: 'b', name: 'Bo', isLocal: false, isSpeaking: true },
+      { userId: 'h', name: 'Host', isLocal: false, isSpeaking: false },
+    ] } })
+    expect(getLiveRoomBubbleForTests()).toMatchObject({ count: 3, face: { userId: 'h', name: 'Host', image: 'h.jpg', speaking: false } })
+    // The host left the call: back to whoever is speaking.
+    applyNativeVoiceEvent({ type: 'room', conversationId: 'r9', snapshot: { members: [
+      { userId: 'me', name: 'Me', isLocal: true, isSpeaking: false },
+      { userId: 'b', name: 'Bo', isLocal: false, isSpeaking: true },
+    ] } })
+    expect(getLiveRoomBubbleForTests()).toMatchObject({ count: 2, face: { userId: 'b', speaking: true } })
+  })
+
+  it('is a rounded square with a leave button tall enough to hit', () => {
+    const source = readFileSync(join(process.cwd(), 'src/components/live-room-bubble.tsx'), 'utf8')
+    expect(source).toContain('const BOX = { width: 124, height: 148 };')
+    expect(source).toContain('const LEAVE_HEIGHT_PX = 42;')
+    expect(source).toContain('data-qa="live-room-bubble-count"')
     applyNativeVoiceEvent(room('r1', [member('me', { isLocal: true })]))
     expect(getLiveRoomBubbleForTests()?.kind).toBe('voice')
     publishLiveStt(null)

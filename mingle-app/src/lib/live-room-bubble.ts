@@ -27,8 +27,14 @@ export type LiveRoomBubbleView = {
   kind: 'voice' | 'stt'
   conversationId: string
   title: string
-  /** The face to show: whoever is speaking, else the last one who spoke, else someone else in the call. */
+  /**
+   * The face to show: the room's host while they are in the call (owner,
+   * 2026-11-25); in a room with no host there, whoever is speaking, else the
+   * last one who spoke, else someone else in the call.
+   */
   face: { userId: string; name: string; image: string | null; speaking: boolean } | null
+  /** How many people are in the call (0 for speech recognition). */
+  count: number
 }
 
 type Remembered = { title: string; lang: string }
@@ -37,6 +43,8 @@ let state: LiveRoomState = { voice: null, stt: null, visibleRoomId: null }
 let lastSpeakerId: string | null = null
 const remembered = new Map<string, Remembered>()
 const images = new Map<string, string>()
+/** Room id → the host of its call (open rooms have one). */
+const hosts = new Map<string, string>()
 const listeners = new Set<() => void>()
 let view: LiveRoomBubbleView | null = null
 let listening = false
@@ -50,12 +58,25 @@ export function resolveLiveRoomBubble(input: {
   titleOf: (conversationId: string) => string
   imageOf: (userId: string) => string | null
   lastSpeakerId: string | null
+  /** The host of a room's call, when the server said who it is. */
+  hostOf?: (conversationId: string) => string | null
 }): LiveRoomBubbleView | null {
   const { voice, stt, visibleRoomId } = input.state
   if (voice && voice.conversationId !== visibleRoomId) {
     const others = voice.members.filter((member) => !member.isLocal)
     const speaking = voice.members.find((member) => member.isSpeaking && !member.isLocal)
       ?? voice.members.find((member) => member.isSpeaking)
+    const hostId = input.hostOf?.(voice.conversationId) ?? null
+    const host = hostId ? voice.members.find((member) => member.userId === hostId) ?? null : null
+    if (host) {
+      return {
+        kind: 'voice',
+        conversationId: voice.conversationId,
+        title: input.titleOf(voice.conversationId),
+        face: { userId: host.userId, name: host.name, image: input.imageOf(host.userId), speaking: host.isSpeaking },
+        count: voice.members.length,
+      }
+    }
     const pick = speaking
       ?? others.find((member) => member.userId === input.lastSpeakerId)
       ?? others[0]
@@ -66,10 +87,11 @@ export function resolveLiveRoomBubble(input: {
       conversationId: voice.conversationId,
       title: input.titleOf(voice.conversationId),
       face: pick ? { userId: pick.userId, name: pick.name, image: input.imageOf(pick.userId), speaking: Boolean(speaking) } : null,
+      count: voice.members.length,
     }
   }
   if (stt && stt.conversationId !== visibleRoomId) {
-    return { kind: 'stt', conversationId: stt.conversationId, title: stt.title, face: null }
+    return { kind: 'stt', conversationId: stt.conversationId, title: stt.title, face: null, count: 0 }
   }
   return null
 }
@@ -79,6 +101,7 @@ function sameView(left: LiveRoomBubbleView | null, right: LiveRoomBubbleView | n
   return left.kind === right.kind && left.conversationId === right.conversationId && left.title === right.title
     && left.face?.userId === right.face?.userId && left.face?.name === right.face?.name
     && left.face?.image === right.face?.image && left.face?.speaking === right.face?.speaking
+    && left.count === right.count
 }
 
 function refresh(): void {
@@ -87,6 +110,7 @@ function refresh(): void {
     titleOf: (conversationId) => remembered.get(conversationId)?.title ?? '',
     imageOf: (userId) => images.get(userId) ?? null,
     lastSpeakerId,
+    hostOf: (conversationId) => hosts.get(conversationId) ?? null,
   })
   if (sameView(view, next)) return
   view = next
@@ -104,7 +128,7 @@ function readMembers(raw: unknown): LiveRoomMember[] {
 
 /** One `mingle:native-voice` event (see rn/src/voice/voiceBridge.ts for the shapes). */
 export function applyNativeVoiceEvent(detail: unknown): void {
-  const event = detail as { type?: unknown; phase?: unknown; conversationId?: unknown; snapshot?: { members?: unknown }; call?: { participants?: unknown } | null } | null
+  const event = detail as { type?: unknown; phase?: unknown; conversationId?: unknown; snapshot?: { members?: unknown }; call?: { participants?: unknown; stage?: { hostUserId?: unknown } | null } | null } | null
   if (!event || typeof event.type !== 'string') return
   const conversationId = typeof event.conversationId === 'string' ? event.conversationId : ''
   if (event.type === 'room' && conversationId) {
@@ -128,6 +152,9 @@ export function applyNativeVoiceEvent(detail: unknown): void {
     for (const entry of participants as Array<{ userId?: unknown; image?: unknown }>) {
       if (typeof entry?.userId === 'string' && typeof entry.image === 'string' && entry.image) images.set(entry.userId, entry.image)
     }
+    const hostUserId = event.call?.stage?.hostUserId
+    if (conversationId && typeof hostUserId === 'string' && hostUserId) hosts.set(conversationId, hostUserId)
+    else if (conversationId && event.call) hosts.delete(conversationId)
   } else {
     return
   }

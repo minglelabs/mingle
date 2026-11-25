@@ -113,7 +113,7 @@ export default function VoiceRoomsPage({ dictionary, locale }: VoiceRoomsPagePro
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white" data-qa="voice-tab">
       {/* The top bar is exactly as tall as the app expects, so its ad banner sits right under it. */}
-      <header className="shrink-0 bg-white" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
+      <header className="relative z-10 shrink-0 bg-white shadow-[inset_0_-1px_0_#e5e7eb]" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
         <div className="flex items-center px-4" style={{ height: TAB_BANNER_TOP_BAR_HEIGHT_PX }}>
           <h1 className="text-[22px] font-extrabold tracking-[-0.02em] text-slate-950">{copy.title}</h1>
         </div>
@@ -122,7 +122,7 @@ export default function VoiceRoomsPage({ dictionary, locale }: VoiceRoomsPagePro
       <div
         data-qa="tab-banner-slot"
         aria-hidden="true"
-        className="shrink-0 border-b border-gray-100 bg-white"
+        className={`shrink-0 bg-white ${bannerHeightPx > 0 ? "border-b border-gray-200" : ""}`}
         style={{ height: bannerHeightPx }}
       />
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
