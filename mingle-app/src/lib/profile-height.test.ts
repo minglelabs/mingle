@@ -63,12 +63,13 @@ describe('profile height', () => {
   })
 
   // Owner, 2026-11-25: sign-up needs a face-verified photo (no "later"), and men a 20+ character self-introduction.
-  it('asks a face-verified photo of everyone and a self-introduction of men before sign-up', async () => {
+  it('asks a photo of everyone (face-verified for men) and a self-introduction of men before sign-up', async () => {
     const { BIO_MIN_LENGTH, bioLength } = await import('@/lib/pending-profile-extras')
     expect(BIO_MIN_LENGTH).toBe(30)
     expect(bioLength('  안녕하세요 😀  ')).toBe(7)
     const modal = readFileSync(new URL('../components/LivePhoneDemo/LanguageOnboardingModal.tsx', import.meta.url), 'utf8')
-    expect(modal).toContain('target === "profile-photo" ? Boolean(photoDataUrl) && faceVerified')
+    expect(modal).toContain('target === "profile-photo" ? Boolean(photoDataUrl) && (faceVerified || !selfieAsked)')
+    expect(modal).toContain('const selfieAsked = gender !== "female"')
     expect(modal).toContain('target === "bio" ? gender !== "male" || bioLength(bio) >= BIO_MIN_LENGTH')
     expect(modal).not.toContain('onboarding-photo-skip')
     const sync = readFileSync(new URL('../components/pending-profile-sync.tsx', import.meta.url), 'utf8')

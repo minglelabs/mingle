@@ -160,8 +160,11 @@ export default function PendingProfileSync() {
             clearPendingPhoto();
             return;
           }
+          // Women sign up with a photo alone (owner, 2026-11-25).
+          const selfieAsked = (gender ?? profile.gender) !== "female";
           const askForAnother = () => {
             clearPendingPhoto();
+            if (!selfieAsked) return;
             markPhotoRequired(userId);
             if (!cancelled) setPhotoRequired(true);
           };
@@ -179,7 +182,13 @@ export default function PendingProfileSync() {
           }
           // The selfie check passed against this photo during onboarding.
           const similarity = readPendingFaceSimilarity();
-          if (similarity === null) return askForAnother();
+          if (similarity === null) {
+            if (!selfieAsked) {
+              clearPendingPhoto();
+              return;
+            }
+            return askForAnother();
+          }
           const verified = await sendWithRetry(() => fetch(buildClientApiPath("/profile/face-verification"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },

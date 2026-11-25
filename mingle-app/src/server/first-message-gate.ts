@@ -54,6 +54,7 @@ export type FirstMessageGateUser = {
   image: string | null
   imageFaceCheck: string | null
   faceVerifiedAt?: Date | null
+  gender?: string | null
 }
 
 export function resolveFirstMessageNeeds(
@@ -76,7 +77,8 @@ export function resolveFirstMessageNeeds(
   if (options.followedByTargets) return needs
   const check = parseImageFaceCheck(user.imageFaceCheck)
   if (!user.image?.trim() || check === 'no_face') needs.push('face_photo')
-  else if (!user.faceVerifiedAt) needs.push('face_verify')
+  // The selfie check is for men only (owner, 2026-11-25).
+  else if (!user.faceVerifiedAt && user.gender !== 'female') needs.push('face_verify')
   return needs
 }
 
@@ -115,7 +117,7 @@ export async function readFirstMessageNeeds(userId: string, targetUserIds: reado
     select: {
       isOperator: true, isOfficial: true, email: true,
       phoneE164: true, phoneVerifiedAt: true, nationalityCountry: true, primaryLanguages: true,
-      image: true, imageFaceCheck: true, faceVerifiedAt: true,
+      image: true, imageFaceCheck: true, faceVerifiedAt: true, gender: true,
     },
   })
   if (!user) return []

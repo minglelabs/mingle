@@ -217,6 +217,8 @@ export default function LanguageOnboardingModal({
   // The selfie check opens right after a photo is picked (owner, 2026-11-24).
   const [selfieOpen, setSelfieOpen] = useState(false);
   const [faceVerified, setFaceVerified] = useState(() => readPendingFaceSimilarity() !== null);
+  // The selfie check is for men only (owner, 2026-11-25): women add a photo and go on.
+  const selfieAsked = gender !== "female";
   const [micResult, setMicResult] = useState<MicPermissionResult | null>(null);
   const [micAsking, setMicAsking] = useState(false);
   // A wheel like the birth date, starting at a typical height (no keyboard).
@@ -398,34 +400,37 @@ export default function LanguageOnboardingModal({
       .filter((code): code is string => Boolean(code));
     return [...new Set(codes)].slice(0, 6);
   }, [interestCode, ownLanguageCode]);
+  const requestBioPreview = useCallback((text: string, signal?: AbortSignal, showLanguage?: string | null) => {
+    setBioPreviewBusy(true);
+    void fetch(buildClientApiPath("/profile/bio-preview"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, languages: bioPreviewLanguages }),
+      signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const data = await response.json() as { translations?: Record<string, string> };
+        if (!data.translations) return;
+        setBioPreview({ text, translations: data.translations });
+        if (showLanguage && data.translations[showLanguage]) setBioPreviewLanguage(showLanguage);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!signal?.aborted) setBioPreviewBusy(false);
+      });
+  }, [bioPreviewLanguages]);
   useEffect(() => {
     if (step !== "bio") return;
     const text = bio.trim();
     if (!text || bioLength(text) < 2 || bioPreview?.text === text) return;
     const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      setBioPreviewBusy(true);
-      void fetch(buildClientApiPath("/profile/bio-preview"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, languages: bioPreviewLanguages }),
-        signal: controller.signal,
-      })
-        .then(async (response) => {
-          if (!response.ok) return;
-          const data = await response.json() as { translations?: Record<string, string> };
-          if (data.translations) setBioPreview({ text, translations: data.translations });
-        })
-        .catch(() => undefined)
-        .finally(() => {
-          if (!controller.signal.aborted) setBioPreviewBusy(false);
-        });
-    }, BIO_PREVIEW_IDLE_MS);
+    const timer = window.setTimeout(() => requestBioPreview(text, controller.signal), BIO_PREVIEW_IDLE_MS);
     return () => {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [bio, bioPreview?.text, bioPreviewLanguages, step]);
+  }, [bio, bioPreview?.text, requestBioPreview, step]);
   const bioPreviewFresh = bioPreview !== null && bioPreview.text === bio.trim();
 
   const handleStepBack = useCallback(() => {
@@ -525,7 +530,8 @@ export default function LanguageOnboardingModal({
       // The arrival alone is enough: the departure may not be known yet.
       : target === "korea-visit" ? Boolean(koreaVisit.start)
       : target === "korea-visit-past" ? visitedAgo !== null
-      : target === "profile-photo" ? Boolean(photoDataUrl) && faceVerified
+      // Women: the photo alone, no selfie check (owner, 2026-11-25).
+      : target === "profile-photo" ? Boolean(photoDataUrl) && (faceVerified || !selfieAsked)
       // Men: at least BIO_MIN_LENGTH characters; others may leave it empty (owner, 2026-11-25).
       : target === "bio" ? gender !== "male" || bioLength(bio) >= BIO_MIN_LENGTH
       : target === "voice-intro" ? true
@@ -630,7 +636,7 @@ export default function LanguageOnboardingModal({
       writePendingFaceSimilarity(null);
       setFaceVerified(false);
       setPhotoDataUrl(dataUrl);
-      setSelfieOpen(true);
+      if (selfieAsked) setSelfieOpen(true);
       setSkippedSteps((current) => current.filter((entry) => entry !== "profile-photo"));
       captureMingleClientEvent("mingle_onboarding_photo", { result: "picked" });
     } catch {
@@ -665,6 +671,14 @@ export default function LanguageOnboardingModal({
       recordKoreaVisit({ kind: "dates", start: koreaVisit.start, end: koreaVisit.end });
     }
     if (step === "gender") clearGenderAdvance();
+    // Continue before the idle timer translated it (owner, 2026-11-25): the
+    // translation is shown now, in the first other language; the next tap goes on.
+    const bioText = bio.trim();
+    if (step === "bio" && bioLength(bioText) >= 2 && bioPreview?.text !== bioText && !bioPreviewBusy) {
+      const showLanguage = bioPreviewLanguages.find((code) => code !== ownLanguageCode) ?? null;
+      requestBioPreview(bioText, undefined, showLanguage);
+      return;
+    }
     if (isLastStep) {
       void handleFinalConfirm();
       return;
@@ -995,7 +1009,7 @@ export default function LanguageOnboardingModal({
               <h2 id={titleId} className="text-[1.6rem] font-extrabold leading-tight tracking-[-0.02em] text-slate-950">
                 {extraCopy.photoTitle}
               </h2>
-              <p className="text-[0.92rem] leading-snug text-slate-500">{extraCopy.photoDescription}</p>
+              <p className="text-[0.92rem] leading-snug text-slate-500">{selfieAsked ? extraCopy.photoDescription : extraCopy.photoDescriptionNoSelfie}</p>
             </div>
           ) : step === "voice-intro" ? (
             <div className="space-y-3 px-6 pb-4 pt-2 text-left">
@@ -1287,7 +1301,7 @@ export default function LanguageOnboardingModal({
             >
               {photoDataUrl ? extraCopy.photoChange : extraCopy.photoPick}
             </button>
-            {photoDataUrl ? (
+            {photoDataUrl && selfieAsked ? (
               faceVerified ? (
                 <p data-qa="onboarding-face-verified" className="flex items-center gap-1.5 text-[0.9rem] font-semibold text-emerald-600">
                   <Check size={16} strokeWidth={3} aria-hidden />

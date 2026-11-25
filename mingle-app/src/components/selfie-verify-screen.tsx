@@ -354,8 +354,13 @@ export default function SelfieVerifyScreen({
   const autoStartedRef = useRef(false);
   useEffect(() => {
     if (phase !== "intro" || autoStartedRef.current) return;
-    autoStartedRef.current = true;
-    const timer = window.setTimeout(() => void start(), 0);
+    // Marked inside the timer: an effect run that is cleaned up at once (React
+    // runs effects twice in development) must not use up the one start.
+    const timer = window.setTimeout(() => {
+      if (autoStartedRef.current) return;
+      autoStartedRef.current = true;
+      void start();
+    }, 0);
     return () => window.clearTimeout(timer);
   }, [phase, start]);
 

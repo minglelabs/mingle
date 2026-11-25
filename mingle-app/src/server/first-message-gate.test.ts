@@ -55,6 +55,8 @@ describe('first message gate: what an account still needs', () => {
   it('asks for the selfie check when the photo was never verified, however it was checked', () => {
     for (const imageFaceCheck of ['face', 'unchecked', null]) {
       expect(resolveFirstMessageNeeds({ ...verified, imageFaceCheck, faceVerifiedAt: null }, { env, reach: world })).toEqual(['face_verify'])
+      // Women: a photo with a face is enough, no selfie check (owner, 2026-11-25).
+      expect(resolveFirstMessageNeeds({ ...verified, imageFaceCheck, faceVerifiedAt: null, gender: 'female' }, { env, reach: world })).toEqual([])
     }
     expect(resolveFirstMessageNeeds({ ...verified, imageFaceCheck: null }, { env, reach: world })).toEqual([])
   })
