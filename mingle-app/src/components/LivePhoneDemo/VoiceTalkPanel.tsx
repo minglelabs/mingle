@@ -26,6 +26,8 @@ import { buildClientApiPath, clientApiNamespace, namespaceSupportsVoiceTalk } fr
 import { useRoomPresence } from '@/lib/room-presence'
 import { rememberLiveRoom } from '@/lib/live-room-bubble'
 import { voiceStageCopy } from '@/i18n/voice-stage-copy'
+import { voiceRoomCopy } from '@/i18n/voice-room-copy'
+import VoiceRoomStage from './VoiceRoomStage'
 import { resolveVoiceStage, voiceStageTransition, type VoiceStageRole } from './voice-talk-stage'
 import { useNativeBannerSuppression } from '@/lib/use-native-banner-suppression'
 import { VOICE_TALK_MAX_SEATS, voiceTalkCopy } from '@/i18n/voice-talk-copy'
@@ -250,6 +252,15 @@ export type VoiceTalkPanelProps = {
   onOpenProfile?: (userId: string) => void
   /** This viewer's account id: always counted as having the room open. */
   viewerUserId?: string | null
+  /**
+   * 'room': the voice room screen of an open room (owner, 2026-11-25): the
+   * stage is always there under the top bar (VoiceRoomStage), in the call or
+   * not. 'panel' (default): the strip of a chat room's call, shown only
+   * while this phone is in it.
+   */
+  variant?: 'panel' | 'room'
+  /** 'room' only: the stage's height in px (0 when gone), so the chat starts below it. */
+  onHeightChange?: (heightPx: number) => void
 }
 
 export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
@@ -572,7 +583,8 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   // Room members who are not in the call, shown small under the seats.
   const presence = useRoomPresence(conversationId)
   const [roomMembers, setRoomMembers] = useState<RoomMemberSummary[]>([])
-  const panelShown = joined || !!error
+  const roomVariant = props.variant === 'room'
+  const panelShown = joined || !!error || roomVariant
   useEffect(() => {
     if (!panelShown || !conversationId) return
     let cancelled = false
@@ -586,6 +598,24 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     () => resolveVoiceTalkBystanders({ members: roomMembers, seatUserIds: seats.map((seat) => seat.userId), presence, viewerUserId }),
     [presence, roomMembers, seats, viewerUserId],
   )
+
+  // The voice room's stage tells the room how tall it is: the chat starts below it.
+  const roomStageRef = useRef<HTMLDivElement | null>(null)
+  const onHeightChangeRef = useRef(props.onHeightChange)
+  useEffect(() => { onHeightChangeRef.current = props.onHeightChange }, [props.onHeightChange])
+  useEffect(() => {
+    if (!roomVariant) return
+    const element = roomStageRef.current
+    if (!element) return
+    const report = () => onHeightChangeRef.current?.(Math.round(element.getBoundingClientRect().height))
+    report()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(report)
+    observer?.observe(element)
+    return () => {
+      observer?.disconnect()
+      onHeightChangeRef.current?.(0)
+    }
+  }, [roomVariant])
 
   const onDragEnd = useCallback((_: unknown, info: PanInfo) => {
     if (info.offset.y < -24 || info.velocity.y < -300) setFolded(true)
@@ -720,6 +750,79 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
       </div>
     </div>
   ) : null
+
+  // The voice room screen: the stage is the room, whether or not this phone
+  // is in the call. Coming in is the stage's own button (no "join?" card).
+  if (roomVariant) {
+    const roomCopy = voiceRoomCopy(props.uiLocale)
+    const onStage = stage.enabled ? stageSeats.length : seats.length
+    return (
+      <>
+        {leaveDialog}
+        {startDialog}
+        <div ref={roomStageRef} className="pointer-events-none absolute inset-x-0 z-30" style={{ top: props.topOffset }}>
+          <VoiceRoomStage
+            labels={{
+              status: phase === 'connecting' ? copy.connecting : (live || joined ? copy.live(onStage) : copy.idle),
+              join: roomCopy.join,
+              host: roomCopy.host,
+              me: copy.me,
+              emptySeat: roomCopy.emptySeat,
+              micMuted: copy.micMuted,
+              mic: roomCopy.mic,
+              hand: roomCopy.hand,
+              lowerHand: stageCopy.lowerHand,
+              interpret: roomCopy.interpret,
+              listen: roomCopy.listen,
+              leave: roomCopy.leave,
+              audience: roomCopy.audience(stage.listeners.length + bystanders.length),
+              quiet: roomCopy.quiet,
+              toStage: stageCopy.toStage,
+              offStage: stageCopy.offStage,
+              stepDown: stageCopy.stepDown,
+              fold: copy.fold,
+              open: copy.open,
+            }}
+            seats={stageSeats}
+            seatCount={MAX_SEATS}
+            hostUserId={call?.stage?.hostUserId ?? null}
+            viewerUserId={viewerUserId}
+            listeners={stage.listeners}
+            bystanders={bystanders}
+            joined={joined}
+            connecting={phase === 'connecting'}
+            stageEnabled={stage.enabled}
+            isHost={stage.isHost}
+            myRole={joined ? stage.myRole : null}
+            myHandRaised={stage.myHandRaised}
+            micOn={!listenOnly}
+            interpretOn={interpretOn}
+            listenOn={listenOn}
+            earphonesConnected={props.earphonesConnected === true}
+            busy={stageBusy}
+            folded={folded}
+            error={error}
+            note={stageNote}
+            onJoin={join}
+            onLeave={leave}
+            onToggleMic={() => onListenOnlyChange?.(!listenOnly)}
+            onToggleHand={() => void stageAct(stage.myHandRaised ? 'lower' : 'raise')}
+            onToggleInterpret={() => {
+              // No Hash: the switch stays off and the "out of Hash" sheet opens.
+              if (!interpretOn && !ensureCoinsForPaidFeature()) return
+              onInterpretChange?.(!interpretOn)
+            }}
+            onToggleListen={() => onListenChange?.(!listenOn)}
+            onInvite={(userId) => void stageAct('invite', userId)}
+            onRemove={(userId) => void stageAct('remove', userId)}
+            onStepDown={() => void stageAct('step_down')}
+            onOpenProfile={onOpenProfile}
+            onToggleFold={() => setFolded((value) => !value)}
+          />
+        </div>
+      </>
+    )
+  }
 
   // The panel is the call this phone is in. Before joining there is nothing
   // to show under the top bar: starting and joining are the dialogs above.

@@ -2172,6 +2172,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [voiceTalkAvailable, setVoiceTalkAvailable] = useState(false)
   useEffect(() => setVoiceTalkAvailable(isVoiceTalkAvailable()), [])
   const [voiceTalkOpenSignal, setVoiceTalkOpenSignal] = useState(0)
+  // Height of the voice room's stage (an open room), 0 when there is none.
+  const [voiceRoomStageHeightPx, setVoiceRoomStageHeightPx] = useState(0)
   const [voiceTalkLeaveSignal, setVoiceTalkLeaveSignal] = useState(0)
   // Listen only: a seat in the call that sends no voice (speech-to-text as the room has it).
   const [voiceTalkListenOnly, setVoiceTalkListenOnly] = useState(false)
@@ -8810,7 +8812,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const copyToastBottomOffsetPx = scrollToBottomButtonBottomPx + SCROLL_TO_BOTTOM_BUTTON_SIZE_PX + 12
   const nativeChatTopSpacerPx = Math.max(0, Math.round(effectiveNativeTopInsetPx))
   const nativeChatBottomSpacerPx = Math.max(0, Math.round(effectiveNativeBottomBannerInsetPx))
-  const chatPaddingTop = trialTopInsetPx && trialTopInsetPx > 0 ? `${trialTopInsetPx}px` : '0.625rem'
+  // The voice room's stage covers the top of the room: the chat starts below it.
+  const baseChatPaddingTop = trialTopInsetPx && trialTopInsetPx > 0 ? `${trialTopInsetPx}px` : '0.625rem'
+  const chatPaddingTop = voiceRoomStageHeightPx > 0 && !(trialTopInsetPx && trialTopInsetPx > 0)
+    ? `${voiceRoomStageHeightPx + 10}px`
+    : baseChatPaddingTop
   const chatPaddingBottom = '0.625rem'
   const chatViewportStyle = useMemo<CSSProperties>(() => ({
     WebkitOverflowScrolling: 'touch',
@@ -9161,6 +9167,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             uiLocale={uiLocale}
             myLang={voiceTalkLang}
             topOffset="calc(54px + env(safe-area-inset-top, 0px))"
+            // An open room is a voice room: its stage is the screen, the chat runs below it.
+            variant={isPublicRoom ? 'room' : 'panel'}
+            onHeightChange={setVoiceRoomStageHeightPx}
             onAvailabilityChange={handleVoiceTalkAvailability}
                 onParticipantsChange={setVoiceTalkParticipants}
             openSignal={voiceTalkOpenSignal}
