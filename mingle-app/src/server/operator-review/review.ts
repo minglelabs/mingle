@@ -1,6 +1,6 @@
 import type { OperatorPostStats } from '@/lib/operator-post-stats'
 import { loadOperatorPostStats } from '@/server/operator-post-stats/load'
-import { listReferencePhotos, releaseReferencePhoto } from '@/server/reference-library/library'
+import { listReferencePhotos, releaseReferenceForImage, releaseReferencePhoto } from '@/server/reference-library/library'
 import { avatarReferencesByUser, claimAvatarReference, releaseOtherAvatarReferences, type AvatarLibraryReference } from '@/server/reference-library/avatar-reference'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
@@ -665,6 +665,8 @@ export async function reviewOperatorPost(
   if (action === 'delete') {
     const cancelled = await prisma.operatorPostReserve.updateMany({ where: { id: reserveId, state: 'review' }, data: { state: 'cancelled', releaseAt: null, ...(feedback ? { reviewFeedback: feedback } : {}) } })
     if (cancelled.count === 0) return { ok: false, error: 'busy' }
+    // The reference-library photo it was drawn from goes back to the library.
+    await releaseReferenceForImage(row.imageObjectKey).catch(() => {})
     await audit('delete')
     return { ok: true, state: 'deleted' }
   }

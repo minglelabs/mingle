@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const store = vi.hoisted(() => ({
   value: { items: [] as unknown[] } as unknown,
-  reserves: [] as Array<{ imageObjectKey: string; state: string }>,
+  reserves: [] as Array<{ imageObjectKey: string; state: string; postId?: string }>,
+  deletedPosts: [] as string[],
   users: [] as Array<{ id: string; operatorAccount?: { avatarSpec: unknown } }>,
 }))
 
@@ -16,12 +17,13 @@ vi.mock('@/lib/prisma', () => {
     $queryRaw: async () => [],
     operatorPostReserve: { findMany: async () => store.reserves },
     user: { findMany: async () => store.users },
+    post: { findMany: async () => store.deletedPosts.map((id) => ({ id })) },
   }
   return { prisma: { ...tx, $transaction: async (fn: (client: typeof tx) => unknown) => fn(tx) } }
 })
 vi.mock('@/server/posts/post-image-storage', () => ({ putPostImage: vi.fn(), getPostImage: vi.fn(), deletePostImage: vi.fn(async () => {}) }))
 
-import { claimReferencePhoto, listReferencePhotos, markReferenceImage, releaseAbandonedReferences, releaseReferencePhoto, removeReferencePhoto } from './library'
+import { claimReferencePhoto, listReferencePhotos, markReferenceImage, releaseAbandonedReferences, releaseReferenceForImage, releaseReferencePhoto, removeReferencePhoto } from './library'
 
 function photo(id: string, gender: string | null, used = false) {
   return { id, objectKey: `post-images/reference-library/${id}.jpg`, width: 10, height: 10, gender, createdAt: '2026-11-24T00:00:00.000Z', usedBy: used ? { userId: 'u0', kind: 'avatar', at: 'x' } : null }
@@ -82,6 +84,7 @@ describe('releaseAbandonedReferences', () => {
     const use = (kind: string, userId: string, imageKey?: string, at = old) => ({ userId, kind, at, ...(imageKey ? { imageKey } : {}) })
     store.value = { items: [
       { ...photo('published', 'female'), usedBy: use('post', 'u1', 'k-published') },
+      { ...photo('published-deleted', 'female'), usedBy: use('post', 'u1', 'k-published-deleted') },
       { ...photo('deleted', 'female'), usedBy: use('post', 'u1', 'k-deleted') },
       { ...photo('redrawn', 'female'), usedBy: use('post', 'u1', 'k-redrawn') },
       { ...photo('fresh', 'female'), usedBy: use('post', 'u1', 'k-fresh', '2026-11-25T11:55:00.000Z') },
@@ -89,13 +92,27 @@ describe('releaseAbandonedReferences', () => {
       { ...photo('gone-avatar', 'female'), usedBy: use('avatar', 'u3') },
       { ...photo('redrawn-avatar', 'female'), usedBy: use('avatar', 'u4') },
     ] }
-    store.reserves = [{ imageObjectKey: 'k-published', state: 'published' }, { imageObjectKey: 'k-deleted', state: 'cancelled' }]
+    store.reserves = [
+      { imageObjectKey: 'k-published', state: 'published', postId: 'p1' },
+      { imageObjectKey: 'k-published-deleted', state: 'published', postId: 'p2' },
+      { imageObjectKey: 'k-deleted', state: 'cancelled' },
+    ]
+    store.deletedPosts = ['p2']
     store.users = [
       { id: 'u2', operatorAccount: { avatarSpec: { attributes: { source: 'reference_library' } } } },
       { id: 'u4', operatorAccount: { avatarSpec: { attributes: { source: 'taxonomy' } } } },
     ]
-    expect(await releaseAbandonedReferences(new Date('2026-11-25T12:00:00.000Z'))).toBe(4)
+    expect(await releaseAbandonedReferences(new Date('2026-11-25T12:00:00.000Z'))).toBe(5)
     const used = (await listReferencePhotos()).filter((item) => item.usedBy).map((item) => item.id)
     expect(used).toEqual(['published', 'fresh', 'live-avatar'])
+  })
+
+  it('puts back the photo of a post staff deleted, right away', async () => {
+    store.value = { items: [
+      { ...photo('drawn', 'female'), usedBy: { userId: 'u1', kind: 'post', at: new Date().toISOString(), imageKey: 'k1' } },
+      { ...photo('other', 'female'), usedBy: { userId: 'u1', kind: 'post', at: new Date().toISOString(), imageKey: 'k2' } },
+    ] }
+    await releaseReferenceForImage('k1')
+    expect((await listReferencePhotos()).filter((item) => item.usedBy).map((item) => item.id)).toEqual(['other'])
   })
 })

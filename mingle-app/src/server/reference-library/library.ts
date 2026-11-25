@@ -315,7 +315,7 @@ export async function markReferenceImage(id: string, imageKey: string): Promise<
 
 /**
  * Frees library photos whose use never went out (staff, 2026-11-25): a post
- * deleted before it was published, or whose photo was redrawn (no post holds
+ * deleted before or after it was published, or whose photo was redrawn (no post holds
  * the drawn photo any more), an account deleted, and an account whose
  * profile photo was redrawn the usual way (its spec no longer the library's).
  * A post photo only counts once recorded (markReferenceImage) and ten minutes
@@ -332,13 +332,18 @@ export async function releaseAbandonedReferences(now: Date = new Date()): Promis
     if (!postUses.length && !avatarUses.length && !lostDrawings.length) return 0
     const [rows, users] = await Promise.all([
       postUses.length
-        ? prisma.operatorPostReserve.findMany({ where: { imageObjectKey: { in: postUses.map((item) => item.usedBy!.imageKey!) } }, select: { imageObjectKey: true, state: true } })
+        ? prisma.operatorPostReserve.findMany({ where: { imageObjectKey: { in: postUses.map((item) => item.usedBy!.imageKey!) } }, select: { imageObjectKey: true, state: true, postId: true } })
         : [],
       avatarUses.length
         ? prisma.user.findMany({ where: { id: { in: avatarUses.map((item) => item.usedBy!.userId) }, isDeleted: false }, select: { id: true, operatorAccount: { select: { avatarSpec: true, pendingAvatarSpec: true } } } })
         : [],
     ])
-    const liveKeys = new Set(rows.filter((row) => row.state !== 'cancelled').map((row) => row.imageObjectKey))
+    // A published post staff deleted later gives its photo back too.
+    const postIds = rows.flatMap((row) => (row.state === 'published' && row.postId ? [row.postId] : []))
+    const deletedPosts = new Set(postIds.length
+      ? (await prisma.post.findMany({ where: { id: { in: postIds }, isDeleted: true }, select: { id: true } })).map((post) => post.id)
+      : [])
+    const liveKeys = new Set(rows.filter((row) => row.state !== 'cancelled' && !(row.postId && deletedPosts.has(row.postId))).map((row) => row.imageObjectKey))
     const fromLibrary = (spec: unknown) => {
       const attributes = spec && typeof spec === 'object' ? (spec as { attributes?: { source?: unknown } }).attributes : undefined
       return attributes?.source === 'reference_library'
@@ -360,6 +365,17 @@ export async function releaseAbandonedReferences(now: Date = new Date()): Promis
     console.warn('[reference-library] release_abandoned_failed', { error: error instanceof Error ? error.name : 'unknown' })
     return 0
   }
+}
+
+/** Puts back the library photo a post photo was drawn from, when staff delete that post. */
+export async function releaseReferenceForImage(imageKey: string | null | undefined): Promise<void> {
+  if (!imageKey) return
+  const items = await listReferencePhotos()
+  if (!items.some((item) => item.usedBy?.kind === 'post' && item.usedBy.imageKey === imageKey)) return
+  await updateLibrary((current) => ({
+    items: current.map((item) => (item.usedBy?.kind === 'post' && item.usedBy.imageKey === imageKey ? { ...item, usedBy: null } : item)),
+    result: null,
+  }))
 }
 
 /** Puts a claimed photo back when the drawing it was claimed for failed. */
