@@ -28,6 +28,9 @@ import {
 import FeedPostView from "@/components/feed/feed-post-view";
 import HeartBurst from "@/components/feed/heart-burst";
 import PostLanguageChips, { ORIGINAL_CHIP } from "@/components/feed/post-language-chips";
+import { buildLanguageChips } from "@/lib/language-chips";
+import { useViewerLanguages } from "@/lib/use-viewer-languages";
+import { resolveMoreLanguagesCopy } from "@/i18n/more-languages-copy";
 import PostReadAloudButton from "@/components/feed/post-read-aloud-button";
 import { stopReadAloud, usePostReadAloud } from "@/components/feed/post-read-aloud";
 import { buildClientApiPath } from "@/lib/api-contract";
@@ -517,23 +520,20 @@ export default function FeedPostCard({
     translate.toggle();
   }, [isSignedIn, translate, track]);
 
-  // ── Language chips: original + the viewer's language + every other
-  // language the post is already translated into ──
+  // ── Language chips (owner, 2026-11-25; see @/lib/language-chips): the
+  // original, the viewer's own language, their 관심 언어 and English up front;
+  // every other language behind "more languages" ──
   const viewerChipLanguage =
     translate.mode !== "hidden" ? (post.displayLanguage && post.displayLanguage.trim()) || viewerLanguage : null;
-  const chipLanguages = useMemo(() => {
-    const seen = new Set<string>();
+  const viewerLanguages = useViewerLanguages(viewerId);
+  const { main: chipLanguages, more: moreChipLanguages } = useMemo(() => buildLanguageChips({
+    sourceLanguage: post.sourceLanguage,
     // A mixed body has a real translation into its own language: keep that chip.
-    const sourceKey = post.sourceLanguagesMixed ? "" : (post.sourceLanguage ?? "").toLowerCase();
-    const out: string[] = [];
-    for (const language of [viewerChipLanguage, ...(post.translationLanguages ?? [])]) {
-      const key = (language ?? "").toLowerCase();
-      if (!language || !key || key === sourceKey || seen.has(key)) continue;
-      seen.add(key);
-      out.push(language);
-    }
-    return out.slice(0, 6);
-  }, [viewerChipLanguage, post.translationLanguages, post.sourceLanguage, post.sourceLanguagesMixed]);
+    sourceLanguagesMixed: post.sourceLanguagesMixed,
+    comfortableLanguage: viewerChipLanguage ?? viewerLanguages.comfortable,
+    interestLanguages: viewerLanguages.interest,
+    translatedLanguages: post.translationLanguages,
+  }), [viewerChipLanguage, viewerLanguages, post.translationLanguages, post.sourceLanguage, post.sourceLanguagesMixed]);
   const selectedChip = pickedText
     ? (pickedLanguage as string)
     : viewerChipLanguage && translate.showingTranslation
@@ -549,20 +549,38 @@ export default function FeedPostCard({
         if ((chip === ORIGINAL_CHIP) === translate.showingTranslation) handleTranslateToggle();
         return;
       }
-      if (otherTranslations) {
-        if (otherTranslations[chip]) pickLanguage(chip);
+      if (otherTranslations?.[chip]) {
+        pickLanguage(chip);
         return;
       }
       if (loadingLanguage) return;
       setLoadingLanguage(chip);
       void (async () => {
         try {
-          const res = await fetch(buildClientApiPath(`/posts/${encodeURIComponent(post.id)}/translate`), {
-            cache: "no-store",
-          });
-          if (!res.ok) throw new Error("translations_unavailable");
-          const body = (await res.json()) as { translations?: Array<{ language: string; text: string }> };
-          const texts = Object.fromEntries((body.translations ?? []).map((row) => [row.language, row.text]));
+          const url = buildClientApiPath(`/posts/${encodeURIComponent(post.id)}/translate`);
+          // What is already translated is read once (no model call)...
+          let texts = otherTranslations;
+          if (!texts) {
+            const res = await fetch(url, { cache: "no-store" });
+            if (!res.ok) throw new Error("translations_unavailable");
+            const body = (await res.json()) as { translations?: Array<{ language: string; text: string }> };
+            texts = Object.fromEntries((body.translations ?? []).map((row) => [row.language, row.text]));
+          }
+          // ...and a language nobody asked for yet is translated now, on this tap.
+          if (!texts[chip]) {
+            if (!isSignedIn) {
+              requireLogin();
+              return;
+            }
+            const res = await fetch(url, {
+              method: "POST",
+              cache: "no-store",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ language: chip }),
+            });
+            const made = res.ok ? ((await res.json().catch(() => null)) as { text?: string | null; status?: string } | null) : null;
+            if (made?.status === "ready" && typeof made.text === "string" && made.text) texts = { ...texts, [chip]: made.text };
+          }
           setOtherTranslations(texts);
           remember({ otherTranslations: texts });
           if (texts[chip]) pickLanguage(chip);
@@ -574,7 +592,7 @@ export default function FeedPostCard({
         }
       })();
     },
-    [viewerChipLanguage, translate.showingTranslation, handleTranslateToggle, otherTranslations, loadingLanguage, post.id, onToast, copy, pickLanguage, remember],
+    [viewerChipLanguage, translate.showingTranslation, handleTranslateToggle, otherTranslations, loadingLanguage, post.id, onToast, copy, pickLanguage, remember, isSignedIn, requireLogin],
   );
   const showLanguageChips = post.sourceText.trim().length > 0 && chipLanguages.length > 0;
 
@@ -751,6 +769,8 @@ export default function FeedPostCard({
             locale={locale}
             originalLabel={copy.translateHide}
             onSelect={handleSelectLanguage}
+            moreLanguages={moreChipLanguages}
+            moreLabel={resolveMoreLanguagesCopy(locale)}
           />
         ) : null}
         {canReadAloud ? (

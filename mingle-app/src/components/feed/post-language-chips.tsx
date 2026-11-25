@@ -2,8 +2,9 @@
 
 import LanguageFlag from "@/components/language-flag";
 import { getSttLanguageDisplayName } from "@/lib/stt-languages";
-import { Globe, Loader2 } from "lucide-react";
+import { Globe, Loader2, Plus } from "lucide-react";
 import Image from "next/image";
+import { useState } from "react";
 
 export const ORIGINAL_CHIP = "original";
 
@@ -19,6 +20,12 @@ type PostLanguageChipsProps = {
   locale: string;
   originalLabel: string;
   onSelect: (language: string) => void;
+  /**
+   * Languages behind "more languages" (owner, 2026-11-25): a button after the
+   * flags opens them in the same row, which then scrolls sideways.
+   */
+  moreLanguages?: readonly string[];
+  moreLabel?: string;
 };
 
 /**
@@ -33,11 +40,20 @@ export default function PostLanguageChips({
   locale,
   originalLabel,
   onSelect,
+  moreLanguages = [],
+  moreLabel = "",
 }: PostLanguageChipsProps) {
-  const chips = [ORIGINAL_CHIP, ...languages];
+  const [opened, setOpened] = useState(false);
+  // A language picked from the rest stays in view after a reload of the card.
+  const expanded = opened || moreLanguages.includes(selected) || (loadingLanguage !== null && moreLanguages.includes(loadingLanguage));
+  const chips = [ORIGINAL_CHIP, ...languages, ...(expanded ? moreLanguages : [])];
 
   return (
-    <div className="flex min-w-0 items-center gap-1.5" data-post-language-chips>
+    <div
+      className={`flex min-w-0 items-center gap-1.5 ${expanded ? "overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" : ""}`}
+      data-post-language-chips
+      data-expanded={expanded ? "true" : "false"}
+    >
       {chips.map((chip) => {
         const isOriginal = chip === ORIGINAL_CHIP;
         const language = isOriginal ? sourceLanguage : chip;
@@ -85,6 +101,24 @@ export default function PostLanguageChips({
           </button>
         );
       })}
+      {!expanded && moreLanguages.length > 0 ? (
+        <button
+          type="button"
+          data-feed-action
+          data-qa="language-chips-more"
+          aria-label={moreLabel}
+          title={moreLabel}
+          onClick={() => setOpened(true)}
+          className="relative inline-flex h-11 w-9 shrink-0 items-center justify-center"
+        >
+          <span
+            aria-hidden="true"
+            className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-full border border-white/70 bg-white text-slate-600 opacity-80 shadow-[0_2px_7px_rgba(15,23,42,0.18)] transition-transform active:scale-95"
+          >
+            <Plus size={16} strokeWidth={2.6} />
+          </span>
+        </button>
+      ) : null}
     </div>
   );
 }

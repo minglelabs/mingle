@@ -5,6 +5,9 @@ import PostLanguageChips, { ORIGINAL_CHIP } from '@/components/feed/post-languag
 import { buildClientApiPath } from '@/lib/api-contract'
 import { BIO_CHANGED_EVENT, BIO_DEFAULT_LANGUAGES, DISPLAY_LANGUAGE_CHANGED_EVENT, sameBioLanguage, type ProfileBioSnapshot } from '@/lib/profile-bio'
 import { profileBioCopy } from '@/i18n/profile-bio-copy'
+import { buildLanguageChips } from '@/lib/language-chips'
+import { useViewerLanguages } from '@/lib/use-viewer-languages'
+import { resolveMoreLanguagesCopy } from '@/i18n/more-languages-copy'
 
 export default function ProfileBio({ userId, initialBio, locale, dark = false, editing = false, expectTranslate = false }: {
   userId: string; initialBio?: string | null; locale: string; dark?: boolean; editing?: boolean
@@ -29,6 +32,7 @@ export default function ProfileBio({ userId, initialBio, locale, dark = false, e
   const snapshotRef = useRef(snapshot)
   snapshotRef.current = snapshot
   const copy = profileBioCopy(locale)
+  const viewerLanguages = useViewerLanguages(viewerId)
   const refresh = useCallback(async (request = false) => {
     if (!viewerId || !userId) return
     // User intent supersedes an in-flight poll; polls never cancel a POST.
@@ -121,11 +125,14 @@ export default function ProfileBio({ userId, initialBio, locale, dark = false, e
   if (!original) return null
   const translated = snapshot?.translation
   const pending = requesting || snapshot?.status === 'running'
-  // One flag per language the bio can be read in: the original, the reader's own, then the four every bio is translated into.
+  // The same flags as a post (see @/lib/language-chips): the original, the reader's own language, their 관심 언어, English; the rest behind "more languages".
   const source = snapshot?.sourceLanguage ?? null
-  const chipLanguages = [...new Set([readerLanguage, ...BIO_DEFAULT_LANGUAGES].filter((code): code is string => Boolean(code)))]
-    .filter((code) => !sameBioLanguage(source, code))
-  const showChips = Boolean(snapshot && !snapshot.detecting && source && chipLanguages.length > 0)
+  const { main: chipLanguages, more: moreChipLanguages } = buildLanguageChips({
+    sourceLanguage: source,
+    comfortableLanguage: readerLanguage ?? viewerLanguages.comfortable,
+    interestLanguages: viewerLanguages.interest,
+  })
+  const showChips = Boolean(snapshot && !snapshot.detecting && source && chipLanguages.length + moreChipLanguages.length > 0)
   return <div className={`mt-1 min-w-0 ${dark ? 'text-white/85' : 'text-slate-700'}`}>
     <p dir="auto" className="whitespace-pre-wrap break-words text-[14px] leading-relaxed [overflow-wrap:anywhere]">{translated && !showOriginal && !requesting ? translated : original}</p>
     {showChips && <div className="mt-1" data-qa="profile-bio-language-chips">
@@ -136,10 +143,14 @@ export default function ProfileBio({ userId, initialBio, locale, dark = false, e
         loadingLanguage={pending ? snapshot?.language ?? chosenLanguage : null}
         locale={locale}
         originalLabel={copy.original}
+        moreLanguages={moreChipLanguages}
+        moreLabel={resolveMoreLanguagesCopy(locale)}
         onSelect={(chip) => {
           if (chip === ORIGINAL_CHIP) { setShowOriginal(true); return }
           setShowOriginal(false)
           if (chip !== snapshot?.language) setChosenLanguage(chip)
+          // The reader's own language outside the four: translated on this tap.
+          else if (!translated && !pending) void refresh(true)
         }}
       />
     </div>}
