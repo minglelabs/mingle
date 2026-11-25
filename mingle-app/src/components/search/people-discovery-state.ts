@@ -15,6 +15,8 @@ export type DiscoveryPerson = {
   primaryLanguages: string[];
   interestLanguages: InterestLanguage[];
   badge?: "online" | "new" | "active";
+  /** Seen in the last hour: the live dot on an explore card. */
+  live?: boolean;
   /** One line of the bio, already cut for a card; null when there is none. */
   bio: string | null;
   isOfficial?: boolean;
@@ -57,6 +59,7 @@ function parsePerson(value: unknown): DiscoveryPerson | null {
       return typeof code === "string" && code ? [{ code: code as SttLanguageCode, level: clampLanguageLevel(level) }] : [];
     }),
     ...(raw.badge === "online" || raw.badge === "new" || raw.badge === "active" ? { badge: raw.badge } : {}),
+    ...(raw.live === true ? { live: true } : {}),
     bio: optionalString(raw.bio),
     ...(raw.isOfficial === true ? { isOfficial: true } : {}),
     ...(raw.isFollowing === true ? { isFollowing: true } : {}),

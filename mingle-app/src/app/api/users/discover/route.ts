@@ -56,6 +56,8 @@ async function readPublishedBios(users: { id: string; bio: string | null }[]): P
  * GET /api/users/discover?locale=ko&cursor=…
  * People cards for the home tab (see `@/server/people-discovery`).
  */
+const LIVE_WINDOW_MS = 60 * 60 * 1000;
+
 export async function GET(request: NextRequest) {
   const viewerId = getSessionUserId(await getServerSession(getAuthOptions()));
   if (!viewerId) {
@@ -128,6 +130,8 @@ export async function GET(request: NextRequest) {
       const age = calculateProfileAge(user.birthDate, now);
       const gender = normalizeProfileGender(user.gender);
       const badge = resolveDiscoveryBadge(user, now);
+      // Seen in the last hour: a live dot on the card (owner, 2026-11-25; no label anywhere).
+      const live = now.getTime() - user.lastSeenAt.getTime() <= LIVE_WINDOW_MS;
       return {
         id: user.id,
         handle: user.handle,
@@ -142,6 +146,7 @@ export async function GET(request: NextRequest) {
         primaryLanguages,
         interestLanguages,
         ...(badge ? { badge } : {}),
+        ...(live ? { live: true } : {}),
         bio: bioCardLine(bioById.get(user.id)),
         ...(typeof user.heightCm === "number" ? { heightCm: user.heightCm } : {}),
         isFollowing: user.followerRelations.length > 0,

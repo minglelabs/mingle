@@ -356,6 +356,13 @@ function PersonCard({
               <UserRound size={48} className="text-gray-300" />
             </span>
           )}
+          {/* Active in the last hour (owner, 2026-11-25): a light green dot, explained nowhere on purpose. */}
+          {person.live ? (
+            <span data-qa="explore-live-dot" className="absolute right-2 top-2 flex h-3.5 w-3.5 items-center justify-center">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-lime-400 opacity-60 [animation-duration:2.4s]" />
+              <span className="relative inline-flex h-3 w-3 rounded-full bg-lime-400 ring-2 ring-white" />
+            </span>
+          ) : null}
           {badgeLabel ? (
             <span
               className={`absolute left-2 top-2 rounded-full px-2 py-[3px] text-[11px] font-bold leading-none shadow-sm ${

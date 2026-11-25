@@ -13,6 +13,7 @@ import { canDrawImagesHere } from '@/server/operator-avatars/generate'
 import type { ImageEngine } from '@/server/seedream/client'
 import { runOperatorEngagement, type EngagementRunResult } from '@/server/operator-engagement/engagement'
 import { getAutomationSettings, getAutomationState, saveAutomationState } from './settings'
+import { refreshOperatorPresence } from '@/server/operator-presence'
 
 /**
  * The automatic generation rules staff set in `/admin/settings/automation`:
@@ -250,6 +251,10 @@ export async function writeDailyOperatorPosts(chancePercent: number, now: Date, 
 /** One worker run. Two settings reads and nothing else while both rules are off or not yet due. */
 export async function runOperatorAutomation(options: { now?: () => Date } = {}): Promise<AutomationRunSummary> {
   const now = options.now ?? (() => new Date())
+  // Operator accounts that look online, whatever the other rules (see @/server/operator-presence).
+  await refreshOperatorPresence(now()).catch((error) => {
+    console.warn('[operator-automation] presence_failed', { error: error instanceof Error ? error.name : 'unknown' })
+  })
   const settings = await getAutomationSettings()
   const summary: AutomationRunSummary = { avatar: 'off', account: 'off', posts: 'off', engagement: 'off' }
   if (!settings.avatars.enabled && !settings.accounts.enabled && !settings.posts.enabled && !settings.engagement.enabled) return summary
