@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2, Send } from 'lucide-react'
+import { refreshInPlace } from '../../../_components/refresh-in-place'
 
 /**
  * 게시 for an account waiting for review, right on its profile page (staff
@@ -27,7 +28,7 @@ export function ApproveAccountButton({ userId }: { userId: string }) {
         const payload = await response.json().catch(() => ({})) as { error?: string }
         throw new Error(payload.error ?? 'request_failed')
       }
-      router.refresh()
+      refreshInPlace(router)
     } catch (caught) {
       setError((caught as Error).message === 'already_approved' ? '이미 게시된 계정이에요.' : '게시하지 못했어요. 다시 눌러 주세요.')
     } finally {

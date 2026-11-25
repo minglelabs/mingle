@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { adminPostImageUrl } from '../../operators/review/review-image-url'
+import { refreshInPlace } from '../../_components/refresh-in-place'
 
 const ERRORS: Record<string, string> = {
   invalid_image: 'JPG·PNG·WEBP 사진만 넣을 수 있어요.',
@@ -107,7 +108,7 @@ export function PhotoRedrawPanel({ postId, language, onClose, onApplied, review 
       })
       if (!response.ok) { setError('사진을 바꾸지 못했어요.'); return }
       if (onApplied) onApplied()
-      else router.refresh()
+      else refreshInPlace(router)
       onClose()
     } catch {
       setError('사진을 바꾸지 못했어요.')

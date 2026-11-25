@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { refreshInPlace } from '../../_components/refresh-in-place'
 
 /**
  * Takes an operator's published post down from the app back into review, or
@@ -19,7 +20,7 @@ export function PostTakedownButton({ postId, hidden }: { postId: string; hidden:
     try {
       const response = await fetch(`/admin/api/posts/${postId}`, { method: 'DELETE' })
       if (!response.ok) throw new Error()
-      router.refresh()
+      refreshInPlace(router)
     } catch {
       setError('삭제하지 못했어요.')
     } finally {
@@ -38,7 +39,7 @@ export function PostTakedownButton({ postId, hidden }: { postId: string; hidden:
         body: JSON.stringify({ hidden: !hidden }),
       })
       if (!response.ok) throw new Error()
-      router.refresh()
+      refreshInPlace(router)
     } catch {
       setError(hidden ? '다시 올리지 못했어요.' : '내리지 못했어요.')
     } finally {

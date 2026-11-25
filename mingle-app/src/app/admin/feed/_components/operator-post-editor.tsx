@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { PhotoRedrawPanel } from './photo-redraw-panel'
 import { PostTakedownButton } from './post-takedown-button'
+import { refreshInPlace } from '../../_components/refresh-in-place'
 
 const ERRORS: Record<string, string> = {
   invalid_image: 'JPG·PNG·WEBP 사진만 올릴 수 있어요.',
@@ -42,7 +43,7 @@ export function OperatorPostEditor({ postId, text, hasPhoto, language = null, pu
         setError(ERRORS[body.error ?? ''] ?? '저장하지 못했어요.')
         return false
       }
-      router.refresh()
+      refreshInPlace(router)
       return true
     } catch {
       setError('저장하지 못했어요.')
