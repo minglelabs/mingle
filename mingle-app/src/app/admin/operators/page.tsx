@@ -1,11 +1,11 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { ChevronLeft, ChevronRight, Plus, Search, UserRound } from 'lucide-react'
+import { Plus, Search, UserRound } from 'lucide-react'
 import { requireAdmin } from '@/server/admin/guard'
 import { listOperatorAccounts, normalizeOperatorSearch, parseAccountListScope, type AccountListScope } from '@/server/operators/operator-admin-query'
-import { adminProfileHref } from '../_lib/profile-href'
-import { InactiveChip, OperatorAvatar, OperatorChip, OperatorsMain } from './_components/operator-ui'
-import { countryLabel } from './_lib/options'
+import { OperatorsMain } from './_components/operator-ui'
+import { AccountItems, listHref } from './account-items'
+import { AccountsMore } from './accounts-more'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,14 +25,6 @@ function takeFirst(value: string | string[] | undefined): string {
 
 const SCOPE_LABEL: Record<AccountListScope, string> = { all: '전체', operator: '운영 계정', user: '실제 유저' }
 
-function listHref(query: string, page: number, scope: AccountListScope = 'all'): string {
-  const params = new URLSearchParams()
-  if (query) params.set('q', query)
-  if (scope !== 'all') params.set('who', scope)
-  if (page > 1) params.set('page', String(page))
-  const search = params.toString()
-  return search ? `/admin/operators?${search}` : '/admin/operators'
-}
 
 export default async function OperatorsPage({ searchParams }: OperatorsPageProps) {
   await requireAdmin('/admin/operators')
@@ -42,7 +34,6 @@ export default async function OperatorsPage({ searchParams }: OperatorsPageProps
   const scope = parseAccountListScope(takeFirst(params.who))
 
   const list = await listOperatorAccounts({ query, page: requestedPage, scope })
-  const pageButton = 'inline-flex h-11 items-center justify-center gap-1 rounded-xl border px-4 text-sm font-semibold'
 
   return (
     <OperatorsMain>
@@ -114,55 +105,14 @@ export default async function OperatorsPage({ searchParams }: OperatorsPageProps
           </p>
         </section>
       ) : (
-        <ul className="mt-4 grid gap-2 sm:grid-cols-2">
-          {list.items.map(item => (
-            <li key={item.id}>
-              <Link
-                href={item.isOperator ? `/admin/operators/${encodeURIComponent(item.id)}` : adminProfileHref(item.id, listHref(list.query, list.page, scope))}
-                className="flex min-h-[72px] items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 active:bg-slate-50"
-              >
-                <OperatorAvatar image={item.image} name={item.name} size={48} languages={item.primaryLanguage ? [item.primaryLanguage] : []} />
-                <span className="min-w-0 flex-1">
-                  <span className="flex min-w-0 items-center gap-1.5">
-                    <span className="truncate text-[15px] font-semibold text-slate-900">{item.name || '이름 없음'}</span>
-                    {item.isOperator ? <OperatorChip /> : null}
-                    {item.isOperator && !item.isActive ? <InactiveChip /> : null}
-                  </span>
-                  <span className="mt-0.5 block break-all text-sm text-slate-500">@{item.handle}</span>
-                  <span className="mt-0.5 block break-words text-xs text-slate-500">
-                    {countryLabel(item.personaCountry)}
-                  </span>
-                </span>
-                <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" aria-hidden="true" />
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+            <AccountItems items={list.items} back={listHref(list.query, list.page, scope)} />
+          </ul>
+          <AccountsMore query={list.query} scope={scope} initialCursor={list.page < list.pageCount ? String(list.page + 1) : null} />
+        </>
       )}
 
-      {list.pageCount > 1 ? (
-        <nav className="mt-5 flex items-center justify-between gap-3" aria-label="페이지">
-          {list.page > 1 ? (
-            <Link href={listHref(list.query, list.page - 1, scope)} className={`${pageButton} border-slate-300 bg-white text-slate-700`}>
-              <ChevronLeft className="h-4 w-4" aria-hidden="true" />이전
-            </Link>
-          ) : (
-            <span aria-disabled="true" className={`${pageButton} border-slate-200 bg-slate-100 text-slate-400`}>
-              <ChevronLeft className="h-4 w-4" aria-hidden="true" />이전
-            </span>
-          )}
-          <span className="text-sm text-slate-600">{list.page} / {list.pageCount}</span>
-          {list.page < list.pageCount ? (
-            <Link href={listHref(list.query, list.page + 1, scope)} className={`${pageButton} border-slate-300 bg-white text-slate-700`}>
-              다음<ChevronRight className="h-4 w-4" aria-hidden="true" />
-            </Link>
-          ) : (
-            <span aria-disabled="true" className={`${pageButton} border-slate-200 bg-slate-100 text-slate-400`}>
-              다음<ChevronRight className="h-4 w-4" aria-hidden="true" />
-            </span>
-          )}
-        </nav>
-      ) : null}
     </OperatorsMain>
   )
 }
