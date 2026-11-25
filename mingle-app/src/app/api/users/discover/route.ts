@@ -17,7 +17,7 @@ import {
   decodePeopleDiscoveryCursor,
   encodePeopleDiscoveryCursor,
   bioCardLine,
-  resolveDiscoveryBadge,
+  isNewDiscoveryUser, resolveDiscoveryActivityBadge,
   resolveViewerIsKorean,
   type PeopleDiscoveryRow,
 } from "@/server/people-discovery";
@@ -180,7 +180,8 @@ export async function GET(request: NextRequest) {
         .filter((entry) => !primaryLanguages.includes(entry.code));
       const age = calculateProfileAge(user.birthDate, now);
       const gender = normalizeProfileGender(user.gender);
-      const badge = resolveDiscoveryBadge(user, now);
+      const badge = resolveDiscoveryActivityBadge(user, now);
+      const isNew = isNewDiscoveryUser(user, now);
       // Seen in the last hour: a live dot on the card (owner, 2026-11-25; no label anywhere).
       const live = now.getTime() - user.lastSeenAt.getTime() <= LIVE_WINDOW_MS;
       return {
@@ -198,6 +199,7 @@ export async function GET(request: NextRequest) {
         primaryLanguages,
         interestLanguages,
         ...(badge ? { badge } : {}),
+        ...(isNew ? { isNew: true } : {}),
         ...(live ? { live: true } : {}),
         bio: bioCardLine(bioById.get(user.id)),
         ...(typeof user.heightCm === "number" ? { heightCm: user.heightCm } : {}),

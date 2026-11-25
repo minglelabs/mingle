@@ -176,6 +176,8 @@ model User {
   profileVisitorUnlocks     ProfileVisitorUnlock[]         @relation("ProfileVisitorUnlockOwner")
   nameTransliterations      UserNameTransliteration[]      @relation("UserNameTransliterations")
   profileVisitorUnlockedBy  ProfileVisitorUnlock[]         @relation("ProfileVisitorUnlockVisitor")
+  profileLikesSent          ProfileLike[]                  @relation("ProfileLikeLiker")
+  profileLikesReceived      ProfileLike[]                  @relation("ProfileLikeLiked")
   postHides                 PostHide[]
   postDrafts                PostDraft[]
   recentSearches            RecentSearch[]
@@ -1050,6 +1052,21 @@ model ProfileVisitorUnlock {
   @@id([userId, visitorId])
   @@index([visitorId], map: "app_profile_visitor_unlocks_visitor_id_idx")
   @@map("app_profile_visitor_unlocks")
+}
+
+/// A heart on a profile (owner, 2026-11-25; src/server/profile-likes.ts): one
+/// per (who sent it, whose profile). Taking it back deletes the row.
+model ProfileLike {
+  likerId   String   @map("liker_id")
+  likedId   String   @map("liked_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  liker User @relation("ProfileLikeLiker", fields: [likerId], references: [id], onDelete: Cascade)
+  liked User @relation("ProfileLikeLiked", fields: [likedId], references: [id], onDelete: Cascade)
+
+  @@id([likerId, likedId])
+  @@index([likedId, createdAt], map: "app_profile_likes_liked_id_created_at_idx")
+  @@map("app_profile_likes")
 }
 
 model PostHide {

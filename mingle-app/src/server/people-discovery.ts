@@ -251,6 +251,25 @@ export function resolveDiscoveryBadge(
   return null;
 }
 
+/**
+ * The card's activity badge alone (owner, 2026-11-25): "online" or "active".
+ * Being new is a tag of its own (`isNewDiscoveryUser`), shown together with
+ * it, so a new person who is online shows both.
+ */
+export function resolveDiscoveryActivityBadge(
+  user: { lastSeenAt: Date },
+  now: Date = new Date(),
+): "online" | "active" | null {
+  const sinceSeen = now.getTime() - user.lastSeenAt.getTime();
+  if (sinceSeen < ONLINE_WINDOW_MS) return "online";
+  return sinceSeen < RECENTLY_ACTIVE_WINDOW_MS ? "active" : null;
+}
+
+/** Joined in the last week. */
+export function isNewDiscoveryUser(user: { createdAt: Date }, now: Date = new Date()): boolean {
+  return now.getTime() - user.createdAt.getTime() < NEW_USER_WINDOW_MS;
+}
+
 /** One line of a bio for a card: whitespace collapsed, cut to `max` characters. */
 export function bioCardLine(bio: string | null | undefined, max = 80): string | null {
   const line = (bio ?? "").replace(/\s+/g, " ").trim();

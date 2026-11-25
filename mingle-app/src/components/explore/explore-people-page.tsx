@@ -1,7 +1,7 @@
 "use client";
 
 import { resolvePeopleSafetyCopy } from "@/i18n/people-safety-copy";
-import { Check, Loader2, MessageCircle, Search, SlidersHorizontal, UserPlus, UserRound } from "lucide-react";
+import { Check, Loader2, MessageCircle, Search, SlidersHorizontal, Sparkles, UserPlus, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -358,10 +358,8 @@ function PersonCard({
   const primary = person.primaryLanguages.slice(0, MAX_LANGUAGES_ON_CARD);
   const interest = person.interestLanguages.slice(0, MAX_LANGUAGES_ON_CARD);
   const countryName = person.nationalityCountry ? getCountryDisplayName(person.nationalityCountry, locale) : "";
-  const badgeLabel = person.badge === "online" ? copy.badgeOnline
-    : person.badge === "new" ? peopleCopy.badgeNew
-      : person.badge === "active" ? peopleCopy.badgeActive
-        : "";
+  const activityLabel = person.badge === "online" ? copy.badgeOnline : person.badge === "active" ? peopleCopy.badgeActive : "";
+  const badgeLabel = [person.isNew ? peopleCopy.badgeNew : "", activityLabel].filter(Boolean).join(", ");
   const label = [
     withAccountBadgeLabel(name, accountBadge, locale),
     formatProfileAge(person.age, locale),
@@ -404,16 +402,21 @@ function PersonCard({
               <span className="relative inline-flex h-3 w-3 rounded-full bg-lime-400 ring-2 ring-white" />
             </span>
           ) : null}
-          {badgeLabel ? (
-            <span
-              className={`absolute left-2 top-2 rounded-full px-2 py-[3px] text-[11px] font-bold leading-none shadow-sm ${
-                person.badge === "new" ? "bg-amber-400 text-white" : "bg-white/90 text-emerald-700"
-              }`}
-            >
-              {person.badge === "new" ? null : (
-                <span className={`mr-1 inline-block h-[6px] w-[6px] rounded-full align-middle ${person.badge === "online" ? "bg-emerald-500" : "bg-emerald-300"}`} />
-              )}
-              <span className="align-middle">{badgeLabel}</span>
+          {/* Top left: the "new" tag (joined this week), then what they are up to. Both show when both hold. */}
+          {person.isNew || activityLabel ? (
+            <span className="absolute left-2 top-2 flex flex-col items-start gap-1">
+              {person.isNew ? (
+                <span data-qa="explore-new-tag" className="flex items-center gap-0.5 rounded-full bg-gradient-to-r from-rose-500 to-orange-400 px-2 py-[3px] text-[11px] font-bold leading-none text-white shadow-sm">
+                  <Sparkles size={10} strokeWidth={2.6} aria-hidden="true" />
+                  {peopleCopy.badgeNew}
+                </span>
+              ) : null}
+              {activityLabel ? (
+                <span className="rounded-full bg-white/90 px-2 py-[3px] text-[11px] font-bold leading-none text-emerald-700 shadow-sm">
+                  <span className={`mr-1 inline-block h-[6px] w-[6px] rounded-full align-middle ${person.badge === "online" ? "bg-emerald-500" : "bg-emerald-300"}`} />
+                  <span className="align-middle">{activityLabel}</span>
+                </span>
+              ) : null}
             </span>
           ) : null}
         </span>
