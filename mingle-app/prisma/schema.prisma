@@ -170,6 +170,7 @@ model User {
   profileViewsMade          ProfileView[]                  @relation("ProfileViewViewer")
   profileViewsReceived      ProfileView[]                  @relation("ProfileViewProfile")
   profileVisitorUnlocks     ProfileVisitorUnlock[]         @relation("ProfileVisitorUnlockOwner")
+  nameTransliterations      UserNameTransliteration[]      @relation("UserNameTransliterations")
   profileVisitorUnlockedBy  ProfileVisitorUnlock[]         @relation("ProfileVisitorUnlockVisitor")
   postHides                 PostHide[]
   postDrafts                PostDraft[]
@@ -1005,6 +1006,22 @@ model ProfileView {
   @@index([sourcePostId], map: "app_profile_views_source_post_id_idx")
   @@index([profileUserId, createdAt], map: "app_profile_views_profile_created_at_idx")
   @@map("app_profile_views")
+}
+
+/// A person's name written for readers of another language (owner, 2026-11-25):
+/// the sound in that language's script (李伟 → 리웨이 / Li Wei), never a
+/// translation. Kept per language; a changed name (sourceName differs) is redone.
+model UserNameTransliteration {
+  userId     String   @map("user_id")
+  language   String
+  sourceName String   @map("source_name")
+  text       String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation("UserNameTransliterations", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, language])
+  @@map("app_user_name_transliterations")
 }
 
 /// "Who viewed my profile" (owner, 2026-11-25): a visitor shows blurred until

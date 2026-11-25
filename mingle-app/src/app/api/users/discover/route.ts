@@ -1,4 +1,4 @@
-import { type NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse, after } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
@@ -8,6 +8,9 @@ import { resolveNationalityCountry } from "@/lib/nationality";
 import { normalizeProfileGender } from "@/lib/profile-gender";
 import { USER_IDENTITY_SELECT, identityBadgeFlags } from "@/server/identity/user-identity-select";
 import { calculateProfileAge } from "@/server/user-profile";
+import { BIO_DEFAULT_LANGUAGES, resolveBioDisplayLanguage, sameBioLanguage } from "@/lib/profile-bio";
+import { requestBioTranslation } from "@/server/profile-bio";
+import { fillNameTransliterations, nameLanguageOf, readNameTransliterations } from "@/server/name-transliteration";
 import {
   buildPeopleDiscoverySql,
   parsePeopleDiscoveryFilters,
@@ -34,22 +37,49 @@ const NO_STORE = { "Cache-Control": "private, no-store" };
  * with a bio state shows the published version only (an unpublished draft
  * stays hidden); a user without one still has the plain `bio` column.
  */
-async function readPublishedBios(users: { id: string; bio: string | null }[]): Promise<Map<string, string | null>> {
+async function readPublishedBios(
+  users: { id: string; bio: string | null }[],
+  readingLanguage: string,
+): Promise<{ bios: Map<string, string | null>; untranslated: string[] }> {
   const bios = new Map<string, string | null>(users.map((user) => [user.id, user.bio]));
-  if (users.length === 0) return bios;
+  // Bios with no translation into the reader's language yet (asked for in the background).
+  const untranslated: string[] = [];
+  if (users.length === 0) return { bios, untranslated };
   const states = await prisma.profileBioState.findMany({
     where: { userId: { in: users.map((user) => user.id) } },
     select: { userId: true, publishedVersionId: true },
   });
   const versionIds = states.map((state) => state.publishedVersionId).filter((id): id is string => Boolean(id));
-  const versions = versionIds.length > 0
-    ? await prisma.profileBioVersion.findMany({ where: { id: { in: versionIds } }, select: { id: true, sourceText: true } })
-    : [];
-  const textByVersion = new Map(versions.map((version) => [version.id, version.sourceText]));
+  const [versions, translations] = versionIds.length > 0
+    ? await Promise.all([
+      prisma.profileBioVersion.findMany({ where: { id: { in: versionIds } }, select: { id: true, sourceText: true, sourceLanguage: true } }),
+      // The reader's own language (owner, 2026-11-25), when a translation exists.
+      prisma.profileBioTranslation.findMany({
+        where: { versionId: { in: versionIds }, language: readingLanguage, status: "succeeded" },
+        select: { versionId: true, text: true },
+      }),
+    ])
+    : [[], []];
+  const versionById = new Map(versions.map((version) => [version.id, version]));
+  const translatedByVersion = new Map(translations.map((row) => [row.versionId, row.text]));
+  const withState = new Set<string>();
   for (const state of states) {
-    bios.set(state.userId, state.publishedVersionId ? textByVersion.get(state.publishedVersionId) ?? null : null);
+    withState.add(state.userId);
+    const version = state.publishedVersionId ? versionById.get(state.publishedVersionId) : undefined;
+    if (!version) {
+      bios.set(state.userId, null);
+      continue;
+    }
+    const translated = translatedByVersion.get(version.id)?.trim();
+    if (translated) bios.set(state.userId, translated);
+    else {
+      bios.set(state.userId, version.sourceText);
+      if (version.sourceText?.trim() && !sameBioLanguage(version.sourceLanguage, readingLanguage)) untranslated.push(state.userId);
+    }
   }
-  return bios;
+  // A plain bio with no state yet is detected and translated on request too.
+  for (const user of users) if (!withState.has(user.id) && user.bio?.trim()) untranslated.push(user.id);
+  return { bios, untranslated };
 }
 
 /**
@@ -71,8 +101,15 @@ export async function GET(request: NextRequest) {
 
   const viewer = await prisma.user.findUnique({
     where: { id: viewerId },
-    select: { nationalityCountry: true, nationality: true, primaryLanguages: true },
+    select: { nationalityCountry: true, nationality: true, primaryLanguages: true, defaultDisplayLanguage: true, defaultConversationLanguages: true },
   });
+  // Bios and names read in the viewer's own language (owner, 2026-11-25).
+  const readingLanguage = resolveBioDisplayLanguage(
+    viewer?.defaultDisplayLanguage,
+    viewer?.primaryLanguages ?? [],
+    viewer?.defaultConversationLanguages ?? [],
+    request.nextUrl.searchParams.get("locale") ?? "en",
+  );
   const viewerIsKorean = resolveViewerIsKorean(viewer, request.nextUrl.searchParams.get("locale"));
 
   const rankedRows = await prisma.$queryRaw<PeopleDiscoveryRow[]>(buildPeopleDiscoverySql({
@@ -113,7 +150,19 @@ export async function GET(request: NextRequest) {
       },
     })
     : [];
-  const bioById = await readPublishedBios(details);
+  const { bios: bioById, untranslated } = await readPublishedBios(details, readingLanguage);
+  const nameLanguage = nameLanguageOf(readingLanguage);
+  const nameById = nameLanguage ? await readNameTransliterations(details, nameLanguage) : new Map<string, string>();
+  // What is missing is made in the background for the next look: bios only into
+  // the four languages every bio is translated into, a few per page.
+  after(async () => {
+    if ((BIO_DEFAULT_LANGUAGES as readonly string[]).includes(readingLanguage)) {
+      for (const userId of untranslated.slice(0, 6)) {
+        await requestBioTranslation(userId, readingLanguage).catch(() => null);
+      }
+    }
+    if (nameLanguage) await fillNameTransliterations(details, nameLanguage).catch(() => 0);
+  });
   const detailById = new Map(details.map((user) => [user.id, user]));
   const now = new Date();
 
@@ -135,7 +184,8 @@ export async function GET(request: NextRequest) {
       return {
         id: user.id,
         handle: user.handle,
-        name: user.name,
+        // The name written for the reader (李伟 → 리웨이); the original when there is none yet.
+        name: nameById.get(user.id) ?? user.name,
         image: user.image,
         imageCropScale: user.imageCropScale,
         imageCropX: user.imageCropX,

@@ -116,6 +116,8 @@ type PublicUserProfile = {
   /** Passed the selfie check for the current photo; absent means false. */
   faceVerified?: boolean;
   phoneVerified?: boolean;
+  /** The name written for this reader (李伟 → 리웨이), when it differs from the original. */
+  readerName?: string;
   /** "Member #N" (see @/server/member-number); absent for staff accounts. */
   memberNumber?: number;
 };
@@ -624,7 +626,10 @@ export default function PublicUserProfileScreen({
     }
   }, [isOwnProfile, profile, reportMessage, reportPending, reportReason]);
 
-  const name = profile?.name?.trim() || copy.userFallback;
+  // Read in the viewer's own script by default (owner, 2026-11-25); the original stays beside it.
+  const originalName = profile?.name?.trim() || "";
+  const name = profile?.readerName?.trim() || originalName || copy.userFallback;
+  const showOriginalName = Boolean(profile?.readerName?.trim() && originalName && profile.readerName.trim() !== originalName);
   const badge = resolveAccountBadge(profile);
   // The name as screen readers hear it: with the badge label.
   const nameLabel = withAccountBadgeLabel(name, badge, locale);
@@ -762,6 +767,7 @@ export default function PublicUserProfileScreen({
               <div className="mt-4 pl-2">
                 <p className="flex min-w-0 items-center gap-1.5">
                   <span className="truncate text-[15px] font-semibold text-slate-950">{name}</span>
+                  {showOriginalName ? <span data-qa="profile-original-name" className="shrink-0 text-[13px] text-gray-500">{originalName}</span> : null}
                   {/* The name spelled the way it sounds, in English letters (owner, 2026-11-25). */}
                   {!isOwnProfile && profile.name ? <NamePronunciationButton userId={userId} name={profile.name} label="Pronunciation" /> : null}
                   <AccountBadge kind={badge} locale={locale} tone="dark" />

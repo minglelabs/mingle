@@ -11,6 +11,18 @@ const { mockGetServerSession, mockUserFindUnique, mockUserFindMany, mockQueryRaw
 }));
 
 vi.mock("next-auth", () => ({ getServerSession: mockGetServerSession }));
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  // Background work after the response (bio translations, names) is not run here.
+  after: () => undefined,
+}));
+vi.mock("@/server/name-transliteration", () => ({
+  nameLanguageOf: () => null,
+  readNameTransliterations: async () => new Map(),
+  fillNameTransliterations: async () => 0,
+}));
+vi.mock("@/server/profile-bio", () => ({ requestBioTranslation: async () => null }));
+
 vi.mock("@/lib/auth-options", () => ({ getAuthOptions: () => ({}) }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -18,6 +30,7 @@ vi.mock("@/lib/prisma", () => ({
     user: { findUnique: mockUserFindUnique, findMany: mockUserFindMany },
     profileBioState: { findMany: mockBioStates },
     profileBioVersion: { findMany: mockBioVersions },
+    profileBioTranslation: { findMany: async () => [] },
   },
 }));
 

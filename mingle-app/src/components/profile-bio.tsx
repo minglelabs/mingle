@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { Languages } from 'lucide-react'
 import { buildClientApiPath } from '@/lib/api-contract'
-import { BIO_CHANGED_EVENT, DISPLAY_LANGUAGE_CHANGED_EVENT, sameBioLanguage, type ProfileBioSnapshot } from '@/lib/profile-bio'
+import { BIO_CHANGED_EVENT, BIO_DEFAULT_LANGUAGES, DISPLAY_LANGUAGE_CHANGED_EVENT, sameBioLanguage, type ProfileBioSnapshot } from '@/lib/profile-bio'
 import { profileBioCopy } from '@/i18n/profile-bio-copy'
 
 export default function ProfileBio({ userId, initialBio, locale, dark = false, editing = false, expectTranslate = false }: {
@@ -89,6 +89,19 @@ export default function ProfileBio({ userId, initialBio, locale, dark = false, e
       document.removeEventListener('visibilitychange', changed)
     }
   }, [refresh])
+  // Read in the viewer's own language by default (owner, 2026-11-25): for the
+  // four languages every bio is translated into, a missing translation is asked
+  // for once, without a tap. Other languages show one only when it exists.
+  const autoRequestedFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (editing || !snapshot || snapshot.detecting || snapshot.translation || snapshot.status !== 'idle') return
+    if (!snapshot.original || sameBioLanguage(snapshot.sourceLanguage, snapshot.language) || !snapshot.sourceLanguage) return
+    if (!(BIO_DEFAULT_LANGUAGES as readonly string[]).includes(snapshot.language)) return
+    const key = `${snapshot.versionId ?? 'legacy'}:${snapshot.language}`
+    if (autoRequestedFor.current === key) return
+    autoRequestedFor.current = key
+    void refresh(true)
+  }, [editing, refresh, snapshot])
   if (editing) {
     if (!snapshot?.draft?.original) return null
     return <p role="status" className="mt-2 text-xs text-slate-500">{snapshot.draft.status === 'running' ? copy.processing : snapshot.draft.status === 'failed' ? copy.partial : copy.ready}</p>

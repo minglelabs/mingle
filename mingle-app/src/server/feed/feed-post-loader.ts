@@ -72,9 +72,11 @@ export async function loadSerializerContext(
   if (viewerId) {
     const viewer = await prisma.user.findUnique({
       where: { id: viewerId },
-      select: { defaultDisplayLanguage: true },
+      select: { defaultDisplayLanguage: true, primaryLanguages: true },
     })
-    viewerDefaultDisplayLanguage = viewer?.defaultDisplayLanguage ?? null
+    // The viewer's own language (편한 언어) when no display language was saved
+    // (owner, 2026-11-25): posts read in it by default, not in the app's UI language.
+    viewerDefaultDisplayLanguage = viewer?.defaultDisplayLanguage ?? viewer?.primaryLanguages?.[0] ?? null
   }
   const displayLanguage = resolveDisplayLanguage(rawDisplayLanguage, viewerDefaultDisplayLanguage)
 
