@@ -183,27 +183,31 @@ export type LearnerPlan = {
 
 export type LearnerLevel = { key: string; ko: string; brief: string; /** 1-5, as on the profile's 관심 언어. */ dots: number }
 
+/**
+ * How each level writes. Staff (2026-11-25): learners read far too good, so
+ * every level is written well below its name; even 유창 still reads foreign.
+ */
 const LEARNER_LEVELS: readonly LearnerLevel[] = [
-  { key: 'starter', ko: '입문', dots: 1, brief: 'just started: only a few memorized phrases and greetings, two to five words, textbook polite form, basic words wrong or spelled the way they sound, often falls back to their own language mid-sentence' },
-  { key: 'beginner', ko: '초급', dots: 2, brief: 'a beginner: very short textbook sentences, the polite form taught first, a wrong particle or word order here and there, sometimes a word left in their own language' },
-  { key: 'intermediate', ko: '중급', dots: 3, brief: 'intermediate: can say what they mean in simple sentences, but the wording is slightly unnatural, mixes stiff written endings with chat endings, and makes an occasional grammar slip' },
-  { key: 'advanced', ko: '고급', dots: 4, brief: 'advanced: nearly natural and uses chat expressions, with only a rare odd word choice' },
-  { key: 'fluent', ko: '유창', dots: 5, brief: 'fluent: natural, with at most a faint foreign touch' },
+  { key: 'starter', ko: '입문', dots: 1, brief: 'barely started: knows only a handful of words and set phrases (hello, thank you, I like ~, delicious). Writes one to four words in it, often misspelled the way they sound or with the wrong word; anything more goes in their own language (or simple English) with one or two learned words dropped in. Never a full correct sentence' },
+  { key: 'beginner', ko: '초급', dots: 2, brief: 'a beginner: two-to-five-word textbook sentences in the polite form taught first, a wrong particle, ending or word order in most of them, only the simplest words, and their own language (or simple English) for any word they do not know. No slang, no chat expressions' },
+  { key: 'intermediate', ko: '중급', dots: 3, brief: 'lower intermediate: short simple sentences that get the point across but sound plainly foreign: a grammar slip in most sentences (particles, endings, tense), odd or too-formal word choice, stiff textbook endings, now and then a word in their own language. No slang' },
+  { key: 'advanced', ko: '고급', dots: 4, brief: 'upper intermediate: understandable and fairly easy to read, but clearly a learner: unnatural phrasing, a wrong word or ending every sentence or two, textbook expressions where a native would use chat ones' },
+  { key: 'fluent', ko: '유창', dots: 5, brief: 'advanced: says what they mean, but still reads as a foreigner: a slightly odd word, ending or spacing now and then, and few of the slang or chat expressions a native would use' },
 ]
 
-/** How well people on the app speak the language they learn: mostly just started (60%, 25%, 10%, 4%, 1%). */
-const LEARNER_LEVEL_WEIGHTS = [60, 25, 10, 4, 1] as const
+/** How well people on the app speak the language they learn: almost all just started (staff 2026-11-25: much lower). */
+const LEARNER_LEVEL_WEIGHTS = [78, 17, 4, 1, 0] as const
 
 /**
  * Korean learners by where they are from (their own language), staff
- * 2026-11-23: Westerners almost all just started; Japanese and Chinese mostly
- * too; the rest a little further along.
+ * 2026-11-23 and 11-25: Westerners almost all just started; Japanese and
+ * Chinese mostly too; the rest a little further along.
  */
 const KOREAN_LEARNER_WEIGHTS: ReadonlyArray<readonly [languages: readonly string[], weights: readonly number[]]> = [
-  [['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'tr', 'ar', 'kk'], [84, 12, 3, 0.8, 0.2]],
-  [['ja', 'zh'], [74, 18, 6, 1.6, 0.4]],
+  [['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'tr', 'ar', 'kk'], [93, 6, 1, 0, 0]],
+  [['ja', 'zh'], [87, 11, 2, 0, 0]],
 ]
-const OTHER_KOREAN_LEARNER_WEIGHTS = [64, 24, 9, 2.5, 0.5] as const
+const OTHER_KOREAN_LEARNER_WEIGHTS = [82, 14, 3.5, 0.5, 0] as const
 
 function learnerWeights(nativeLanguage: string | null | undefined, learning: string): readonly number[] {
   if (learning !== 'ko') return LEARNER_LEVEL_WEIGHTS

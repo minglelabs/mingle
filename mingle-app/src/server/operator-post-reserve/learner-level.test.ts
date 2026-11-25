@@ -12,21 +12,22 @@ describe('learner level', () => {
 
   it('puts most foreign accounts at the lowest Korean level, Westerners most of all', () => {
     const western = shares('en')
-    expect(western[0]).toBeGreaterThan(0.81)
-    expect(western[3] + western[4]).toBeLessThan(0.02)
+    expect(western[0]).toBeGreaterThan(0.9)
+    expect(western[3] + western[4]).toBe(0)
     const japanese = shares('ja')
-    expect(japanese[0]).toBeGreaterThan(0.71)
-    expect(japanese[0]).toBeLessThan(0.77)
-    expect(japanese[3] + japanese[4]).toBeLessThan(0.035)
+    expect(japanese[0]).toBeGreaterThan(0.84)
+    expect(japanese[0]).toBeLessThan(0.9)
+    expect(japanese[3] + japanese[4]).toBe(0)
     const vietnamese = shares('vi')
-    expect(vietnamese[0]).toBeGreaterThan(0.61)
+    expect(vietnamese[0]).toBeGreaterThan(0.79)
     expect(vietnamese[0]).toBeLessThan(japanese[0])
   })
 
-  it('keeps Korean accounts learning other languages at about 60 / 25 / 10 / 5', () => {
+  it('keeps Korean accounts learning other languages at about 78 / 17 / 4 / 1', () => {
     const korean = shares('ko')
-    expect(korean[0]).toBeGreaterThan(0.57)
-    expect(korean[0]).toBeLessThan(0.63)
+    expect(korean[0]).toBeGreaterThan(0.75)
+    expect(korean[0]).toBeLessThan(0.81)
+    expect(korean[4]).toBe(0)
   })
 
   it('puts the same level on the profile as the posts use', () => {
