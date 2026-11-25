@@ -119,10 +119,11 @@ import { isCoinBillingActive, openCoinStore, useCoinWallet } from "@/lib/coin-wa
 import { resolveContactSyncCopy } from "@/i18n/contact-sync-copy";
 import { openContactSync } from "@/lib/native-contacts";
 import PhoneVerifySheet from "@/components/contacts/phone-verify-sheet";
+import { resolveVerificationBadgesCopy } from "@/i18n/verification-badges-copy";
 import { resolvePhoneFriendsCopy } from "@/i18n/phone-friends-copy";
 import { resolvePhoneGateCopy } from "@/i18n/phone-gate-copy";
 import StaffAdminEntry from "@/components/staff-admin-entry";
-import { Archive, BarChart3, Bell, Check, Smartphone, ChevronLeft, ChevronRight, Contact, EyeOff, Headphones, Languages, Loader2, LogOut, Menu, MessageCircle, Plus, ShieldCheck, Siren, SquarePen, Ticket, Trash2, UserRound, UserRoundX, X } from "lucide-react";
+import { Archive, BarChart3, Bell, Check, ScanFace, Smartphone, ChevronLeft, ChevronRight, Contact, EyeOff, Headphones, Languages, Loader2, LogOut, Menu, MessageCircle, Plus, Siren, SquarePen, Ticket, Trash2, UserRound, UserRoundX, X } from "lucide-react";
 import { resolveSelfieVerifyCopy } from "@/i18n/selfie-verify-copy";
 import { resolveProfileLockedNote } from "@/i18n/profile-locked-copy";
 import { resolveProfileHeightCopy } from "@/i18n/profile-height-copy";
@@ -1999,6 +2000,28 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   });
   const [profile, setProfile] = useState<ProfileRecord>(initialProfileSeed.profile);
   const [selfieVerifyOpen, setSelfieVerifyOpen] = useState(false);
+  // The two checks side by side on the profile (owner, 2026-11-25: one
+  // "인증 완료" did not say which). The phone one opens the number sheet.
+  const [myPhone, setMyPhone] = useState<{ verified: boolean; available: boolean; worldwide: boolean } | null>(null);
+  const [myPhoneSheetOpen, setMyPhoneSheetOpen] = useState(false);
+  useEffect(() => {
+    if (sessionStatus !== "authenticated") return;
+    let cancelled = false;
+    void Promise.all([
+      fetch(buildClientApiPath("/phone"), { cache: "no-store" }).then((response) => (response.ok ? response.json() : null)).catch(() => null),
+      fetch(buildClientApiPath("/phone/sign-in"), { cache: "no-store" }).then((response) => (response.ok ? response.json() : null)).catch(() => null),
+    ]).then(([phone, signIn]) => {
+      if (cancelled || !phone) return;
+      setMyPhone({
+        verified: typeof phone.phoneE164 === "string" && phone.phoneE164.length > 0,
+        available: phone.available !== false,
+        worldwide: signIn?.worldwide === true,
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionStatus]);
   // The account whose data `profile` currently holds. Empty until a snapshot or
   // an API response arrives, so a placeholder is never cached as a real profile.
   const profileOwnerUserIdRef = useRef(initialProfileSeed.ownerUserId);
@@ -2808,19 +2831,48 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
             <Ticket size={16} strokeWidth={2.2} aria-hidden="true" />
             <span className="truncate">{resolveInviteTicketCopy(locale).inviteScreenEntry}</span>
           </button>
-          {/* Optional selfie check: a verified badge on the profile (see @/lib/selfie-liveness). */}
-          <button
-            type="button"
-            onClick={() => setSelfieVerifyOpen(true)}
-            disabled={profile.faceVerified === true}
-            data-qa="my-page-selfie-verify"
-            className={`mt-2 flex h-10 w-full items-center justify-center gap-1.5 rounded-lg px-2 text-[13px] font-bold transition ${profile.faceVerified ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-slate-900 active:bg-gray-200"}`}
-          >
-            <ShieldCheck size={16} strokeWidth={2.2} aria-hidden="true" />
-            <span className="truncate">
-              {profile.faceVerified ? resolveSelfieVerifyCopy(locale).entryDone : resolveSelfieVerifyCopy(locale).entry}
-            </span>
-          </button>
+          {/* The checks, one button each with its own icon: done ones are green
+              and say which check it was; the others open it (see @/lib/selfie-liveness). */}
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setSelfieVerifyOpen(true)}
+              disabled={profile.faceVerified === true}
+              data-qa="my-page-selfie-verify"
+              className={`flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[13px] font-bold transition ${profile.faceVerified ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-slate-900 active:bg-gray-200"}`}
+            >
+              <ScanFace size={16} strokeWidth={2.2} aria-hidden="true" />
+              <span className="truncate">
+                {profile.faceVerified ? resolveVerificationBadgesCopy(locale).face : resolveSelfieVerifyCopy(locale).entry}
+              </span>
+              {profile.faceVerified ? <Check size={14} strokeWidth={3} aria-hidden="true" /> : null}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMyPhoneSheetOpen(true)}
+              disabled={!myPhone || myPhone.verified || !myPhone.available}
+              data-qa="my-page-phone-verify"
+              className={`flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[13px] font-bold transition ${myPhone?.verified ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-slate-900 active:bg-gray-200 disabled:opacity-50"}`}
+            >
+              <Smartphone size={16} strokeWidth={2.2} aria-hidden="true" />
+              <span className="truncate">
+                {myPhone?.verified ? resolveVerificationBadgesCopy(locale).phone : resolvePhoneGateCopy(locale).start}
+              </span>
+              {myPhone?.verified ? <Check size={14} strokeWidth={3} aria-hidden="true" /> : null}
+            </button>
+          </div>
+          {myPhoneSheetOpen ? (
+            <PhoneVerifySheet
+              copy={resolvePhoneFriendsCopy(locale)}
+              locale={locale}
+              koreaOnly={!myPhone?.worldwide}
+              onClose={() => setMyPhoneSheetOpen(false)}
+              onVerified={() => {
+                setMyPhoneSheetOpen(false);
+                setMyPhone((current) => (current ? { ...current, verified: true } : current));
+              }}
+            />
+          ) : null}
           {selfieVerifyOpen ? (
             <SelfieVerifyScreen
               locale={locale}
