@@ -1,5 +1,6 @@
 "use client";
 
+import { TAB_BANNER_TOP_BAR_HEIGHT_PX, useTabNativeBanner } from "@/lib/use-tab-native-banner";
 import { Gamepad2, Headphones, Loader2, Phone, UserRound } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -104,15 +105,23 @@ export default function VoiceRoomsPage({ dictionary, locale }: VoiceRoomsPagePro
   }, [joining, lounge, openRoom]);
 
   const excludeIds = useMemo(() => (lounge ? [lounge.id] : []), [lounge]);
+  const bannerHeightPx = useTabNativeBanner(sessionStatus === "authenticated");
 
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white" data-qa="voice-tab">
-      <header
-        className="shrink-0 border-b border-gray-100 bg-white px-4 pb-2.5"
-        style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)" }}
-      >
-        <h1 className="text-[22px] font-extrabold tracking-[-0.02em] text-slate-950">{copy.title}</h1>
+      {/* The top bar is exactly as tall as the app expects, so its ad banner sits right under it. */}
+      <header className="shrink-0 bg-white" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
+        <div className="flex items-center px-4" style={{ height: TAB_BANNER_TOP_BAR_HEIGHT_PX }}>
+          <h1 className="text-[22px] font-extrabold tracking-[-0.02em] text-slate-950">{copy.title}</h1>
+        </div>
       </header>
+      {/* The ad banner (drawn by the app) is pinned here; the lounge card and the rooms scroll below it. */}
+      <div
+        data-qa="tab-banner-slot"
+        aria-hidden="true"
+        className="shrink-0 border-b border-gray-100 bg-white"
+        style={{ height: bannerHeightPx }}
+      />
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {sessionStatus === "unauthenticated" ? (
           <div className="flex flex-col items-center px-6 pt-20 text-center">

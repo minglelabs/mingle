@@ -32,6 +32,7 @@ import { useStartDirectConversation } from "@/lib/use-start-direct-conversation"
 import { searchCopy } from "@/i18n/search-copy";
 import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
 import { usePullToRefresh } from "@/lib/use-pull-to-refresh";
+import { TAB_BANNER_TOP_BAR_HEIGHT_PX, useTabNativeBanner } from "@/lib/use-tab-native-banner";
 import ExploreFilterSheet, {
   NO_EXPLORE_FILTERS,
   exploreFilterParams,
@@ -81,6 +82,7 @@ export default function ExplorePeoplePage({ dictionary, locale }: ExplorePeopleP
     return () => window.clearTimeout(timer);
   }, []);
   const filtering = isFiltering(filters);
+  const bannerHeightPx = useTabNativeBanner(sessionStatus === "authenticated");
   const cacheKey = `${viewerId}:${locale}:${JSON.stringify(exploreFilterParams(filters))}`;
   const [page, setPage] = useState<DiscoveryPage | null>(() => (viewerId ? pageCache.get(cacheKey) ?? null : null));
   const [failed, setFailed] = useState(false);
@@ -203,12 +205,10 @@ export default function ExplorePeoplePage({ dictionary, locale }: ExplorePeopleP
 
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white" data-qa="explore-tab">
-      <header
-        className="shrink-0 border-b border-gray-100 bg-white px-4 pb-2.5"
-        style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)" }}
-      >
-        <h1 className="flex items-center" aria-label="HashChat"><MingleWordmark /></h1>
-        <div className="mt-2.5 flex items-center gap-2">
+      {/* One row, exactly as tall as the app expects, so its ad banner sits right under it. */}
+      <header className="shrink-0 bg-white" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
+        <div className="flex items-center gap-2 px-4" style={{ height: TAB_BANNER_TOP_BAR_HEIGHT_PX }}>
+          <h1 className="flex shrink-0 items-center" aria-label="HashChat"><MingleWordmark /></h1>
           <button
             type="button"
             data-qa="explore-open-search"
@@ -223,14 +223,21 @@ export default function ExplorePeoplePage({ dictionary, locale }: ExplorePeopleP
             data-qa="explore-open-filter"
             onClick={() => setFilterOpen(true)}
             aria-label={safetyCopy.filterButton}
-            className={`relative flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-3 text-[14px] font-bold active:scale-[0.98] ${filtering ? "bg-amber-50 text-amber-700 ring-1 ring-amber-300" : "bg-gray-100 text-slate-700"}`}
+            title={safetyCopy.filterButton}
+            className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl active:scale-[0.98] ${filtering ? "bg-amber-50 text-amber-700 ring-1 ring-amber-300" : "bg-gray-100 text-slate-700"}`}
           >
-            <SlidersHorizontal size={17} strokeWidth={2.2} aria-hidden="true" />
-            {safetyCopy.filterButton}
+            <SlidersHorizontal size={18} strokeWidth={2.2} aria-hidden="true" />
             {filtering ? <span aria-hidden="true" className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-amber-500" /> : null}
           </button>
         </div>
       </header>
+      {/* The ad banner (drawn by the app) is pinned here; the cards scroll below it. */}
+      <div
+        data-qa="tab-banner-slot"
+        aria-hidden="true"
+        className="shrink-0 border-b border-gray-100 bg-white"
+        style={{ height: bannerHeightPx }}
+      />
       {filterOpen ? (
         <ExploreFilterSheet
           copy={safetyCopy}

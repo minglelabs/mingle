@@ -8,6 +8,9 @@ export type NativeBannerNavigationState = {
   pendingNavigationZone: NativeBannerZone | null;
 };
 
+/** Tabs where the web decides the banner (mingle-app/src/lib/native-banner-zone.ts keeps the same list). */
+export const NATIVE_BANNER_TAB_ROUTES: readonly string[] = ['voice', 'explore'];
+
 export function resolveNativeBannerZoneForUrl(rawUrl: string): NativeBannerZone | null {
   if (!rawUrl) return null;
 
@@ -21,6 +24,10 @@ export function resolveNativeBannerZoneForUrl(rawUrl: string): NativeBannerZone 
   // Allow-list: only /{locale}/conversations hosts the list and the chat room.
   // Sub-routes such as /conversations/new-group are separate screens.
   const pathSegments = parsedUrl.pathname.split('/').filter(Boolean);
+  // The voice-room and explore tabs pin the banner under their top bar when
+  // the web asks for it (owner, 2026-11-25): nothing is inferred from the URL,
+  // so the shell neither shows nor hides it on its own there.
+  if (pathSegments.length === 2 && NATIVE_BANNER_TAB_ROUTES.includes(pathSegments[1])) return null;
   if (pathSegments.length !== 2 || pathSegments[1] !== 'conversations') return 'hidden';
 
   return parsedUrl.searchParams.get('conversation') ? 'conversation' : 'list';

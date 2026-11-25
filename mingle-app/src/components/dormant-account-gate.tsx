@@ -11,6 +11,7 @@ import { resolveDormantAccountCopy } from "@/i18n/dormant-account-copy";
 import { resolveFirstMessageGateCopy } from "@/i18n/first-message-gate-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { uploadProfilePhotoWithFaceCheck } from "@/lib/profile-photo-upload";
+import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
 
 // Loads the face library: only when it is opened, never on the server.
 const SelfieVerifyScreen = dynamic(() => import("@/components/selfie-verify-screen"), { ssr: false });
@@ -65,6 +66,9 @@ export default function DormantAccountGate() {
     });
     return () => { cancelled = true; };
   }, [isAdminPath, status, userId]);
+
+  // The app's ad banner draws above the page: none over the dormant screen.
+  useNativeBannerSuppression(status === "authenticated" && !isAdminPath && profile?.dormant === true);
 
   const afterStep = useCallback(async () => {
     const next = await refresh();

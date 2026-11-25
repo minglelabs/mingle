@@ -1,5 +1,6 @@
 "use client";
 
+import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
 import { X } from "lucide-react";
 import { useState } from "react";
 import type { PeopleSafetyCopy } from "@/i18n/people-safety-copy";
@@ -72,6 +73,8 @@ export default function ExploreFilterSheet({
   onApply: (filters: ExploreFilters) => void;
   onClose: () => void;
 }) {
+  // The app's ad banner draws above the page: none while the sheet is open.
+  useNativeBannerSuppression();
   const [draft, setDraft] = useState<ExploreFilters>(value);
   const genders: Array<{ key: ExploreFilters["gender"]; label: string }> = [
     { key: null, label: copy.filterAll },
