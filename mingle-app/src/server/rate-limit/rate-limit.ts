@@ -32,6 +32,7 @@ export type RateLimitAction =
   | 'translate_post'
   | 'translate_comment'
   | 'record_profile_view'
+  | 'name_pronunciation'
 
 type WindowRule = { limit: number; windowMs: number }
 
@@ -53,6 +54,8 @@ const RULES: Record<RateLimitAction, WindowRule> = {
   translate_comment: { limit: 60, windowMs: 60_000 },
   // Profile-visit beacon (one row per visit): nobody opens 60 profiles a minute.
   record_profile_view: { limit: 60, windowMs: 60_000 },
+  // "How do I say this name" on a profile (a Haiku call, cached per name).
+  name_pronunciation: { limit: 30, windowMs: 60_000 },
 }
 
 export type RateLimitDecision =

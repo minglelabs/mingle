@@ -1,5 +1,6 @@
 "use client";
 
+import NamePronunciationButton from "@/components/name-pronunciation-button";
 import { resolvePeopleSafetyCopy } from "@/i18n/people-safety-copy";
 import { isRecipientBlocksMen } from "@/lib/use-start-direct-conversation";
 import { requestProfileBasics } from "@/lib/profile-basics";
@@ -761,6 +762,8 @@ export default function PublicUserProfileScreen({
               <div className="mt-4 pl-2">
                 <p className="flex min-w-0 items-center gap-1.5">
                   <span className="truncate text-[15px] font-semibold text-slate-950">{name}</span>
+                  {/* The name spelled the way it sounds, in English letters (owner, 2026-11-25). */}
+                  {!isOwnProfile && profile.name ? <NamePronunciationButton userId={userId} name={profile.name} label="Pronunciation" /> : null}
                   <AccountBadge kind={badge} locale={locale} tone="dark" />
                   <ProfileGenderAgeBadge gender={profile.gender} age={profile.age} heightCm={profile.heightCm} locale={locale} />
                   {profile.handle ? <span className="min-w-0 truncate text-[13px] text-gray-500">{formatHandle(profile.handle)}</span> : null}
