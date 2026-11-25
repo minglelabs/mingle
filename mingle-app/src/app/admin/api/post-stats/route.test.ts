@@ -10,7 +10,8 @@ const { mockGetServerSession, mockGetAdminContext, mockUserFindUnique, mockLoadS
 vi.mock('next-auth', () => ({ getServerSession: mockGetServerSession }))
 vi.mock('@/lib/auth-options', () => ({ getAuthOptions: () => ({}) }))
 vi.mock('@/server/admin/guard', () => ({ getAdminContext: mockGetAdminContext }))
-vi.mock('@/lib/prisma', () => ({ prisma: { user: { findUnique: mockUserFindUnique } } }))
+vi.mock('@/lib/prisma', () => ({ prisma: { user: { findUnique: mockUserFindUnique }, post: { findMany: async () => [{ id: 'op_post', imageObjectKey: 'post-images/u/k.jpg' }] } } }))
+vi.mock('@/server/seedream/drawn-images', () => ({ seedreamImageIds: async () => new Set(['post-images/u/k.jpg']) }))
 vi.mock('@/server/operator-post-stats/load', () => ({ loadOperatorPostStats: mockLoadStats }))
 
 import { GET } from './route'
@@ -64,7 +65,7 @@ describe('GET /admin/api/post-stats', () => {
     const response = await get('op_post,user_post')
     expect(response.status).toBe(200)
     expect(response.headers.get('cache-control')).toBe('private, no-store')
-    expect(await response.json()).toEqual({ stats: { op_post: STATS } })
+    expect(await response.json()).toEqual({ stats: { op_post: { ...STATS, photoEngine: 'seedream' } } })
     expect(mockLoadStats).toHaveBeenCalledWith({ postIds: ['op_post', 'user_post'], authorId: null, anyAuthor: true })
   })
 

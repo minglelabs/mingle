@@ -2,6 +2,7 @@ import sharp from 'sharp'
 import { prisma } from '@/lib/prisma'
 import { loadAvatarPersona, requestAvatarImage, SEEDREAM_IMAGE_MODEL, type AvatarReference } from '@/server/operator-avatars/generate'
 import type { ImageEngine } from '@/server/seedream/client'
+import { markSeedreamImage } from '@/server/seedream/drawn-images'
 import { lensForShot, phonePhotoRealism } from '@/server/operator-avatars/photo-realism'
 import { describeAccountFace, describeAccountLook, pickAnimeStyle, seededRandom, type AvatarSpec } from '@/server/operator-avatars/taxonomy'
 import { newPostImageKey } from '@/server/posts/post-image-keys'
@@ -527,6 +528,8 @@ export async function drawReservePostImage(
       return null
     }
     const stored = await storeReservePostImage(operatorUserId, drawn.bytes)
+    // Staff see which engine drew each photo; only Seedream's are listed (the pool is the default).
+    if (options.engine === 'seedream') await markSeedreamImage(stored.objectKey)
     // The review queue shows posts drawn from the library first.
     if (library) await markReferenceImage(library.referenceId, stored.objectKey).catch(() => {})
     return stored

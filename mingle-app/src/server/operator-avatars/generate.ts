@@ -5,6 +5,7 @@ import { setOperatorAvatarFromBytes } from '@/server/operators/operator-avatar'
 import { storeAvatarCandidate } from '@/server/operators/avatar-candidate'
 import { chatgptPoolImage, chatgptPoolKey } from '@/server/chatgpt-pool/client'
 import { requestSeedreamImage, type ImageEngine } from '@/server/seedream/client'
+import { markSeedreamImage } from '@/server/seedream/drawn-images'
 import { AVATAR_SPEC_VERSION, describeAccountFace, describeAccountLook, pickAvatarSpec, seededRandom, type AvatarPersona, type AvatarSpec } from './taxonomy'
 import { referenceRecreateLines, type ReferenceKind } from '@/server/reference-library/library'
 import type { ReferenceAttributes } from '@/server/reference-library/classify'
@@ -303,6 +304,7 @@ export async function generateOperatorAvatar(
     if (options.candidate) {
       const candidate = await storeAvatarCandidate(userId, image.bytes, spec)
       if (!candidate.ok) return { ok: false, error: 'image_storage_failed', detail: candidate.error }
+      if (options.engine === 'seedream') await markSeedreamImage(candidate.image)
       return { ok: true, image: candidate.image, spec }
     }
 
@@ -310,6 +312,7 @@ export async function generateOperatorAvatar(
       generated: true, category: spec.category, subtype: spec.subtype, model: image.model,
     })
     if (!stored.ok) return { ok: false, error: 'image_storage_failed', detail: stored.error }
+    if (options.engine === 'seedream') await markSeedreamImage(stored.image)
 
     await prisma.operatorAccount.updateMany({
       where: { userId },
