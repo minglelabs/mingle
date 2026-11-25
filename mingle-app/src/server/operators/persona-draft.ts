@@ -62,6 +62,8 @@ export type PersonaSlot = {
   bioStyle: string
   /** Whether the bio mentions a language they learn. */
   bioMentionsLearning: boolean
+  /** Whether the bio says what they do (a job or what they study). */
+  bioMentionsJob: boolean
   /** A plan or wish about Korea the bio mentions (accounts outside Korea only). */
   koreaPlan: string | null
 }
@@ -109,7 +111,12 @@ const BIO_STYLES: ReadonlyArray<{ key: string; female: number; male: number; bri
   { key: 'emoji', female: 2, male: 0.3, brief: 'a short line built around two or three emoji, few words' },
   { key: 'earnest', female: 1, male: 1.5, brief: 'three to five earnest sentences: what they do, what they care about and what kind of people or conversations they hope to find; no emoji' },
   { key: 'dry', female: 1, male: 1.3, brief: 'a single dry, slightly funny remark about themself, no emoji' },
+  // Staff 2026-11-25: some bios should read like a real self-introduction (hello, what I do, why Korea), each in its own words.
+  { key: 'intro', female: 4, male: 4, brief: 'a real self-introduction in two or three sentences, the kind people write on a language-exchange app: a greeting, what they do (their job or what they study, said concretely), and why they are here (outside Korea: what draws them to Korea or Korean; in Korea: the country or language they are curious about). In their own words and order, never a fill-in template; one emoji at most' },
 ]
+
+/** Share of bios that say what the person does (staff 2026-11-25: almost none did). */
+export const BIO_JOB_SHARE = 0.6
 /** Share of bios that mention a language being learned. */
 const BIO_LEARNING_SHARE = 0.25
 
@@ -289,6 +296,7 @@ export function planPersonaSlots(request: PersonaDraftRequest, options: { random
       nameSeed: country.code === 'KR' ? pickKoreanGivenName(genders[index], random) : null,
       bioStyle: pickBioStyle(genders[index], random),
       bioMentionsLearning: random() < BIO_LEARNING_SHARE,
+      bioMentionsJob: random() < BIO_JOB_SHARE,
       koreaPlan: country.code !== 'KR' && random() < BIO_KOREA_SHARE ? BIO_KOREA_PLANS[Math.floor(random() * BIO_KOREA_PLANS.length)] : null,
     }
   })
@@ -305,7 +313,7 @@ For each item in "personas" return one object with the same "slot" and these fie
   When an item has "nameSeed", its given name is that word: build the name on it (a Korean full name with a surname you pick, or the same given name alone, a nickname made from it, or its Latin spelling);, never swap it for another name.
   At most 40 characters, matching "gender" when one is given. Use common names only: never the name of a real public figure, celebrity, influencer or fictional character.
 - handle: a natural username for that person using only lower-case a-z, 0-9, "_" and "."; 3 to 30 characters, starting with a letter (e.g. yuki.tnk, minjun_0412, lucas.silva).
-- bio: the self-description this person types into a chat-app profile, at most 140 characters, written in primaryLanguage. Follow the item's "bioStyle" literally: it sets the length, the form and whether there is an emoji. Mention a language they are learning only when "bioMentionsLearning" is true. When the item has "koreaPlan", the bio says that this person does it (a trip to Korea or Seoul, studying there next year, a working holiday...), in their own words and in the bioStyle form; Korea and Seoul may be named, never a real school or business. Never use the stock pattern of a short line, an emoji, then a longer line about studying a language or wanting to chat; bios in one batch must not share a shape or an opening.
+- bio: the self-description this person types into a chat-app profile, at most 140 characters, written in primaryLanguage. Follow the item's "bioStyle" literally: it sets the length, the form and whether there is an emoji. Mention a language they are learning only when "bioMentionsLearning" is true. When "bioMentionsJob" is true (and always in a self-introduction bioStyle), the bio says what this person does: a concrete job or field of study fitting their age and city (nurse, barista, office worker in sales, third-year architecture student, freelance illustrator), never the name of an employer or school; when it is false, leave the job out. When the item has "koreaPlan", the bio says that this person does it (a trip to Korea or Seoul, studying there next year, a working holiday...), in their own words and in the bioStyle form; Korea and Seoul may be named, never a real school or business. Never use the stock pattern of a short line, an emoji, then a longer line about studying a language or wanting to chat; bios in one batch must not share a shape or an opening.
 - primaryLanguage: the language this person writes in; exactly one code from the item's "languages" (normally the first).
 - gender: "female" or "male"; the item's gender when it has one.
 
@@ -382,6 +390,7 @@ async function requestChunk(
         ...(slot.nameSeed ? { nameSeed: slot.nameSeed } : {}),
         bioStyle: slot.bioStyle,
         bioMentionsLearning: slot.bioMentionsLearning,
+        bioMentionsJob: slot.bioMentionsJob,
         ...(slot.koreaPlan ? { koreaPlan: slot.koreaPlan } : {}),
         languages: slot.country.languages,
       })),
