@@ -115,7 +115,7 @@ export const TURN_GAUGE_TARGET = YAW_TURN / TURN_GAUGE_RANGE
  * the detector's frame-to-frame jitter is taken off. It was "too jumpy"
  * because the bar was wide, so the bar is shorter instead (TurnGauge).
  */
-export const GAUGE_SMOOTHING = 0.85
+export const GAUGE_SMOOTHING = 1
 /** The farthest the dot moves in one frame (a fraction of the half-bar): no cap in practice. */
 export const GAUGE_MAX_STEP = 2
 

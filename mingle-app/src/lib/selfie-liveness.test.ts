@@ -109,7 +109,9 @@ describe('selfie check steps', () => {
     const screen = read('../components/selfie-verify-screen.tsx')
     expect(screen).toContain('<TurnGauge step={step} position={gauge} />')
     expect(screen).toContain('<TurnArrows step={step} />')
-    expect(screen).toContain('const MODEL_PATH = "/models/human/"')
+    // The models moved to @/lib/selfie-human, so the onboarding can start them early.
+    expect(read('./selfie-human.ts')).toContain('const MODEL_PATH = "/models/human/"')
+    expect(read('../components/LivePhoneDemo/LanguageOnboardingModal.tsx')).toContain('module.preloadSelfieModels()')
     // Only the similarity goes to the server, never a frame or a face description.
     expect(screen).toContain('JSON.stringify({ similarity })')
     for (const model of ['blazeface', 'facemesh', 'faceres']) {

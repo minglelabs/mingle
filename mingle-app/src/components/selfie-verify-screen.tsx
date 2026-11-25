@@ -24,57 +24,15 @@ import {
 } from "@/lib/selfie-liveness";
 import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
 
-type HumanModule = typeof import("@vladmandic/human");
-type HumanInstance = InstanceType<HumanModule["Human"]>;
+import { loadHuman, type HumanInstance } from "@/lib/selfie-human";
 type Phase = "intro" | "loading" | "camera" | "comparing" | "passed" | "mismatch" | "failed" | "need_photo" | "camera_denied" | "unsupported";
 
-/** Free face models (Human, MIT), served from this site; nothing is fetched from elsewhere. */
-const MODEL_PATH = "/models/human/";
-const FRAME_INTERVAL_MS = 120;
+// As often as the phone can look: the gauge follows the head with no easing (owner, 2026-11-25).
+const FRAME_INTERVAL_MS = 40;
 /** Screens where the circle shows the live camera instead of an empty grey disc. */
 const LIVE_PREVIEW_PHASES: readonly string[] = ["intro", "mismatch", "failed", "need_photo"];
 const LIVENESS_TIMEOUT_MS = 45_000;
 
-let humanPromise: Promise<HumanInstance> | null = null;
-
-function loadHuman(): Promise<HumanInstance> {
-  humanPromise ??= import("@vladmandic/human").then(async ({ Human }) => {
-    const human = new Human({
-      modelBasePath: `${window.location.origin}${MODEL_PATH}`,
-      backend: "webgl",
-      // The first detection compiles the GPU shaders (11 to 13 s on a Galaxy S9
-      // and an iPhone 11 Pro); warming up does it behind the "Getting ready" spinner.
-      warmup: "face",
-      cacheSensitivity: 0,
-      debug: false,
-      face: {
-        enabled: true,
-        detector: { rotation: true, maxDetected: 2, minConfidence: 0.5, return: false },
-        mesh: { enabled: true },
-        iris: { enabled: false },
-        description: { enabled: true },
-        emotion: { enabled: false },
-        antispoof: { enabled: false },
-        liveness: { enabled: false },
-        attention: { enabled: false },
-        gear: { enabled: false },
-      },
-      body: { enabled: false },
-      hand: { enabled: false },
-      object: { enabled: false },
-      gesture: { enabled: false },
-      segmentation: { enabled: false },
-      filter: { enabled: true, flip: false },
-    });
-    await human.load();
-    await human.warmup();
-    return human;
-  }).catch((error) => {
-    humanPromise = null;
-    throw error;
-  });
-  return humanPromise;
-}
 
 function hintText(copy: SelfieVerifyCopy, hint: LivenessHint): string {
   switch (hint) {
@@ -622,7 +580,7 @@ function TurnGauge({ step, position }: { step: LivenessStep; position: number })
       {/* Where the head is now. */}
       <div
         data-qa="selfie-verify-gauge-dot"
-        className={`absolute top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-lg transition-[left] duration-100 ease-linear ${reached ? "bg-emerald-500" : "bg-[#F97316]"}`}
+        className={`absolute top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-lg ${reached ? "bg-emerald-500" : "bg-[#F97316]"}`}
         style={{ left: toPercent(position) }}
       />
     </div>

@@ -219,6 +219,12 @@ export default function LanguageOnboardingModal({
   const [faceVerified, setFaceVerified] = useState(() => readPendingFaceSimilarity() !== null);
   // The selfie check is for men only (owner, 2026-11-25): women add a photo and go on.
   const selfieAsked = gender !== "female";
+  // The face models take 10 s or more to get ready the first time: start as
+  // soon as the selfie check is known to come (a man), not when it opens.
+  useEffect(() => {
+    if (gender !== "male" || faceVerified) return;
+    void import("@/lib/selfie-human").then((module) => module.preloadSelfieModels()).catch(() => undefined);
+  }, [faceVerified, gender]);
   const [micResult, setMicResult] = useState<MicPermissionResult | null>(null);
   const [micAsking, setMicAsking] = useState(false);
   // A wheel like the birth date, starting at a typical height (no keyboard).
