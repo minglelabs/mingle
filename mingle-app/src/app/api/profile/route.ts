@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse, after } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import {
   MAX_STT_LANGUAGE_SELECTION,
   canonicalizeSttLanguageCode,
@@ -16,6 +17,7 @@ import {
 import { isDiscoverySource, type DiscoverySource } from "@/lib/discovery-source";
 import { isProfileGender, type ProfileGender } from "@/lib/profile-gender";
 import { normalizeHeightCm } from "@/lib/profile-height";
+import { normalizeKoreaVisitAnswer } from "@/lib/korea-visit";
 import { defaultNationalityForLanguage, normalizeNationalityCountry } from "@/lib/nationality";
 import {
   isUsagePurpose,
@@ -272,6 +274,7 @@ export async function PATCH(request: NextRequest) {
     birthDate?: Date | null;
     gender?: ProfileGender | null;
     heightCm?: number | null;
+    koreaVisit?: Prisma.InputJsonValue | typeof Prisma.DbNull;
     discoverySource?: DiscoverySource | null;
     usagePurpose?: UsagePurpose | null;
     usagePurposeNote?: string | null;
@@ -493,6 +496,19 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: "height_locked" }, { status: 409 });
       }
       if (storedHeightCm === null) data.heightCm = heightCm;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "koreaVisit")) {
+    // The Korea trip from sign-up (dates, undecided, was there): stored as answered.
+    if (body.koreaVisit === null) {
+      data.koreaVisit = Prisma.DbNull;
+    } else {
+      const koreaVisit = normalizeKoreaVisitAnswer(body.koreaVisit);
+      if (!koreaVisit) {
+        return NextResponse.json({ error: "invalid_korea_visit" }, { status: 400 });
+      }
+      data.koreaVisit = koreaVisit;
     }
   }
 

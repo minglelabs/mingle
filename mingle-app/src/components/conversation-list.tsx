@@ -96,7 +96,9 @@ import {
 import { resolveFirstRunCopy } from "@/i18n/first-run-copy";
 import { readLastSignInMethod } from "@/lib/last-sign-in-method";
 import { resolveSpeakTrialCopy } from "@/i18n/speak-trial-copy";
-import { isSpeakTrialDone } from "@/lib/speak-trial";
+import { isSpeakTrialDone, markSpeakTrialDone } from "@/lib/speak-trial";
+import { clearHaveAccountSkip, isHaveAccountSkipPending, markHaveAccountSkip } from "@/lib/onboarding-draft";
+import { PENDING_PROFILE_SYNC_EVENT } from "@/components/pending-profile-sync";
 import { useAppAccess } from "@/components/onboarding/invite-gate";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
 import {
@@ -2184,6 +2186,8 @@ export default function ConversationList({
   // then the sign-in screen. Read after mount, so the server render matches.
   const [speakTrialPending, setSpeakTrialPending] = useState(false);
   const [speakTrialJustDone, setSpeakTrialJustDone] = useState(false);
+  // Counts up when the "I already have an account" check is settled, so the move to Explore runs again.
+  const [haveAccountChecked, setHaveAccountChecked] = useState(0);
   useEffect(() => {
     setSpeakTrialPending(!isSpeakTrialDone() && readLastSignInMethod() === null);
   }, []);
@@ -5520,6 +5524,8 @@ export default function ConversationList({
 
   const handleLanguageOnboardingConfirm = useCallback(async (
     payload: LanguageOnboardingConfirmPayload | string,
+    // "I already have an account": only the language is kept, nothing else was asked.
+    options: { existingAccount?: boolean } = {},
   ) => {
     const {
       languageCode,
@@ -5603,9 +5609,17 @@ export default function ConversationList({
     // An invitee is taken straight into the inviter's room, and where they
     // heard of the app is already known ("friend"): no "say something" card
     // and no question about it afterwards.
-    if (!discoverySource) {
+    if (!discoverySource && !options.existingAccount) {
       markFirstSpeakPending();
       setFirstSpeakPending(true);
+    }
+    if (!options.existingAccount) {
+      // Every question was answered: the account no longer has to be looked at
+      // after sign-in. Signed in already (a new account that had skipped):
+      // the height, the photo and the rest go up now.
+      clearHaveAccountSkip();
+      setHaveAccountChecked((count) => count + 1);
+      if (sessionStatus === "authenticated") window.dispatchEvent(new Event(PENDING_PROFILE_SYNC_EVENT));
     }
     // A new device is asked for notifications after its first conversation, with a reason.
     holdPushPrompt();
@@ -5635,6 +5649,45 @@ export default function ConversationList({
     setLanguageOnboardingPhase("ready");
   }, [locale, sessionStatus]);
 
+  // "I already have an account" on the first screen (owner, 2026-11-25): no
+  // questions and no speak trial, straight to sign-in. The account is looked
+  // at once it signs in (below).
+  const handleHaveAccount = useCallback((language: string) => {
+    markHaveAccountSkip();
+    markSpeakTrialDone();
+    setSpeakTrialPending(false);
+    captureMingleClientEvent("mingle_first_run_step", { step: "have_account" });
+    void handleLanguageOnboardingConfirm(language, { existingAccount: true });
+  }, [handleLanguageOnboardingConfirm]);
+
+  // ...and if the account that signed in is new after all (no gender, no birth
+  // date), the questions open again: nobody gets an account without them.
+  useEffect(() => {
+    if (sessionStatus !== "authenticated" || languageOnboardingPhase !== "ready" || !isHaveAccountSkipPending()) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(buildClientApiPath("/profile"), { cache: "no-store" });
+        if (!response.ok || cancelled) return;
+        const profile = await response.json() as { gender?: string | null; birthDate?: string | null };
+        if (cancelled) return;
+        if (profile.gender || profile.birthDate) {
+          clearHaveAccountSkip();
+          setHaveAccountChecked((count) => count + 1);
+          return;
+        }
+        captureMingleClientEvent("mingle_first_run_step", { step: "have_account_was_new" });
+        resolvedLanguageOnboardingPhase = "selection";
+        setLanguageOnboardingPhase("selection");
+      } catch {
+        // Offline: looked at again on the next launch.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [languageOnboardingPhase, sessionStatus]);
+
   // The first translation in any room ends the first run.
   const handleFirstSpeakCompleted = useCallback(() => {
     if (!completeFirstSpeak()) return;
@@ -5661,11 +5714,13 @@ export default function ConversationList({
     if (sessionStatus !== "authenticated") return;
     // The speak-trial room can still be closing right after sign-in: wait for the list.
     if (activeConversation !== null || !shouldGoHomeAfterSignIn()) return;
+    // "I already have an account": stay until the account has been looked at.
+    if (isHaveAccountSkipPending()) return;
     const params = new URLSearchParams(window.location.search);
     if (params.has("firstSpeak")) return;
     captureMingleClientEvent("mingle_first_run_step", { step: "home_after_sign_in" });
     router.replace(buildNativeAwareTabPath(exploreHref(locale), params, { tabRoot: true }));
-  }, [activeConversation, locale, router, sessionStatus]);
+  }, [activeConversation, haveAccountChecked, locale, router, sessionStatus]);
 
   // Home's "say something" card lands here with `firstSpeak=1`: open the room at once.
   const firstSpeakFromHomeHandledRef = useRef(false);
@@ -6587,6 +6642,7 @@ export default function ConversationList({
           uiLocale={locale}
           invite={inviteOnboarding}
           onConfirm={handleLanguageOnboardingConfirm}
+          onHaveAccount={sessionStatus === "unauthenticated" ? handleHaveAccount : undefined}
         />
       ) : null}
       {discoveryPromptOpen && !languageOnboardingModalOpen ? (

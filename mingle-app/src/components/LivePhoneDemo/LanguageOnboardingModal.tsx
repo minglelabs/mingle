@@ -83,7 +83,10 @@ import { resolveProfileGenderCopy } from "@/i18n/profile-gender-copy";
 import { resolveProfileHeightCopy } from "@/i18n/profile-height-copy";
 import { DEFAULT_HEIGHT_CM } from "@/lib/profile-height";
 import ProfileHeightWheel from "@/components/profile-height-wheel";
-import type { ProfileGender } from "@/lib/profile-gender";
+import { isProfileGender, type ProfileGender } from "@/lib/profile-gender";
+import { clearOnboardingDraft, readOnboardingDraft, writeOnboardingDraft } from "@/lib/onboarding-draft";
+import { resolveHaveAccountCopy } from "@/i18n/have-account-copy";
+import { isDiscoverySource } from "@/lib/discovery-source";
 
 const DEFAULT_ONBOARDING_BIRTH_DATE: BirthDateParts = {
   year: 2000,
@@ -129,6 +132,11 @@ interface LanguageOnboardingModalProps {
    */
   invite?: boolean;
   onConfirm: (payload: LanguageOnboardingConfirmPayload) => void | Promise<void>;
+  /**
+   * "I already have an account" on the first screen (owner, 2026-11-25): the
+   * caller skips the questions and shows sign-in. Not passed, no such link.
+   */
+  onHaveAccount?: (language: string) => void;
 }
 
 export type OnboardingStep = "language" | "bio" | "nationality" | "korea-trip-plan" | "korea-visit" | "korea-visit-past" | "interest-language" | "profile-photo" | "voice-intro" | "usage-purpose" | "discovery-source" | "gender" | "birth-date" | "height";
@@ -171,14 +179,23 @@ export default function LanguageOnboardingModal({
   steps: requestedSteps = FIRST_RUN_ONBOARDING_STEPS,
   invite = false,
   onConfirm,
+  onHaveAccount,
 }: LanguageOnboardingModalProps) {
   const baseSteps = invite ? INVITE_ONBOARDING_STEPS : requestedSteps;
-  const [gender, setGender] = useState<ProfileGender | null>(null);
+  // The whole first run keeps its answers on the device as they are given
+  // (see @/lib/onboarding-draft): read once here, written on every change.
+  const keepsDraft = baseSteps.includes("voice-intro");
+  const [draft] = useState(() => (keepsDraft ? readOnboardingDraft() : null));
+  const [gender, setGender] = useState<ProfileGender | null>(() => (isProfileGender(draft?.gender) ? draft.gender : null));
   const [koreanAnswer, setKoreanAnswer] = useState<KoreanAnswer | null>(() => readKoreanAnswer());
-  const [koreaVisit, setKoreaVisit] = useState<KoreaVisitRange>({ start: null, end: null });
-  const [tripPlan, setTripPlan] = useState<KoreaVisitPlan | null>(null);
-  const [tripField, setTripField] = useState<KoreaVisitField>("start");
-  const [visitedAgo, setVisitedAgo] = useState<KoreaVisitAgo | null>(null);
+  const [koreaVisit, setKoreaVisit] = useState<KoreaVisitRange>(() => draft?.koreaVisit ?? { start: null, end: null });
+  const [tripPlan, setTripPlan] = useState<KoreaVisitPlan | null>(() => (
+    draft?.tripPlan === "planned" || draft?.tripPlan === "undecided" || draft?.tripPlan === "visited" ? draft.tripPlan : null
+  ));
+  const [tripField, setTripField] = useState<KoreaVisitField>(() => (draft?.koreaVisit.start ? "end" : "start"));
+  const [visitedAgo, setVisitedAgo] = useState<KoreaVisitAgo | null>(() => (
+    KOREA_VISIT_AGO_OPTIONS.find((option) => option === draft?.visitedAgo) ?? null
+  ));
   // 국적 for someone who is not Korean; the avatar flag (2026-11-24), apart from languages.
   const [nationality, setNationality] = useState<string | null>(() => (
     readNationalityAnswer() ?? (readKoreanAnswer() === "yes" ? "KR" : null)
@@ -203,7 +220,10 @@ export default function LanguageOnboardingModal({
   const [micResult, setMicResult] = useState<MicPermissionResult | null>(null);
   const [micAsking, setMicAsking] = useState(false);
   // A wheel like the birth date, starting at a typical height (no keyboard).
-  const [heightCm, setHeightCm] = useState<number>(DEFAULT_HEIGHT_CM);
+  const [heightCm, setHeightCm] = useState<number>(draft?.heightCm ?? DEFAULT_HEIGHT_CM);
+  // The wheel starts on a grey suggestion, like the birth date: the height is
+  // locked once saved, so Continue waits until the person picked it (owner, 2026-11-25).
+  const [heightPicked, setHeightPicked] = useState(() => draft?.heightPicked === true);
   const [bio, setBio] = useState(() => readPendingBio() ?? "");
   // The self-introduction shown in other languages (Haiku, @/server/bio-preview):
   // asked BIO_PREVIEW_IDLE_MS after the typing stops.
@@ -227,21 +247,34 @@ export default function LanguageOnboardingModal({
   useNativeBannerSuppression();
   const titleId = useId();
   const firstStep = steps[0] ?? "language";
-  const [step, setStep] = useState<OnboardingStep>(firstStep);
+  const [step, setStep] = useState<OnboardingStep>(() => {
+    const kept = steps.find((entry) => entry === draft?.step);
+    return kept ?? firstStep;
+  });
   const stepIndex = Math.max(0, steps.indexOf(step));
   const isFirstStep = stepIndex === 0;
   const isLastStep = stepIndex >= steps.length - 1;
   const [query, setQuery] = useState("");
-  const [language, setLanguage] = useState(initialLanguage);
+  const [language, setLanguage] = useState(draft?.language ?? initialLanguage);
   const [interestQuery, setInterestQuery] = useState("");
-  const [interestCode, setInterestCode] = useState<string | null>(null);
-  const [interestLevel, setInterestLevel] = useState(1);
-  const [birthDate, setBirthDate] = useState<BirthDateParts>(initialBirthDate);
+  const [interestCode, setInterestCode] = useState<string | null>(draft?.interestCode ?? null);
+  const [interestLevel, setInterestLevel] = useState(draft?.interestLevel ?? 1);
+  const [birthDate, setBirthDate] = useState<BirthDateParts>(draft?.birthDate ?? initialBirthDate);
   // The wheels start on a grey suggestion; Continue waits until the person picked year, month and day.
-  const [birthDatePicked, setBirthDatePicked] = useState(false);
+  const [birthDatePicked, setBirthDatePicked] = useState(() => draft?.birthDatePicked === true);
+  const [birthDateWasPicked] = useState(birthDatePicked);
   const [usagePurpose, setUsagePurpose] = useState<UsagePurpose | null>(null);
   const [usagePurposeNote, setUsagePurposeNote] = useState("");
-  const [discoverySource, setDiscoverySource] = useState<DiscoverySource | null>(null);
+  const [discoverySource, setDiscoverySource] = useState<DiscoverySource | null>(() => (
+    isDiscoverySource(draft?.discoverySource) ? draft.discoverySource : null
+  ));
+  useEffect(() => {
+    if (!keepsDraft) return;
+    writeOnboardingDraft({
+      step, language, gender, birthDate, birthDatePicked, heightCm, heightPicked,
+      tripPlan, koreaVisit, visitedAgo, interestCode, interestLevel, discoverySource,
+    });
+  }, [birthDate, birthDatePicked, discoverySource, gender, heightCm, heightPicked, interestCode, interestLevel, keepsDraft, koreaVisit, language, step, tripPlan, visitedAgo]);
   const [discoveryOptionCodes, setDiscoveryOptionCodes] = useState(shuffleDiscoverySourceCodes);
   const [isConfirming, setIsConfirming] = useState(false);
 
@@ -500,13 +533,19 @@ export default function LanguageOnboardingModal({
       : target === "usage-purpose" ? Boolean(usagePurpose)
       : target === "discovery-source" ? Boolean(discoverySource)
       : target === "gender" ? Boolean(gender)
-      : target === "height" ? heightCm > 0
+      : target === "height" ? heightCm > 0 && heightPicked
         : birthDatePicked && isEligibleAge
   );
 
   const handleFinalConfirm = async (justSkipped: OnboardingStep | null = null) => {
     const passed = (entry: OnboardingStep) => entry === justSkipped || skippedSteps.includes(entry) || isStepAnswered(entry);
-    if (isConfirming || !steps.every(passed)) return;
+    if (isConfirming) return;
+    // An answer went missing (a photo the phone could not keep): back to it.
+    const missing = steps.find((entry) => !passed(entry));
+    if (missing) {
+      setStep(missing);
+      return;
+    }
     const asked = (target: OnboardingStep) => steps.includes(target);
     // Kept on the device until the account exists (PendingProfileSync saves it).
     if (asked("voice-intro")) writePendingHeight(asked("height") ? heightCm : null);
@@ -527,6 +566,7 @@ export default function LanguageOnboardingModal({
           : null,
         discoverySource: invite ? "friend" : asked("discovery-source") ? discoverySource : null,
       });
+      if (keepsDraft) clearOnboardingDraft();
     } finally {
       setIsConfirming(false);
     }
@@ -576,8 +616,17 @@ export default function LanguageOnboardingModal({
     setPhotoBusy(true);
     setPhotoError(false);
     try {
-      const dataUrl = await squarePhotoDataUrl(file);
-      writePendingPhoto(dataUrl);
+      // Kept on the phone until sign-in. A phone short of storage gets a
+      // smaller copy; one that cannot keep any says so instead of letting the
+      // account be made without a photo.
+      let dataUrl = await squarePhotoDataUrl(file);
+      let kept = writePendingPhoto(dataUrl);
+      for (const size of [480, 320]) {
+        if (kept) break;
+        dataUrl = await squarePhotoDataUrl(file, size);
+        kept = writePendingPhoto(dataUrl);
+      }
+      if (!kept) throw new Error("photo_not_kept");
       writePendingFaceSimilarity(null);
       setFaceVerified(false);
       setPhotoDataUrl(dataUrl);
@@ -1324,7 +1373,7 @@ export default function LanguageOnboardingModal({
             style={{ paddingBottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))" }}
           >
             <div data-qa="onboarding-height">
-              <ProfileHeightWheel value={heightCm} onChange={setHeightCm} />
+              <ProfileHeightWheel value={heightCm} onChange={setHeightCm} picked={heightPicked} onPicked={() => setHeightPicked(true)} />
             </div>
           </div>
         ) : step === "bio" ? (
@@ -1395,6 +1444,7 @@ export default function LanguageOnboardingModal({
                 value={birthDate}
                 onChange={setBirthDate}
                 onPickedChange={setBirthDatePicked}
+                initialPicked={birthDateWasPicked}
                 yearLabel={signupCopy.yearLabel}
                 monthLabel={signupCopy.monthLabel}
                 dayLabel={signupCopy.dayLabel}
@@ -1530,6 +1580,20 @@ export default function LanguageOnboardingModal({
                 ? copy.confirmButtonLabel
                 : signupCopy.continueAction}
           </button>
+          {step === "language" && onHaveAccount ? (
+            <button
+              type="button"
+              data-qa="onboarding-have-account"
+              disabled={isConfirming}
+              onClick={() => {
+                clearOnboardingDraft();
+                onHaveAccount(language);
+              }}
+              className="mt-1 flex h-11 w-full items-center justify-center rounded-full text-[0.9rem] font-semibold text-slate-600 underline-offset-4 active:text-slate-950"
+            >
+              {resolveHaveAccountCopy(language)}
+            </button>
+          ) : null}
         </footer>
       </div>
     </div>

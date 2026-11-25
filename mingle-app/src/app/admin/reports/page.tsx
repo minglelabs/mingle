@@ -48,7 +48,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "신고함",
+  title: "신고/이상유저검수",
 };
 
 const REPORT_PAGE_SIZE = 20;
@@ -416,7 +416,7 @@ export default async function AdminReportsPage({ searchParams }: AdminReportsPag
       <AdminPageHeader
         back={{ href: "/admin/more", label: "더보기" }}
         description={`전체 ${data.totalCount}건 · 처리 대기 ${data.openCount}건`}
-        title="신고함"
+        title="신고/이상유저검수"
       />
 
       <nav aria-label="상태 필터" className="flex flex-wrap gap-2">

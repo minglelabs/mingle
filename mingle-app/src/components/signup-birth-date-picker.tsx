@@ -22,6 +22,8 @@ type SignupBirthDatePickerProps = {
    * (production, 2026-11-21), and birth dates are locked once saved.
    */
   onPickedChange?: (picked: boolean) => void;
+  /** Already picked earlier (an onboarding picked up where it stopped): no grey suggestion. */
+  initialPicked?: boolean;
   yearLabel: string;
   monthLabel: string;
   dayLabel: string;
@@ -158,10 +160,14 @@ export default function SignupBirthDatePicker({
   monthLabel,
   dayLabel,
   onPickedChange,
+  initialPicked = false,
 }: SignupBirthDatePickerProps) {
   const years = useMemo(() => getSignupBirthYearOptions(), []);
   // Without onPickedChange the wheels behave as before (always "picked").
-  const [pickedColumns, setPickedColumns] = useState(() => ({ year: !onPickedChange, month: !onPickedChange, day: !onPickedChange }));
+  const [pickedColumns, setPickedColumns] = useState(() => {
+    const picked = !onPickedChange || initialPicked;
+    return { year: picked, month: picked, day: picked };
+  });
   const markPicked = (column: "year" | "month" | "day") => {
     if (pickedColumns[column]) return;
     const next = { ...pickedColumns, [column]: true };

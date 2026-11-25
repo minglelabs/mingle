@@ -29,6 +29,10 @@ model User {
   /// Height in centimetres, typed by the user (never checked). Asked of men
   /// with the profile basics; anyone may add it in profile edit.
   heightCm                     Int?      @map("height_cm")
+  /// The Korea trip answered at sign-up by someone who is not Korean
+  /// (src/lib/korea-visit.ts): {kind:'dates',start,end|null}, {kind:'undecided'}
+  /// or {kind:'visited',ago}. Null: never asked.
+  koreaVisit                   Json?     @map("korea_visit")
   latestIpAddress              String?   @map("latest_ip_address")
   latestUserAgent              String?   @map("latest_user_agent")
   language                     String?

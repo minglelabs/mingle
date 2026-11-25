@@ -44,8 +44,8 @@ describe('profile height', () => {
 
   it('is picked on a wheel that starts at 177 cm, never typed on a keyboard', () => {
     const modal = read('../components/LivePhoneDemo/LanguageOnboardingModal.tsx')
-    expect(modal).toContain('useState<number>(DEFAULT_HEIGHT_CM)')
-    expect(modal).toContain('<ProfileHeightWheel value={heightCm} onChange={setHeightCm} />')
+    expect(modal).toContain('useState<number>(draft?.heightCm ?? DEFAULT_HEIGHT_CM)')
+    expect(modal).toContain('<ProfileHeightWheel value={heightCm} onChange={setHeightCm} picked={heightPicked}')
     expect(modal).not.toContain('inputMode="numeric"')
     const edit = read('../components/my-page.tsx')
     expect(edit).toContain('optional={gender !== "male"}')

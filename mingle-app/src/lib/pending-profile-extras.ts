@@ -10,6 +10,10 @@ const PHOTO_KEY = "mingle.pending.profilePhoto.v1";
 const FACE_KEY = "mingle.pending.faceSimilarity.v1";
 // Men's self-introduction (owner, 2026-11-25).
 const BIO_KEY = "mingle.pending.bio.v1";
+// The account the pending photo was already uploaded to (its check not yet confirmed).
+const PHOTO_UPLOADED_KEY = "mingle.pending.photoUploadedFor.v1";
+// The account that must add another photo and pass the selfie check.
+const PHOTO_REQUIRED_KEY = "mingle.photoRequired.v1";
 
 /** The shortest self-introduction a man can sign up with (owner, 2026-11-25: 20 → 30). Women: no minimum. */
 export const BIO_MIN_LENGTH = 30;
@@ -83,9 +87,13 @@ export function clearPendingHeight(): void {
 /** A square JPEG as a data URL (already cropped and shrunk on the phone). */
 export function writePendingPhoto(dataUrl: string | null): boolean {
   try {
-    if (dataUrl) storage()?.setItem(PHOTO_KEY, dataUrl);
-    else storage()?.removeItem(PHOTO_KEY);
-    return true;
+    if (!dataUrl) {
+      storage()?.removeItem(PHOTO_KEY);
+      return true;
+    }
+    storage()?.setItem(PHOTO_KEY, dataUrl);
+    // Read back: without storage at all nothing throws, and nothing is kept.
+    return storage()?.getItem(PHOTO_KEY) === dataUrl;
   } catch {
     // Storage full or blocked: the photo is added from My page instead.
     return false;
@@ -119,9 +127,52 @@ export function readPendingFaceSimilarity(): number | null {
   }
 }
 
+/** The pending photo reached this account; its selfie check may still be on the way. */
+export function markPendingPhotoUploaded(userId: string): void {
+  try {
+    storage()?.setItem(PHOTO_UPLOADED_KEY, userId);
+  } catch {
+    // Uploaded once more, the same photo.
+  }
+}
+
+export function isPendingPhotoUploadedFor(userId: string): boolean {
+  try {
+    return storage()?.getItem(PHOTO_UPLOADED_KEY) === userId;
+  } catch {
+    return false;
+  }
+}
+
+/** The server refused the sign-up photo or its check: this account is asked for another one. */
+export function markPhotoRequired(userId: string): void {
+  try {
+    storage()?.setItem(PHOTO_REQUIRED_KEY, userId);
+  } catch {
+    // Asked this once only.
+  }
+}
+
+export function isPhotoRequiredFor(userId: string): boolean {
+  try {
+    return storage()?.getItem(PHOTO_REQUIRED_KEY) === userId;
+  } catch {
+    return false;
+  }
+}
+
+export function clearPhotoRequired(): void {
+  try {
+    storage()?.removeItem(PHOTO_REQUIRED_KEY);
+  } catch {
+    // Harmless.
+  }
+}
+
 export function clearPendingPhoto(): void {
   try {
     storage()?.removeItem(FACE_KEY);
+    storage()?.removeItem(PHOTO_UPLOADED_KEY);
     storage()?.removeItem(PHOTO_KEY);
   } catch {
     // Harmless: uploaded again on the next visit.

@@ -17,11 +17,16 @@ export default function ProfileHeightWheel({
   onChange,
   optional = false,
   label = "cm",
+  picked = true,
+  onPicked,
 }: {
   value: number;
   onChange: (value: number) => void;
   optional?: boolean;
   label?: string;
+  /** False until the person picked: the value shows grey, as a suggestion only. */
+  picked?: boolean;
+  onPicked?: () => void;
 }) {
   const values = useMemo(() => {
     const range = Array.from({ length: MAX_HEIGHT_CM - MIN_HEIGHT_CM + 1 }, (_, index) => MIN_HEIGHT_CM + index);
@@ -35,6 +40,8 @@ export default function ProfileHeightWheel({
         label={label}
         formatValue={(height) => (height === NO_HEIGHT ? "—" : `${height}`)}
         onChange={onChange}
+        picked={picked}
+        onPicked={onPicked}
       />
     </div>
   );

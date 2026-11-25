@@ -80,7 +80,16 @@ export function daysBetween(from: IsoDay, to: IsoDay): number {
 export function parseKoreaVisitAnswer(raw: string | null): KoreaVisitAnswer | null {
   if (!raw) return null;
   try {
-    const value = JSON.parse(raw) as Partial<{ kind: string; start: string; end: string | null; ago: string }>;
+    return normalizeKoreaVisitAnswer(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+/** The answer as the profile stores it (also what the server accepts), or null when it is not one. */
+export function normalizeKoreaVisitAnswer(input: unknown): KoreaVisitAnswer | null {
+  try {
+    const value = input as Partial<{ kind: string; start: string; end: string | null; ago: string }> | null;
     if (value?.kind === "undecided") return { kind: "undecided" };
     if (value?.kind === "visited") {
       const ago = KOREA_VISIT_AGO_OPTIONS.find((option) => option === value.ago);
@@ -102,6 +111,15 @@ export function readKoreaVisitAnswer(): KoreaVisitAnswer | null {
     return typeof window === "undefined" ? null : parseKoreaVisitAnswer(window.localStorage.getItem(STORAGE_KEY));
   } catch {
     return null;
+  }
+}
+
+/** After the answer is saved on the profile (PendingProfileSync). */
+export function clearKoreaVisitAnswer(): void {
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Harmless: saved again, the same value.
   }
 }
 
