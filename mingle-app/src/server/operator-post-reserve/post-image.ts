@@ -1,6 +1,7 @@
 import sharp from 'sharp'
 import { prisma } from '@/lib/prisma'
-import { loadAvatarPersona, requestAvatarImage, type AvatarReference } from '@/server/operator-avatars/generate'
+import { loadAvatarPersona, requestAvatarImage, SEEDREAM_IMAGE_MODEL, type AvatarReference } from '@/server/operator-avatars/generate'
+import type { ImageEngine } from '@/server/seedream/client'
 import { lensForShot, phonePhotoRealism } from '@/server/operator-avatars/photo-realism'
 import { describeAccountFace, describeAccountLook, pickAnimeStyle, seededRandom, type AvatarSpec } from '@/server/operator-avatars/taxonomy'
 import { newPostImageKey } from '@/server/posts/post-image-keys'
@@ -490,7 +491,8 @@ export async function drawReservePostImage(
   staffReference?: AvatarReference,
   context?: RedrawContext,
   /** `fromLibrary`: staff asked for a redraw from a reference-library photo; fails when none fits. */
-  options: { fromLibrary?: boolean } = {},
+  /** `engine`: 'seedream' when staff picked Seedream 5.5 for this photo (review tool only). */
+  options: { fromLibrary?: boolean; engine?: ImageEngine } = {},
 ): Promise<ReservePostImage | null> {
   try {
     // A redo always draws a new photo.
@@ -509,10 +511,10 @@ export async function drawReservePostImage(
       : context
         ? await withRedrawContext(base, { ...context, staffReference })
         : staffReference ? await withStaffReference(base, staffReference) : base
-    const drawn = await requestAvatarImage(request.prompt, { reference: request.reference ?? undefined })
+    const drawn = await requestAvatarImage(request.prompt, { reference: request.reference ?? undefined, ...(options.engine === 'seedream' ? { model: SEEDREAM_IMAGE_MODEL } : {}) })
     if (!drawn.ok) {
       if (library) await releaseReferencePhoto(library.referenceId).catch(() => {})
-      console.warn('[operator-post-reserve] image_failed', { operatorUserId, error: drawn.error, detail: drawn.detail })
+      console.warn('[operator-post-reserve] image_failed', { operatorUserId, engine: options.engine ?? 'pool', error: drawn.error, detail: drawn.detail })
       return null
     }
     const stored = await storeReservePostImage(operatorUserId, drawn.bytes)

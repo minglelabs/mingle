@@ -16,6 +16,7 @@ import { decodePostPhoto } from '@/server/operator-post-reserve/post-photo'
 import { pickScheduledPublishAt } from '@/server/operator-post-reserve/schedule'
 import { loadExistingReserveTexts, loadReservePersona, PHOTO_REQUESTED, publishReservePostNow } from '@/server/operator-post-reserve/worker'
 import { applyAvatarCandidate, candidateDrawing, discardAvatarCandidate } from '@/server/operators/avatar-candidate'
+import { seedreamConfigured, type ImageEngine } from '@/server/seedream/client'
 
 /**
  * Staff review of operator profiles and their pre-written posts. A profile
@@ -71,7 +72,7 @@ async function releaseProfileIfCutOff(userId: string): Promise<boolean> {
  * puts the row back in review with the photo, or marked failed so the draw
  * button stays. Never throws.
  */
-async function drawPostPhotoInBackground(reserveId: string, operatorUserId: string, description: string, onDrawn: () => Promise<unknown>, onFailed: () => Promise<unknown>, staffReference?: AvatarReference, context?: RedrawContext, drawOptions?: { fromLibrary?: boolean }): Promise<void> {
+async function drawPostPhotoInBackground(reserveId: string, operatorUserId: string, description: string, onDrawn: () => Promise<unknown>, onFailed: () => Promise<unknown>, staffReference?: AvatarReference, context?: RedrawContext, drawOptions?: { fromLibrary?: boolean; engine?: ImageEngine }): Promise<void> {
   try {
     const image = await drawReservePostImage(operatorUserId, description, staffReference, context, drawOptions)
     await prisma.operatorPostReserve.updateMany({
@@ -566,7 +567,7 @@ export async function reviewOperatorProfile(
 
 export type PostReviewResult =
   | { ok: true; state: 'published' | 'deleted' | 'review'; postId?: string | null; post?: ReviewPost }
-  | { ok: false; error: 'not_found' | 'profile_pending' | 'photo_pending' | 'busy' | 'publish_failed' | 'regenerate_failed' | 'draw_failed' | 'no_reference'; detail?: string }
+  | { ok: false; error: 'not_found' | 'profile_pending' | 'photo_pending' | 'busy' | 'publish_failed' | 'regenerate_failed' | 'draw_failed' | 'no_reference' | 'seedream_unconfigured'; detail?: string }
 
 /** 게시 / 삭제 / 재제작 for a post waiting for review. */
 export async function reviewOperatorPost(
@@ -575,8 +576,13 @@ export async function reviewOperatorPost(
   action: ReviewAction,
   feedback: string | null,
   now: Date = new Date(),
-  options: { reference?: AvatarReference } = {},
+  /** `engine`: 'seedream' draws this photo with Seedream 5.5 instead of the pool (staff's pick on the card). */
+  options: { reference?: AvatarReference; engine?: ImageEngine } = {},
 ): Promise<PostReviewResult> {
+  const seedream = options.engine === 'seedream'
+  if (seedream && (action === 'redraw_photo' || action === 'redraw_reference' || action === 'draw') && !seedreamConfigured()) return { ok: false, error: 'seedream_unconfigured' }
+  // Seedream draws from any server; the pool only where it is reachable.
+  const drawsHere = seedream || canDrawImagesHere()
   const row = await prisma.operatorPostReserve.findUnique({
     where: { id: reserveId },
     select: { ...POST_SELECT, operatorUserId: true, operatorUser: { select: { isActive: true } } },
@@ -610,8 +616,8 @@ export async function reviewOperatorPost(
   }
 
   if (action === 'redraw_photo' || action === 'redraw_reference') {
-    // Only where this server draws (the pool): the old photo stays until the new one is in.
-    if (!canDrawImagesHere()) return { ok: false, error: 'draw_failed' }
+    // Only where this server draws (the pool, or Seedream): the old photo stays until the new one is in.
+    if (!drawsHere) return { ok: false, error: 'draw_failed' }
     if (!row.imagePrompt && !row.imageObjectKey) return { ok: false, error: 'not_found' }
     const fromLibrary = action === 'redraw_reference'
     const brief = row.imagePrompt ?? '[self] A casual everyday photo of the poster that fits the post.'
@@ -640,8 +646,8 @@ export async function reviewOperatorPost(
     }
     void drawPostPhotoInBackground(
       reserveId, row.operatorUserId, description,
-      () => audit('redraw_photo', { photo: true, fromLibrary }), () => audit('redraw_photo', { photo: false, fromLibrary }),
-      fromLibrary ? undefined : options.reference, { postText: row.text }, { fromLibrary },
+      () => audit('redraw_photo', { photo: true, fromLibrary, engine: options.engine ?? 'pool' }), () => audit('redraw_photo', { photo: false, fromLibrary, engine: options.engine ?? 'pool' }),
+      fromLibrary ? undefined : options.reference, { postText: row.text }, { fromLibrary, engine: options.engine },
     )
     const drawing = await prisma.operatorPostReserve.findUnique({ where: { id: reserveId }, select: POST_SELECT })
     return { ok: true, state: 'review', post: toReviewPost(drawing ?? { ...row, state: 'regenerating', error: PHOTO_DRAWING }) }
@@ -649,8 +655,8 @@ export async function reviewOperatorPost(
 
   if (action === 'draw') {
     if (!row.imagePrompt || row.imageObjectKey) return { ok: false, error: 'not_found' }
-    if (canDrawImagesHere()) {
-      // Drawn right here (the ChatGPT pool), the text untouched, in the
+    if (drawsHere) {
+      // Drawn right here (the ChatGPT pool, or Seedream), the text untouched, in the
       // background: a photo of a person takes over two minutes, longer than
       // the hosting proxy keeps a request open. The card polls until it is in.
       runningHere.add(postJob(reserveId))
@@ -669,7 +675,11 @@ export async function reviewOperatorPost(
         return { ok: false, error: 'busy' }
       }
       const description = feedback ? `${row.imagePrompt}\nStaff feedback on this photo, to follow: ${feedback}` : row.imagePrompt
-      void drawPostPhotoInBackground(reserveId, row.operatorUserId, description, () => audit('draw', { photo: true }), () => audit('draw', { photo: false }), options.reference)
+      void drawPostPhotoInBackground(
+        reserveId, row.operatorUserId, description,
+        () => audit('draw', { photo: true, engine: options.engine ?? 'pool' }), () => audit('draw', { photo: false, engine: options.engine ?? 'pool' }),
+        options.reference, undefined, { engine: options.engine },
+      )
       const drawing = await prisma.operatorPostReserve.findUnique({ where: { id: reserveId }, select: POST_SELECT })
       return { ok: true, state: 'review', post: toReviewPost(drawing ?? { ...row, state: 'regenerating', error: PHOTO_DRAWING }) }
     }
