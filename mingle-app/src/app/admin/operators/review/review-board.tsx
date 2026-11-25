@@ -23,6 +23,8 @@ import { PhotoRedrawPanel } from '../../feed/_components/photo-redraw-panel'
 import { buildLanguageOptions, koreanLanguageName } from '../_lib/options'
 import { reviewImageUrl } from './review-image-url'
 import { pastedImage } from '../_lib/pasted-image'
+import { createPortal } from 'react-dom'
+import { PhotoMarkupEditor } from './photo-markup-editor'
 
 type Action = 'publish' | 'delete' | 'regenerate' | 'draw' | 'redraw_photo' | 'redraw_reference'
 
@@ -893,10 +895,16 @@ function PhotoRedoOverlay({ drawing, disabled, onRedo, onRedoFromReference, engi
 }
 
 /** A post's photos, swiped sideways like the app's feed, with a "2 / 4" count. */
-export function ReviewPhotos({ photos }: { photos: Array<{ objectKey: string; width: number | null; height: number | null }> }) {
+export function ReviewPhotos({ photos, onEdited }: {
+  photos: Array<{ objectKey: string; width: number | null; height: number | null }>
+  /** Where given, the full-screen view offers 편집 (pen, blur, stickers); called with the edited photo. */
+  onEdited?: (index: number, file: File) => Promise<void>
+}) {
   const [index, setIndex] = useState(0)
   // Tap a photo: full screen with pinch zoom, as in the app.
   const [zoomed, setZoomed] = useState<string | null>(null)
+  const [editing, setEditing] = useState<number | null>(null)
+  const zoomedIndex = zoomed ? photos.findIndex((photo) => reviewImageUrl(photo.objectKey) === zoomed) : -1
   return (
     <div className="relative mt-2">
       <div
@@ -922,6 +930,27 @@ export function ReviewPhotos({ photos }: { photos: Array<{ objectKey: string; wi
         ))}
       </div>
       <ImageZoomOverlay open={zoomed !== null} src={zoomed ?? ''} alt="" closeLabel="닫기" reducedMotion={false} onClose={() => setZoomed(null)} />
+      {onEdited && zoomed && zoomedIndex >= 0 && typeof document !== 'undefined' ? createPortal(
+        <button
+          type="button"
+          onClick={() => { setEditing(zoomedIndex); setZoomed(null) }}
+          className="fixed left-1/2 z-[60] inline-flex h-10 -translate-x-1/2 items-center gap-1.5 rounded-full bg-white px-4 text-sm font-semibold text-slate-900 shadow-lg"
+          style={{ bottom: 'calc(env(safe-area-inset-bottom) + 24px)' }}
+        >
+          <Pencil className="h-4 w-4" aria-hidden="true" />편집 (펜·블러·스티커)
+        </button>,
+        document.body,
+      ) : null}
+      {onEdited && editing !== null && photos[editing] ? (
+        <PhotoMarkupEditor
+          src={reviewImageUrl(photos[editing].objectKey)}
+          onCancel={() => setEditing(null)}
+          onSave={async (file) => {
+            await onEdited(editing, file)
+            setEditing(null)
+          }}
+        />
+      ) : null}
       {photos.length > 1 ? (
         <span className="absolute right-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-xs font-semibold text-white tabular-nums">
           {Math.min(index, photos.length - 1) + 1} / {photos.length}
@@ -1038,6 +1067,26 @@ function PostCard({ post: initial, at, pinned, fromReference, reference: initial
     else if (latest.photoNoReference) setError(NO_REFERENCE_WAIT)
     return true
   })
+
+  /** Stores a photo staff edited (pen, blur, stickers) in place of the one at `index`; the old file is kept. */
+  async function saveEditedPhoto(index: number, file: File) {
+    const form = new FormData()
+    form.set('id', post.id)
+    form.set('file', file)
+    const stored = await fetch('/admin/operators/api/review/photos', { method: 'POST', body: form })
+    const upload = await stored.json().catch(() => ({})) as { photo?: ReviewPhoto; error?: string }
+    if (!stored.ok || !upload.photo) throw new Error(upload.error ?? 'upload_failed')
+    const replaced = photos[index]
+    const next = photos.map((photo, at) => (at === index ? upload.photo! : photo))
+    const response = await fetch('/admin/operators/api/review/photos', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: post.id, photos: next, replaced: replaced ? [{ from: replaced.objectKey, to: upload.photo.objectKey }] : [] }),
+    })
+    const result = await response.json().catch(() => ({})) as { post?: ReviewPost; error?: string }
+    if (!response.ok || !result.post) throw new Error(result.error ?? 'save_failed')
+    setPost(result.post)
+  }
 
   async function handle(action: Action, feedback: string, image?: File | null) {
     if (action === 'delete' && !window.confirm('이 글을 삭제할까요?')) return
@@ -1191,7 +1240,7 @@ function PostCard({ post: initial, at, pinned, fromReference, reference: initial
         />
       ) : post.imageObjectKey ? (
         <div className="relative">
-          <ReviewPhotos photos={photos} />
+          <ReviewPhotos photos={photos} onEdited={post.scheduledAt ? undefined : saveEditedPhoto} />
           {pastStats && !post.photoDrawing ? <PastStatsOverlay stats={pastStats} /> : null}
           {reference && !post.photoDrawing ? (
             // The library photo this one was drawn from, on the photo itself: tap to open it in the library.
