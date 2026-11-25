@@ -202,8 +202,10 @@ export function compareConversationRecency(a: ConversationChannelSummary, b: Con
  * list shows chat rooms only. The room stays in the loaded list, so it still
  * opens from Explore or a notification.
  */
-export function isChatListConversation(conversation: Pick<ConversationChannelSummary, "isPublic">): boolean {
-  return conversation.isPublic !== true;
+export function isChatListConversation(conversation: Pick<ConversationChannelSummary, "isPublic" | "isDuoCall">): boolean {
+  // The hidden room of a 1:1 voice talk from a post is never a row, also while
+  // the app holds it (it was loaded by id to open the call screen).
+  return conversation.isPublic !== true && conversation.isDuoCall !== true;
 }
 
 export type ConversationListSortMode = "recent" | "unreadFirst";

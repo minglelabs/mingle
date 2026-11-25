@@ -400,6 +400,8 @@ html[data-hash-rush-open="true"] [data-sonner-toaster] {
 
 [data-duo-call="on"] [data-qa="live-demo-header"] > div:first-child button {
   color: #ffffff;
+  /* The back button's own pressed/hover fill would be a white box on the photo. */
+  background: transparent;
 }
 
 [data-duo-call="on"] [data-qa="live-demo-chat-area"] {

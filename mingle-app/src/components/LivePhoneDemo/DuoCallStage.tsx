@@ -256,7 +256,7 @@ export default function DuoCallStage({ blockRef, ...props }: DuoCallStageProps) 
  */
 export function DuoCallSelfFace({ image, name, speaking, micOn, sizePx }: { image: string | null; name: string | null; speaking: boolean; micOn: boolean; sizePx: number }) {
   return (
-    <span className="relative inline-flex shrink-0 items-center justify-center" style={{ width: sizePx, height: sizePx }} data-qa="duo-call-self" data-speaking={speaking ? 'true' : 'false'}>
+    <span className="relative mb-0.5 inline-flex shrink-0 items-center justify-center" style={{ width: sizePx, height: sizePx }} data-qa="duo-call-self" data-speaking={speaking ? 'true' : 'false'}>
       {speaking && micOn ? (
         <>
           <span aria-hidden="true" className="mingle-voice-ripple absolute inset-0 rounded-full bg-emerald-300/80" />

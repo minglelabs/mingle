@@ -798,6 +798,37 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     return () => window.clearTimeout(timer)
   }, [duoOver])
 
+  // Leaving the call screen (back button, back swipe, Android back) hangs up:
+  // a 1:1 call left running behind the tabs would keep this phone in a call
+  // the other person may already have left, with nothing on screen to end it.
+  // (Found on a phone, 2026-11-26.) Deferred a moment so a remount in place,
+  // as React's development double-mount does, is not taken for leaving.
+  const duoScreenMountedRef = useRef(false)
+  const duoLiveCallRef = useRef<string | null>(null)
+  useEffect(() => {
+    duoLiveCallRef.current = duoCallId && duoStatus !== null && !isPostCallOver(duoStatus) ? duoCallId : null
+  }, [duoCallId, duoStatus])
+  useEffect(() => {
+    if (!duoVariant) return
+    duoScreenMountedRef.current = true
+    return () => {
+      duoScreenMountedRef.current = false
+      window.setTimeout(() => {
+        if (duoScreenMountedRef.current) return
+        const callId = duoLiveCallRef.current
+        if (!callId) return
+        duoLiveCallRef.current = null
+        post({ type: 'native_voice_close' })
+        void fetch(buildClientApiPath(`/post-calls/${encodeURIComponent(callId)}`), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ action: 'hangup' }),
+          keepalive: true,
+        }).catch(() => undefined)
+      }, 400)
+    }
+  }, [duoVariant])
+
   const duoHangUp = useCallback(() => {
     duoSelfEndedRef.current = true
     if (phaseRef.current === 'connecting' || phaseRef.current === 'connected') leave()

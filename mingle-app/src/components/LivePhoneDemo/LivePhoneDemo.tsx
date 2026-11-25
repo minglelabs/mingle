@@ -11135,6 +11135,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   && item.utterance.id !== unreadDividerUtteranceId
                   && isLivePhoneDemoMessageGroupContinuation(previousItem.utterance, item.utterance)
 
+                // The call screen of a 1:1 voice talk shows what is said and written, not the
+                // room's own notices ("invited", "left") or its date line.
+                if (isDuoCall && item.kind !== 'message') return null
+
                 return (
                   <div
                     key={item.kind === 'leave-notice'
