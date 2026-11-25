@@ -1,5 +1,7 @@
 "use client";
 
+import { resolvePeopleSafetyCopy } from "@/i18n/people-safety-copy";
+import { isRecipientBlocksMen } from "@/lib/use-start-direct-conversation";
 import { requestProfileBasics } from "@/lib/profile-basics";
 import { parseFirstMessageSetupNeeds, requestFirstMessageSetup } from "@/lib/first-message-setup";
 import { resolveVerificationBadgesCopy } from "@/i18n/verification-badges-copy";
@@ -293,6 +295,7 @@ export default function PublicUserProfileScreen({
   const [messageError, setMessageError] = useState(false);
   /** Set when the server says today's new people are used up: the number allowed per day. */
   const [dailyLimit, setDailyLimit] = useState<number | null>(null);
+  const [recipientBlocksMen, setRecipientBlocksMen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReason, setReportReason] = useState<ReportReason>("spam");
@@ -493,6 +496,11 @@ export default function PublicUserProfileScreen({
     if (response.status === 403) {
       // A first room with someone new needs a verified number and a photo with
       // a face first (server/first-message-gate): ask for them, then send again.
+      // She does not take new rooms from men (server/male-dm-block).
+      if (await isRecipientBlocksMen(response)) {
+        setRecipientBlocksMen(true);
+        throw new Error("recipient_blocks_men");
+      }
       const refused = await response.clone().json().catch(() => null);
       const needs = parseFirstMessageSetupNeeds(response.status, refused);
       if (needs) {
@@ -545,7 +553,7 @@ export default function PublicUserProfileScreen({
       }
       await openDirectConversation(conversation);
     } catch (error) {
-      if (!(error instanceof Error && (error.message === "daily_new_chat_limit" || error.message === "first_message_setup"))) setMessageError(true);
+      if (!(error instanceof Error && (error.message === "daily_new_chat_limit" || error.message === "first_message_setup" || error.message === "recipient_blocks_men"))) setMessageError(true);
     } finally {
       setIsMessagePending(false);
     }
@@ -560,7 +568,7 @@ export default function PublicUserProfileScreen({
       await openDirectConversation(existingConversation);
       setExistingConversation(null);
     } catch (error) {
-      if (!(error instanceof Error && (error.message === "daily_new_chat_limit" || error.message === "first_message_setup"))) setMessageError(true);
+      if (!(error instanceof Error && (error.message === "daily_new_chat_limit" || error.message === "first_message_setup" || error.message === "recipient_blocks_men"))) setMessageError(true);
     } finally {
       setIsMessagePending(false);
     }
@@ -576,7 +584,7 @@ export default function PublicUserProfileScreen({
       await openDirectConversation(conversation);
       setExistingConversation(null);
     } catch (error) {
-      if (!(error instanceof Error && (error.message === "daily_new_chat_limit" || error.message === "first_message_setup"))) setMessageError(true);
+      if (!(error instanceof Error && (error.message === "daily_new_chat_limit" || error.message === "first_message_setup" || error.message === "recipient_blocks_men"))) setMessageError(true);
     } finally {
       setIsMessagePending(false);
     }
@@ -842,6 +850,11 @@ export default function PublicUserProfileScreen({
                     </button>
                   ) : null}
                 </div>
+              ) : null}
+              {recipientBlocksMen ? (
+                <p className="mt-2 text-center text-[13px] leading-relaxed text-slate-700" role="status" data-qa="profile-recipient-blocks-men">
+                  {resolvePeopleSafetyCopy(locale).recipientBlocksMen}
+                </p>
               ) : null}
               {dailyLimit !== null ? (
                 <p className="mt-2 text-center text-[13px] leading-relaxed text-slate-700" role="status" data-qa="profile-daily-limit">

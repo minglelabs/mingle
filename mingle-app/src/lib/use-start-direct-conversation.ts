@@ -13,6 +13,8 @@ export type StartDirectConversationResult =
   /** The user closed a question (profile basics, first-message setup). */
   | { kind: "cancelled" }
   | { kind: "daily_limit"; limit: number }
+  /** She does not take new rooms from men (server/male-dm-block). */
+  | { kind: "recipient_blocks_men" }
   | { kind: "failed" };
 
 /**
@@ -21,6 +23,12 @@ export type StartDirectConversationResult =
  * one-new-person-a-day limit — then the room opens. A room that already
  * exists with the person simply opens.
  */
+/** The 403 a man gets when she turned off new rooms from men (server/male-dm-block). */
+export async function isRecipientBlocksMen(response: Response): Promise<boolean> {
+  const body = await response.clone().json().catch(() => null) as { error?: unknown } | null;
+  return body?.error === "recipient_blocks_men";
+}
+
 export function useStartDirectConversation(locale: string) {
   const router = useRouter();
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
@@ -38,6 +46,7 @@ export function useStartDirectConversation(locale: string) {
         body: JSON.stringify({ targetUserId, locale, force: false }),
       });
       let response = await send();
+      if (response.status === 403 && await isRecipientBlocksMen(response)) return { kind: "recipient_blocks_men" };
       if (response.status === 403) {
         const needs = parseFirstMessageSetupNeeds(response.status, await response.clone().json().catch(() => null));
         if (needs) {

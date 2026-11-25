@@ -10,6 +10,7 @@ import { USER_IDENTITY_SELECT, identityBadgeFlags } from "@/server/identity/user
 import { calculateProfileAge } from "@/server/user-profile";
 import {
   buildPeopleDiscoverySql,
+  parsePeopleDiscoveryFilters,
   decodePeopleDiscoveryCursor,
   encodePeopleDiscoveryCursor,
   bioCardLine,
@@ -77,6 +78,8 @@ export async function GET(request: NextRequest) {
     viewerIsKorean,
     cursor,
     take: DISCOVERY_PAGE_SIZE + 1,
+    // gender, ageMin, ageMax, online=1 (the explore filter sheet).
+    filters: parsePeopleDiscoveryFilters(request.nextUrl.searchParams),
   }));
 
   const hasMore = rankedRows.length > DISCOVERY_PAGE_SIZE;

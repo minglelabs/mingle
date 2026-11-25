@@ -6,26 +6,44 @@ vi.mock('@/lib/prisma', () => ({
   prisma: { user: { findMany: db.userFindMany }, appConversationChannel: { findMany: db.channelFindMany } },
 }))
 
-import { checkDailyNewChatLimit, newPeopleFromOpenedRooms, readDailyNewChatLimit } from './daily-new-chat-limit'
+import { checkDailyNewChatLimit, isLimitedPair, newPeopleFromOpenedRooms, readDailyNewChatLimit } from './daily-new-chat-limit'
 
 const env = (value?: string) => ({ DAILY_NEW_CHAT_LIMIT: value }) as unknown as NodeJS.ProcessEnv
 const room = (others: string[], pending: string[] = []) => ({ ownerUserId: 'me', pendingInviteeUserIds: pending, members: [{ userId: 'me' }, ...others.map((userId) => ({ userId }))] })
 
+type Account = { id: string; isOperator?: boolean; isOfficial?: boolean; gender?: string | null }
+// The pair (me, target) and the genders of everyone written to today.
+function accounts(pair: Account[], women: string[] = []) {
+  db.userFindMany.mockImplementation(async ({ where }: { where: { gender?: unknown } }) => (
+    where.gender === 'female'
+      ? women.map((id) => ({ id }))
+      : pair.map((account) => ({ isOperator: false, isOfficial: false, ...account }))
+  ))
+}
+const man = { id: 'me', gender: 'male' }
+const woman = { id: 'target', gender: 'female' }
+
 beforeEach(() => {
   vi.clearAllMocks()
-  db.userFindMany.mockImplementation(async ({ where }: { where: { isOfficial?: unknown } }) => (
-    where.isOfficial ? [] : [{ id: 'me', isOperator: false, isOfficial: false }, { id: 'target', isOperator: false, isOfficial: false }]
-  ))
+  accounts([man, woman])
   db.channelFindMany.mockResolvedValue([])
 })
 
-describe('daily new chat limit', () => {
-  it('is 1 by default, reads a number, and can be turned off', () => {
-    expect(readDailyNewChatLimit(env())).toBe(1)
-    expect(readDailyNewChatLimit(env('3'))).toBe(3)
+describe('daily new chat limit (a man to new women, 3 a day)', () => {
+  it('is 3 by default, reads a number, and can be turned off', () => {
+    expect(readDailyNewChatLimit(env())).toBe(3)
+    expect(readDailyNewChatLimit(env('5'))).toBe(5)
     expect(readDailyNewChatLimit(env('off'))).toBeNull()
     expect(readDailyNewChatLimit(env('0'))).toBeNull()
-    expect(readDailyNewChatLimit(env('abc'))).toBe(1)
+    expect(readDailyNewChatLimit(env('abc'))).toBe(3)
+  })
+
+  it('limits only a man writing to a woman', () => {
+    expect(isLimitedPair('male', 'female')).toBe(true)
+    expect(isLimitedPair('male', 'male')).toBe(false)
+    expect(isLimitedPair('female', 'female')).toBe(false)
+    expect(isLimitedPair('female', 'male')).toBe(false)
+    expect(isLimitedPair(null, 'female')).toBe(false)
   })
 
   it('counts the other person of each 1:1 room the user opened, pending invitees included', () => {
@@ -41,50 +59,48 @@ describe('daily new chat limit', () => {
     expect([...people].sort()).toEqual(['a', 'b'])
   })
 
-  it('lets the first new person of the day through and stops the second', async () => {
+  it('lets a man write to three new women a day and stops the fourth', async () => {
+    db.channelFindMany.mockResolvedValue([room(['a']), room(['b'])])
+    accounts([man, woman], ['a', 'b'])
     await expect(checkDailyNewChatLimit('me', 'target', { env: env() })).resolves.toEqual({ allowed: true })
-    db.channelFindMany.mockResolvedValue([room([], ['someone'])])
-    await expect(checkDailyNewChatLimit('me', 'target', { env: env() })).resolves.toEqual({ allowed: false, limit: 1 })
+    db.channelFindMany.mockResolvedValue([room(['a']), room(['b']), room([], ['c'])])
+    accounts([man, woman], ['a', 'b', 'c'])
+    await expect(checkDailyNewChatLimit('me', 'target', { env: env() })).resolves.toEqual({ allowed: false, limit: 3 })
     expect(db.channelFindMany).toHaveBeenLastCalledWith(expect.objectContaining({
       where: { ownerUserId: 'me', createdAt: { gte: expect.any(Date) } },
     }))
   })
 
-  it('does not count the same person twice, the welcome account, or the official account', async () => {
-    db.channelFindMany.mockResolvedValue([room(['target'])])
-    await expect(checkDailyNewChatLimit('me', 'target', { env: env() })).resolves.toEqual({ allowed: true })
-    db.channelFindMany.mockResolvedValue([room(['royce'])])
-    await expect(checkDailyNewChatLimit('me', 'target', { env: env() })).resolves.toEqual({ allowed: true })
-    db.channelFindMany.mockResolvedValue([room(['operator'])])
-    db.userFindMany.mockImplementation(async ({ where }: { where: { isOfficial?: unknown } }) => (
-      where.isOfficial ? [{ id: 'operator' }] : [{ id: 'me', isOperator: false, isOfficial: false }, { id: 'target', isOperator: false, isOfficial: false }]
-    ))
+  it('counts only the women written to (men, the official account and the welcome account do not use up the day)', async () => {
+    db.channelFindMany.mockResolvedValue([room(['a']), room(['b']), room(['c']), room(['royce'])])
+    accounts([man, woman], ['a'])
     await expect(checkDailyNewChatLimit('me', 'target', { env: env() })).resolves.toEqual({ allowed: true })
   })
 
-  it('never limits the welcome account, a staff account doing the writing, the official account, or anyone while it is off', async () => {
-    db.channelFindMany.mockResolvedValue([room(['someone'])])
-    await expect(checkDailyNewChatLimit('me', 'royce', { env: env() })).resolves.toEqual({ allowed: true })
+  it('never limits man to man, woman to anyone, the same woman again, staff, or anyone while it is off', async () => {
+    db.channelFindMany.mockResolvedValue([room(['a']), room(['b']), room(['c'])])
+    accounts([man, { id: 'target', gender: 'male' }], ['a', 'b', 'c'])
+    await expect(checkDailyNewChatLimit('me', 'target', { env: env() })).resolves.toEqual({ allowed: true })
+    accounts([{ id: 'me', gender: 'female' }, woman], ['a', 'b', 'c'])
+    await expect(checkDailyNewChatLimit('me', 'target', { env: env() })).resolves.toEqual({ allowed: true })
+    accounts([{ id: 'me', gender: 'female' }, { id: 'target', gender: 'male' }], ['a', 'b', 'c'])
+    await expect(checkDailyNewChatLimit('me', 'target', { env: env() })).resolves.toEqual({ allowed: true })
+    db.channelFindMany.mockResolvedValue([room(['a']), room(['b']), room(['target'])])
+    accounts([man, woman], ['a', 'b', 'target'])
+    await expect(checkDailyNewChatLimit('me', 'target', { env: env() })).resolves.toEqual({ allowed: true })
+    accounts([{ ...man, isOperator: true }, woman], ['a', 'b', 'c'])
+    await expect(checkDailyNewChatLimit('me', 'target', { env: env() })).resolves.toEqual({ allowed: true })
+    accounts([man, { ...woman, isOfficial: true }], ['a', 'b', 'c'])
+    await expect(checkDailyNewChatLimit('me', 'target', { env: env() })).resolves.toEqual({ allowed: true })
+    accounts([man, woman], ['a', 'b', 'c'])
     await expect(checkDailyNewChatLimit('me', 'target', { env: env('off') })).resolves.toEqual({ allowed: true })
-    db.userFindMany.mockResolvedValue([{ id: 'me', isOperator: true, isOfficial: false }, { id: 'target', isOperator: false, isOfficial: false }])
-    await expect(checkDailyNewChatLimit('me', 'target', { env: env() })).resolves.toEqual({ allowed: true })
+    await expect(checkDailyNewChatLimit('me', 'royce', { env: env() })).resolves.toEqual({ allowed: true })
   })
 
-  it('counts an operator account like anyone else', async () => {
-    db.channelFindMany.mockResolvedValue([{ ownerUserId: 'me', pendingInviteeUserIds: [], members: [{ userId: 'me' }, { userId: 'someone' }] }])
-    db.userFindMany.mockImplementation(async ({ where }: { where: { isOfficial?: unknown } }) => (
-      where.isOfficial ? [] : [{ id: 'me', isOperator: false, isOfficial: false }, { id: 'target', isOperator: true, isOfficial: false }]
-    ))
-    await expect(checkDailyNewChatLimit('me', 'target', { env: env() })).resolves.toEqual({ allowed: false, limit: 1 })
-    db.userFindMany.mockImplementation(async ({ where }: { where: { isOfficial?: unknown } }) => (
-      where.isOfficial ? [] : [{ id: 'me', isOperator: false, isOfficial: false }, { id: 'target', isOperator: false, isOfficial: true }]
-    ))
-    await expect(checkDailyNewChatLimit('me', 'target', { env: env() })).resolves.toEqual({ allowed: true })
-  })
-
-  it('raises with the configured number', async () => {
-    db.channelFindMany.mockResolvedValue([room(['a']), room(['b'])])
-    await expect(checkDailyNewChatLimit('me', 'target', { env: env('3') })).resolves.toEqual({ allowed: true })
-    await expect(checkDailyNewChatLimit('me', 'target', { env: env('2') })).resolves.toEqual({ allowed: false, limit: 2 })
+  it('counts an operator woman like anyone else, and follows the configured number', async () => {
+    db.channelFindMany.mockResolvedValue([room(['a'])])
+    accounts([man, { ...woman, isOperator: true }], ['a'])
+    await expect(checkDailyNewChatLimit('me', 'target', { env: env('1') })).resolves.toEqual({ allowed: false, limit: 1 })
+    await expect(checkDailyNewChatLimit('me', 'target', { env: env('2') })).resolves.toEqual({ allowed: true })
   })
 })

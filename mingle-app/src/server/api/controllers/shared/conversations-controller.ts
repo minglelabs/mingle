@@ -24,6 +24,7 @@ import { isSupportedLocale } from "@/i18n/config";
 import { prisma } from "@/lib/prisma";
 import { captureMingleEvent } from "@/lib/posthog-server";
 import { checkDailyNewChatLimit } from "@/server/daily-new-chat-limit";
+import { isNewRoomBlockedForMen } from "@/server/male-dm-block";
 import { readFirstMessageNeeds, readFirstMessageNeedsForInvitees } from "@/server/first-message-gate";
 
 export const runtime = "nodejs";
@@ -318,6 +319,10 @@ export async function postDirectConversationResponse(request: NextRequest) {
       otherUserIds: [targetUserId],
     });
     if (!existingRoom) {
+      // She does not take new rooms from men (see @/server/male-dm-block).
+      if (await isNewRoomBlockedForMen(resolvedUser.userId, targetUserId)) {
+        return NextResponse.json({ error: "recipient_blocks_men" }, { status: 403 });
+      }
       // Phone number and a face-verified photo first, unless they follow you (see @/server/first-message-gate).
       const needs = await readFirstMessageNeeds(resolvedUser.userId, [targetUserId]);
       if (needs.length > 0) {

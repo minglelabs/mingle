@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, Loader2, MessageCircle, Search, UserPlus, UserRound } from "lucide-react";
+import { resolvePeopleSafetyCopy } from "@/i18n/people-safety-copy";
+import { Check, Loader2, MessageCircle, Search, SlidersHorizontal, UserPlus, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -30,14 +31,22 @@ import { requestProfileBasics } from "@/lib/profile-basics";
 import { useStartDirectConversation } from "@/lib/use-start-direct-conversation";
 import { searchCopy } from "@/i18n/search-copy";
 import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
+import ExploreFilterSheet, {
+  NO_EXPLORE_FILTERS,
+  exploreFilterParams,
+  isFiltering,
+  readExploreFilters,
+  writeExploreFilters,
+  type ExploreFilters,
+} from "@/components/explore/explore-filter-sheet";
 
 /** Pages kept for the session so coming back to the tab neither refetches nor jumps. */
 const pageCache = new Map<string, DiscoveryPage>();
 
 const MAX_LANGUAGES_ON_CARD = 2;
 
-async function fetchDiscoveryPage(locale: string, cursor: string | null): Promise<DiscoveryPage> {
-  const params = new URLSearchParams({ locale });
+async function fetchDiscoveryPage(locale: string, cursor: string | null, filters: ExploreFilters): Promise<DiscoveryPage> {
+  const params = new URLSearchParams({ locale, ...exploreFilterParams(filters) });
   if (cursor) params.set("cursor", cursor);
   const response = await fetch(buildClientApiPath(`/users/discover?${params.toString()}`), { cache: "no-store" });
   if (!response.ok) throw new Error("people_discovery_failed");
@@ -62,7 +71,16 @@ export default function ExplorePeoplePage({ dictionary, locale }: ExplorePeopleP
   const viewerId = typeof session?.user?.id === "string" ? session.user.id.trim() : "";
   const copy = useMemo(() => resolveHomeCopy(locale), [locale]);
   const peopleCopy = useMemo(() => resolvePeopleDiscoveryCopy(locale), [locale]);
-  const cacheKey = `${viewerId}:${locale}`;
+  const safetyCopy = useMemo(() => resolvePeopleSafetyCopy(locale), [locale]);
+  // Kept on the device (owner, 2026-11-25); read after mount so the server render matches.
+  const [filters, setFilters] = useState<ExploreFilters>(NO_EXPLORE_FILTERS);
+  const [filterOpen, setFilterOpen] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setFilters(readExploreFilters()), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+  const filtering = isFiltering(filters);
+  const cacheKey = `${viewerId}:${locale}:${JSON.stringify(exploreFilterParams(filters))}`;
   const [page, setPage] = useState<DiscoveryPage | null>(() => (viewerId ? pageCache.get(cacheKey) ?? null : null));
   const [failed, setFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -78,7 +96,7 @@ export default function ExplorePeoplePage({ dictionary, locale }: ExplorePeopleP
     }
     let cancelled = false;
     setFailed(false);
-    void fetchDiscoveryPage(locale, null)
+    void fetchDiscoveryPage(locale, null, filters)
       .then((first) => {
         pageCache.set(cacheKey, first);
         if (!cancelled) setPage(first);
@@ -87,13 +105,13 @@ export default function ExplorePeoplePage({ dictionary, locale }: ExplorePeopleP
         if (!cancelled) setFailed(true);
       });
     return () => { cancelled = true; };
-  }, [cacheKey, locale, reloadKey, sessionStatus, viewerId]);
+  }, [cacheKey, filters, locale, reloadKey, sessionStatus, viewerId]);
 
   const loadMore = useCallback(async () => {
     if (!page?.nextCursor || loadingMore) return;
     setLoadingMore(true);
     try {
-      const next = mergeDiscoveryPage(page, await fetchDiscoveryPage(locale, page.nextCursor));
+      const next = mergeDiscoveryPage(page, await fetchDiscoveryPage(locale, page.nextCursor, filters));
       pageCache.set(cacheKey, next);
       setPage(next);
     } catch {
@@ -101,7 +119,7 @@ export default function ExplorePeoplePage({ dictionary, locale }: ExplorePeopleP
     } finally {
       setLoadingMore(false);
     }
-  }, [cacheKey, loadingMore, locale, page]);
+  }, [cacheKey, filters, loadingMore, locale, page]);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -157,8 +175,9 @@ export default function ExplorePeoplePage({ dictionary, locale }: ExplorePeopleP
   const messagePerson = useCallback(async (person: DiscoveryPerson) => {
     const result = await startDirectConversation(person.id);
     if (result.kind === "daily_limit") toast(fillHomeCount(copy.dailyLimit, result.limit));
+    else if (result.kind === "recipient_blocks_men") toast(resolvePeopleSafetyCopy(locale).recipientBlocksMen);
     else if (result.kind === "failed") toast(actionLabels.failed);
-  }, [actionLabels.failed, copy.dailyLimit, startDirectConversation]);
+  }, [actionLabels.failed, copy.dailyLimit, locale, startDirectConversation]);
 
   const heading = page?.viewerSide === "korean" ? peopleCopy.headingForKorean : peopleCopy.headingForForeigner;
   const searchPlaceholder = searchCopy(locale).searchPlaceholder;
@@ -173,16 +192,41 @@ export default function ExplorePeoplePage({ dictionary, locale }: ExplorePeopleP
         style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)" }}
       >
         <h1 className="flex items-center" aria-label="HashChat"><MingleWordmark /></h1>
-        <button
-          type="button"
-          data-qa="explore-open-search"
-          onClick={openSearch}
-          className="mt-2.5 flex h-10 w-full items-center gap-2 rounded-xl bg-gray-100 px-3 text-left text-[15px] text-gray-400 active:bg-gray-200"
-        >
-          <Search size={17} strokeWidth={2.2} aria-hidden="true" />
-          <span className="truncate">{searchPlaceholder}</span>
-        </button>
+        <div className="mt-2.5 flex items-center gap-2">
+          <button
+            type="button"
+            data-qa="explore-open-search"
+            onClick={openSearch}
+            className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-xl bg-gray-100 px-3 text-left text-[15px] text-gray-400 active:bg-gray-200"
+          >
+            <Search size={17} strokeWidth={2.2} aria-hidden="true" />
+            <span className="truncate">{searchPlaceholder}</span>
+          </button>
+          <button
+            type="button"
+            data-qa="explore-open-filter"
+            onClick={() => setFilterOpen(true)}
+            aria-label={safetyCopy.filterButton}
+            className={`relative flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-3 text-[14px] font-bold active:scale-[0.98] ${filtering ? "bg-amber-50 text-amber-700 ring-1 ring-amber-300" : "bg-gray-100 text-slate-700"}`}
+          >
+            <SlidersHorizontal size={17} strokeWidth={2.2} aria-hidden="true" />
+            {safetyCopy.filterButton}
+            {filtering ? <span aria-hidden="true" className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-amber-500" /> : null}
+          </button>
+        </div>
       </header>
+      {filterOpen ? (
+        <ExploreFilterSheet
+          copy={safetyCopy}
+          value={filters}
+          onClose={() => setFilterOpen(false)}
+          onApply={(next) => {
+            setFilterOpen(false);
+            writeExploreFilters(next);
+            setFilters(next);
+          }}
+        />
+      ) : null}
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {sessionStatus === "authenticated" && viewerId ? <ProfileStartCard locale={locale} userId={viewerId} /> : null}
         <HomeNoticeStrip locale={locale} />
@@ -211,7 +255,7 @@ export default function ExplorePeoplePage({ dictionary, locale }: ExplorePeopleP
         ) : !page ? (
           <div className="flex justify-center pt-24 text-gray-300"><Loader2 size={26} className="animate-spin" aria-hidden="true" /></div>
         ) : page.users.length === 0 ? (
-          <p className="px-6 pt-20 text-center text-[15px] text-slate-600">{copy.empty}</p>
+          <p className="px-6 pt-20 text-center text-[15px] text-slate-600">{filtering ? safetyCopy.filterEmpty : copy.empty}</p>
         ) : (
           <section className="px-3 pb-6 pt-3" aria-label={heading}>
             <h2 className="px-1 pb-2.5 text-[17px] font-bold text-slate-900">{heading}</h2>

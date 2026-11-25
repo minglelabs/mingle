@@ -56,6 +56,8 @@ type LocationPermissionStatus = (typeof LOCATION_PERMISSION_STATUSES)[number];
 
 type PrivateProfileResponse = UserProfile & {
   birthDate?: string | null;
+  /** Only on the account's own profile: men cannot open a new 1:1 room with her. */
+  blockMaleDms?: boolean;
 };
 
 function profileResponse(profile: PrivateProfileResponse): NextResponse {
@@ -232,11 +234,12 @@ export async function GET() {
 
   const privateFields = await prisma.user.findUnique({
     where: { id: userId },
-    select: { birthDate: true },
+    select: { birthDate: true, blockMaleDms: true },
   });
   return profileResponse({
     ...profile,
     birthDate: serializePrivateBirthDate(privateFields?.birthDate),
+    blockMaleDms: privateFields?.blockMaleDms === true,
   });
 }
 
@@ -275,6 +278,7 @@ export async function PATCH(request: NextRequest) {
     gender?: ProfileGender | null;
     heightCm?: number | null;
     koreaVisit?: Prisma.InputJsonValue | typeof Prisma.DbNull;
+    blockMaleDms?: boolean;
     discoverySource?: DiscoverySource | null;
     usagePurpose?: UsagePurpose | null;
     usagePurposeNote?: string | null;
@@ -499,6 +503,13 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
+  if (Object.prototype.hasOwnProperty.call(body, "blockMaleDms")) {
+    if (typeof body.blockMaleDms !== "boolean") {
+      return NextResponse.json({ error: "invalid_block_male_dms" }, { status: 400 });
+    }
+    data.blockMaleDms = body.blockMaleDms;
+  }
+
   if (Object.prototype.hasOwnProperty.call(body, "koreaVisit")) {
     // The Korea trip from sign-up (dates, undecided, was there): stored as answered.
     if (body.koreaVisit === null) {
@@ -614,7 +625,7 @@ export async function PATCH(request: NextRequest) {
     if (versionId) after(() => runBioVersion(versionId));
     const privateFields = await prisma.user.findUnique({
       where: { id: userId },
-      select: { birthDate: true },
+      select: { birthDate: true, blockMaleDms: true },
     });
 
     if (shouldRefreshWelcomeMessage) {
@@ -633,6 +644,7 @@ export async function PATCH(request: NextRequest) {
       bio: await getPublishedBioText(userId, updated.bio),
       bioDraft: updated.bio,
       birthDate: serializePrivateBirthDate(privateFields?.birthDate),
+      blockMaleDms: privateFields?.blockMaleDms === true,
     });
   } catch (error) {
     if (isHandleUniqueViolation(error)) {

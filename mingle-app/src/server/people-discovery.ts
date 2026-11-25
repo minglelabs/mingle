@@ -104,7 +104,39 @@ export function decodePeopleDiscoveryCursor(rawCursor: string | null): PeopleDis
   }
 }
 
+/** The explore tab's filters (owner, 2026-11-25). Absent = everyone. */
+export type PeopleDiscoveryFilters = {
+  gender?: "female" | "male" | null;
+  /** Ages from the birth date, inclusive. */
+  ageMin?: number | null;
+  ageMax?: number | null;
+  onlineOnly?: boolean;
+};
+
+export const DISCOVERY_AGE_MIN = 18;
+export const DISCOVERY_AGE_MAX = 60;
+
+/** Reads the filters from the query; anything unknown is left out. */
+export function parsePeopleDiscoveryFilters(params: URLSearchParams): PeopleDiscoveryFilters {
+  const gender = params.get("gender");
+  const age = (key: string) => {
+    const value = Number.parseInt(params.get(key) ?? "", 10);
+    return Number.isFinite(value) && value >= DISCOVERY_AGE_MIN && value <= DISCOVERY_AGE_MAX ? value : null;
+  };
+  let ageMin = age("ageMin");
+  let ageMax = age("ageMax");
+  if (ageMin !== null && ageMax !== null && ageMin > ageMax) [ageMin, ageMax] = [ageMax, ageMin];
+  return {
+    gender: gender === "female" || gender === "male" ? gender : null,
+    // The ends of the range mean "no limit" on that side.
+    ageMin: ageMin !== null && ageMin > DISCOVERY_AGE_MIN ? ageMin : null,
+    ageMax: ageMax !== null && ageMax < DISCOVERY_AGE_MAX ? ageMax : null,
+    onlineOnly: params.get("online") === "1",
+  };
+}
+
 export type PeopleDiscoverySqlInput = {
+  filters?: PeopleDiscoveryFilters;
   viewerId: string;
   /** Which side the viewer is on; the other side is ranked first. */
   viewerIsKorean: boolean;
@@ -121,6 +153,7 @@ export function buildPeopleDiscoverySql({
   cursor,
   take,
   now = new Date(),
+  filters = {},
 }: PeopleDiscoverySqlInput): Prisma.Sql {
   const anonPrefix = ANONYMOUS_HANDLE_PREFIX.toLowerCase();
   const reserved = RESERVED_SEARCH_HANDLE.toLowerCase();
@@ -136,6 +169,18 @@ export function buildPeopleDiscoverySql({
   const photoRank = Prisma.sql`CASE WHEN coalesce(btrim(u.image), '') <> '' THEN 0 ELSE 1 END`;
   const onlineSince = new Date(now.getTime() - ONLINE_WINDOW_MS).toISOString();
   const onlineRank = Prisma.sql`CASE WHEN u.last_seen_at >= (${onlineSince}::timestamptz AT TIME ZONE 'UTC') THEN 0 ELSE 4 END`;
+
+  // Born between these dates = the age range (today in UTC).
+  const yearsAgo = (years: number) => {
+    const date = new Date(now);
+    date.setUTCFullYear(date.getUTCFullYear() - years);
+    return date.toISOString().slice(0, 10);
+  };
+  const filterClause = Prisma.sql`
+        ${filters.gender ? Prisma.sql`AND u.gender = ${filters.gender}` : Prisma.empty}
+        ${filters.ageMin ? Prisma.sql`AND u.birth_date <= ${yearsAgo(filters.ageMin)}::date` : Prisma.empty}
+        ${filters.ageMax ? Prisma.sql`AND u.birth_date > ${yearsAgo(filters.ageMax + 1)}::date` : Prisma.empty}
+        ${filters.onlineOnly ? Prisma.sql`AND u.last_seen_at >= (${onlineSince}::timestamptz AT TIME ZONE 'UTC')` : Prisma.empty}`;
 
   const cursorClause = cursor
     ? Prisma.sql`WHERE (
@@ -165,6 +210,7 @@ export function buildPeopleDiscoverySql({
         AND u.id <> ${viewerId}
         AND left(lower(u.handle), ${anonPrefix.length}::int) <> ${anonPrefix}
         AND lower(u.handle) <> ${reserved}
+        ${filterClause}
         AND NOT EXISTS (
           SELECT 1 FROM app.app_user_blocks b WHERE b.blocker_id = u.id AND b.blocked_id = ${viewerId}
         )

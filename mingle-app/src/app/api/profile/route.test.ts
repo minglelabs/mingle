@@ -144,6 +144,7 @@ describe("/api/profile route", () => {
       defaultConversationLanguages: [],
       location: null,
       birthDate: null,
+      blockMaleDms: false,
       followersCount: 2,
       followingCount: 3,
     });

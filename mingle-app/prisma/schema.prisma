@@ -33,6 +33,9 @@ model User {
   /// (src/lib/korea-visit.ts): {kind:'dates',start,end|null}, {kind:'undecided'}
   /// or {kind:'visited',ago}. Null: never asked.
   koreaVisit                   Json?     @map("korea_visit")
+  /// A woman's choice (owner, 2026-11-25): men cannot open a new 1:1 room
+  /// with her. Rooms that already exist, and her writing first, are untouched.
+  blockMaleDms                 Boolean   @default(false) @map("block_male_dms")
   latestIpAddress              String?   @map("latest_ip_address")
   latestUserAgent              String?   @map("latest_user_agent")
   language                     String?
@@ -166,6 +169,8 @@ model User {
   postViews                 PostView[]
   profileViewsMade          ProfileView[]                  @relation("ProfileViewViewer")
   profileViewsReceived      ProfileView[]                  @relation("ProfileViewProfile")
+  profileVisitorUnlocks     ProfileVisitorUnlock[]         @relation("ProfileVisitorUnlockOwner")
+  profileVisitorUnlockedBy  ProfileVisitorUnlock[]         @relation("ProfileVisitorUnlockVisitor")
   postHides                 PostHide[]
   postDrafts                PostDraft[]
   recentSearches            RecentSearch[]
@@ -1000,6 +1005,22 @@ model ProfileView {
   @@index([sourcePostId], map: "app_profile_views_source_post_id_idx")
   @@index([profileUserId, createdAt], map: "app_profile_views_profile_created_at_idx")
   @@map("app_profile_views")
+}
+
+/// "Who viewed my profile" (owner, 2026-11-25): a visitor shows blurred until
+/// the profile owner pays to see them (src/server/profile-visitors.ts). One row
+/// per owner and visitor; later visits by the same person stay visible.
+model ProfileVisitorUnlock {
+  userId    String   @map("user_id")
+  visitorId String   @map("visitor_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User @relation("ProfileVisitorUnlockOwner", fields: [userId], references: [id], onDelete: Cascade)
+  visitor User @relation("ProfileVisitorUnlockVisitor", fields: [visitorId], references: [id], onDelete: Cascade)
+
+  @@id([userId, visitorId])
+  @@index([visitorId], map: "app_profile_visitor_unlocks_visitor_id_idx")
+  @@map("app_profile_visitor_unlocks")
 }
 
 model PostHide {

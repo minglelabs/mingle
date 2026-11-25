@@ -120,6 +120,8 @@ import { resolveContactSyncCopy } from "@/i18n/contact-sync-copy";
 import { openContactSync } from "@/lib/native-contacts";
 import PhoneVerifySheet from "@/components/contacts/phone-verify-sheet";
 import { resolveVerificationBadgesCopy } from "@/i18n/verification-badges-copy";
+import { resolvePeopleSafetyCopy } from "@/i18n/people-safety-copy";
+import ProfileVisitorsSection from "@/components/profile-visitors-section";
 import { resolvePhoneFriendsCopy } from "@/i18n/phone-friends-copy";
 import { resolvePhoneGateCopy } from "@/i18n/phone-gate-copy";
 import StaffAdminEntry from "@/components/staff-admin-entry";
@@ -2004,6 +2006,23 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   // "인증 완료" did not say which). The phone one opens the number sheet.
   const [myPhone, setMyPhone] = useState<{ verified: boolean; available: boolean; worldwide: boolean } | null>(null);
   const [myPhoneSheetOpen, setMyPhoneSheetOpen] = useState(false);
+  const [blockMaleDmsSaving, setBlockMaleDmsSaving] = useState(false);
+  const handleBlockMaleDmsChange = useCallback(async (next: boolean) => {
+    setBlockMaleDmsSaving(true);
+    setProfile((current) => ({ ...current, blockMaleDms: next }));
+    try {
+      const response = await fetch(buildClientApiPath("/profile"), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blockMaleDms: next }),
+      });
+      if (!response.ok) throw new Error("save_failed");
+    } catch {
+      setProfile((current) => ({ ...current, blockMaleDms: !next }));
+    } finally {
+      setBlockMaleDmsSaving(false);
+    }
+  }, []);
   useEffect(() => {
     if (sessionStatus !== "authenticated") return;
     let cancelled = false;
@@ -2310,6 +2329,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           isOfficial: data.isOfficial === true,
           faceVerified: data.faceVerified === true,
           memberNumber: typeof data.memberNumber === "number" ? data.memberNumber : null,
+          blockMaleDms: data.blockMaleDms === true,
         });
       })
       .catch(() => {
@@ -2861,6 +2881,28 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
               {myPhone?.verified ? <Check size={14} strokeWidth={3} aria-hidden="true" /> : null}
             </button>
           </div>
+          {/* Women only (owner, 2026-11-25): men cannot open a new chat with her. */}
+          {profile.gender === "female" ? (
+            <label data-qa="my-page-block-male-dms" className="mt-2 flex cursor-pointer items-start gap-3 rounded-lg bg-gray-50 px-3 py-2.5">
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13px] font-bold text-slate-900">{resolvePeopleSafetyCopy(locale).blockMenTitle}</span>
+                <span className="mt-0.5 block text-[12px] leading-snug text-slate-500">{resolvePeopleSafetyCopy(locale).blockMenHint}</span>
+              </span>
+              <input
+                type="checkbox"
+                role="switch"
+                checked={profile.blockMaleDms === true}
+                disabled={blockMaleDmsSaving}
+                onChange={(event) => void handleBlockMaleDmsChange(event.target.checked)}
+                className="peer sr-only"
+              />
+              <span aria-hidden="true" className={`relative mt-0.5 inline-flex h-6 w-10 shrink-0 rounded-full transition ${profile.blockMaleDms ? "bg-amber-500" : "bg-gray-300"}`}>
+                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${profile.blockMaleDms ? "left-[18px]" : "left-0.5"}`} />
+              </span>
+            </label>
+          ) : null}
+          {/* Who viewed my profile: blurred until paid for (owner, 2026-11-25). */}
+          {sessionStatus === "authenticated" ? <ProfileVisitorsSection locale={locale} /> : null}
           {myPhoneSheetOpen ? (
             <PhoneVerifySheet
               copy={resolvePhoneFriendsCopy(locale)}

@@ -1,8 +1,9 @@
 import { prisma } from '@/lib/prisma'
 import { ROYCE_USER_ID } from '@/lib/signup-welcome-onboarding'
 
-// Free accounts may start a 1:1 chat with one NEW person a day
-// (docs/home-explore-rooms-plan.md, "프로필 화면 버튼"). Counted over the last
+// A man may start a 1:1 chat with three NEW women a day (owner, 2026-11-25;
+// was one new person a day for everyone). Man to man, woman to woman and
+// woman to man have no limit. Counted over the last
 // 24 hours, from the rooms this account itself opened with exactly one other
 // person. Not counted: a person there is already a room with (whoever opened
 // it, so answering someone who wrote first is always free), the welcome
@@ -11,11 +12,11 @@ import { ROYCE_USER_ID } from '@/lib/signup-welcome-onboarding'
 // leaving them out would leave the limit with nothing to limit. An operator
 // or official account doing the writing is never limited.
 //
-// DAILY_NEW_CHAT_LIMIT sets the number (default 1); 0 or "off" turns the
+// DAILY_NEW_CHAT_LIMIT sets the number (default 3); 0 or "off" turns the
 // limit off.
 
 const DAY_MS = 24 * 60 * 60 * 1000
-export const DEFAULT_DAILY_NEW_CHAT_LIMIT = 1
+export const DEFAULT_DAILY_NEW_CHAT_LIMIT = 3
 
 export function readDailyNewChatLimit(env: NodeJS.ProcessEnv = process.env): number | null {
   const raw = (env.DAILY_NEW_CHAT_LIMIT ?? '').trim().toLowerCase()
@@ -40,6 +41,11 @@ export function newPeopleFromOpenedRooms(userId: string, rooms: OpenedRoom[], ig
   return people
 }
 
+/** Man to woman is the one limited direction (owner, 2026-11-25). */
+export function isLimitedPair(senderGender: string | null | undefined, targetGender: string | null | undefined): boolean {
+  return senderGender === 'male' && targetGender === 'female'
+}
+
 export type DailyNewChatCheck = { allowed: true } | { allowed: false; limit: number }
 
 /**
@@ -55,11 +61,13 @@ export async function checkDailyNewChatLimit(
   if (limit === null || targetUserId === ROYCE_USER_ID) return { allowed: true }
   const accounts = await prisma.user.findMany({
     where: { id: { in: [userId, targetUserId] } },
-    select: { id: true, isOperator: true, isOfficial: true },
+    select: { id: true, isOperator: true, isOfficial: true, gender: true },
   })
   const self = accounts.find((account) => account.id === userId)
   const target = accounts.find((account) => account.id === targetUserId)
   if (self?.isOperator || self?.isOfficial || target?.isOfficial) return { allowed: true }
+  // Only a man writing to a woman is limited.
+  if (!isLimitedPair(self?.gender, target?.gender)) return { allowed: true }
 
   const since = new Date((options.now ?? new Date()).getTime() - DAY_MS)
   const rooms = await prisma.appConversationChannel.findMany({
@@ -74,13 +82,14 @@ export async function checkDailyNewChatLimit(
   )
   // Opening a second room with someone already counted today costs nothing.
   if (people.has(targetUserId)) return { allowed: true }
-  // The official account written to today does not use up the day.
+  // Only women count; the official account written to today does not use up the day.
   if (people.size > 0) {
-    const official = await prisma.user.findMany({
-      where: { id: { in: [...people] }, isOfficial: true },
+    const counted = await prisma.user.findMany({
+      where: { id: { in: [...people] }, isOfficial: false, gender: 'female' },
       select: { id: true },
     })
-    for (const account of official) people.delete(account.id)
+    const countedIds = new Set(counted.map((account) => account.id))
+    for (const id of [...people]) if (!countedIds.has(id)) people.delete(id)
   }
   return people.size >= limit ? { allowed: false, limit } : { allowed: true }
 }
