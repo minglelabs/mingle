@@ -957,6 +957,23 @@
         font-size: clamp(1.7rem, 2.4vw, 2.6rem);
       }
 
+      .slide-store-count {
+        margin: clamp(6px, 0.6vw, 10px) 0 0;
+        color: var(--accent-strong);
+        font-size: clamp(2rem, 3.2vw, 3.4rem);
+        font-weight: 850;
+        line-height: 1.05;
+        letter-spacing: -0.04em;
+      }
+
+      .slide-store-count-caption {
+        margin: clamp(14px, 1.4vw, 22px) auto 0;
+        color: rgba(45, 42, 30, 0.58);
+        font-size: clamp(0.95rem, 1.2vw, 1.15rem);
+        font-weight: 650;
+        text-align: center;
+      }
+
       .slide-market-overview-item {
         display: grid;
         min-width: 0;
@@ -4735,20 +4752,24 @@
           <article class="slide-shell slide-shell--ai-requirements">
             <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
               <p class="slide-kicker">수익 모델</p>
-              <h1 class="slide-title">이 중 미용실에<br/>제일 먼저 관심을 가집니다</h1>
+              <h1 class="slide-title">인스타그램을 운영하는<br/>이 매장들에 모두 연락해<br/>콘텐츠를 올려두도록 입점시킵니다</h1>
             </div>
             <div class="slide-side-media slide-side-media--ai-requirements">
               <div class="slide-ai-requirements-grid slide-roadmap-grid">
-                <article class="slide-ai-requirement slide-ai-requirement--dim slide-roadmap-step slide-roadmap-step--plain">
+                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--plain">
                   <h2 class="slide-ai-requirement-title">맛집</h2>
+                  <p class="slide-store-count">약 4~6만</p>
                 </article>
-                <article class="slide-ai-requirement slide-ai-requirement--focus slide-roadmap-step slide-roadmap-step--plain">
+                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--plain">
                   <h2 class="slide-ai-requirement-title">미용실</h2>
+                  <p class="slide-store-count">약 1.1만</p>
                 </article>
-                <article class="slide-ai-requirement slide-ai-requirement--dim slide-roadmap-step slide-roadmap-step--plain">
+                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--plain">
                   <h2 class="slide-ai-requirement-title">미용 병원</h2>
+                  <p class="slide-store-count">약 3천</p>
                 </article>
               </div>
+              <p class="slide-store-count-caption">인스타그램 계정을 운영하는 매장 수</p>
             </div>
           </article>
         </section>
