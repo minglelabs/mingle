@@ -1886,6 +1886,18 @@
 
       .slide-final-link--brand {
         min-width: clamp(170px, 15vw, 220px);
+        gap: clamp(10px, 0.9vw, 14px);
+        color: var(--title);
+        font-size: clamp(1.1rem, 1.25vw, 1.42rem);
+        font-weight: 780;
+        letter-spacing: -0.03em;
+      }
+
+      .slide-final-logo--hashchat {
+        width: clamp(30px, 2.5vw, 38px);
+        height: clamp(30px, 2.5vw, 38px);
+        border-radius: 22%;
+        display: block;
       }
 
       .slide-final-link--github {
@@ -3574,6 +3586,7 @@
         width: 106px;
       }
 
+      html.is-mobile-viewport .slide-final-link--brand,
       html.is-mobile-viewport .slide-final-link--github,
       html.is-mobile-viewport .slide-final-link--linkedin {
         font-size: 0.94rem;
@@ -3759,17 +3772,17 @@
             </div>
             <div class="slide-side-media slide-side-media--download-qr">
               <div class="slide-download-qr-label">
-                <img class="slide-download-app-icon" src="./assets/mingle-icon.png" alt="HashChat 앱 아이콘" />
+                <img class="slide-download-app-icon" src="./assets/site/hashchat-icon.png" alt="HashChat 앱 아이콘" />
                 <span>HashChat 다운로드 링크 👇</span>
               </div>
               <a
                 class="slide-download-qr-link"
-                href="https://mingle-landing.vercel.app/download"
+                href="https://hashchat.minglelabs.app/get"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="HashChat 앱 설치 페이지 열기"
               >
-                <img class="slide-download-qr" src="./assets/qr-mingle-download.svg" alt="HashChat 앱 설치용 QR 코드" />
+                <img class="slide-download-qr" src="./assets/qr-hashchat-get.svg" alt="HashChat 앱 설치용 QR 코드" />
               </a>
             </div>
           </article>
@@ -4360,23 +4373,15 @@
           </article>
         </section>
 
-        <section class="slide slide--hero">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--center">
-              <h1 class="slide-title">팀원 구합니다</h1>
-              <p class="slide-body">제품향 인재든 사업향 인재든, 문과생이든 이과생이든 상관 없습니다.</p>
-            </div>
-          </article>
-        </section>
-
         <section class="slide">
           <article class="slide-shell slide-shell--download-qr">
             <div class="slide-copy slide--hero slide-copy--download-qr slide-copy--final-cta">
               <h1 class="slide-title">감사합니다.<br/>Q &amp; A</h1>
               <nav class="slide-final-links" aria-label="HashChat links">
                 <div class="slide-final-link-row">
-                  <a class="slide-final-link slide-final-link--brand" href="https://mingle-landing.vercel.app/normal">
-                    <img class="slide-final-logo--mingle" src="./assets/logo-mingle.png" alt="HashChat" />
+                  <a class="slide-final-link slide-final-link--brand" href="https://hashchat.minglelabs.app/">
+                    <img class="slide-final-logo--hashchat" src="./assets/site/hashchat-icon.png" alt="" />
+                    <span>HashChat</span>
                   </a>
                   <a class="slide-final-link slide-final-link--github" href="https://github.com/minglelabs/mingle">
                     <img class="slide-final-logo--github" src="./assets/logo-github.svg" alt="" />
@@ -4402,17 +4407,17 @@
             </div>
             <div class="slide-side-media slide-side-media--download-qr">
               <div class="slide-download-qr-label">
-                <img class="slide-download-app-icon" src="./assets/mingle-icon.png" alt="HashChat 앱 아이콘" />
+                <img class="slide-download-app-icon" src="./assets/site/hashchat-icon.png" alt="HashChat 앱 아이콘" />
                 <span>HashChat 다운로드 링크 👇</span>
               </div>
               <a
                 class="slide-download-qr-link"
-                href="https://mingle-landing.vercel.app/download"
+                href="https://hashchat.minglelabs.app/get"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="HashChat 앱 설치 페이지 열기"
               >
-                <img class="slide-download-qr" src="./assets/qr-mingle-download.svg" alt="HashChat 앱 설치용 QR 코드" />
+                <img class="slide-download-qr" src="./assets/qr-hashchat-get.svg" alt="HashChat 앱 설치용 QR 코드" />
               </a>
             </div>
           </article>
