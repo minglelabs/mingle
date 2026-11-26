@@ -312,6 +312,7 @@
         line-height: 1.14;
         letter-spacing: -0.06em;
         text-wrap: balance;
+        word-break: keep-all;
       }
 
       .slide-goal-emphasis {
@@ -342,6 +343,67 @@
         background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
         box-shadow: 0 12px 24px rgba(185, 28, 28, 0.26);
         transform: translateY(-50%) rotate(-5deg);
+      }
+
+      .slide-goal-columns--both-crossed {
+        position: relative;
+      }
+
+      .slide-goal-badge--center {
+        top: 50%;
+        left: 50%;
+        right: auto;
+        z-index: 20;
+        padding: clamp(22px, 2.2vw, 36px) clamp(40px, 4vw, 72px);
+        border-width: 5px;
+        font-size: clamp(3.4rem, 6.4vw, 7rem);
+        transform: translate(-50%, -50%) rotate(-5deg);
+      }
+
+      .slide-market-grid--dense .slide-market-logo {
+        width: clamp(84px, 7.2vw, 116px);
+        height: clamp(84px, 7.2vw, 116px);
+      }
+
+      .slide-kfriends-brand {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: clamp(10px, 1vw, 16px);
+      }
+
+      .slide-kfriends-brand-logo {
+        width: clamp(180px, 17vw, 260px);
+        height: clamp(180px, 17vw, 260px);
+        border-radius: 22%;
+        box-shadow: 0 24px 52px rgba(45, 42, 30, 0.18);
+      }
+
+      .slide-kfriends-brand-name {
+        margin: clamp(8px, 0.8vw, 14px) 0 0;
+        color: var(--title);
+        font-size: clamp(2rem, 2.8vw, 3.2rem);
+        font-weight: 800;
+        letter-spacing: -0.04em;
+      }
+
+      .slide-kfriends-brand-count {
+        margin: 0;
+        color: var(--accent-strong);
+        font-size: clamp(1.5rem, 2.1vw, 2.4rem);
+        font-weight: 750;
+        letter-spacing: -0.03em;
+      }
+
+      .slide-ai-requirement--dim {
+        opacity: 0.32;
+        filter: grayscale(1);
+      }
+
+      .slide-ai-requirement--focus {
+        transform: scale(1.06);
+        box-shadow: 0 0 0 3px var(--accent-strong), 0 22px 44px rgba(72, 57, 18, 0.16);
+        z-index: 2;
       }
 
       .slide-goal-columns--flow .slide-goal {
@@ -2967,6 +3029,37 @@
         font-size: clamp(0.9rem, 3.8vw, 1.2rem);
       }
 
+      html.is-mobile-viewport .slide-goal-badge--center {
+        right: auto;
+        padding: 14px 22px;
+        border-width: 3px;
+        border-radius: 999px;
+        font-size: clamp(1.9rem, 8.4vw, 2.6rem);
+      }
+
+      html.is-mobile-viewport .slide-market-grid--dense .slide-market-logo-cloud {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-content: flex-start;
+        gap: 8px;
+        height: auto;
+        min-height: 0;
+        padding-top: 40px;
+      }
+
+      html.is-mobile-viewport .slide-market-grid--dense .slide-market-logo {
+        position: static;
+        width: clamp(46px, 12.6vw, 58px);
+        height: clamp(46px, 12.6vw, 58px);
+        transform: rotate(var(--r));
+      }
+
+      html.is-mobile-viewport .slide-kfriends-brand-logo {
+        width: 150px;
+        height: 150px;
+      }
+
       html.is-mobile-viewport .slide-goal-arrow {
         top: 50%;
         height: 68px;
@@ -3810,7 +3903,7 @@
                   <h2 class="slide-goal-text"><span class="slide-goal-emphasis">말이 통해야</span><br/>친해질 수 있다</h2>
                 </article>
                 <article class="slide-goal slide-goal--right">
-                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">말을 배우려면</span><br/>대화할 친구가 필요하다</h2>
+                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">말을 배우려면</span><br/>대화상대가 필요하다</h2>
                 </article>
               </div>
             </div>
@@ -3902,16 +3995,17 @@
           <article class="slide-shell">
             <div class="slide-copy slide-copy--goal-split">
               <p class="slide-kicker">해결책</p>
-              <h1 class="slide-title">하나를 아예 해소시켜 버리면 어떨까?!</h1>
-              <div class="slide-goal-columns">
+              <h1 class="slide-title">전제를 아예 해소시켜버리면 어떨까?!</h1>
+              <div class="slide-goal-columns slide-goal-columns--both-crossed">
                 <article class="slide-goal slide-goal--left slide-goal--crossed">
                   <h2 class="slide-goal-text"><span class="slide-goal-emphasis">말이 통해야</span><br/>친해질 수 있다</h2>
                   <div class="slide-cross-mark" aria-hidden="true"></div>
-                  <span class="slide-goal-badge">통번역 제공</span>
                 </article>
-                <article class="slide-goal slide-goal--right">
-                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">말을 배우려면</span><br/>대화할 친구가 필요하다</h2>
+                <article class="slide-goal slide-goal--right slide-goal--crossed">
+                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">말을 배우려면</span><br/>대화상대가 필요하다</h2>
+                  <div class="slide-cross-mark" aria-hidden="true"></div>
                 </article>
+                <span class="slide-goal-badge slide-goal-badge--center">통번역 제공</span>
               </div>
             </div>
           </article>
@@ -3933,31 +4027,31 @@
           <article class="slide-shell slide-shell--market slide-shell--market-categories">
             <div class="slide-copy slide-copy--market slide-copy--market-categories">
               <p class="slide-kicker">시장</p>
-              <h1 class="slide-title"><span>한국인과 외국인을 이어주는 서비스는 이미 많고</span><br/><span>지금도 우후죽순 생기고 있습니다</span></h1>
+              <h1 class="slide-title"><span>한국인과 외국인을 이어주는 서비스는</span><br/><span>지금도 우후죽순 생기고 있습니다</span></h1>
             </div>
             <div class="slide-side-media slide-side-media--market slide-side-media--market-categories" aria-hidden="true">
-              <div class="slide-market-grid slide-market-grid--categories slide-market-grid--categories-compact">
+              <div class="slide-market-grid slide-market-grid--categories slide-market-grid--categories-compact slide-market-grid--dense">
                 <section class="slide-market-category slide-market-category--language">
                   <h2 class="slide-market-category-title">외국인 친구 매칭</h2>
                   <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 18%; --y: 38%; --s: clamp(60px, 4.8vw, 76px); --r: -8deg" src="./assets/logo-market-kfriends-blue.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 50%; --y: 66%; --s: clamp(60px, 4.8vw, 76px); --r: 6deg" src="./assets/logo-market-kfriends.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 82%; --y: 36%; --s: clamp(60px, 4.8vw, 76px); --r: -6deg" src="./assets/logo-market-kof.png" alt="" />
+                    <img class="slide-market-logo" style="--x: 30%; --y: 40%; --r: -6deg" src="./assets/logo-market-kfriends-blue.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 70%; --y: 40%; --r: 6deg" src="./assets/logo-market-kfriends.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 50%; --y: 80%; --r: -4deg" src="./assets/logo-market-kof.png" alt="" />
                   </div>
                 </section>
                 <section class="slide-market-category slide-market-category--voice">
                   <h2 class="slide-market-category-title">한일 교류</h2>
                   <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 18%; --y: 36%; --s: clamp(60px, 4.8vw, 76px); --r: -7deg" src="./assets/logo-market-connecting.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 40%; --y: 68%; --s: clamp(60px, 4.8vw, 76px); --r: 6deg" src="./assets/logo-market-maum.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 62%; --y: 34%; --s: clamp(60px, 4.8vw, 76px); --r: -9deg" src="./assets/logo-market-wizet.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 84%; --y: 66%; --s: clamp(60px, 4.8vw, 76px); --r: 8deg" src="./assets/logo-market-doran.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 30%; --y: 38%; --r: -6deg" src="./assets/logo-market-connecting.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 70%; --y: 38%; --r: 6deg" src="./assets/logo-market-maum.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 30%; --y: 80%; --r: 5deg" src="./assets/logo-market-wizet.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 70%; --y: 80%; --r: -5deg" src="./assets/logo-market-doran.jpg" alt="" />
                   </div>
                 </section>
                 <section class="slide-market-category slide-market-category--offline">
                   <h2 class="slide-market-category-title">오프라인 모임</h2>
                   <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 50%; --y: 50%; --s: clamp(60px, 4.8vw, 76px); --r: -6deg" src="./assets/logo-market-gatchi.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 50%; --y: 58%; --r: -5deg" src="./assets/logo-market-gatchi.jpg" alt="" />
                   </div>
                 </section>
               </div>
@@ -3968,8 +4062,23 @@
           <article class="slide-shell">
             <div class="slide-copy slide-copy--kfriends-goal">
               <p class="slide-kicker">시장</p>
-              <h1 class="slide-title">대표 주자 K프렌즈</h1>
-              <p class="slide-body" style="max-width: min(30rem, 100%); white-space: normal;">2년에 한 번 업데이트합니다 (4년 전, 2년 전, 최근).<br/>완성도가 매우 낮아 제품으로는 충분히 이길 수 있습니다.<br/>그런데 ASO 덕분에 꾸준히 다운로드되고 결제도 일어납니다.<br/>따박따박 돈을 버는 서비스입니다.</p>
+              <h1 class="slide-title">대표 주자<br/>K프렌즈</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--kfriends-goal" style="top: 50%; transform: translateY(-50%);">
+              <div class="slide-kfriends-brand">
+                <img class="slide-kfriends-brand-logo" src="./assets/logo-market-kfriends-blue.jpg" alt="Kfriends 앱 로고" />
+                <p class="slide-kfriends-brand-name">K-Friends</p>
+                <p class="slide-kfriends-brand-count">약 450만</p>
+              </div>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--kfriends-goal">
+              <p class="slide-kicker">시장</p>
+              <h1 class="slide-title">그만큼 시장이 좋습니다</h1>
+              <p class="slide-body" style="max-width: min(30rem, 100%);">2년에 한 번 업데이트하고<br/>완성도도 조악한데<br/>여전히 많이 다운받고, 다들 결제하며 씁니다.</p>
             </div>
             <div class="slide-side-media slide-side-media--kfriends-goal">
               <div class="slide-kfriends-goal-gallery">
@@ -4001,7 +4110,7 @@
                 </article>
                 <article class="slide-ai-requirement">
                   <h2 class="slide-ai-requirement-title">일회성 관계</h2>
-                  <p class="slide-ai-requirement-description">한 번 인사하고 이어지지 않음</p>
+                  <p class="slide-ai-requirement-description">한 번 인사하고 흐지부지</p>
                 </article>
                 <article class="slide-ai-requirement">
                   <h2 class="slide-ai-requirement-title">겉도는 대화</h2>
@@ -4011,15 +4120,47 @@
                   <h2 class="slide-ai-requirement-title">콘텐츠 부재</h2>
                   <p class="slide-ai-requirement-description">연결 이상의 즐길 거리가 없음</p>
                 </article>
+                <article class="slide-ai-requirement">
+                  <h2 class="slide-ai-requirement-title">확실한 BM 부재</h2>
+                  <p class="slide-ai-requirement-description">돈을 낼 정도는 아님</p>
+                </article>
               </div>
             </div>
           </article>
         </section>
         <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--center">
+          <article class="slide-shell slide-shell--ai-requirements">
+            <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
               <p class="slide-kicker">문제</p>
               <h1 class="slide-title">여기서 우리는<br/>언어 문제부터 관심을 가졌습니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--ai-requirements">
+              <div class="slide-ai-requirements-grid">
+                <article class="slide-ai-requirement slide-ai-requirement--focus">
+                  <h2 class="slide-ai-requirement-title">언어 장벽</h2>
+                  <p class="slide-ai-requirement-description">말이 안 통해 대화가 금방 끊김</p>
+                </article>
+                <article class="slide-ai-requirement slide-ai-requirement--dim">
+                  <h2 class="slide-ai-requirement-title">비매너 회원</h2>
+                  <p class="slide-ai-requirement-description">불쾌한 경험 때문에 떠남</p>
+                </article>
+                <article class="slide-ai-requirement slide-ai-requirement--dim">
+                  <h2 class="slide-ai-requirement-title">일회성 관계</h2>
+                  <p class="slide-ai-requirement-description">한 번 인사하고 흐지부지</p>
+                </article>
+                <article class="slide-ai-requirement slide-ai-requirement--dim">
+                  <h2 class="slide-ai-requirement-title">겉도는 대화</h2>
+                  <p class="slide-ai-requirement-description">비슷한 얘기만 반복됨</p>
+                </article>
+                <article class="slide-ai-requirement slide-ai-requirement--dim">
+                  <h2 class="slide-ai-requirement-title">콘텐츠 부재</h2>
+                  <p class="slide-ai-requirement-description">연결 이상의 즐길 거리가 없음</p>
+                </article>
+                <article class="slide-ai-requirement slide-ai-requirement--dim">
+                  <h2 class="slide-ai-requirement-title">확실한 BM 부재</h2>
+                  <p class="slide-ai-requirement-description">돈을 낼 정도는 아님</p>
+                </article>
+              </div>
             </div>
           </article>
         </section>
