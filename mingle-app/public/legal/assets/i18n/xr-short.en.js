@@ -177,6 +177,7 @@ window.DECK_EN = {
 },
 "texts": {},
 "attrs": {
+    "Toki SNS 핫플 AI 저장 앱 화면": "Toki app screen saving trending SNS spots with AI",
 "Toki 여행 일정 관리 앱 화면": "Toki trip itinerary app screen",
 "Toki 여행 앱 추천 SNS 게시물": "Social post recommending the Toki travel app",
 "언어 학습 위주 채팅 화면 예시": "Example of a language-learning chat screen",
