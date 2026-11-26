@@ -6,6 +6,8 @@ window.DECK_EN = {
 "문제": "Problem",
 "“ 한국인과 외국인은 서로 친해지고 싶어하는데 서로를 이어주는 서비스가 부족하다 ”": "<span class=\"slide-title-quote slide-title-quote--open mt-10\">“</span> <span class=\"slide-title-text\">Koreans and foreigners want to be friends,<br/> but few services bring them together</span> <span class=\"slide-title-quote slide-title-quote--close mt-10\">”</span>",
 "닭 vs 달걀 문제": "The chicken-and-egg problem",
+"일부 서비스들은 통번역을 나름 제공하지만아직 부족합니다": "<span>Some services do offer interpretation,</span><br/><span>but it still falls short</span>",
+"커넥팅": "Connecting",
 "2년에 한 번 업데이트하고완성도도 조악한데여전히 많이 다운받고, 다들 결제하며 씁니다.": "Updated once every two years<br/>and rough around the edges,<br/>yet it still gets plenty of downloads, and people pay to use it.",
 "확실한 BM 부재": "No clear business model",
 "돈을 낼 정도는 아님": "Not worth paying for",

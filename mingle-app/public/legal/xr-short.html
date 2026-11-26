@@ -878,6 +878,22 @@
         margin-top: clamp(4px, 1vh, 14px);
       }
 
+      .slide-market-overview-row--three {
+        grid-template-columns: repeat(3, auto);
+        justify-content: center;
+        gap: clamp(40px, 6vw, 110px);
+        margin-inline: auto;
+        margin-top: clamp(24px, 5vh, 56px);
+      }
+
+      .slide-market-overview-row--three .slide-market-overview-logo {
+        width: clamp(120px, 12vw, 180px);
+      }
+
+      .slide-market-overview-row--three .slide-market-overview-name {
+        font-size: clamp(1.4rem, 1.9vw, 1.9rem);
+      }
+
       .slide-market-overview-item {
         display: grid;
         min-width: 0;
@@ -2971,6 +2987,16 @@
         margin-top: 0;
       }
 
+      html.is-mobile-viewport .slide-market-overview-row--three {
+        grid-template-columns: repeat(3, auto);
+        justify-content: center;
+        gap: 24px;
+      }
+
+      html.is-mobile-viewport .slide-market-overview-row--three .slide-market-overview-logo {
+        width: 84px;
+      }
+
       html.is-mobile-viewport .slide-market-overview-item {
         gap: 6px;
       }
@@ -4433,6 +4459,28 @@
                   alt="HashChat interface"
                 />
               </div>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell slide-shell--market-overview">
+            <div class="slide-copy slide-copy--market-overview">
+              <p class="slide-kicker">고객</p>
+              <h1 class="slide-title"><span>일부 서비스들은 통번역을 나름 제공하지만</span><br/><span>아직 부족합니다</span></h1>
+            </div>
+            <div class="slide-market-overview-row slide-market-overview-row--three">
+              <article class="slide-market-overview-item">
+                <img class="slide-market-overview-logo" src="./assets/logo-hellotalk.png" alt="" />
+                <p class="slide-market-overview-name">HelloTalk</p>
+              </article>
+              <article class="slide-market-overview-item">
+                <img class="slide-market-overview-logo" src="./assets/logo-market-kfriends-blue.jpg" alt="" />
+                <p class="slide-market-overview-name">K-Friends</p>
+              </article>
+              <article class="slide-market-overview-item">
+                <img class="slide-market-overview-logo" src="./assets/logo-market-connecting.jpg" alt="" />
+                <p class="slide-market-overview-name">커넥팅</p>
+              </article>
             </div>
           </article>
         </section>
