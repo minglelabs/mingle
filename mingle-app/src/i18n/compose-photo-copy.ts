@@ -3,7 +3,7 @@ import { resolvePrimaryUiLocaleTag, type PrimaryUiLocale } from "@/i18n/mingle-l
 /**
  * The photo-first write screen (owner, 2026-11-27): the big photo area on
  * top, the caption under it, and why the post button is not ready yet.
- * {max} is filled in.
+ * {max} is filled in. The gallery* lines are the app's own gallery screen.
  */
 export type ComposePhotoCopy = {
   pickTitle: string;

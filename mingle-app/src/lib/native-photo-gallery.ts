@@ -18,7 +18,7 @@
 import { NATIVE_SHELL_CAPABILITIES_STATE_KEY } from '@/lib/native-device-audio'
 
 export const NATIVE_PHOTOS_EVENT = 'mingle:native-photos'
-/** The gallery stays open as long as the person browses; this only drops a shell that never answers. */
+/** The gallery stays open as long as the person browses; this only drops a shell that never answers at all. */
 const GALLERY_TIMEOUT_MS = 10 * 60 * 1000
 
 type GalleryWindow = Window & {
@@ -76,6 +76,12 @@ export function openNativePhotoGallery(max: number, labels: NativePhotoGalleryLa
       window.clearTimeout(timer)
       window.removeEventListener(NATIVE_PHOTOS_EVENT, handle)
       if (detail?.type === 'denied') refusedThisSession = true
+      // The last answer, for checking on a phone (QA bridge reads it).
+      ;(window as GalleryWindow & { __mingleLastNativePhotos?: unknown }).__mingleLastNativePhotos = {
+        type: detail?.type ?? 'timeout',
+        count: Array.isArray(detail?.photos) ? detail.photos.length : 0,
+        reason: (detail as { reason?: unknown } | null)?.reason ?? null,
+      }
       try {
         resolve(filesFromNativePhotos(detail))
       } catch {

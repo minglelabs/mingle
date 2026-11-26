@@ -37,7 +37,7 @@ export type PhotoGalleryRequest = { requestId: string; max: number; labels: Phot
 
 export type PhotoGalleryAnswer =
   | { requestId: string; type: 'picked'; photos: Array<{ dataUrl: string; name: string }> }
-  | { requestId: string; type: 'cancelled' }
+  | { requestId: string; type: 'cancelled'; reason?: string }
   /** Access refused: the web keeps the system picker from then on. */
   | { requestId: string; type: 'denied' };
 
@@ -148,7 +148,11 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
     void askAccess().then((next) => {
       if (cancelled) return;
       setAccess(next);
-      if (next !== 'denied') void loadPage(null);
+      if (next === 'denied') return;
+      void loadPage(null).then(() => {
+        // Right after the access prompt the first read can come back empty: once more, shortly after.
+        if (!cancelled) setTimeout(() => { if (!cancelled) void loadPage(null); }, 700);
+      });
     });
     return () => {
       cancelled = true;
@@ -179,17 +183,21 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
     if (ids.length === 0) return;
     setBusy(true);
     const out: Array<{ dataUrl: string; name: string }> = [];
+    let lastError = '';
     for (const [index, id] of ids.entries()) {
       const photo = byId.get(id);
       if (!photo) continue;
       try {
-        out.push({ dataUrl: await toDataUrl(photo), name: `photo-${index + 1}.jpg` });
-      } catch {
+        const dataUrl = await toDataUrl(photo);
+        if (dataUrl.length > 'data:image/jpeg;base64,'.length) out.push({ dataUrl, name: `photo-${index + 1}.jpg` });
+        else lastError = 'empty_image';
+      } catch (error) {
         // One unreadable photo (an iCloud one offline) does not stop the rest.
+        lastError = error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200);
       }
     }
     setBusy(false);
-    onAnswer(out.length > 0 ? { requestId, type: 'picked', photos: out } : { requestId, type: 'cancelled' });
+    onAnswer(out.length > 0 ? { requestId, type: 'picked', photos: out } : { requestId, type: 'cancelled', reason: lastError || 'nothing_read' });
   }, [busy, byId, focus, onAnswer, picked, requestId]);
 
   const letMoreIn = useCallback(() => {
@@ -201,8 +209,8 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
   // Nothing at all until the web asks (no idle Modal in the tree).
   if (!galleryRequest) return null;
   return (
-    <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={close} statusBarTranslucent>
-      <View style={[styles.root, { paddingTop: insets.top }]}>
+    <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={close}>
+      <View style={[styles.root, { paddingTop: Platform.OS === 'ios' ? insets.top : 0 }]}>
         <View style={styles.bar}>
           <Pressable accessibilityRole="button" accessibilityLabel={labels?.close} onPress={close} hitSlop={12} style={styles.barSide}>
             <Text style={styles.close}>✕</Text>

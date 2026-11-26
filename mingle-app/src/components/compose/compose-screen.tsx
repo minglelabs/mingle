@@ -464,7 +464,7 @@ export default function ComposeScreen({
     }
   }
 
-  // The app's own gallery when the app has one (see @/lib/native-photo-gallery);
+  // The app's own gallery, when the app has one (see @/lib/native-photo-gallery);
   // false lets the editor open the system photo picker instead.
   function requestNativePhotos(): boolean {
     if (!isNativePhotoGalleryAvailable()) return false
