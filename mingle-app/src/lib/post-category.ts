@@ -37,7 +37,7 @@ export const POST_INTRO_FOODS = ["korean", "japanese", "chinese", "western", "st
 export const POST_INTRO_ANIMALS = ["dog", "cat", "rabbit", "hamster", "bird", "fish", "reptile"] as const;
 export const POST_INTRO_DRINKS = ["never", "sometimes", "often", "social"] as const;
 export const POST_INTRO_INTERESTS = ["fitness", "money", "self_growth", "dating", "trip_plans", "korean", "food_hunt", "new_hobby", "career", "kpop"] as const;
-/** At most this many of each list where several can be picked. */
+/** At most this many of each list where several can be picked (job and drinking: one). */
 export const POST_INTRO_MULTI_MAX = 3;
 
 export type PostIntroJob = (typeof POST_INTRO_JOBS)[number];

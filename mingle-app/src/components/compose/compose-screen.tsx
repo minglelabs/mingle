@@ -27,6 +27,7 @@ import { postPreviewText } from './draft-preview'
 import {
   appendDraftPage,
   canPublish,
+  MAX_POST_LENGTH,
   draftImageField,
   draftImagePath,
   generateClientPostId,
@@ -36,7 +37,10 @@ import {
 import { createDraftAutosaver, type DraftAutosaver, type DraftSaveState } from './draft-autosave'
 import { isPublishRunning, startPublish } from './publish-store'
 import { feedEvents, trackFeedEvent } from '@/lib/feed-analytics'
-import type { PreparedImage } from './compose-image'
+import { prepareComposeImage, type PreparedImage } from './compose-image'
+import { isNativePhotoGalleryAvailable, openNativePhotoGallery } from '@/lib/native-photo-gallery'
+import { resolveComposePhotoCopy } from '@/i18n/compose-photo-copy'
+import { resolvePostCategoryCopy } from '@/i18n/post-category-copy'
 
 const AUTOSAVE_DEBOUNCE_MS = 1200
 
@@ -460,6 +464,27 @@ export default function ComposeScreen({
     }
   }
 
+  // The app's own gallery when the app has one (see @/lib/native-photo-gallery);
+  // false lets the editor open the system photo picker instead.
+  function requestNativePhotos(): boolean {
+    if (!isNativePhotoGalleryAvailable()) return false
+    const room = MAX_POST_PHOTOS - photos.length
+    if (room <= 0) return true
+    void openNativePhotoGallery(room).then(async (files) => {
+      if (!files) return
+      const prepared: PreparedImage[] = []
+      for (const file of files.slice(0, room)) {
+        try {
+          prepared.push(await prepareComposeImage(file))
+        } catch {
+          // One unreadable photo does not stop the rest.
+        }
+      }
+      if (prepared.length) handleAddPhotos(prepared)
+    })
+    return true
+  }
+
   function handleRemovePhoto(index: number) {
     if (index > 0) {
       setExtras((prev) => {
@@ -504,6 +529,19 @@ export default function ComposeScreen({
   // A self-introduction needs a hobby and some text before it can be posted.
   const introProblem = category === 'intro' ? postIntroProblem({ text, hobbies }) : null
   const publishable = canPublish({ sourceText: text, hasImage }) && !introProblem
+  const photoCopy = resolveComposePhotoCopy(locale)
+  const categoryCopy = resolvePostCategoryCopy(locale)
+  const blockedReason = publishable
+    ? null
+    : text.length > MAX_POST_LENGTH
+      ? photoCopy.textTooLong
+      : !canPublish({ sourceText: text, hasImage })
+        ? photoCopy.needContent
+        : introProblem === 'hobbies'
+          ? categoryCopy.needHobby
+          : introProblem === 'text'
+            ? categoryCopy.needText
+            : null
 
   async function handlePublish() {
     if (!publishable || publishing.current) return
@@ -733,18 +771,7 @@ export default function ComposeScreen({
           </p>
         ) : null}
 
-        {/* What kind of post: an ordinary one, one that lasts an hour, or a self-introduction. */}
-        <ComposeCategoryPicker
-          locale={locale}
-          category={category}
-          onCategoryChange={setCategory}
-          hobbies={hobbies}
-          introExtras={introExtras}
-          onIntroExtrasChange={setIntroExtras}
-          onHobbiesChange={setHobbies}
-          problem={introProblem}
-        />
-
+        {/* Photo first (owner, 2026-11-27): the photos, then the caption, then what kind of post. */}
         <ComposeEditor
           locale={locale}
           sourceText={text}
@@ -757,26 +784,51 @@ export default function ComposeScreen({
           onAddPhotos={handleAddPhotos}
           onRemovePhoto={handleRemovePhoto}
           author={author}
-          autoFocus={!initialDraftId}
-          // In the panel, focus once it has slid in (SlideSurface: 320ms).
-          autoFocusDelayMs={embedded ? 360 : 0}
+          // Photos come first: the keyboard would cover them.
+          autoFocus={false}
+          photoFirst
+          onRequestPhotos={requestNativePhotos}
           previewOpen={previewOpen}
           onPreviewOpenChange={setPreviewOpen}
+        />
+
+        {/* What kind of post: an ordinary one, one that lasts an hour, a self-introduction, or calls. */}
+        <ComposeCategoryPicker
+          locale={locale}
+          category={category}
+          onCategoryChange={setCategory}
+          hobbies={hobbies}
+          introExtras={introExtras}
+          onIntroExtrasChange={setIntroExtras}
+          onHobbiesChange={setHobbies}
+          problem={introProblem}
         />
       </div>
 
       <div
-        className="flex shrink-0 items-center justify-between gap-3 border-t border-foreground/10 px-4 pt-2.5"
+        className="shrink-0 border-t border-foreground/10 px-4 pt-2"
         style={{
           paddingBottom: keyboardInset > 0 ? '10px' : 'max(env(safe-area-inset-bottom, 0px), 10px)',
         }}
       >
-        <span className="min-w-0 flex-1 truncate text-[13px] text-foreground/45" role="status" aria-live="polite">
-          {saveStatus}
-        </span>
-        <ComposePrimaryButton onClick={() => void handlePublish()} disabled={!publishable}>
+        {/* Why the button is not ready yet, else how the draft is doing. */}
+        <p
+          className={`mb-2 min-h-[18px] truncate text-center text-[13px] ${blockedReason ? 'font-semibold text-amber-700' : 'text-foreground/45'}`}
+          role="status"
+          aria-live="polite"
+          data-qa="compose-publish-reason"
+        >
+          {blockedReason ?? saveStatus}
+        </p>
+        <button
+          type="button"
+          data-qa="compose-publish"
+          onClick={() => void handlePublish()}
+          disabled={!publishable}
+          className="flex h-12 w-full items-center justify-center rounded-2xl bg-primary text-[16px] font-bold text-primary-foreground transition active:scale-[0.99] disabled:bg-foreground/10 disabled:text-foreground/35"
+        >
           {copy.publish}
-        </ComposePrimaryButton>
+        </button>
       </div>
     </div>
   )

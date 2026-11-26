@@ -75,7 +75,7 @@ export default function PostCategoryStrip({
   if (category === "intro" && intro) {
     return (
       <div className="mt-1 flex flex-wrap gap-1" data-qa="post-category-strip" data-post-category="intro">
-        <span className={`${PILL} bg-amber-400 text-white`}>{copy.categories.intro}</span>
+        <span className={PILL.replace("bg-white/90", "bg-amber-400").replace("text-slate-800", "text-white")}>{copy.categories.intro}</span>
         {intro.country ? (
           <span className={PILL}>
             <FlagEmoji emoji={countryFlagEmoji(intro.country)} className="text-[12px] leading-none" />
