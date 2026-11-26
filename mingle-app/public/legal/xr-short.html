@@ -994,6 +994,41 @@
         font-size: clamp(1.15rem, 1.6vw, 1.6rem);
       }
 
+      .slide-roadmap-grid--two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        width: min(820px, 100%);
+      }
+
+      .slide-side-media.slide-side-media--toki {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: clamp(14px, 1.6vw, 24px);
+        width: auto;
+      }
+
+      .slide-toki-image {
+        display: block;
+        border-radius: clamp(16px, 1.6vw, 24px);
+        box-shadow: 0 24px 52px rgba(45, 42, 30, 0.16);
+        background: #fff;
+      }
+
+      .slide-toki-image--app {
+        height: min(72vh, 620px);
+        width: auto;
+      }
+
+      .slide-toki-image--post {
+        width: min(24vw, 340px);
+        height: auto;
+      }
+
+      .slide-copy .slide-title.slide-title--toki {
+        white-space: normal;
+        font-size: clamp(2.4rem, 4vw, 4.6rem);
+      }
+
       .slide-market-overview-item {
         display: grid;
         min-width: 0;
@@ -3114,6 +3149,28 @@
         font-size: 1.02rem;
       }
 
+      html.is-mobile-viewport .slide-copy .slide-title.slide-title--toki {
+        font-size: clamp(1.6rem, 7vw, 2rem);
+      }
+
+      html.is-mobile-viewport .slide-side-media.slide-side-media--toki {
+        display: flex !important;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        transform: none;
+      }
+
+      html.is-mobile-viewport .slide-toki-image--app {
+        height: 44vh;
+      }
+
+      html.is-mobile-viewport .slide-toki-image--post {
+        width: 36vw;
+      }
+
       html.is-mobile-viewport .slide-roadmap-step {
         min-height: 0;
       }
@@ -4822,6 +4879,36 @@
                   <p class="slide-ai-requirement-description slide-roadmap-description">24시간 간편한 CS 운영</p>
                 </article>
               </div>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell slide-shell--ai-requirements">
+            <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
+              <p class="slide-kicker">수익 모델</p>
+              <h1 class="slide-title">외국인 관광객에게 제공하는 가치는<br/>두 가지입니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--ai-requirements">
+              <div class="slide-ai-requirements-grid slide-roadmap-grid slide-roadmap-grid--two">
+                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--named">
+                  <h2 class="slide-ai-requirement-title">한국인과의 소셜링</h2>
+                </article>
+                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--named">
+                  <h2 class="slide-ai-requirement-title">콘텐츠 중심의 여행 계획</h2>
+                </article>
+              </div>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--kfriends-goal">
+              <p class="slide-kicker">수익 모델</p>
+              <h1 class="slide-title slide-title--toki">Toki라는 서비스가<br/>여행 계획과 SNS 콘텐츠의<br/>결합의 힘을 잘 보여줬습니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--kfriends-goal slide-side-media--voicetalk slide-side-media--toki">
+              <img class="slide-toki-image slide-toki-image--app" src="./assets/deck-toki-itinerary.jpg" alt="Toki 여행 일정 관리 앱 화면" />
+              <img class="slide-toki-image slide-toki-image--post" src="./assets/deck-toki-logo.jpg" alt="Toki 여행 앱 추천 SNS 게시물" />
             </div>
           </article>
         </section>
