@@ -28,7 +28,7 @@ window.DECK_EN = {
 "통번역 외의 AI 기능까지 탑재한 네이티브 메신저": "An AI-native messenger with features beyond interpretation",
 "확장 전략 2": "Expansion strategy 2",
 "X(트위터), 인스타그램, 스레드, 위챗은번역을 제공하긴 합니다만몹시 불편하고 제한적입니다": "<span>X (Twitter), Instagram, Threads and WeChat</span><br/><span>do offer translation,</span><br/><span>but it is clumsy and limited</span>",
-"1부문제와 해결책 2부확장 전략": "<a class=\"slide-toc-item\" href=\"#3\"><span class=\"slide-toc-index\">Part 1</span><span class=\"slide-toc-text\">Problem and solution</span></a> <a class=\"slide-toc-item\" href=\"#27\"><span class=\"slide-toc-index\">Part 2</span><span class=\"slide-toc-text\">Expansion strategy</span></a>",
+"1부문제와 해결책 2부확장 전략": "<a class=\"slide-toc-item\" href=\"#3\"><span class=\"slide-toc-index\">Part 1</span><span class=\"slide-toc-text\">Problem and solution</span></a> <a class=\"slide-toc-item\" href=\"#29\"><span class=\"slide-toc-index\">Part 2</span><span class=\"slide-toc-text\">Expansion strategy</span></a>",
 "목차": "Contents",
 "1부": "Part 1",
 "문제와 해결책": "Problem and solution",
