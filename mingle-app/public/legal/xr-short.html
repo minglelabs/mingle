@@ -979,6 +979,21 @@
         font-size: clamp(1.05rem, 1.4vw, 1.4rem);
       }
 
+      .slide-roadmap-step--named {
+        align-content: center;
+      }
+
+      .slide-roadmap-step--named .slide-ai-requirement-title {
+        font-size: clamp(2.2rem, 3.4vw, 3.8rem);
+        font-weight: 850;
+        line-height: 1.1;
+        letter-spacing: -0.04em;
+      }
+
+      .slide-roadmap-step--named .slide-roadmap-description {
+        font-size: clamp(1.15rem, 1.6vw, 1.6rem);
+      }
+
       .slide-market-overview-item {
         display: grid;
         min-width: 0;
@@ -3091,6 +3106,14 @@
         width: 64px;
       }
 
+      html.is-mobile-viewport .slide-roadmap-step--named .slide-ai-requirement-title {
+        font-size: clamp(1.6rem, 7vw, 2rem);
+      }
+
+      html.is-mobile-viewport .slide-roadmap-step--named .slide-roadmap-description {
+        font-size: 1.02rem;
+      }
+
       html.is-mobile-viewport .slide-roadmap-step {
         min-height: 0;
       }
@@ -4786,18 +4809,15 @@
             </div>
             <div class="slide-side-media slide-side-media--ai-requirements">
               <div class="slide-ai-requirements-grid slide-roadmap-grid">
-                <article class="slide-ai-requirement slide-roadmap-step">
-                  <p class="slide-roadmap-index">1</p>
+                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--named">
                   <h2 class="slide-ai-requirement-title">노출 &amp; 홍보</h2>
                   <p class="slide-ai-requirement-description slide-roadmap-description">외국인 고객 유치</p>
                 </article>
-                <article class="slide-ai-requirement slide-roadmap-step">
-                  <p class="slide-roadmap-index">2</p>
+                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--named">
                   <h2 class="slide-ai-requirement-title">통번역</h2>
                   <p class="slide-ai-requirement-description slide-roadmap-description">편리한 상담/예약</p>
                 </article>
-                <article class="slide-ai-requirement slide-roadmap-step">
-                  <p class="slide-roadmap-index">3</p>
+                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--named">
                   <h2 class="slide-ai-requirement-title">AI 상담</h2>
                   <p class="slide-ai-requirement-description slide-roadmap-description">24시간 간편한 CS 운영</p>
                 </article>
