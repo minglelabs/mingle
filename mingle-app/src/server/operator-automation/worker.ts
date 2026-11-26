@@ -4,8 +4,9 @@ import { assignReferencePhoto, claimReferencePhoto, loadReferenceBytes, referenc
 import { generateOperatorAvatar, type AvatarGenerationResult } from '@/server/operator-avatars/generate'
 import { createOperatorAccount, type CreatedOperatorAccount } from '@/server/operators/create-operator'
 import { generatePersonaDrafts } from '@/server/operators/persona-draft'
-import { mostUnderrepresentedCountry } from '@/server/operators/seed-plan'
+import { mostUnderrepresentedCountry, SEED_MALE_LEANING, SEED_MALE_SHARE } from '@/server/operators/seed-plan'
 import { referenceAgeRange, referenceCountries } from '@/server/reference-library/direction'
+import type { ReferenceAttributes } from '@/server/reference-library/classify'
 import { generateReservePosts, isKoreaCountry, pickReserveTopics, reservePosterProfile } from '@/server/operator-post-reserve/generate'
 import { drawReservePostImage, PHOTO_NO_REFERENCE } from '@/server/operator-post-reserve/post-image'
 import { loadExistingReserveTexts, loadReservePersona } from '@/server/operator-post-reserve/worker'
@@ -111,8 +112,10 @@ export async function createNextSeedAccount(
     referenceId?: string | null
     /** 'seedream': staff picked Seedream 5.5 for the profile photo (reference library's 계정 만들기 only). */
     engine?: ImageEngine
+    random?: () => number
   } = {},
 ): Promise<AccountStepResult> {
+  const random = options.random ?? Math.random
   const rows = await prisma.operatorAccount.groupBy({
     by: ['personaCountry'],
     // Accounts still hidden for review count too, or the same country is picked every time.
@@ -126,8 +129,15 @@ export async function createNextSeedAccount(
   // 레퍼런스 짤 저장소: while unused photos are left, each new account's profile photo is drawn from one.
   const canDraw = options.engine === 'seedream' || canDrawImagesHere()
   const drawsHere = options.inReview === true && canDraw
+  // The library is mostly women, and a new account takes its photo's gender: a
+  // turn for a male-leaning country asks for a man's photo from there first (staff, 2026-11-26).
+  const due = mostUnderrepresentedCountry(byCountry)
+  const wantMale = !options.referenceId && SEED_MALE_LEANING.has(due) && random() < SEED_MALE_SHARE
   const reference = drawsHere || options.referenceId
-    ? await claimReferencePhoto({ userId: 'pending', kind: 'avatar', id: options.referenceId ?? null }).catch(() => null)
+    ? await claimReferencePhoto({
+        userId: 'pending', kind: 'avatar', id: options.referenceId ?? null,
+        ...(wantMale ? { gender: 'male' as const, prefer: (item: { attributes?: ReferenceAttributes | null }) => referenceCountries(item.attributes)?.includes(due) ?? false } : {}),
+      }).catch(() => null)
     : null
   if (options.referenceId && !reference) return { done: false, reason: 'reference_unavailable' }
   // A profile photo from the library: the persona is made to suit its person (about the
@@ -139,7 +149,7 @@ export async function createNextSeedAccount(
   try {
     const { drafts } = await generatePersonaDrafts({
       count: 1, countries: [country], ageMin: ages?.min ?? ACCOUNT_AGE_MIN, ageMax: ages?.max ?? ACCOUNT_AGE_MAX,
-      genderMix: reference?.gender ?? 'balanced',
+      genderMix: reference?.gender ?? (SEED_MALE_LEANING.has(country) ? 'mostly_male' : 'balanced'),
     })
     if (!drafts[0]) {
       if (reference) await releaseReferencePhoto(reference.id).catch(() => {})
