@@ -1,4 +1,5 @@
 import type { LegalDocumentLocale } from '@/i18n/config'
+import { reportCopy } from '@/i18n/report-copy'
 import {
   isNotifiedReportStatus,
   type TeamNotificationType,
@@ -154,6 +155,12 @@ const COPY_BY_LOCALE: Record<LegalDocumentLocale, TeamNotificationCopy> = {
   },
 }
 
+// Which language each copy is in, for the report reason a removed post gives
+// (read from the report copy, so it is not repeated here).
+const LOCALE_OF_COPY = new Map<TeamNotificationCopy, string>(
+  Object.entries(COPY_BY_LOCALE).map(([locale, copy]) => [copy, locale]),
+)
+
 const COPY_BY_LOWERCASE_LOCALE = new Map(
   Object.entries(COPY_BY_LOCALE).map(([locale, copy]) => [locale.toLowerCase(), copy]),
 )
@@ -176,7 +183,12 @@ export function resolveTeamNotificationText(
   const text = (body ?? '').trim()
   if (type === 'feedback_reply') return { title: copy.feedbackReplyTitle, body: text }
   if (type === 'report_reply') return { title: copy.reportReplyTitle, body: text }
-  if (type === 'post_removed') return { title: copy.postRemovedTitle, body: copy.postRemovedBody }
+  if (type === 'post_removed') {
+    // `body` is the report reason staff picked (none on the first ones sent).
+    const reasons = reportCopy(LOCALE_OF_COPY.get(copy) ?? 'en')
+    const reason = (reasons.reasons as Partial<Record<string, string>>)[text]
+    return { title: copy.postRemovedTitle, body: reason ? `${copy.postRemovedBody}\n${reasons.reasonLabel}: ${reason}` : copy.postRemovedBody }
+  }
   return {
     title: copy.reportStatusTitle,
     body: isNotifiedReportStatus(text)
