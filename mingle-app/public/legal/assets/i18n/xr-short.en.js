@@ -4,7 +4,7 @@ window.DECK_EN = {
 "한국 여행·한국인 친구 매칭으로 시작해 메신저/SNS로 확장합니다.최종 업데이트 - 2026-11-26": "Starting with Korea travel and Korean friend matching, growing into a messenger and social network.<br/>Last updated: Nov 26, 2026",
 "HashChat 다운로드 링크 👇": "<img alt=\"HashChat app icon\" class=\"slide-download-app-icon\" src=\"./assets/site/hashchat-icon.png\"/> <span>Download HashChat 👇</span>",
 "문제": "Problem",
-"“ 외국인과 친해지고 싶은데 언어 장벽을 넘기 힘들다 ”": "<span class=\"slide-title-quote slide-title-quote--open mt-10\">“</span> <span class=\"slide-title-text\">I want to make friends abroad,<br/> but the language gets in the way</span> <span class=\"slide-title-quote slide-title-quote--close mt-10\">”</span>",
+"“ 한국인과 외국인은 서로 친해지고 싶은데 이어주는 서비스는 부족하고 언어 장벽은 크다 ”": "<span class=\"slide-title-quote slide-title-quote--open mt-10\">“</span> <span class=\"slide-title-text\">Koreans and foreigners want to be friends,<br/> but few services bring them together<br/> and the language barrier is high</span> <span class=\"slide-title-quote slide-title-quote--close mt-10\">”</span>",
 "닭 vs 달걀 문제": "The chicken-and-egg problem",
 "외국인 친구를사귀고 싶다": "<span class=\"slide-goal-emphasis\">I want friends</span><br/>from abroad",
 "외국어를배우고 싶다": "<span class=\"slide-goal-emphasis\">I want to learn</span><br/>a language",
