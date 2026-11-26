@@ -1015,16 +1015,25 @@
       }
 
       .slide-toki-image--app {
-        height: min(72vh, 620px);
+        height: min(60vh, 520px);
         width: auto;
+      }
+
+      .slide-toki-image--saved {
+        position: relative;
+        z-index: 1;
+        height: min(52vh, 450px);
+        width: auto;
+        margin-left: clamp(-70px, -4vw, -30px);
+        margin-bottom: clamp(80px, 11vh, 150px);
       }
 
       .slide-toki-image--post {
         position: relative;
         z-index: 2;
-        width: min(24vw, 340px);
+        width: min(16vw, 240px);
         height: auto;
-        margin-left: clamp(-90px, -5vw, -40px);
+        margin-left: clamp(-70px, -4vw, -30px);
         margin-top: clamp(120px, 14vh, 200px);
       }
 
@@ -3181,12 +3190,18 @@
       }
 
       html.is-mobile-viewport .slide-toki-image--app {
-        height: 44vh;
+        height: 38vh;
+      }
+
+      html.is-mobile-viewport .slide-toki-image--saved {
+        height: 34vh;
+        margin-left: -28px;
+        margin-bottom: 70px;
       }
 
       html.is-mobile-viewport .slide-toki-image--post {
-        width: 40vw;
-        margin-left: -36px;
+        width: 32vw;
+        margin-left: -30px;
         margin-top: 90px;
       }
 
@@ -4933,6 +4948,7 @@
             </div>
             <div class="slide-side-media slide-side-media--kfriends-goal slide-side-media--voicetalk slide-side-media--toki">
               <img class="slide-toki-image slide-toki-image--app" src="./assets/deck-toki-itinerary.jpg" alt="Toki 여행 일정 관리 앱 화면" />
+              <img class="slide-toki-image slide-toki-image--saved" src="./assets/deck-toki-saved-places.jpg" alt="Toki SNS 핫플 AI 저장 앱 화면" />
               <img class="slide-toki-image slide-toki-image--post" src="./assets/deck-toki-logo.jpg" alt="Toki 여행 앱 추천 SNS 게시물" />
             </div>
           </article>
