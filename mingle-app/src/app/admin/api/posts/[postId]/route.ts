@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAdminApi } from '@/server/admin/guard'
+import { normalizeReportReason } from '@/server/reports/report-service'
 import { deleteOperatorPost, editOperatorPostText, editOperatorPostTime, setOperatorPostHidden } from '@/server/operator-post-edit/edit'
 
 export const runtime = 'nodejs'
@@ -21,9 +22,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ postI
   } catch {
     body = null
   }
-  const fields = body && typeof body === 'object' ? body as { text?: unknown; hidden?: unknown; publishedAt?: unknown; notifyAuthor?: unknown } : {}
+  const fields = body && typeof body === 'object' ? body as { text?: unknown; hidden?: unknown; publishedAt?: unknown; notifyAuthor?: unknown; reason?: unknown } : {}
   const result = typeof fields.hidden === 'boolean'
-    ? await setOperatorPostHidden(auth.ctx, postId, fields.hidden, { notifyAuthor: fields.notifyAuthor === true })
+    ? await setOperatorPostHidden(auth.ctx, postId, fields.hidden, { notifyAuthor: fields.notifyAuthor === true, reason: normalizeReportReason(fields.reason) })
     : fields.publishedAt !== undefined
     ? await editOperatorPostTime(auth.ctx, postId, fields.publishedAt)
     : await editOperatorPostText(auth.ctx, postId, fields.text)

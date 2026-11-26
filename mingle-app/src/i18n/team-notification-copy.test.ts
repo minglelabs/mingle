@@ -32,5 +32,7 @@ describe('team notification copy', () => {
       body: '회원님의 게시물이 신고되어 검토한 결과, 이용규칙 위반으로 삭제 처리되었습니다.',
     })
     expect(resolveTeamNotificationText(resolveTeamNotificationCopy('fr'), 'post_removed', '').title).toBe('Votre publication a été supprimée')
+    expect(resolveTeamNotificationText(ko, 'post_removed', 'spam').body).toBe('회원님의 게시물이 신고되어 검토한 결과, 이용규칙 위반으로 삭제 처리되었습니다.\n신고 사유: 스팸·도배')
+    expect(resolveTeamNotificationText(resolveTeamNotificationCopy('en'), 'post_removed', 'harassment').body).toMatch(/\nReason: Harassment$/)
   })
 })

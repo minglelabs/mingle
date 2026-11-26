@@ -14,7 +14,7 @@ import {
 } from '@/server/operator-posts/convert'
 import { checkOperatorForPosting } from '@/server/operator-posts/operator-check'
 import { createComment } from '@/server/posts/comment-service'
-import { visibleCommentsWhere, visibleSingleCommentWhere } from '@/server/posts/comment-visibility'
+import { visibleSingleCommentWhere } from '@/server/posts/comment-visibility'
 import { visibleSinglePostWhere } from '@/server/posts/post-visibility'
 import { detectSourceLanguageVerdict } from '@/server/translation/detect-source-language'
 import {
@@ -58,6 +58,8 @@ export type ThreadComment = {
   translations: StoredTranslation[]
   hasImage: boolean
   isDeleted: boolean
+  /** Hidden from the app by staff or a report (staff still see it, marked). */
+  hidden?: boolean
   likeCount: number
   /** Who liked it, newest first (staff only). */
   likers?: InboxPerson[]
@@ -81,6 +83,9 @@ export type OperatorPostThread = {
     publishedAt: string
     /** When the post was actually created. */
     createdAt: string
+    /** Staff see every post: hidden from the app (by staff or a report), or deleted. */
+    hidden?: boolean
+    deleted?: boolean
   }
   /** The operator the thread is read and answered as. */
   operator: ThreadOperator
@@ -155,7 +160,8 @@ export async function loadOperatorPostThread(args: {
 }): Promise<OperatorThreadResult> {
   // Who is in the thread, before any visibility rule (which needs a viewer).
   const base = await prisma.post.findFirst({
-    where: { id: args.postId, OR: [{ isDeleted: null }, { isDeleted: false }] },
+    // Staff open any post from the admin, hidden or deleted too (staff, 2026-11-26).
+    where: { id: args.postId },
     select: {
       sourceLanguage: true,
       author: { select: THREAD_USER_SELECT },
@@ -205,9 +211,11 @@ export async function loadOperatorPostThread(args: {
   if (!viewerId || !operator) return { ok: false, error: 'operator_required' }
 
   const post = await prisma.post.findFirst({
-    where: visibleSinglePostWhere(args.postId, viewerId),
+    where: { id: args.postId },
     select: {
       id: true,
+      isDeleted: true,
+      moderationHiddenAt: true,
       sourceText: true,
       sourceLanguage: true,
       bodyVersion: true,
@@ -227,10 +235,12 @@ export async function loadOperatorPostThread(args: {
   if (!post) return { ok: false, error: 'not_found' }
 
   const rows = await prisma.postComment.findMany({
-    where: visibleCommentsWhere(args.postId, viewerId),
+    // Every comment, hidden ones too (marked), as staff see the post itself.
+    where: { postId: args.postId },
     orderBy: { createdAt: 'asc' },
     select: {
       id: true,
+      moderationHiddenAt: true,
       parentId: true,
       sourceText: true,
       sourceLanguage: true,
@@ -270,6 +280,7 @@ export async function loadOperatorPostThread(args: {
       translations: text ? currentTranslations(row.translations, row.bodyVersion, row.sourceLanguage) : [],
       hasImage: !isDeleted && Boolean(row.imageObjectKey),
       isDeleted,
+      ...(row.moderationHiddenAt ? { hidden: true } : {}),
       likeCount: row.likeCount,
       likers: row.likes.map((like) => toActivityPerson(like.user)),
       createdAt: row.createdAt.toISOString(),
@@ -330,6 +341,8 @@ export async function loadOperatorPostThread(args: {
         commentCount: post.commentCount,
         publishedAt: post.publishedAt.toISOString(),
         createdAt: post.createdAt.toISOString(),
+        ...(post.moderationHiddenAt ? { hidden: true } : {}),
+        ...(post.isDeleted ? { deleted: true } : {}),
       },
       operator,
       operators: [...operatorsById.values()],

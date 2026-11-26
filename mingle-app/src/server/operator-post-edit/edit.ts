@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { notifyUserFromTeam } from '@/server/team-notifications'
+import type { ReportReason } from '@/server/reports/report-service'
 import type { AdminContext } from '@/server/admin/guard'
 import { writeAdminAudit } from '@/server/admin/audit'
 import { storeReservePostImage } from '@/server/operator-post-reserve/post-image'
@@ -97,15 +98,15 @@ export async function editOperatorPostTime(ctx: AdminContext, postId: string, ra
  * the way a report would hide it, or shown again. Nothing goes to the review
  * queue, which holds operator posts only.
  */
-async function setPostHiddenByStaff(ctx: AdminContext, postId: string, hidden: boolean, options: { notifyAuthor?: boolean } = {}): Promise<OperatorPostEditResult> {
+async function setPostHiddenByStaff(ctx: AdminContext, postId: string, hidden: boolean, options: { notifyAuthor?: boolean; reason?: ReportReason | null } = {}): Promise<OperatorPostEditResult> {
   const post = await prisma.post.findUnique({ where: { id: postId }, select: { id: true, authorId: true, moderationHiddenAt: true } })
   if (!post) return { ok: false, error: 'not_found', status: 404 }
   if (hidden) await hidePostByModerator(prisma, post.id)
   else await unhidePostByModerator(prisma, post.id)
   // The author hears it was removed for breaking the community rules (staff, 2026-11-26), once.
   const notify = hidden && options.notifyAuthor === true && !post.moderationHiddenAt
-  if (notify) await notifyUserFromTeam({ recipientId: post.authorId, type: 'post_removed', body: '', targetId: post.id })
-  await writeAdminAudit(ctx, { action: hidden ? 'post.takedown' : 'post.restore', targetType: 'post', targetId: post.id, metadata: { authorId: post.authorId, notified: notify } })
+  if (notify) await notifyUserFromTeam({ recipientId: post.authorId, type: 'post_removed', body: options.reason ?? '', targetId: post.id })
+  await writeAdminAudit(ctx, { action: hidden ? 'post.takedown' : 'post.restore', targetType: 'post', targetId: post.id, metadata: { authorId: post.authorId, notified: notify, reason: options.reason ?? null } })
   return { ok: true }
 }
 
@@ -120,7 +121,7 @@ async function setPostHiddenByStaff(ctx: AdminContext, postId: string, hidden: b
 export async function setOperatorPostHidden(
   ctx: AdminContext, postId: string, hidden: boolean,
   /** `notifyAuthor`: a real user's post taken down tells its author (operator posts never do). */
-  options: { notifyAuthor?: boolean } = {},
+  options: { notifyAuthor?: boolean; reason?: ReportReason | null } = {},
 ): Promise<OperatorPostEditResult & { reserveId?: string }> {
   const post = await operatorPost(postId)
   if (!post) return setPostHiddenByStaff(ctx, postId, hidden, options)
