@@ -2,7 +2,7 @@ window.DECK_EN = {
 "blocks": {
 "언어 장벽 없는음성 메신저 HashChat": "A voice messenger<br/>without language barriers",
 "헬로톡, 디스코드보다 편한 외국인과의 대화 경험을 만듭니다.최종 업데이트 - 2026-11-26": "Talking with people abroad, made easier than on HelloTalk or Discord.<br/>Last updated: Nov 26, 2026",
-"HashChat 다운로드 링크 👇": "<img alt=\"HashChat app icon\" class=\"slide-download-app-icon\" src=\"./assets/mingle-icon.png\"/> <span>Download HashChat 👇</span>",
+"HashChat 다운로드 링크 👇": "<img alt=\"HashChat app icon\" class=\"slide-download-app-icon\" src=\"./assets/site/hashchat-icon.png\"/> <span>Download HashChat 👇</span>",
 "문제": "Problem",
 "“ 외국인과 친해지고 싶은데 언어 장벽을 넘기 힘들다 ”": "<span class=\"slide-title-quote slide-title-quote--open mt-10\">“</span> <span class=\"slide-title-text\">I want to make friends abroad,<br/> but the language gets in the way</span> <span class=\"slide-title-quote slide-title-quote--close mt-10\">”</span>",
 "닭 vs 달걀 문제": "The chicken-and-egg problem",
