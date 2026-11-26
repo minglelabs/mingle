@@ -781,6 +781,10 @@
         left: clamp(12px, 1vw, 16px);
         width: 4px;
         border-radius: 999px;
+        background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
+      }
+
+      .slide-shell--problem .slide-ai-requirement::before {
         background: #dc2626;
       }
 
@@ -3082,6 +3086,11 @@
         white-space: nowrap;
       }
 
+      html.is-mobile-viewport .slide-copy--ai-requirements .slide-title.slide-title--wrap {
+        white-space: normal;
+        word-break: keep-all;
+      }
+
       html.is-mobile-viewport .slide-side-media--ai-requirements {
         width: var(--mobile-content-width);
         max-width: var(--mobile-content-width);
@@ -4418,10 +4427,10 @@
         </section>
 
         <section class="slide">
-          <article class="slide-shell slide-shell--ai-requirements">
+          <article class="slide-shell slide-shell--ai-requirements slide-shell--problem">
             <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
               <p class="slide-kicker">문제</p>
-              <h1 class="slide-title">다들 겪고 있는 문제도 비슷합니다</h1>
+              <h1 class="slide-title slide-title--wrap">다들 겪고 있는 문제도 비슷합니다</h1>
             </div>
             <div class="slide-side-media slide-side-media--ai-requirements">
               <div class="slide-ai-requirements-grid">
@@ -4455,7 +4464,7 @@
         </section>
 
         <section class="slide">
-          <article class="slide-shell slide-shell--ai-requirements">
+          <article class="slide-shell slide-shell--ai-requirements slide-shell--problem">
             <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
               <p class="slide-kicker">문제</p>
               <h1 class="slide-title">여기서 저희는<br/>언어 문제부터 관심을 가졌습니다</h1>
@@ -4545,7 +4554,7 @@
         </section>
 
         <section class="slide">
-          <article class="slide-shell slide-shell--ai-requirements">
+          <article class="slide-shell slide-shell--ai-requirements slide-shell--problem">
             <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
               <p class="slide-kicker">문제</p>
               <h1 class="slide-title">소셜링 상황의 까다로운 요구사항들을<br/>기존의 AI로는 충족할 수 없었기 때문입니다</h1>
@@ -4801,7 +4810,7 @@
           <article class="slide-shell slide-shell--ai-requirements">
             <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
               <p class="slide-kicker">배운 점 1</p>
-              <h1 class="slide-title">실제로 쓰인 곳은 대부분 업무 현장이었습니다</h1>
+              <h1 class="slide-title slide-title--wrap">실제로 쓰인 곳은 대부분 업무 현장이었습니다</h1>
             </div>
             <div class="slide-side-media slide-side-media--ai-requirements">
               <div class="slide-ai-requirements-grid slide-roadmap-grid">
@@ -4902,7 +4911,7 @@
         </section>
 
         <section class="slide">
-          <article class="slide-shell slide-shell--ai-requirements">
+          <article class="slide-shell slide-shell--ai-requirements slide-shell--problem">
             <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
               <p class="slide-kicker">수익 모델</p>
               <h1 class="slide-title">유저가 충분히 쌓이면<br/>수익 모델을 해결합니다</h1>
@@ -5053,7 +5062,7 @@
           <article class="slide-shell slide-shell--ai-requirements">
             <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
               <p class="slide-kicker">수익 모델</p>
-              <h1 class="slide-title">해시챗이 이 사업자들에게 제공하려는 가치</h1>
+              <h1 class="slide-title slide-title--wrap">해시챗이 이 사업자들에게 제공하려는 가치</h1>
             </div>
             <div class="slide-side-media slide-side-media--ai-requirements">
               <div class="slide-ai-requirements-grid slide-roadmap-grid">
@@ -5078,7 +5087,7 @@
           <article class="slide-shell slide-shell--ai-requirements">
             <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
               <p class="slide-kicker">수익 모델</p>
-              <h1 class="slide-title">해시챗이 외국인 관광객에게 제공하려는 가치</h1>
+              <h1 class="slide-title slide-title--wrap">해시챗이 외국인 관광객에게 제공하려는 가치</h1>
             </div>
             <div class="slide-side-media slide-side-media--ai-requirements">
               <div class="slide-ai-requirements-grid slide-roadmap-grid slide-roadmap-grid--two">
@@ -5111,7 +5120,7 @@
           <article class="slide-shell slide-shell--ai-requirements">
             <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
               <p class="slide-kicker">목표</p>
-              <h1 class="slide-title">HashChat이 이루려는 3가지</h1>
+              <h1 class="slide-title slide-title--wrap">HashChat이 이루려는 3가지</h1>
             </div>
             <div class="slide-side-media slide-side-media--ai-requirements">
               <div class="slide-ai-requirements-grid slide-roadmap-grid">
