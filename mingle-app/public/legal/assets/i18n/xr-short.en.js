@@ -8,7 +8,7 @@ window.DECK_EN = {
 "닭 vs 달걀 문제": "The chicken-and-egg problem",
 "연결만 하는 서비스에서여행 플랫폼으로 확장합니다": "From a service that only connects people<br/>to a travel platform",
 "이 중 한국 여행 정보만 집중합니다": "Of these, we focus only on Korea travel tips",
-"가장 많이 질문하는 여행 정보는세 가지입니다": "The travel questions people ask most<br/>come down to three",
+"외국인 관광객이 가장 궁금해하는여행 정보는 세 가지입니다": "What foreign tourists most want to know<br/>comes down to three things",
 "맛집": "Restaurants",
 "미용실": "Hair salons",
 "미용 병원": "Beauty clinics",
