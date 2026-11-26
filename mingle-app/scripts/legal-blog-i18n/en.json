@@ -63,12 +63,12 @@
   },
   "hashchat-pitch-deck-short": {
    "kind": "Pitch deck",
-   "dateLabel": "Updated November 26, 2026",
+   "dateLabel": "Updated September 1, 2026",
    "title": "HashChat Pitch Deck: The Short Version",
    "description": "The chicken-and-egg problem of language exchange, and how live interpretation removes one side of it.",
    "body": [
     "A shorter version of our pitch deck. Language exchange apps are stuck on a chicken-and-egg problem: you want friends abroad, and you want to learn their language. HashChat removes one side of it with live interpretation, so you can talk without a shared language.",
-    "It also covers the add-on caption and in-person interpretation demand we found, and the social network we launched in November. It starts as a matching service that replaces K-Friends, with three goals: help Korean businesses win foreign customers, help foreign tourists travel in Korea, and take social content global."
+    "It also covers the add-on caption and in-person interpretation demand we found, and our first goal: winning over K-Friends users."
    ]
   },
   "virtually-deck": {
