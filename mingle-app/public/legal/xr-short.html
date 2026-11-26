@@ -3101,6 +3101,10 @@
         gap: 8px;
       }
 
+      html.is-mobile-viewport .slide-ai-requirements-grid:has(> :nth-child(7)) {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
       html.is-mobile-viewport .slide-ai-requirement {
         min-height: 0;
         padding: 10px 10px 10px 24px;
@@ -4557,7 +4561,7 @@
           <article class="slide-shell slide-shell--ai-requirements slide-shell--problem">
             <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
               <p class="slide-kicker">문제</p>
-              <h1 class="slide-title">소셜링 상황의 까다로운 요구사항들을<br/>기존의 AI로는 충족할 수 없었기 때문입니다</h1>
+              <h1 class="slide-title slide-title--wrap">소셜링 상황의 까다로운 요구사항들을<br/>기존의 AI로는 충족할 수 없었기 때문입니다</h1>
             </div>
             <div class="slide-side-media slide-side-media--ai-requirements">
               <div class="slide-ai-requirements-grid">
@@ -4606,7 +4610,7 @@
           <article class="slide-shell slide-shell--ai-requirements slide-shell--ai-requirements-solution">
             <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
               <p class="slide-kicker">해결책</p>
-              <h1 class="slide-title">현재는 이 모든 요구사항이<br/>AI 발전 덕분에 해결 가능합니다</h1>
+              <h1 class="slide-title slide-title--wrap">현재는 이 모든 요구사항이<br/>AI 발전 덕분에 해결 가능합니다</h1>
             </div>
             <div class="slide-side-media slide-side-media--ai-requirements">
               <div class="slide-ai-requirements-grid">
