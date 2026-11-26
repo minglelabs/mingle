@@ -256,20 +256,23 @@ export default function DuoCallStage({ blockRef, ...props }: DuoCallStageProps) 
  */
 export function DuoCallSelfFace({ image, name, speaking, micOn, sizePx }: { image: string | null; name: string | null; speaking: boolean; micOn: boolean; sizePx: number }) {
   return (
-    <span className="relative mb-0.5 inline-flex shrink-0 items-center justify-center" style={{ width: sizePx, height: sizePx }} data-qa="duo-call-self" data-speaking={speaking ? 'true' : 'false'}>
+    <span className="relative inline-flex shrink-0 items-center justify-center" style={{ width: sizePx, height: sizePx }} data-qa="duo-call-self" data-speaking={speaking ? 'true' : 'false'}>
       {speaking && micOn ? (
         <>
           <span aria-hidden="true" className="mingle-voice-ripple absolute inset-0 rounded-full bg-emerald-300/80" />
           <span aria-hidden="true" className="mingle-voice-ripple mingle-voice-ripple-late absolute inset-0 rounded-full bg-emerald-300/60" />
         </>
       ) : null}
-      <span className={`relative inline-flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-amber-100 text-[0.9rem] font-bold text-amber-800 ring-2 ${speaking && micOn ? 'ring-emerald-300' : 'ring-white/70'}`}>
+      <span
+        className={`relative inline-flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-amber-100 font-bold text-amber-800 shadow-[0_4px_14px_rgba(2,6,23,0.35)] ring-[2.5px] transition-shadow ${speaking && micOn ? 'ring-emerald-300' : 'ring-white/80'}`}
+        style={{ fontSize: Math.round(sizePx * 0.4) }}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {image ? <img src={image} alt="" className="h-full w-full object-cover" /> : initial(name)}
       </span>
       {!micOn ? (
-        <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-slate-900 text-white ring-1 ring-white/70">
-          <MicOff size={9} strokeWidth={2.6} aria-hidden="true" />
+        <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white ring-2 ring-white/80">
+          <MicOff size={11} strokeWidth={2.6} aria-hidden="true" />
         </span>
       ) : null}
     </span>

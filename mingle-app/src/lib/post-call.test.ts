@@ -77,6 +77,15 @@ describe("1:1 voice talk from a post", () => {
     // The text box stays; the viewer's own face sits left of it.
     expect(room).toContain("isComposerOpen || isDuoCall");
     expect(room).toContain("<DuoCallSelfFace");
+    // The bottom bar (owner, 2026-11-26): a large own face, "+" with a photo and PiP only,
+    // a send button that is always there, and the face and "+" stepping aside while typing.
+    expect(room).toContain("const DUO_CALL_SELF_FACE_PX = 52");
+    expect(room).toContain("sizePx={DUO_CALL_SELF_FACE_PX}");
+    expect(room).toContain("isComposerTextareaFocused ? 'pointer-events-none -mr-2 max-w-0 overflow-hidden opacity-0'");
+    expect(room).toContain("data-qa={isDuoCall ? 'duo-call-send' : undefined}");
+    const panel = room.slice(room.indexOf("const actionPanelItems = useMemo"), room.indexOf("const syncNativePipPlaybackState"));
+    expect(panel.indexOf("if (isDuoCall) {")).toBeGreaterThan(panel.indexOf("key: 'photo'"));
+    expect(panel.slice(panel.indexOf("if (isDuoCall) {"), panel.indexOf("return items")).includes("key: 'pip'")).toBe(true);
     const stage = read("src/components/LivePhoneDemo/DuoCallStage.tsx");
     // The face is a third of the way down, with waves while they speak.
     expect(stage).toContain("const FACE_CENTER = 35");

@@ -466,6 +466,8 @@ const VOICE_MODE_SIDE_BUTTON_SIZE_PX = 44
 // One icon size for every side control (+, photo, speaker/earphone, keyboard) so they line up.
 const VOICE_MODE_SIDE_ICON_SIZE_PX = 20
 const COMPOSER_MODE_CONTROL_SIZE_PX = 36
+/** The viewer's own face in the bottom bar of a 1:1 voice talk's call screen. */
+const DUO_CALL_SELF_FACE_PX = 52
 const VOICE_MODE_STT_BUTTON_RADIUS_PX = 20
 // Intentionally not localized: review requested fixed English CTA labels for the voice-mode STT button.
 const VOICE_MODE_START_LABEL = 'Start'
@@ -8435,6 +8437,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         onSelect: closeThen(() => photoPickerRef.current?.()),
       })
     }
+    // The call screen of a 1:1 voice talk (owner, 2026-11-26): its "+" is a
+    // photo and PiP only; the call has its own buttons for the rest.
+    if (isDuoCall) {
+      if (pipMenuItem) {
+        items.push({
+          key: 'pip',
+          label: pipMenuItem.label,
+          icon: <PictureInPicture2 size={21} strokeWidth={2} />,
+          onSelect: closeThen(pipMenuItem.onSelect),
+        })
+      }
+      return items
+    }
     if (voiceTalkMenuItem) {
       items.push({
         key: 'voice-talk',
@@ -8480,6 +8495,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     conversationImageCopy.choose,
     earphoneModeMenuItem,
     handleToggleComposer,
+    isDuoCall,
     pipMenuItem,
     setActionPanelOpen,
     viewerUserId,
@@ -11615,9 +11631,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
                   transition={{ duration: 0.12, ease: [0.22, 1, 0.36, 1] }}
-                  className="flex items-end gap-1.5"
+                  className={isDuoCall ? 'flex items-center gap-2' : 'flex items-end gap-1.5'}
+                  data-qa={isDuoCall ? 'duo-call-bottom-bar' : undefined}
                 >
-                  <motion.div className="flex shrink-0 items-end justify-center self-end">
+                  <motion.div
+                    className={isDuoCall
+                      // The call screen: the face and "+" step aside while typing, so the text box takes the row.
+                      ? `flex shrink-0 items-center gap-2 transition-[max-width,opacity,margin] duration-200 ease-out ${
+                        isComposerTextareaFocused ? 'pointer-events-none -mr-2 max-w-0 overflow-hidden opacity-0' : 'max-w-[120px] opacity-100'
+                      }`
+                      : 'flex shrink-0 items-end justify-center self-end'}
+                    aria-hidden={isDuoCall && isComposerTextareaFocused ? true : undefined}
+                  >
                     {trialSpeechLength ? (
                       <button
                         type="button"
@@ -11630,14 +11655,24 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         <Mic size={Math.round(COMPOSER_MODE_CONTROL_SIZE_PX * 0.5)} strokeWidth={2.1} />
                       </button>
                     ) : isDuoCall ? (
-                      // The call screen: the viewer's own face, rippling while they speak.
-                      <DuoCallSelfFace
-                        image={typeof session?.user?.image === 'string' ? session.user.image : null}
-                        name={typeof session?.user?.name === 'string' ? session.user.name : null}
-                        speaking={duoSelfSpeaking}
-                        micOn={!voiceTalkListenOnly}
-                        sizePx={COMPOSER_MODE_CONTROL_SIZE_PX}
-                      />
+                      <>
+                        {/* The viewer's own face, large, rippling while they speak. */}
+                        <DuoCallSelfFace
+                          image={typeof session?.user?.image === 'string' ? session.user.image : null}
+                          name={typeof session?.user?.name === 'string' ? session.user.name : null}
+                          speaking={duoSelfSpeaking}
+                          micOn={!voiceTalkListenOnly}
+                          sizePx={DUO_CALL_SELF_FACE_PX}
+                        />
+                        {/* Photo and PiP. */}
+                        <ChatActionPlusButton
+                          open={actionPanelOpen}
+                          label={conversationImageCopy.attach}
+                          sizePx={COMPOSER_SHELL_MIN_HEIGHT_PX}
+                          variant="glass"
+                          onToggle={handleActionPanelToggle}
+                        />
+                      </>
                     ) : (
                       <ChatActionPlusButton
                         open={actionPanelOpen}
@@ -11653,7 +11688,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     className="flex min-w-0 flex-1 items-end gap-1.5 self-end"
                   >
                     <div
-                      className="flex min-w-0 flex-1 items-end overflow-visible rounded-[0.95rem] border border-gray-200 bg-white px-1 shadow-none"
+                      className={isDuoCall
+                        ? 'flex min-w-0 flex-1 items-end overflow-visible rounded-[1.4rem] border border-white/40 bg-white/95 px-2 shadow-[0_4px_16px_rgba(2,6,23,0.25)]'
+                        : 'flex min-w-0 flex-1 items-end overflow-visible rounded-[0.95rem] border border-gray-200 bg-white px-1 shadow-none'}
                       style={{ height: `${Math.max(COMPOSER_SHELL_MIN_HEIGHT_PX, composerTextareaHeightPx)}px` }}
                     >
                       <div className="flex min-w-0 flex-1 items-end px-1">
@@ -11696,10 +11733,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         event.preventDefault()
                       }}
                       aria-label={composerCopy.sendMessageLabel}
+                      data-qa={isDuoCall ? 'duo-call-send' : undefined}
                       className={`inline-flex shrink-0 items-center justify-center self-end rounded-full transition-all duration-200 active:scale-95 ${
                         composerCanSend
                           ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white'
-                          : 'bg-transparent text-gray-300'
+                          : isDuoCall
+                            // The call screen: the send button is always there, dimmed until there is text.
+                            ? 'bg-white/25 text-white/80 backdrop-blur-md'
+                            : 'bg-transparent text-gray-300'
                       }`}
                       style={{
                         width: `${COMPOSER_MODE_CONTROL_SIZE_PX}px`,
