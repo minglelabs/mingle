@@ -6,6 +6,8 @@ window.DECK_EN = {
 "문제": "Problem",
 "“ 한국인과 외국인은 서로 친해지고 싶어하는데 서로를 이어주는 서비스가 부족하다 ”": "<span class=\"slide-title-quote slide-title-quote--open mt-10\">“</span> <span class=\"slide-title-text\">Koreans and foreigners want to be friends,<br/> but few services bring them together</span> <span class=\"slide-title-quote slide-title-quote--close mt-10\">”</span>",
 "닭 vs 달걀 문제": "The chicken-and-egg problem",
+"저희는 매칭에서한국 여행 콘텐츠/예약 플랫폼으로확장합니다": "From matching, we expand into<br/>a Korea travel content and booking platform",
+"그리고 궁극적으로글로벌 소셜 미디어가 되겠습니다": "And ultimately,<br/>we become a global social network",
 "확장 전략 1": "Expansion strategy 1",
 "매칭이 궤도에 오르면저희는 여행 계획을 돕습니다": "Once matching takes off,<br/>we help people plan their trips",
 "외국인 유저들이 한국인과의 대화에서얻고자 하는 건 구체적으로 세 가지입니다": "What foreign users want from talking with Koreans<br/>comes down to three things",
