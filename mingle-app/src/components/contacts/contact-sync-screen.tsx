@@ -1,12 +1,13 @@
 "use client";
 
-import { Check, ChevronLeft, ChevronRight, Gift, Loader2, Search, ShieldCheck, Ticket, UserRound, Users, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Eye, EyeOff, Gift, Loader2, Search, ShieldCheck, Ticket, UserRound, Users, X } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import InviteMessageLanguagePicker from "@/components/contacts/invite-message-language-picker";
 import PhoneVerifySheet, { PHONE_VERIFIED_EVENT } from "@/components/contacts/phone-verify-sheet";
 import SlideSurface from "@/components/slide-surface";
+import { resolveContactAvoidCopy } from "@/i18n/contact-avoid-copy";
 import { resolveContactSyncCopy } from "@/i18n/contact-sync-copy";
 import { resolveInviteTicketCopy } from "@/i18n/invite-ticket-copy";
 import { fillPhoneFriendsCopy, resolvePhoneFriendsCopy } from "@/i18n/phone-friends-copy";
@@ -94,6 +95,69 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
   const [isMatching, setIsMatching] = useState(false);
   const [followingIds, setFollowingIds] = useState<Set<string>>(() => new Set());
   const [pendingFollowIds, setPendingFollowIds] = useState<Set<string>>(() => new Set());
+  // Hiding from people in the address book (owner, 2026-11-26; src/server/contact-avoid.ts):
+  // on once contacts are synced; the switch turns it off, a friend's chip lets that one through.
+  const avoidCopy = useMemo(() => resolveContactAvoidCopy(locale), [locale]);
+  const [avoidEnabled, setAvoidEnabled] = useState(true);
+  const [avoidBusy, setAvoidBusy] = useState(false);
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set());
+  // Turning it back on sends the contacts again, so their numbers are kept again.
+  const [matchRound, setMatchRound] = useState(0);
+  useEffect(() => {
+    if (!open || !ownPhone) return;
+    let cancelled = false;
+    void fetch(buildClientApiPath("/contacts/avoid"), { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: { enabled?: unknown } | null) => {
+        if (!cancelled && body) setAvoidEnabled(body.enabled !== false);
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [open, ownPhone]);
+
+  const toggleAvoid = useCallback(async () => {
+    if (avoidBusy) return;
+    const next = !avoidEnabled;
+    setAvoidBusy(true);
+    setAvoidEnabled(next);
+    try {
+      const response = await fetch(buildClientApiPath("/contacts/avoid"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: next }),
+      });
+      if (!response.ok) throw new Error("contact_avoid_failed");
+      if (next) setMatchRound((round) => round + 1);
+      else setHiddenIds(new Set());
+    } catch {
+      setAvoidEnabled(!next);
+      toast(phoneCopy.errorGeneric);
+    } finally {
+      setAvoidBusy(false);
+    }
+  }, [avoidBusy, avoidEnabled, phoneCopy.errorGeneric]);
+
+  const toggleHiddenFrom = useCallback(async (userId: string) => {
+    const hidden = !hiddenIds.has(userId);
+    const apply = (value: boolean) => setHiddenIds((current) => {
+      const next = new Set(current);
+      if (value) next.add(userId);
+      else next.delete(userId);
+      return next;
+    });
+    apply(hidden);
+    try {
+      const response = await fetch(buildClientApiPath("/contacts/avoid"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, hidden }),
+      });
+      if (!response.ok) throw new Error("contact_avoid_failed");
+    } catch {
+      apply(!hidden);
+      toast(phoneCopy.errorGeneric);
+    }
+  }, [hiddenIds, phoneCopy.errorGeneric]);
 
   // This screen can be open under the phone gate: take the number the gate just verified.
   useEffect(() => {
@@ -225,6 +289,7 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
         if (cancelled) return;
         setMatches(found);
         setFollowingIds(new Set(found.filter((match) => match.user.isFollowing).map((match) => match.user.userId)));
+        setHiddenIds(new Set(found.filter((match) => match.user.hidden).map((match) => match.user.userId)));
       })
       .catch(() => {
         if (!cancelled) setMatches([]);
@@ -233,7 +298,7 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
         if (!cancelled) setIsMatching(false);
       });
     return () => { cancelled = true; };
-  }, [contacts, open, ownPhone]);
+  }, [contacts, matchRound, open, ownPhone]);
 
   const handleFollow = useCallback(async (userId: string) => {
     if (pendingFollowIds.has(userId) || followingIds.has(userId)) return;
@@ -368,6 +433,28 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
                     {fillPhoneFriendsCopy(phoneCopy.verifiedAs, { phone: maskE164(ownPhone) })}
                   </p>
                 </div>
+                {/* Hiding from people in the address book: the switch, and what it does. */}
+                <div className="mt-3 flex items-start gap-3 rounded-xl bg-slate-50 px-3.5 py-3" data-qa="contact-avoid">
+                  {avoidEnabled
+                    ? <EyeOff size={20} strokeWidth={2.2} className="mt-0.5 shrink-0 text-slate-700" aria-hidden="true" />
+                    : <Eye size={20} strokeWidth={2.2} className="mt-0.5 shrink-0 text-gray-400" aria-hidden="true" />}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[14.5px] font-bold leading-snug">{avoidCopy.title}</p>
+                    <p className="mt-1 text-[12.5px] leading-relaxed text-gray-500">{avoidEnabled ? avoidCopy.onBody : avoidCopy.offBody}</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={avoidEnabled}
+                    aria-label={avoidCopy.title}
+                    data-qa="contact-avoid-switch"
+                    disabled={avoidBusy}
+                    onClick={() => void toggleAvoid()}
+                    className={`relative mt-0.5 h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-60 ${avoidEnabled ? "bg-slate-950" : "bg-gray-300"}`}
+                  >
+                    <span className={`absolute left-0.5 top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${avoidEnabled ? "translate-x-5" : ""}`} />
+                  </button>
+                </div>
                 {!contacts ? null : isMatching ? (
                   <p className="mt-3 flex items-center gap-2 text-[13px] text-gray-500">
                     <Loader2 size={15} className="animate-spin" aria-hidden="true" />
@@ -399,6 +486,21 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
                               {[user.name?.trim(), formatHandle(user.handle)].filter(Boolean).join(" · ")}
                             </p>
                           </div>
+                          {/* Hidden from this friend on Explore, or let through. */}
+                          {avoidEnabled ? (
+                            <button
+                              type="button"
+                              aria-pressed={hiddenIds.has(user.userId)}
+                              data-qa="contact-avoid-person"
+                              onClick={() => void toggleHiddenFrom(user.userId)}
+                              className={`flex h-9 shrink-0 items-center gap-1 rounded-full px-3 text-[12.5px] font-semibold transition active:opacity-80 ${
+                                hiddenIds.has(user.userId) ? "bg-slate-100 text-slate-700" : "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                              }`}
+                            >
+                              {hiddenIds.has(user.userId) ? <EyeOff size={14} strokeWidth={2.4} aria-hidden="true" /> : <Eye size={14} strokeWidth={2.4} aria-hidden="true" />}
+                              {hiddenIds.has(user.userId) ? avoidCopy.hidden : avoidCopy.shown}
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             disabled={isPending || isFollowing}

@@ -87,8 +87,9 @@ describe('voice talk panel', () => {
     expect(panelSource).toContain('if (leaveSignal && joined) setConfirmLeave(true)')
     expect(copySource).toContain("leaveTitle: '보이스톡에서 나가시겠습니까?'")
     expect(panelSource).toContain('data-qa="voice-talk-leave-confirm-button"')
-    // Twice: the leave button, and the reconnect when the host puts a listener on the stage.
-    expect(panelSource.split("post({ type: 'native_voice_close' })").length - 1).toBe(2)
+    // Three times: the leave button, the reconnect when the host puts a listener on the
+    // stage, and leaving the call screen of a 1:1 voice talk (which hangs up).
+    expect(panelSource.split("post({ type: 'native_voice_close' })").length - 1).toBe(3)
   })
 
   it('has a mic switch for listening only, in both languages', () => {

@@ -12,7 +12,7 @@ import {
   readOpenRoomPassword,
   sortOpenRooms,
 } from '@/lib/open-room'
-import { isChatListConversation } from '@/components/conversation-list.logic'
+import { isChatListConversation, isOpenChatConversation } from '@/components/conversation-list.logic'
 import { openRoomJoinErrorText } from './open-rooms'
 
 const roomsSource = readFileSync(new URL('./open-rooms.tsx', import.meta.url), 'utf8')
@@ -134,10 +134,18 @@ describe('explore tabs and the chat list', () => {
     expect(searchSource).toContain('showNoResults && roomCodeQuery === null && roomMatchCount === 0')
   })
 
-  it('keeps open rooms out of the chat list', () => {
-    expect(isChatListConversation({ isPublic: true })).toBe(false)
+  it('lists open chats with the private chats, marked as open; voice rooms and 1:1 call rooms stay out', () => {
+    expect(isChatListConversation({ isPublic: true })).toBe(true)
+    expect(isOpenChatConversation({ isPublic: true })).toBe(true)
+    expect(isChatListConversation({ isPublic: true, isVoiceRoom: true })).toBe(false)
+    expect(isOpenChatConversation({ isPublic: true, isVoiceRoom: true })).toBe(false)
+    expect(isChatListConversation({ isDuoCall: true })).toBe(false)
     expect(isChatListConversation({ isPublic: false })).toBe(true)
+    expect(isOpenChatConversation({ isPublic: false })).toBe(false)
     expect(isChatListConversation({})).toBe(true)
+    const list = readFileSync(new URL('../conversation-list.tsx', import.meta.url), 'utf8')
+    expect(list).toContain('data-qa="conversation-open-chat-badge"')
+    expect(list).toContain('data-qa="conversation-open-chat-mark"')
   })
 
   it('has every label in all 15 languages', () => {
@@ -146,7 +154,7 @@ describe('explore tabs and the chat list', () => {
         expect(typeof value === 'function' ? value(2) : value).toBeTruthy()
       }
     }
-    expect(openRoomsCopy('ko').tabRooms).toBe('오픈방')
+    expect(openRoomsCopy('ko').tabRooms).toBe('오픈챗')
     expect(openRoomsCopy('ko').tabPosts).toBe('게시물')
   })
 })

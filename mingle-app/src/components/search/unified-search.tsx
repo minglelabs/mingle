@@ -37,12 +37,12 @@ const PEOPLE_PREVIEW_LIMIT = 3;
 /** Explore with nothing typed: open rooms (the default) or the post grid. */
 export type ExploreTab = "rooms" | "posts";
 /**
- * Open chat rooms are out of Explore for now (owner, 2026-11-25): with voice
- * rooms a kind of their own they mean little yet. The search screen is the
- * recent searches and the grid of posts; a room is still found by its number.
- * True brings the tab and the title matches back.
+ * Open chats are back on the search screen (owner, 2026-11-26; they were out
+ * for a day): a tab next to the posts, and title matches while searching. An
+ * open chat is an ordinary chat room that anyone can find and join. False
+ * leaves the recent searches and the grid of posts only.
  */
-export const OPEN_ROOMS_IN_EXPLORE = false;
+export const OPEN_ROOMS_IN_EXPLORE = true;
 const EXPLORE_TAB_STORAGE_KEY = "mingle:explore-tab";
 
 // The tab is kept for the browser session, so coming back from a post lands on Posts again.

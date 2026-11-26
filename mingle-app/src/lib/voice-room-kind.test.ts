@@ -44,9 +44,11 @@ describe("voice rooms are a kind of their own", () => {
     }
   });
 
-  it("keeps open chat rooms out of the search screen for now: recent searches and posts only", () => {
+  it("lists open chats on the search screen again, next to the posts", () => {
     const search = read("src/components/search/unified-search.tsx");
-    expect(search).toContain("export const OPEN_ROOMS_IN_EXPLORE = false;");
+    expect(search).toContain("export const OPEN_ROOMS_IN_EXPLORE = true;");
+    // Open chats get the coloured card; voice rooms keep their row.
+    expect(read("src/components/search/open-rooms.tsx")).toContain("{voiceRooms ? <OpenRoomRow room={room} copy={copy} busy={busyId === room.id} onEnter={() => void enter(room)} /> : <OpenChatCard room={room} copy={copy} busy={busyId === room.id} onEnter={() => void enter(room)} />}");
     expect(search).toContain("const canBrowseRooms = OPEN_ROOMS_IN_EXPLORE && Boolean(onOpenLiveRoom);");
     expect(search).toContain("{OPEN_ROOMS_IN_EXPLORE && onOpenLiveRoom && dispatchedQuery ? (");
     // A room is still found by its number.

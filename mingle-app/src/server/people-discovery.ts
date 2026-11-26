@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { contactAvoidSql } from '@/server/contact-avoid'
 import { ANONYMOUS_HANDLE_PREFIX, RESERVED_SEARCH_HANDLE } from "@/lib/handles";
 
 /**
@@ -232,6 +233,7 @@ export function buildPeopleDiscoverySql({
         AND NOT EXISTS (
           SELECT 1 FROM app.app_user_blocks b WHERE b.blocker_id = ${viewerId} AND b.blocked_id = u.id
         )
+        ${contactAvoidSql(viewerId)}
     ) ranked
     ${cursorClause}
     ORDER BY ranked.tier ASC, ranked.last_seen_at DESC, ranked.id DESC

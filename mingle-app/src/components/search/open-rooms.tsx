@@ -6,7 +6,7 @@
 // by title or topic, is the "Open rooms" part of the search results.
 
 import LiveBars from "@/components/live-bars";
-import { Gamepad2, Loader2, Lock, MessageCircle, Plus, UserRound } from "lucide-react";
+import { ArrowRight, Gamepad2, Loader2, Lock, MessageCircle, Plus, UserRound } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import LanguageFlag from "@/components/language-flag";
 import { buildClientApiPath } from "@/lib/api-contract";
@@ -193,10 +193,10 @@ export default function OpenRooms({
   const others = listed.filter((room) => !room.isMember);
 
   const renderRows = (list: OpenRoomCard[]) => (
-    <ul className="space-y-2.5 px-4">
+    <ul className={voiceRooms ? "space-y-2.5 px-4" : "space-y-3.5 px-4"}>
       {list.map((room) => (
         <li key={room.id}>
-          <OpenRoomRow room={room} copy={copy} busy={busyId === room.id} onEnter={() => void enter(room)} />
+          {voiceRooms ? <OpenRoomRow room={room} copy={copy} busy={busyId === room.id} onEnter={() => void enter(room)} /> : <OpenChatCard room={room} copy={copy} busy={busyId === room.id} onEnter={() => void enter(room)} />}
         </li>
       ))}
     </ul>
@@ -340,6 +340,106 @@ function StatusChip({ room, copy }: { room: OpenRoomCard; copy: Copy }) {
       <MessageCircle size={11} strokeWidth={2.6} aria-hidden="true" />
       {copy.statusChat}
     </span>
+  );
+}
+
+// One colour per room, always the same for that room: a list of open chats is
+// a wall of different doors, not a column of grey boxes.
+const OPEN_CHAT_COVERS = [
+  "from-amber-400 via-orange-400 to-rose-400",
+  "from-sky-400 via-indigo-400 to-violet-500",
+  "from-emerald-400 via-teal-400 to-cyan-500",
+  "from-rose-400 via-pink-500 to-fuchsia-500",
+  "from-violet-500 via-purple-500 to-indigo-600",
+  "from-lime-400 via-emerald-400 to-teal-500",
+] as const;
+
+export function openChatCover(roomId: string): string {
+  let sum = 0;
+  for (let index = 0; index < roomId.length; index += 1) sum = (sum * 31 + roomId.charCodeAt(index)) >>> 0;
+  return OPEN_CHAT_COVERS[sum % OPEN_CHAT_COVERS.length];
+}
+
+/**
+ * An open chat on the search screen (owner, 2026-11-26: "pretty, so each one
+ * asks to be tapped"). The top is the room's own colour with its title large
+ * in white, its topic and languages; the bottom is who is in it (faces, how
+ * many, what is going on) and a clear way in.
+ */
+function OpenChatCard({ room, copy, busy, onEnter }: { room: OpenRoomCard; copy: Copy; busy: boolean; onEnter: () => void }) {
+  const faces = [room.owner, ...room.members.filter((member) => member.userId !== room.owner?.userId)]
+    .filter((person): person is OpenRoomPerson => Boolean(person))
+    .slice(0, 4);
+  const more = Math.max(0, room.memberCount - faces.length);
+  // Women only and this viewer is not a woman: shown, greyed, and it does not open.
+  const shut = room.locked && !room.isMember;
+  return (
+    <button
+      type="button"
+      data-qa="open-room-card"
+      data-open-room-design="chat"
+      data-open-room-locked={room.hasPassword ? "1" : "0"}
+      data-open-room-women-only={room.womenOnly ? "1" : "0"}
+      data-open-room-shut={shut ? "1" : "0"}
+      aria-disabled={shut || undefined}
+      disabled={busy}
+      onClick={onEnter}
+      className={`block w-full overflow-hidden rounded-3xl bg-white text-left shadow-[0_6px_20px_rgba(15,23,42,0.10)] ring-1 ring-black/5 transition disabled:opacity-70 ${shut ? "opacity-60 saturate-50" : "active:scale-[0.985]"}`}
+    >
+      <span className={`relative block bg-gradient-to-br px-4 pb-4 pt-3.5 ${openChatCover(room.id)}`}>
+        {/* A soft light in the corner, so the colour is not flat. */}
+        <span aria-hidden="true" className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/25 blur-2xl" />
+        <span className="relative flex items-center gap-1.5">
+          {room.topic ? (
+            <span className="min-w-0 truncate rounded-full bg-white/90 px-2.5 py-1 text-[11.5px] font-bold text-slate-800">#{room.topic}</span>
+          ) : null}
+          {room.womenOnly ? (
+            <span data-qa="open-room-women-only" className="flex shrink-0 items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11.5px] font-bold text-rose-600">
+              {shut ? <Lock size={11} strokeWidth={2.6} aria-hidden="true" /> : null}
+              {copy.womenOnly}
+            </span>
+          ) : null}
+          <span className="flex-1" />
+          {room.languages.length > 0 ? (
+            <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-black/20 px-2 py-1 text-[13px] leading-none backdrop-blur-sm" aria-hidden="true">
+              {room.languages.slice(0, 4).map((language) => (
+                <LanguageFlag key={language} language={language} className="text-[13px] leading-none" />
+              ))}
+            </span>
+          ) : null}
+          {room.hasPassword ? (
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-black/25 text-white backdrop-blur-sm"><Lock size={12} strokeWidth={2.6} aria-hidden="true" /></span>
+          ) : null}
+        </span>
+        <span className="relative mt-3 line-clamp-2 block text-[18px] font-extrabold leading-snug tracking-[-0.01em] text-white drop-shadow-[0_1px_3px_rgba(15,23,42,0.25)]">{room.title}</span>
+      </span>
+      <span className="flex items-center gap-2.5 px-4 py-3">
+        {faces.length > 0 ? (
+          <span className="flex shrink-0 -space-x-2">
+            {faces.map((member) => <Face key={member.userId} person={member} size={30} />)}
+            {more > 0 ? (
+              <span className="flex h-[30px] min-w-[30px] items-center justify-center rounded-full bg-slate-100 px-1.5 text-[11px] font-bold tabular-nums text-slate-600 ring-2 ring-white">+{more}</span>
+            ) : null}
+          </span>
+        ) : null}
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="truncate text-[12.5px] font-semibold tabular-nums text-slate-700">{copy.members(room.memberCount)}</span>
+          <span className="flex"><StatusChip room={room} copy={copy} /></span>
+        </span>
+        {shut ? (
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-200 text-gray-500"><Lock size={16} strokeWidth={2.6} aria-hidden="true" /></span>
+        ) : (
+          <span className="flex h-10 shrink-0 items-center gap-1 rounded-full bg-slate-950 pl-4 pr-3 text-[13.5px] font-bold text-white">
+            {busy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : (
+              <>
+                {room.isMember ? copy.open : copy.join}
+                <ArrowRight size={15} strokeWidth={2.6} aria-hidden="true" />
+              </>
+            )}
+          </span>
+        )}
+      </span>
+    </button>
   );
 }
 

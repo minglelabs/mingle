@@ -107,6 +107,8 @@ model User {
   referralRechatAt             DateTime? @map("referral_rechat_at")
   /// When the contact-sync screen was shown on its own after signup. Null = not shown yet.
   contactSyncPromptedAt        DateTime? @map("contact_sync_prompted_at")
+  /// Hiding from people in the address book is on once contacts are synced; true = this account turned it off (src/server/contact-avoid.ts).
+  contactHideOff               Boolean   @default(false) @map("contact_hide_off")
   /// The user's own phone number, E.164 ("+821012345678"), set only after an SMS code check (src/server/phone-verification.ts). One account per number: a number never moves; whoever proves it lands on its account (src/server/identity/phone-claim.ts).
   phoneE164                    String?   @unique(map: "app_users_phone_e164_key") @map("phone_e164")
   /// sha256 hex of phoneE164. Friends' apps hash their contacts' numbers the same way to find this user (src/server/contact-match.ts); uploaded hashes are never stored.
@@ -179,6 +181,7 @@ model User {
   profileLikesSent          ProfileLike[]                  @relation("ProfileLikeLiker")
   profileLikesReceived      ProfileLike[]                  @relation("ProfileLikeLiked")
   postCallsMade             PostCall[]                     @relation("PostCallCaller")
+  contactAvoids             ContactAvoid[]
   postCallsTaken            PostCall[]                     @relation("PostCallAuthor")
   postHides                 PostHide[]
   postDrafts                PostDraft[]
@@ -1065,6 +1068,23 @@ model ProfileVisitorUnlock {
   @@id([userId, visitorId])
   @@index([visitorId], map: "app_profile_visitor_unlocks_visitor_id_idx")
   @@map("app_profile_visitor_unlocks")
+}
+
+/// One number of an account's address book, as its sha256 hash (owner,
+/// 2026-11-26; src/server/contact-avoid.ts): on the explore tab the account
+/// and whoever has that number do not see each other. `allowed` lets one
+/// person through.
+model ContactAvoid {
+  ownerId     String   @map("owner_id")
+  contactHash String   @map("contact_hash")
+  allowed     Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@id([ownerId, contactHash])
+  @@index([contactHash], map: "app_contact_avoids_contact_hash_idx")
+  @@map("app_contact_avoids")
 }
 
 /// A 1:1 voice talk asked for from a "call" post (owner, 2026-11-25;

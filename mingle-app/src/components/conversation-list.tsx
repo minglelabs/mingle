@@ -1,5 +1,6 @@
 "use client";
 
+import { resolveOpenChatLabel } from '@/i18n/open-chat-label';
 import { clearFirstRunCover } from "@/lib/first-run-cover";
 import { LoadingMessage } from "@/components/loading-message";
 import type { AppLocale } from "@/i18n/config";
@@ -39,7 +40,7 @@ import {
   persistLanguageOnboardingChoice,
 } from "@/components/LivePhoneDemo/language-onboarding.storage";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Bell, Check, Loader2, LogOut, Mic, PencilLine, Phone, Search, Settings, Share2, Trash2, UserRound, Ticket } from "lucide-react";
+import { ArrowRight, Bell, Check, Globe, Loader2, LogOut, Mic, PencilLine, Phone, Search, Settings, Share2, Trash2, UserRound, Ticket } from "lucide-react";
 import { toast } from "sonner";
 import { requestContactSyncPromptCheck } from "@/lib/native-contacts";
 import { useHasPendingInvite, openInviteTicket } from "@/lib/native-invite";
@@ -139,6 +140,7 @@ import {
   isConversationListSortMode,
   sortConversationsForDisplay,
   isChatListConversation,
+  isOpenChatConversation,
   type ConversationListSortMode,
   CONVERSATION_ROW_TOUCH_SAFE_STYLE,
   findNativeSttRestoreConversation,
@@ -350,6 +352,9 @@ interface ConversationItem {
   statusLabel: string;
   avatarSrc: string;
   avatarAlt: string;
+  /** An open chat (anyone can find and join it): marked in the list, next to the private chats. */
+  isOpenChat: boolean;
+  openChatLabel: string;
   // Real counterpart photo(s) for the room, in join order. Empty for solo
   // rooms (no other real member yet), which keep using avatarSrc/avatarAlt
   // (the generated diarization avatar) instead.
@@ -1068,6 +1073,8 @@ function mapConversationSummaryToItem(
     status: conversation.status,
     statusLabel,
     avatarSrc: avatar.src,
+    isOpenChat: isOpenChatConversation(conversation),
+    openChatLabel: resolveOpenChatLabel(locale),
     avatarAlt: `${title} ${avatar.name} avatar`,
     otherMembers: conversation.otherMembers,
     titleAccountBadge: resolveRoomAccountBadge(conversation.otherMembers),
@@ -1465,13 +1472,24 @@ function ConversationRow({
 
   const rowContent = (hideFromAccessibility: boolean) => (
     <>
-      <div aria-hidden={hideFromAccessibility || undefined}>
+      <div aria-hidden={hideFromAccessibility || undefined} className="relative">
         <ConversationRoomAvatar item={item} />
+        {/* An open chat wears a globe on its picture; a private chat wears nothing. */}
+        {item.isOpenChat ? (
+          <span data-qa="conversation-open-chat-mark" className="absolute -bottom-0.5 -right-0.5 flex h-[22px] w-[22px] items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-indigo-500 text-white ring-2 ring-white">
+            <Globe size={12} strokeWidth={2.6} aria-hidden="true" />
+          </span>
+        ) : null}
       </div>
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
+            {item.isOpenChat ? (
+              <span data-qa="conversation-open-chat-badge" className="inline-flex shrink-0 items-center rounded-full bg-sky-50 px-1.5 py-0.5 text-[10.5px] font-bold leading-none text-sky-700 ring-1 ring-sky-200">
+                {item.openChatLabel}
+              </span>
+            ) : null}
             <span aria-hidden={hideFromAccessibility || undefined} className="truncate text-[15px] font-semibold text-slate-900">
               {item.title}
             </span>

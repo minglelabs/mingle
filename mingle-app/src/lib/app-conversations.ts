@@ -110,6 +110,9 @@ export type ConversationChannelSummary = {
   shareEnabled: boolean;
   // Listed with its title in the search tab's live rooms, and joinable by anyone from there.
   isPublic?: boolean;
+  // A voice room (a public room of the voice-room kind): it lives on the voice-room
+  // tab; an open chat (public, not a voice room) is listed with the chats.
+  isVoiceRoom?: boolean;
   // The hidden room of a 1:1 voice talk from a post: the chat list never shows it,
   // also when the app loaded it by its id to open the call screen.
   isDuoCall?: boolean;
@@ -254,6 +257,7 @@ type ConversationChannelRecord = {
   sharedAt: Date | null;
   sharedTitle: string | null;
   isPublic: boolean;
+  isVoiceRoom?: boolean;
   isDuoCall?: boolean;
   roomCode: number;
 };
@@ -282,6 +286,7 @@ const conversationChannelSelect = {
   sharedAt: true,
   sharedTitle: true,
   isPublic: true,
+  isVoiceRoom: true,
   isDuoCall: true,
   roomCode: true,
 } satisfies Prisma.AppConversationChannelSelect;
@@ -996,6 +1001,7 @@ function serializeConversationChannel(
     shareToken: record.shareToken,
     shareEnabled: record.shareEnabled === true,
     isPublic: record.isPublic === true,
+    ...(record.isPublic === true && record.isVoiceRoom === true ? { isVoiceRoom: true } : {}),
     ...(record.isDuoCall === true ? { isDuoCall: true } : {}),
     roomCode: record.roomCode,
   };
