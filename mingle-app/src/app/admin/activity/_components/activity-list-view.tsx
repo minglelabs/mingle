@@ -93,11 +93,17 @@ function ActivityCard({ item, nowMs, korean, active }: { item: ActivityItem; now
         </span>
         {item.operator ? (
           <span className="mt-1 flex min-w-0 items-center">
-            <span className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-800 ring-1 ring-sky-200">
+            {/* The account that received it opens its profile in the admin. */}
+            <Link
+              href={adminProfileHref(item.operator.userId, LIST_PATH)}
+              prefetch={false}
+              aria-label={`받은 계정 ${inboxPersonLabel(item.operator)} 프로필`}
+              className="relative z-10 inline-flex min-w-0 max-w-full items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-800 ring-1 ring-sky-200 active:opacity-70"
+            >
               <span className="shrink-0 text-sky-600">받은 계정</span>
               <span aria-hidden="true" className="shrink-0 text-sky-400">·</span>
-              <span className="truncate">{inboxPersonLabel(item.operator)}</span>
-            </span>
+              <span className="truncate underline decoration-sky-300 underline-offset-2">{inboxPersonLabel(item.operator)}</span>
+            </Link>
           </span>
         ) : (
           <span className="mt-1 flex min-w-0 items-center">
@@ -106,7 +112,7 @@ function ActivityCard({ item, nowMs, korean, active }: { item: ActivityItem; now
               {item.target ? (
                 <>
                   <span aria-hidden="true" className="shrink-0 text-emerald-400">·</span>
-                  <span className="truncate">대상 {inboxPersonLabel(item.target)}</span>
+                  <Link href={adminProfileHref(item.target.userId, LIST_PATH)} prefetch={false} className="relative z-10 truncate underline decoration-emerald-300 underline-offset-2 active:opacity-70">대상 {inboxPersonLabel(item.target)}</Link>
                 </>
               ) : null}
             </span>
