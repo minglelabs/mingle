@@ -79,7 +79,7 @@ function ActiveCall({ call, minimized, locale, viewerId, viewerImage, viewerName
   useNativeBannerSuppression(!minimized);
   return (
     <>
-      <PostCallScreen session={session} open={!minimized} locale={locale} viewerImage={viewerImage} viewerName={viewerName} />
+      <PostCallScreen session={session} open={!minimized} locale={locale} viewerImage={viewerImage} viewerName={viewerName} comfortable={languages.comfortable} />
       {minimized ? <PostCallBubble session={session} locale={locale} /> : null}
     </>
   );

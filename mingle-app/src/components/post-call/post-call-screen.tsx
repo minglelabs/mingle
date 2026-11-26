@@ -11,6 +11,7 @@ import { openRoomsCopy } from '@/i18n/open-rooms-copy'
 import { resolvePostCallCopy } from '@/i18n/post-call-copy'
 import { voiceTalkCopy } from '@/i18n/voice-talk-copy'
 import { minimizePostCall } from '@/lib/post-call-session'
+import { PostCallTopActions, type PostCallTextSize } from './post-call-menu'
 import type { PostCallSession, PostCallTimelineLine } from './use-post-call-session'
 
 /** The viewer's own face in the bar (larger than the buttons beside it). */
@@ -30,13 +31,16 @@ const TEXT_MAX_PX = 112
  * The back gesture (iOS edge swipe, Android back) and the chevron fold the
  * screen into the bubble; the call goes on.
  */
-export default function PostCallScreen({ session, open, locale, viewerImage, viewerName }: {
+export default function PostCallScreen({ session, open, locale, viewerImage, viewerName, comfortable }: {
   session: PostCallSession
   open: boolean
   locale: string
   viewerImage: string | null
   viewerName: string | null
+  /** The viewer's comfortable languages, first one the default (listed first in the language page). */
+  comfortable: readonly string[]
 }) {
+  const [textSize, setTextSize] = useState<PostCallTextSize>('medium')
   const copy = useMemo(() => resolvePostCallCopy(locale), [locale])
   const composerCopy = useMemo(() => resolveLivePhoneDemoComposerCopy(locale), [locale])
   const imageCopy = useMemo(() => resolveConversationImageCopy(locale), [locale])
@@ -181,6 +185,7 @@ export default function PostCallScreen({ session, open, locale, viewerImage, vie
           >
             <ChevronDown size={24} strokeWidth={2.4} aria-hidden="true" />
           </button>
+          <PostCallTopActions session={session} locale={locale} comfortable={comfortable} textSize={textSize} onTextSize={setTextSize} />
         </div>
 
         {/* What is said and written, under the face and the buttons. */}
@@ -197,7 +202,7 @@ export default function PostCallScreen({ session, open, locale, viewerImage, vie
               }}
             >
               <div className="flex min-h-full flex-col justify-end gap-2">
-                {session.timeline.map((line) => <Line key={line.id} line={line} />)}
+                {session.timeline.map((line) => <Line key={line.id} line={line} size={textSize} />)}
               </div>
             </div>
           ) : null}
@@ -278,11 +283,18 @@ export default function PostCallScreen({ session, open, locale, viewerImage, vie
   )
 }
 
-function Line({ line }: { line: PostCallTimelineLine }) {
+const LINE_TEXT: Record<PostCallTextSize, [string, string]> = {
+  small: ['text-[13px]', 'text-[12px]'],
+  medium: ['text-[15px]', 'text-[14px]'],
+  large: ['text-[18px]', 'text-[16px]'],
+}
+
+function Line({ line, size }: { line: PostCallTimelineLine; size: PostCallTextSize }) {
+  const [textClass, translationClass] = LINE_TEXT[size]
   return (
     <div className={`flex ${line.mine ? 'justify-end' : 'justify-start'}`} data-qa="post-call-line" data-mine={line.mine ? '1' : '0'}>
       <div
-        className={`max-w-[80%] overflow-hidden rounded-[20px] text-[15px] leading-snug shadow-[0_4px_14px_rgba(2,6,23,0.18)] ${
+        className={`max-w-[80%] overflow-hidden rounded-[20px] ${textClass} leading-snug shadow-[0_4px_14px_rgba(2,6,23,0.18)] ${
           line.mine ? 'rounded-br-md bg-amber-300 text-slate-950' : 'rounded-bl-md bg-white/92 text-slate-900'
         } ${line.partial ? 'opacity-75' : ''}`}
       >
@@ -293,7 +305,7 @@ function Line({ line }: { line: PostCallTimelineLine }) {
           <div className="px-3.5 py-2.5">
             <p className="whitespace-pre-wrap break-words">{line.text}</p>
             {line.translation ? (
-              <p className={`mt-1 whitespace-pre-wrap break-words text-[14px] ${line.mine ? 'text-amber-900/70' : 'text-slate-500'}`}>{line.translation}</p>
+              <p className={`mt-1 whitespace-pre-wrap break-words ${translationClass} ${line.mine ? 'text-amber-900/70' : 'text-slate-500'}`}>{line.translation}</p>
             ) : null}
           </div>
         )}

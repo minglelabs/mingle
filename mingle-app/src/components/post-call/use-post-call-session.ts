@@ -72,6 +72,16 @@ function pick(translations: Record<string, string> | undefined, language: string
   return null
 }
 
+/** The translation of my own line the other person reads: their language, else any other than the line's. */
+function pickOther(translations: Record<string, string> | undefined, peerLanguage: string, ownLanguage: string): string | null {
+  const exact = pick(translations, peerLanguage)
+  if (exact) return exact
+  for (const [key, value] of Object.entries(translations ?? {})) {
+    if (base(key) !== base(ownLanguage) && value.trim()) return value
+  }
+  return null
+}
+
 /**
  * Everything the call screen of a 1:1 voice talk needs, running while the
  * call is up, shown or folded into the bubble (owner, 2026-11-26): the call's
@@ -158,11 +168,19 @@ export function usePostCallSession(input: { initial: PostCallView; viewerId: str
     })
   }, [])
 
+  // The language this viewer hears and reads the other person in: their first
+  // comfortable language unless they pick another on the call screen
+  // (owner, 2026-11-26). The call's interpreter translates into it.
+  const [pickedLanguage, setPickedLanguage] = useState<string | null>(null)
+  const hearLanguage = pickedLanguage || myLanguage
+  const hearLanguageRef = useRef(hearLanguage)
+  useEffect(() => { hearLanguageRef.current = hearLanguage }, [hearLanguage])
+
   const applyInterpret = useCallback((on: boolean, listen: boolean) => {
     pressedUntilRef.current = Date.now() + 3000
     setInterpretOn(on)
     setListenOn(on && listen)
-    if (on) setVoiceTalkListenLang(myLanguage)
+    if (on) setVoiceTalkListenLang(hearLanguageRef.current)
     setVoiceTalkListen(on && listen)
     void setVoiceTalkInterpret(conversationId, on).then((accepted) => {
       if (accepted) return
@@ -170,7 +188,7 @@ export function usePostCallSession(input: { initial: PostCallView; viewerId: str
       setListenOn(false)
       notifyCoinsExhausted({ userInitiated: true })
     })
-  }, [conversationId, myLanguage])
+  }, [conversationId])
 
   const toggleInterpret = useCallback(() => {
     if (!interpretOn && !ensureCoinsForPaidFeature()) return
@@ -205,6 +223,21 @@ export function usePostCallSession(input: { initial: PostCallView; viewerId: str
     return () => window.clearTimeout(timer)
   }, [applyInterpret, call.id, interpretOn, myLanguage, peerLanguage, talking, walletExhausted])
 
+  // A language picked on the call screen: the interpreter switches to it at
+  // once; picking one the other person does not speak turns translation on.
+  const pickLanguage = useCallback((language: string) => {
+    const next = base(language)
+    if (!next) return
+    hearLanguageRef.current = next
+    setPickedLanguage(next)
+    if (interpretOn) {
+      setVoiceTalkListenLang(next)
+      return
+    }
+    if (!talking || !postCallInterpretsByDefault(next, peerLanguage) || !ensureCoinsForPaidFeature()) return
+    applyInterpret(true, true)
+  }, [applyInterpret, interpretOn, peerLanguage, talking])
+
   // ---- ending ----
   const endedHereRef = useRef(false)
   const hangUp = useCallback(() => {
@@ -225,11 +258,11 @@ export function usePostCallSession(input: { initial: PostCallView; viewerId: str
   // ---- what is written ----
   const [written, setWritten] = useState<WrittenLine[]>([])
   const readLines = useCallback(async () => {
-    const body = await fetch(buildClientApiPath(`/post-calls/${encodeURIComponent(call.id)}/lines`), { cache: 'no-store' })
+    const body = await fetch(buildClientApiPath(`/post-calls/${encodeURIComponent(call.id)}/lines?lang=${encodeURIComponent(hearLanguage)}`), { cache: 'no-store' })
       .then((response) => (response.ok ? response.json() : null))
       .catch(() => null) as { lines?: WrittenLine[] } | null
     if (Array.isArray(body?.lines)) setWritten(body.lines)
-  }, [call.id])
+  }, [call.id, hearLanguage])
   useEffect(() => {
     if (!expanded || status !== 'accepted') return
     const first = window.setTimeout(() => { void readLines() }, 0)
@@ -274,7 +307,7 @@ export function usePostCallSession(input: { initial: PostCallView; viewerId: str
           id: `caption-${line.id}`,
           mine,
           text: line.original,
-          translation: pick(line.translations, mine ? peerLanguage : myLanguage),
+          translation: mine ? pickOther(line.translations, peerLanguage, line.lang) : pick(line.translations, hearLanguage),
           imageUrl: null,
           partial: line.isPartial,
           at,
@@ -287,14 +320,14 @@ export function usePostCallSession(input: { initial: PostCallView; viewerId: str
         id: line.id,
         mine,
         text: line.text,
-        translation: pick(line.translations, mine ? peerLanguage : myLanguage),
+        translation: mine ? pickOther(line.translations, peerLanguage, line.language) : pick(line.translations, hearLanguage),
         imageUrl: line.imageUrl,
         partial: false,
         at: Date.parse(line.createdAt) || Number.MAX_SAFE_INTEGER,
       })
     }
     return lines.sort((left, right) => left.at - right.at)
-  }, [captions, interpretOn, myLanguage, peerLanguage, viewerId, written])
+  }, [captions, hearLanguage, interpretOn, peerLanguage, viewerId, written])
 
   return {
     call,
@@ -316,6 +349,8 @@ export function usePostCallSession(input: { initial: PostCallView; viewerId: str
     accept,
     hangUp,
     timeline,
+    hearLanguage,
+    pickLanguage,
     sendText,
     sendPhoto,
   }

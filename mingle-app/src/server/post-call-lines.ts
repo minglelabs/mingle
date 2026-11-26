@@ -98,8 +98,15 @@ export async function addPostCallLine(args: { callId: string; userId: string; te
   return { ok: true, line: { id: message.id, userId: scope.userId, text, language: sourceLanguage, translations, imageUrl: null, createdAt: message.createdAt.toISOString() } };
 }
 
-/** The lines of the call so far (oldest first), photos included. */
-export async function listPostCallLines(args: { callId: string; userId: string; apiPrefix: string }): Promise<PostCallLine[] | null> {
+/** At most this many lines are translated into a newly picked language per read; the next reads do the rest. */
+const FILL_PER_READ = 20;
+
+/**
+ * The lines of the call so far (oldest first), photos included. With `lang`
+ * (the language the viewer picked on the call screen), the other person's
+ * lines that have no translation into it yet get one, kept with the line.
+ */
+export async function listPostCallLines(args: { callId: string; userId: string; apiPrefix: string; lang?: string | null }): Promise<PostCallLine[] | null> {
   const scope = await scopeFor(args.callId, args.userId);
   if (!scope) return null;
   const messages = await prisma.appMessage.findMany({
@@ -115,7 +122,7 @@ export async function listPostCallLines(args: { callId: string; userId: string; 
       contents: { select: { contentType: true, language: true, text: true } },
     },
   });
-  return messages.flatMap((message): PostCallLine[] => {
+  const lines = messages.flatMap((message): PostCallLine[] => {
     const metadata = (message.metadata ?? {}) as Record<string, unknown>;
     // The call's own captions are read from the call itself, not from here.
     if (metadata.voiceCaption || metadata.voiceCall) return [];
@@ -134,4 +141,29 @@ export async function listPostCallLines(args: { callId: string; userId: string; 
       createdAt: message.createdAt.toISOString(),
     }];
   });
+  const lang = baseLanguage(args.lang);
+  if (/^[a-z]{2,3}$/.test(lang)) await fillTranslations(lines, scope.userId, lang);
+  return lines;
+}
+
+async function fillTranslations(lines: PostCallLine[], viewerId: string, lang: string): Promise<void> {
+  const missing = lines.filter((line) => line.userId !== viewerId
+    && line.text.trim()
+    && baseLanguage(line.language) !== lang
+    && !Object.keys(line.translations).some((key) => baseLanguage(key) === lang)).slice(-FILL_PER_READ);
+  for (const line of missing) {
+    try {
+      const result = await translateTexts({ text: line.text, sourceLanguage: line.language || "unknown", targetLanguages: [lang], isFinal: true });
+      const value = Object.entries(result.translations).find(([key]) => baseLanguage(key) === lang)?.[1]?.trim();
+      if (!value) continue;
+      line.translations = { ...line.translations, [lang]: value };
+      await prisma.appMessageContent.createMany({
+        data: [{ messageId: line.id, contentType: "TRANSLATION_FINAL", language: lang, text: value }],
+        skipDuplicates: true,
+      });
+    } catch (error) {
+      console.warn("[post-call] line_fill_failed", error instanceof Error ? error.name : "unknown");
+      return;
+    }
+  }
 }

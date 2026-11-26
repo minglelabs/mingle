@@ -24,6 +24,8 @@ export type ReportSheetProps = {
   target: ReportTarget;
   locale: string;
   onClose: () => void;
+  /** Above a screen that sits over the tabs (the 1:1 voice talk screen). */
+  zIndex?: number;
 };
 
 type Phase = "form" | "submitting" | "submitted" | "already" | "error";
@@ -41,7 +43,7 @@ function endpointFor(target: ReportTarget): `/${string}` {
   }
 }
 
-export default function ReportSheet({ open, target, locale, onClose }: ReportSheetProps) {
+export default function ReportSheet({ open, target, locale, onClose, zIndex }: ReportSheetProps) {
   const copy = useMemo(() => reportCopy(locale), [locale]);
   const [reason, setReason] = useState<ReportReason>("spam");
   const [note, setNote] = useState("");
@@ -97,6 +99,7 @@ export default function ReportSheet({ open, target, locale, onClose }: ReportShe
   return (
     <div
       className="keyboard-safe fixed inset-0 z-[130] flex items-end justify-center bg-black/40"
+      style={zIndex ? { zIndex } : undefined}
       onClick={onClose}
     >
       <section

@@ -19,12 +19,12 @@ function apiPrefix(request: NextRequest): string {
   return match?.[1] ?? "/api";
 }
 
-/** GET: what the two wrote (and sent as photos) on the call screen (see @/server/post-call-lines). */
+/** GET ?lang=: what the two wrote (and sent as photos) on the call screen (see @/server/post-call-lines). */
 export async function GET(request: NextRequest, { params }: LinesRouteProps) {
   const userId = await viewer();
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { callId } = await params;
-  const lines = await listPostCallLines({ callId: callId.trim(), userId, apiPrefix: apiPrefix(request) });
+  const lines = await listPostCallLines({ callId: callId.trim(), userId, apiPrefix: apiPrefix(request), lang: request.nextUrl.searchParams.get("lang") });
   if (!lines) return NextResponse.json({ error: "not_found" }, { status: 404 });
   return NextResponse.json({ lines }, NO_STORE);
 }
