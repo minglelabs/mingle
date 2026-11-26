@@ -9,11 +9,19 @@ import { PERSONA_COUNTRIES } from './persona-countries'
  */
 export const DEFAULT_SEED_PLAN: Readonly<Record<string, number>> = {
   // Staff (2026-11-25): far more Korea, Japan, China and Taiwan (about two thirds together).
-  KR: 25, JP: 25, CN: 10, TW: 10, US: 4, VN: 2, ID: 2, IN: 2, BR: 2, TH: 2, PH: 2, TR: 2,
+  // Staff (2026-11-26): more Korea (men especially, see SEED_MALE_LEANING), a little less Taiwan.
+  KR: 35, JP: 25, CN: 10, TW: 6, US: 4, VN: 2, ID: 2, IN: 2, BR: 2, TH: 2, PH: 2, TR: 2,
   MY: 1, GB: 1, FR: 1, DE: 1, ES: 1, IT: 1, RU: 1, SG: 1, MX: 1, CA: 1, AU: 1,
   // Staff (2026-11-23): a few from Russia, the Middle East and Central Asia, never none.
   SA: 1, AE: 1, KZ: 1, UZ: 1,
 }
+
+/**
+ * Countries whose new accounts lean male (about 70%) when the profile photo
+ * does not already fix the gender (staff, 2026-11-26: more Korean men).
+ */
+export const SEED_MALE_LEANING: ReadonlySet<string> = new Set(['KR'])
+export const SEED_MALE_SHARE = 0.7
 
 export const SEED_MAX_PER_COUNTRY = 200
 /** Accounts asked for per request (one drafts call + one create call). */

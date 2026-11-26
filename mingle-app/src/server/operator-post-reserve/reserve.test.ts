@@ -240,11 +240,13 @@ describe('reserve worker', () => {
 })
 
 describe('seed plan', () => {
-  it('defaults to 103 accounts, about two thirds from Korea, Japan, China and Taiwan, with a few from every region', () => {
+  it('defaults to 109 accounts, about seven tenths from Korea, Japan, China and Taiwan (Korea most), with a few from every region', () => {
     const rows = defaultSeedRows()
-    expect(seedPlanTotal(rows)).toBe(103)
+    expect(seedPlanTotal(rows)).toBe(109)
     for (const code of ['TR', 'RU', 'BR', 'SA', 'AE', 'KZ', 'UZ']) expect(DEFAULT_SEED_PLAN[code]).toBeGreaterThan(0)
-    expect(DEFAULT_SEED_PLAN.KR + DEFAULT_SEED_PLAN.JP + DEFAULT_SEED_PLAN.CN + DEFAULT_SEED_PLAN.TW).toBe(70)
+    expect(DEFAULT_SEED_PLAN.KR + DEFAULT_SEED_PLAN.JP + DEFAULT_SEED_PLAN.CN + DEFAULT_SEED_PLAN.TW).toBe(76)
+    expect(DEFAULT_SEED_PLAN.KR).toBeGreaterThan(DEFAULT_SEED_PLAN.JP)
+    expect(DEFAULT_SEED_PLAN.TW).toBeLessThan(DEFAULT_SEED_PLAN.CN)
     expect(Object.keys(DEFAULT_SEED_PLAN).every((code) => rows.some((row) => row.code === code))).toBe(true)
   })
 

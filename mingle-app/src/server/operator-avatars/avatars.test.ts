@@ -372,7 +372,7 @@ describe('automation rules', () => {
   })
 
   it('is off by default and validates staff input', () => {
-    expect(normalizeAutomationSettings(null)).toEqual({ avatars: { enabled: false, intervalMinutes: 10 }, accounts: { enabled: false, perDay: 5, totalTarget: 100 }, posts: { enabled: false, chancePercent: 20 }, engagement: { enabled: false } })
+    expect(normalizeAutomationSettings(null)).toEqual({ avatars: { enabled: false, intervalMinutes: 10 }, accounts: { enabled: false, perDay: 5, totalTarget: 100 }, posts: { enabled: false, chancePercent: 20, secondChancePercent: 0 }, engagement: { enabled: false } })
     expect(parseAutomationSettings({ avatars: { enabled: true, intervalMinutes: 0 }, accounts: { enabled: false, perDay: 5, totalTarget: 100 }, posts: { enabled: false, chancePercent: 20 } })).toEqual({ ok: false, error: 'invalid_interval' })
     expect(parseAutomationSettings({ avatars: { enabled: true, intervalMinutes: 10 }, accounts: { enabled: true, perDay: 3, totalTarget: 150 }, posts: { enabled: true, chancePercent: 20 } }).ok).toBe(true)
   })
