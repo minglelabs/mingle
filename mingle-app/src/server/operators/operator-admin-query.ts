@@ -113,7 +113,8 @@ export async function listOperatorAccounts(args: { query?: string; page?: number
       interestLanguages: true,
       interestLanguageLevels: true,
       operatorAccount: { select: { personaCountry: true, reviewState: true } },
-      _count: { select: { posts: { where: { isDeleted: { not: true } } } } },
+      // is_deleted is null on most posts, and `not: true` leaves nulls out.
+      _count: { select: { posts: { where: { OR: [{ isDeleted: null }, { isDeleted: false }] } } } },
     },
   })
   return {
