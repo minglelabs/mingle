@@ -1,7 +1,7 @@
 window.DECK_EN = {
 "blocks": {
 "언어 장벽 없는음성 메신저 HashChat": "A voice messenger<br/>without language barriers",
-"헬로톡, 디스코드보다 편한 외국인과의 대화 경험을 만듭니다.최종 업데이트 - 2026-09-01": "Talking with people abroad, made easier than on HelloTalk or Discord.<br/>Last updated: Sep 1, 2026",
+"헬로톡, 디스코드보다 편한 외국인과의 대화 경험을 만듭니다.최종 업데이트 - 2026-11-26": "Talking with people abroad, made easier than on HelloTalk or Discord.<br/>Last updated: Nov 26, 2026",
 "HashChat 다운로드 링크 👇": "<img alt=\"HashChat app icon\" class=\"slide-download-app-icon\" src=\"./assets/mingle-icon.png\"/> <span>Download HashChat 👇</span>",
 "문제": "Problem",
 "“ 외국인과 친해지고 싶은데 언어 장벽을 넘기 힘들다 ”": "<span class=\"slide-title-quote slide-title-quote--open mt-10\">“</span> <span class=\"slide-title-text\">I want to make friends abroad,<br/> but the language gets in the way</span> <span class=\"slide-title-quote slide-title-quote--close mt-10\">”</span>",
@@ -83,7 +83,10 @@ window.DECK_EN = {
 "관광지 정보/상담/예약": "Travel info, advice and booking",
 "다국어 회의": "Multilingual meetings",
 "목표": "Goal",
-"첫 번째 목표는K프렌즈 유저 흡수입니다": "Our first goal:<br/>win over K-Friends users",
+"첫 번째 목표는K프렌즈 대체입니다": "Our first goal:<br/>replace K-Friends",
+"11월부터 SNS를 시작했습니다.K프렌즈를 대체하는 외국인 매칭 서비스로 먼저 출발합니다.": "We launched our social network in November.<br/>It starts as a matching service that replaces K-Friends.",
+"HashChat SNS로 이루려는 3가지": "Three things HashChat's social network sets out to do",
+"1. 국내 사업자들이 외국인 고객을 유치하는 과정을 돕는다2. 외국인 관광객들의 한국 여행을 돕는다3. SNS 콘텐츠를 글로벌화한다": "1. Help Korean businesses win foreign customers<br/>2. Help foreign tourists travel in Korea<br/>3. Take social content global",
 "Kfriends 앱 화면. 2년에 한 번씩 업데이트.": "<img alt=\"Kfriends app logo\" class=\"slide-kfriends-goal-caption-logo\" src=\"./assets/logo-market-kfriends-blue.jpg\"/> <span>The Kfriends app. Updated once every two years.</span>",
 "비전": "Vision",
 "통번역으로 시작해서AI 네이티브 메신저/SNS로!": "<br/>Start with interpretation,<br/>grow into an AI-native messenger and social network!",
