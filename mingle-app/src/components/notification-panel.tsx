@@ -428,6 +428,7 @@ export default function NotificationPanel({
       case "feedback_reply":
       case "report_reply":
       case "report_status":
+      case "post_removed":
         handleToggleTeamNotification(notification);
         return;
     }
@@ -480,7 +481,8 @@ export default function NotificationPanel({
       case "report_resolved": return copy.reportResolvedMessage;
       case "feedback_reply":
       case "report_reply":
-      case "report_status": return "";
+      case "report_status":
+      case "post_removed": return "";
     }
   }, [copy]);
 

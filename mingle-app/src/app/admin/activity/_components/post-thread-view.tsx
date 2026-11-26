@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { ChevronLeft, Heart, Loader2, MessageCircle, SendHorizontal, X } from 'lucide-react'
 import type { OperatorPostStats } from '@/lib/operator-post-stats'
+import { PostHideButton } from './post-hide-button'
 import type { InboxPerson } from '@/server/operator-inbox/inbox'
 import type { OperatorPostThread, StoredTranslation, ThreadComment } from '@/server/operator-activity/thread'
 import { OperatorPostStatsRow } from '../../_components/operator-post-stats-row'
@@ -442,6 +443,9 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
             <span className="inline-flex min-h-7 items-center gap-1"><MessageCircle size={13} aria-hidden="true" />{post.commentCount}</span>
           </div>
           <OperatorPostStatsRow stats={postStats} className="mt-2" />
+          <div className="mt-2">
+            <PostHideButton postId={postId} />
+          </div>
         </article>
         )}
 

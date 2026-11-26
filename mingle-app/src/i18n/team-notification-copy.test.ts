@@ -24,4 +24,13 @@ describe('team notification copy', () => {
     expect(resolveTeamNotificationText(copy, 'report_status', 'rejected').body).toBe(copy.reportRejectedBody)
     expect(resolveTeamNotificationText(copy, 'report_status', 'open').body).toBe('')
   })
+
+  it('tells a user their post was removed for breaking the community rules', () => {
+    const ko = resolveTeamNotificationCopy('ko')
+    expect(resolveTeamNotificationText(ko, 'post_removed', '')).toEqual({
+      title: '게시물이 삭제되었어요',
+      body: '회원님의 게시물이 신고되어 검토한 결과, 이용규칙 위반으로 삭제 처리되었습니다.',
+    })
+    expect(resolveTeamNotificationText(resolveTeamNotificationCopy('fr'), 'post_removed', '').title).toBe('Votre publication a été supprimée')
+  })
 })
