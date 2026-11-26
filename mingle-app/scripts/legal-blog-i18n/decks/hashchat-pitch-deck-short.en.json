@@ -1,23 +1,15 @@
 [
  {
-  "title": "Meet Koreans, no language barrier HashChat",
-  "text": "Starting with Korea travel and Korean friend matching, growing into a messenger and social network.\nLast updated: Nov 26, 2026\nDownload HashChat 👇"
+  "title": "A voice messenger without language barriers",
+  "text": "Talking with people abroad, made easier than on HelloTalk or Discord.\nLast updated: Sep 1, 2026\nDownload HashChat 👇"
  },
  {
-  "title": "Part 1 Problem and solution Part 2 Business model Part 3 Final goal",
-  "text": "Contents"
- },
- {
-  "title": "Part 1 Problem and solution",
-  "text": ""
- },
- {
-  "title": "“ Koreans and foreigners want to be friends, but few services bring them together ”",
+  "title": "“ I want to make friends abroad, but the language gets in the way ”",
   "text": "Problem"
  },
  {
-  "title": "And there is a chicken-and-egg problem",
-  "text": "Problem\nFriendship\nneeds a shared language\nLearning a language\nneeds a friend to talk to"
+  "title": "The chicken-and-egg problem",
+  "text": "Problem\nI want friends\nfrom abroad\nI want to learn\na language"
  },
  {
   "title": "There are lots of language exchange apps, but none solve chicken-and-egg",
@@ -28,36 +20,16 @@
   "text": "Market"
  },
  {
-  "title": "What if we removed the premise?!",
-  "text": "Solution\nFriendship\nneeds a shared language\nLearning a language\nneeds a friend to talk to\nBuilt-in interpretation"
+  "title": "What if we removed one side entirely?!",
+  "text": "Solution\nI want friends\nfrom abroad\nI want to learn\na language\nBuilt-in interpretation"
+ },
+ {
+  "title": "Couldn't people just relax and enjoy the talk?!",
+  "text": "Solution\nI want friends\nfrom abroad\nNo shared language,\nstill a real conversation!"
  },
  {
   "title": "“ Talk with people abroad, with live interpretation ”",
   "text": "Solution"
- },
- {
-  "title": "Services connecting Koreans and foreigners keep popping up everywhere",
-  "text": "Market"
- },
- {
-  "title": "The leader: K-Friends",
-  "text": "Market\n~4.5M"
- },
- {
-  "title": "Rough as it is, it still does well",
-  "text": "Market\nUpdated once every two years\nand rough around the edges,\nyet it still gets plenty of downloads, and people pay to use it.\nThe Kfriends app. Updated once every two years."
- },
- {
-  "title": "That is how much demand there is",
-  "text": "Market"
- },
- {
-  "title": "And they all face similar problems",
-  "text": "Problem\nLanguage barrier\nTalks die out when words don't get across\nRude members\nBad experiences drive people away\nOne-off contacts\nA hello, then it fizzles out\nShallow talk\nThe same small talk over and over\nNothing beyond the match\nNo content past the connection\nNo clear business model\nNot worth paying for"
- },
- {
-  "title": "We started with the language problem",
-  "text": "Problem\nLanguage barrier\nTalks die out when words don't get across\nRude members\nBad experiences drive people away\nOne-off contacts\nA hello, then it fizzles out\nShallow talk\nThe same small talk over and over\nNothing beyond the match\nNo content past the connection\nNo clear business model\nNot worth paying for"
  },
  {
   "title": "So why haven't social apps offered interpretation until now?",
@@ -84,115 +56,35 @@
   "text": "Customers\n\"It never stops to translate.\nIt just plays like subtitles. So easy.\"\n\"I speak Russian, you speak Korean,\nand we still understand each other. Love it.\"\n\"It understands far better than Apple Translate.\""
  },
  {
-  "title": "Some users rely on HashChat",
+  "title": "Some users already rely on HashChat",
   "text": "Customers\nOne Japanese user ran HashChat 2.5 hours a day for two weeks.\nSeveral others always keep HashChat open while on HelloTalk."
  },
  {
-  "title": "Some services do offer interpretation, but it still falls short",
-  "text": "Customers\nHelloTalk\nK-Friends\nConnecting"
- },
- {
-  "title": "We offer far cheaper, easier interpretation",
-  "text": "Solution"
- },
- {
-  "title": "Two hard lessons from four months of running it",
-  "text": "Lessons learned\nStart as a translation tool\nand people use it only for work\nThe cold start\nis nothing to fear"
- },
- {
-  "title": "Start as a translation tool, and nobody uses it to socialize",
-  "text": "Lesson 1\nPeople liked the translation, but nobody opened a translation app to make friends.\nThey socialized on apps like HelloTalk and kept HashChat on the side."
- },
- {
-  "title": "Where it actually got used was mostly at work",
-  "text": "Lesson 1\nHair salon owners\nConsulting and serving foreign customers\nLanding an interpreter job\nInterpreting without strong English\nTour guides\nGuiding Japanese tourists"
- },
- {
-  "title": "Even without network effects, a social service gets used more than you'd expect",
-  "text": "Lesson 2\nEven early on, with few users, people post and comment."
- },
- {
-  "title": "We saw it first-hand in services that started around the same time, and in HashChat",
-  "text": "Lesson 2\nWizet\nDoran\nGatchi"
- },
- {
-  "title": "So in November we started a complete revamp into a social service",
-  "text": "Lessons learned\nInstead of worrying about the cold start, show up sincerely,\nand users understand and start with you."
- },
- {
-  "title": "Language-learning-first services mostly lose people fast",
-  "text": "Solution"
- },
- {
-  "title": "HashChat removes the language barrier and aims only at fun",
-  "text": "Solution"
- },
- {
-  "title": "Part 2 Business model",
-  "text": ""
- },
- {
-  "title": "Once we have enough users, we solve the business model",
-  "text": "Business model\nLanguage barrier\nTalks die out when words don't get across\nRude members\nBad experiences drive people away\nOne-off contacts\nA hello, then it fizzles out\nShallow talk\nThe same small talk over and over\nNothing beyond the match\nNo content past the connection\nNo clear business model\nNot worth paying for"
- },
- {
-  "title": "What foreign users want from talking with Koreans comes down to three things",
-  "text": "Business model\nLearning Korean\nKorea travel tips\nMeeting in person"
- },
- {
-  "title": "Of these, Korea travel tips are how we make money",
-  "text": "Business model\nLearning Korean\nMeeting in person"
- },
- {
-  "title": "What foreign tourists most want to know comes down to three things",
-  "text": "Business model\nRestaurants\nHair salons\nBeauty clinics"
- },
- {
-  "title": "Quite a few hair salon owners have already used HashChat",
-  "text": "Customers\nHair salon owners use it a lot with tourists"
- },
- {
-  "title": "We plan to reach out to these shops on Instagram one by one and bring them on board",
-  "text": "Business model\nRestaurants\n~40–60K\nHair salons\n~11K\nBeauty clinics\n~3K\nNumber of shops running an Instagram account"
- },
- {
-  "title": "What HashChat aims to offer these businesses",
-  "text": "Business model\nExposure & promotion\nWin foreign customers\nInterpretation\nEasy inquiries and bookings & content in every language\nAI support\nSimple customer service, 24/7"
- },
- {
-  "title": "What HashChat aims to offer foreign tourists",
-  "text": "Business model\nSocializing with Koreans\nContent-driven trip planning"
- },
- {
-  "title": "Toki showed how powerful trip planning combined with social content can be",
-  "text": "Business model"
- },
- {
-  "title": "Three things HashChat sets out to do",
-  "text": "Goal\nConnecting people\nBringing Koreans and foreigners together\nConnecting travel products\nLinking Korean businesses with foreign tourists\nTaking travel content global\nKorean travel content, for the whole world"
- },
- {
-  "title": "Part 3 Final goal",
-  "text": ""
- },
- {
-  "title": "X's auto-translation this April turned the world upside down",
-  "text": "Final goal\nIf you didn't see the frenzy coming, think again.\nAll it did was turn the 'Show translation' button on by default.\nSo why did people go wild?\nBecause fitting into where people already are matters that much.\nI'm looking forward to X Chat, due April 17, as well.\nAll content auto-translated\nLaunching April 17"
- },
- {
-  "title": "Quite a few customers have used HashChat as add-on captions",
+  "title": "We also found huge demand for add-on captions",
   "text": "Customers\nSome people use HashChat alongside Xiaohongshu, Roblox and Discord.\nOthers often wanted HashChat for watching content that has no captions.\nWatching Xiaohongshu live streams in PiP\nwith HashChat captions on top\nAlso used with Roblox and Discord"
  },
  {
-  "title": "Because of the cost, existing social networks still offer only very limited translation",
-  "text": "Final goal\nX\nInstagram\nThreads\nWeChat"
+  "title": "Many also use it for in-person and work interpretation",
+  "text": "Customers\nA young man in Africa got hired as an interpreter thanks to HashChat, despite weak English\nAnother user appears to be a Seoul tour guide for Japanese visitors\nHair salon owners use it a lot with tourists"
  },
  {
-  "title": "If we focus only on travel content, we can afford the translation cost",
-  "text": "Final goal"
+  "title": "That makes seven distinct UX cases We'll win them one at a time",
+  "text": "Customers"
+ },
+ {
+  "title": "Our first goal: win over K-Friends users",
+  "text": "Goal\nThe Kfriends app. Updated once every two years."
+ },
+ {
+  "title": "Start with interpretation, grow into an AI-native messenger and social network!",
+  "text": "Vision"
+ },
+ {
+  "title": "We're hiring",
+  "text": "Product or business, humanities or engineering: your background doesn't matter."
  },
  {
   "title": "Thank you. Q & A",
-  "text": "HashChat\nGitHub\nLinkedIn\nDownload HashChat 👇"
+  "text": "GitHub\nLinkedIn\nDownload HashChat 👇"
  }
 ]

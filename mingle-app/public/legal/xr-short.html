@@ -42,20 +42,20 @@
         window.addEventListener("orientationchange", applyViewport);
       })();
     </script>
-    <title>HashChat: meet Koreans without language barriers</title>
-    <meta name="description" content="Starting with Korea travel and Korean friend matching, growing into a messenger and social network." />
-    <meta property="og:title" content="HashChat: meet Koreans without language barriers" />
-    <meta property="og:description" content="Starting with Korea travel and Korean friend matching, growing into a messenger and social network." />
+    <title>HashChat: a voice messenger without language barriers</title>
+    <meta name="description" content="Talking with people abroad, made easier than on HelloTalk or Discord." />
+    <meta property="og:title" content="HashChat: a voice messenger without language barriers" />
+    <meta property="og:description" content="Talking with people abroad, made easier than on HelloTalk or Discord." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://hashchat.minglelabs.app/xr" />
     <meta property="og:image" content="https://hashchat.minglelabs.app/assets/og-hashchat.png?v=20261112" />
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="HashChat: meet Koreans without language barriers" />
+    <meta property="og:image:alt" content="HashChat: a voice messenger without language barriers" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="HashChat: meet Koreans without language barriers" />
-    <meta name="twitter:description" content="Starting with Korea travel and Korean friend matching, growing into a messenger and social network." />
+    <meta name="twitter:title" content="HashChat: a voice messenger without language barriers" />
+    <meta name="twitter:description" content="Talking with people abroad, made easier than on HelloTalk or Discord." />
     <meta name="twitter:image" content="https://hashchat.minglelabs.app/assets/og-hashchat.png?v=20261112" />
     <style>
       :root {
@@ -312,7 +312,6 @@
         line-height: 1.14;
         letter-spacing: -0.06em;
         text-wrap: balance;
-        word-break: keep-all;
       }
 
       .slide-goal-emphasis {
@@ -343,67 +342,6 @@
         background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
         box-shadow: 0 12px 24px rgba(185, 28, 28, 0.26);
         transform: translateY(-50%) rotate(-5deg);
-      }
-
-      .slide-goal-columns--both-crossed {
-        position: relative;
-      }
-
-      .slide-goal-badge--center {
-        top: 50%;
-        left: 50%;
-        right: auto;
-        z-index: 20;
-        padding: clamp(22px, 2.2vw, 36px) clamp(40px, 4vw, 72px);
-        border-width: 5px;
-        font-size: clamp(3.4rem, 6.4vw, 7rem);
-        transform: translate(-50%, -50%) rotate(-5deg);
-      }
-
-      .slide-market-grid--dense .slide-market-logo {
-        width: clamp(84px, 7.2vw, 116px);
-        height: clamp(84px, 7.2vw, 116px);
-      }
-
-      .slide-kfriends-brand {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: clamp(10px, 1vw, 16px);
-      }
-
-      .slide-kfriends-brand-logo {
-        width: clamp(180px, 17vw, 260px);
-        height: clamp(180px, 17vw, 260px);
-        border-radius: 22%;
-        box-shadow: 0 24px 52px rgba(45, 42, 30, 0.18);
-      }
-
-      .slide-kfriends-brand-name {
-        margin: clamp(8px, 0.8vw, 14px) 0 0;
-        color: var(--title);
-        font-size: clamp(2rem, 2.8vw, 3.2rem);
-        font-weight: 800;
-        letter-spacing: -0.04em;
-      }
-
-      .slide-kfriends-brand-count {
-        margin: 0;
-        color: var(--accent-strong);
-        font-size: clamp(1.5rem, 2.1vw, 2.4rem);
-        font-weight: 750;
-        letter-spacing: -0.03em;
-      }
-
-      .slide-ai-requirement--dim {
-        opacity: 0.32;
-        filter: grayscale(1);
-      }
-
-      .slide-ai-requirement--focus {
-        transform: scale(1.06);
-        box-shadow: 0 0 0 3px var(--accent-strong), 0 22px 44px rgba(72, 57, 18, 0.16);
-        z-index: 2;
       }
 
       .slide-goal-columns--flow .slide-goal {
@@ -460,39 +398,14 @@
         display: grid;
         gap: 10px;
         justify-items: start;
-        gap: clamp(14px, 1.6vw, 24px);
         margin-top: clamp(28px, 2.6vw, 42px);
-        font-size: clamp(2.6rem, 4.4vw, 4.8rem);
-        font-weight: 700;
-      }
-
-      .slide-copy .slide-title.slide-title--part {
-        font-size: clamp(4rem, 8vw, 9rem);
-        line-height: 1.12;
-      }
-
-      .slide-side-media.slide-side-media--voicetalk {
-        top: 50%;
-        transform: translateY(-50%);
-      }
-
-      .slide-voicetalk-image--plain {
-        border-radius: 0 !important;
-        box-shadow: none !important;
-        background: transparent;
-      }
-
-      .slide-voicetalk-image {
-        display: block;
-        height: min(80vh, 680px);
-        width: auto;
-        border-radius: clamp(18px, 1.8vw, 28px);
-        box-shadow: 0 24px 52px rgba(45, 42, 30, 0.18);
+        font-size: clamp(2rem, 2.8vw, 3rem);
+        font-weight: 560;
       }
 
       .slide-toc-item {
         display: grid;
-        grid-template-columns: max-content auto;
+        grid-template-columns: clamp(2.2rem, 2.6vw, 2.8rem) auto;
         column-gap: clamp(16px, 1.4vw, 24px);
         align-items: baseline;
         width: fit-content;
@@ -781,10 +694,6 @@
         left: clamp(12px, 1vw, 16px);
         width: 4px;
         border-radius: 999px;
-        background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
-      }
-
-      .slide-shell--problem .slide-ai-requirement::before {
         background: #dc2626;
       }
 
@@ -905,145 +814,6 @@
         width: min(1180px, 100%);
         max-width: min(1180px, 100%);
         margin-top: clamp(4px, 1vh, 14px);
-      }
-
-      .slide-market-overview-row--three {
-        grid-template-columns: repeat(3, auto);
-        justify-content: center;
-        gap: clamp(40px, 6vw, 110px);
-        margin-inline: auto;
-        margin-top: clamp(24px, 5vh, 56px);
-      }
-
-      .slide-market-overview-row--three .slide-market-overview-logo {
-        width: clamp(120px, 12vw, 180px);
-      }
-
-      .slide-market-overview-row--three .slide-market-overview-name {
-        font-size: clamp(1.4rem, 1.9vw, 1.9rem);
-      }
-
-      .slide-market-overview-row--four {
-        grid-template-columns: repeat(4, auto);
-      }
-
-      .slide-roadmap-grid {
-        width: min(1080px, 100%);
-      }
-
-      .slide-roadmap-step {
-        display: grid;
-        align-content: start;
-        gap: clamp(8px, 0.8vw, 14px);
-        min-height: clamp(150px, 15vw, 210px);
-      }
-
-      .slide-roadmap-index {
-        margin: 0;
-        color: var(--accent-strong);
-        font-size: clamp(2.4rem, 3.4vw, 3.6rem);
-        font-weight: 850;
-        line-height: 1;
-      }
-
-      .slide-roadmap-step .slide-ai-requirement-title {
-        font-size: clamp(1.35rem, 1.9vw, 2rem);
-        line-height: 1.3;
-        word-break: keep-all;
-      }
-
-      .slide-roadmap-step--plain {
-        align-content: center;
-        min-height: clamp(110px, 10vw, 150px);
-      }
-
-      .slide-roadmap-step--plain .slide-ai-requirement-title {
-        font-size: clamp(1.7rem, 2.4vw, 2.6rem);
-      }
-
-      .slide-store-count {
-        margin: clamp(6px, 0.6vw, 10px) 0 0;
-        color: var(--accent-strong);
-        font-size: clamp(2rem, 3.2vw, 3.4rem);
-        font-weight: 850;
-        line-height: 1.05;
-        letter-spacing: -0.04em;
-      }
-
-      .slide-store-count-caption {
-        margin: clamp(14px, 1.4vw, 22px) auto 0;
-        color: rgba(45, 42, 30, 0.58);
-        font-size: clamp(0.95rem, 1.2vw, 1.15rem);
-        font-weight: 650;
-        text-align: center;
-      }
-
-      .slide-roadmap-description {
-        margin: 0;
-        font-size: clamp(1.05rem, 1.4vw, 1.4rem);
-      }
-
-      .slide-roadmap-step--named {
-        align-content: center;
-      }
-
-      .slide-roadmap-step--named .slide-ai-requirement-title {
-        font-size: clamp(1.8rem, 2.6vw, 2.8rem);
-        font-weight: 650;
-        line-height: 1.15;
-        letter-spacing: -0.05em;
-      }
-
-      .slide-roadmap-step--named .slide-roadmap-description {
-        font-size: clamp(1.15rem, 1.6vw, 1.6rem);
-      }
-
-      .slide-roadmap-grid--two {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        width: min(820px, 100%);
-      }
-
-      .slide-side-media.slide-side-media--toki {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        gap: 0;
-        width: auto;
-      }
-
-      .slide-toki-image {
-        display: block;
-        border-radius: clamp(16px, 1.6vw, 24px);
-        box-shadow: 0 24px 52px rgba(45, 42, 30, 0.16);
-        background: #fff;
-      }
-
-      .slide-toki-image--app {
-        height: min(60vh, 520px);
-        width: auto;
-      }
-
-      .slide-toki-image--saved {
-        position: relative;
-        z-index: 1;
-        height: min(52vh, 450px);
-        width: auto;
-        margin-left: clamp(-70px, -4vw, -30px);
-        margin-bottom: clamp(80px, 11vh, 150px);
-      }
-
-      .slide-toki-image--post {
-        position: relative;
-        z-index: 2;
-        width: min(16vw, 240px);
-        height: auto;
-        margin-left: clamp(-70px, -4vw, -30px);
-        margin-top: clamp(120px, 14vh, 200px);
-      }
-
-      .slide-copy .slide-title.slide-title--toki {
-        white-space: normal;
-        font-size: clamp(2.4rem, 4vw, 4.6rem);
       }
 
       .slide-market-overview-item {
@@ -2116,18 +1886,6 @@
 
       .slide-final-link--brand {
         min-width: clamp(170px, 15vw, 220px);
-        gap: clamp(10px, 0.9vw, 14px);
-        color: var(--title);
-        font-size: clamp(1.1rem, 1.25vw, 1.42rem);
-        font-weight: 780;
-        letter-spacing: -0.03em;
-      }
-
-      .slide-final-logo--hashchat {
-        width: clamp(30px, 2.5vw, 38px);
-        height: clamp(30px, 2.5vw, 38px);
-        border-radius: 22%;
-        display: block;
       }
 
       .slide-final-link--github {
@@ -2707,19 +2465,6 @@
         user-select: none;
       }
 
-      .page-brand {
-        position: absolute;
-        left: clamp(24px, 4vw, 44px);
-        bottom: clamp(20px, 3vw, 36px);
-        z-index: 2;
-        font-size: 0.92rem;
-        font-weight: 800;
-        letter-spacing: 0.02em;
-        color: rgba(45, 42, 30, 0.52);
-        user-select: none;
-        pointer-events: none;
-      }
-
       .page-counter {
         min-width: 4.8em;
         text-align: right;
@@ -3039,8 +2784,8 @@
       }
 
       html.is-mobile-viewport .slide-market-grid--categories-compact .slide-market-logo {
-        width: clamp(34px, 9.6vw, 42px);
-        height: clamp(34px, 9.6vw, 42px);
+        width: clamp(50px, 14.1vw, 66px);
+        height: clamp(50px, 14.1vw, 66px);
         padding: 3px;
         border-radius: 9px;
       }
@@ -3086,11 +2831,6 @@
         white-space: nowrap;
       }
 
-      html.is-mobile-viewport .slide-copy--ai-requirements .slide-title.slide-title--wrap {
-        white-space: normal;
-        word-break: keep-all;
-      }
-
       html.is-mobile-viewport .slide-side-media--ai-requirements {
         width: var(--mobile-content-width);
         max-width: var(--mobile-content-width);
@@ -3099,10 +2839,6 @@
       html.is-mobile-viewport .slide-ai-requirements-grid {
         grid-template-columns: minmax(0, 1fr);
         gap: 8px;
-      }
-
-      html.is-mobile-viewport .slide-ai-requirements-grid:has(> :nth-child(7)) {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
       html.is-mobile-viewport .slide-ai-requirement {
@@ -3161,67 +2897,6 @@
         margin-top: 0;
       }
 
-      html.is-mobile-viewport .slide-market-overview-row--three {
-        grid-template-columns: repeat(3, auto);
-        justify-content: center;
-        gap: 24px;
-      }
-
-      html.is-mobile-viewport .slide-market-overview-row--three .slide-market-overview-logo {
-        width: 84px;
-      }
-
-      html.is-mobile-viewport .slide-market-overview-row--four {
-        grid-template-columns: repeat(4, auto);
-        gap: 14px;
-      }
-
-      html.is-mobile-viewport .slide-market-overview-row--four .slide-market-overview-logo {
-        width: 64px;
-      }
-
-      html.is-mobile-viewport .slide-roadmap-step--named .slide-ai-requirement-title {
-        font-size: clamp(1.6rem, 7vw, 2rem);
-      }
-
-      html.is-mobile-viewport .slide-roadmap-step--named .slide-roadmap-description {
-        font-size: 1.02rem;
-      }
-
-      html.is-mobile-viewport .slide-copy .slide-title.slide-title--toki {
-        font-size: clamp(1.6rem, 7vw, 2rem);
-      }
-
-      html.is-mobile-viewport .slide-side-media.slide-side-media--toki {
-        display: flex !important;
-        flex-direction: row;
-        flex-wrap: nowrap;
-        align-items: center;
-        justify-content: center;
-        gap: 0;
-        transform: none;
-      }
-
-      html.is-mobile-viewport .slide-toki-image--app {
-        height: 38vh;
-      }
-
-      html.is-mobile-viewport .slide-toki-image--saved {
-        height: 34vh;
-        margin-left: -28px;
-        margin-bottom: 70px;
-      }
-
-      html.is-mobile-viewport .slide-toki-image--post {
-        width: 32vw;
-        margin-left: -30px;
-        margin-top: 90px;
-      }
-
-      html.is-mobile-viewport .slide-roadmap-step {
-        min-height: 0;
-      }
-
       html.is-mobile-viewport .slide-market-overview-item {
         gap: 6px;
       }
@@ -3278,51 +2953,6 @@
         border-width: 2px;
         border-radius: 13px;
         font-size: clamp(0.9rem, 3.8vw, 1.2rem);
-      }
-
-      html.is-mobile-viewport .slide-goal-badge--center {
-        right: auto;
-        padding: 14px 22px;
-        border-width: 3px;
-        border-radius: 999px;
-        font-size: clamp(1.9rem, 8.4vw, 2.6rem);
-      }
-
-      html.is-mobile-viewport .slide-market-grid--dense .slide-market-logo-cloud {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        align-content: flex-start;
-        gap: 8px;
-        height: auto;
-        min-height: 0;
-        padding-top: 40px;
-      }
-
-      html.is-mobile-viewport .slide-market-grid--dense .slide-market-logo {
-        position: static;
-        width: clamp(46px, 12.6vw, 58px);
-        height: clamp(46px, 12.6vw, 58px);
-        transform: rotate(var(--r));
-      }
-
-      html.is-mobile-viewport .slide-kfriends-brand-logo {
-        width: 150px;
-        height: 150px;
-      }
-
-      html.is-mobile-viewport .slide-copy .slide-title.slide-title--part {
-        font-size: clamp(3rem, 15vw, 4.4rem);
-      }
-
-      html.is-mobile-viewport .slide-side-media.slide-side-media--voicetalk {
-        top: auto;
-        transform: none;
-      }
-
-      html.is-mobile-viewport .slide-voicetalk-image {
-        height: 54vh;
-        margin-inline: auto;
       }
 
       html.is-mobile-viewport .slide-goal-arrow {
@@ -3944,7 +3574,6 @@
         width: 106px;
       }
 
-      html.is-mobile-viewport .slide-final-link--brand,
       html.is-mobile-viewport .slide-final-link--github,
       html.is-mobile-viewport .slide-final-link--linkedin {
         font-size: 0.94rem;
@@ -4024,12 +3653,6 @@
 
       html.is-mobile-viewport .slide-download-qr-caption {
         font-size: 0.78rem;
-      }
-
-      html.is-mobile-viewport .page-brand {
-        left: 16px;
-        bottom: calc(env(safe-area-inset-bottom) + 16px);
-        font-size: 0.72rem;
       }
 
       html.is-mobile-viewport .page-controls {
@@ -4131,79 +3754,55 @@
         <section class="slide slide--hero">
           <article class="slide-shell slide-shell--download-qr">
             <div class="slide-copy slide-copy--download-qr">
-              <h1 class="slide-title">언어 장벽 없이<br/>한국인을 만나는 곳<br/>HashChat</h1>
-              <p class="slide-body">한국 여행·한국인 친구 매칭으로 시작해 메신저/SNS로 확장합니다.<br/>최종 업데이트 - 2026-11-26</p>
+              <h1 class="slide-title">언어 장벽 없는<br/>음성 메신저 HashChat</h1>
+              <p class="slide-body">헬로톡, 디스코드보다 편한 외국인과의 대화 경험을 만듭니다.<br/>최종 업데이트 - 2026-09-01</p>
             </div>
             <div class="slide-side-media slide-side-media--download-qr">
               <div class="slide-download-qr-label">
-                <img class="slide-download-app-icon" src="./assets/site/hashchat-icon.png" alt="HashChat 앱 아이콘" />
+                <img class="slide-download-app-icon" src="./assets/mingle-icon.png" alt="HashChat 앱 아이콘" />
                 <span>HashChat 다운로드 링크 👇</span>
               </div>
               <a
                 class="slide-download-qr-link"
-                href="https://hashchat.minglelabs.app/get"
+                href="https://mingle-landing.vercel.app/download"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="HashChat 앱 설치 페이지 열기"
               >
-                <img class="slide-download-qr" src="./assets/qr-hashchat-get.svg" alt="HashChat 앱 설치용 QR 코드" />
+                <img class="slide-download-qr" src="./assets/qr-mingle-download.svg" alt="HashChat 앱 설치용 QR 코드" />
               </a>
             </div>
           </article>
         </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--toc">
-              <p class="slide-kicker">목차</p>
-              <h1 class="slide-title">
-                <a class="slide-toc-item" href="#3"><span class="slide-toc-index">1부</span><span class="slide-toc-text">문제와 해결책</span></a>
-                <a class="slide-toc-item" href="#33"><span class="slide-toc-index">2부</span><span class="slide-toc-text">수익 모델</span></a>
-                <a class="slide-toc-item" href="#44"><span class="slide-toc-index">3부</span><span class="slide-toc-text">최종 목표</span></a>
-              </h1>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--center">
-              <h1 class="slide-title slide-title--part">1부<br/>문제와 해결책</h1>
-            </div>
-          </article>
-        </section>
-
         <section class="slide">
           <article class="slide-shell">
             <div class="slide-copy slide-copy--center">
               <p class="slide-kicker">문제</p>
               <h1 class="slide-title slide-title--quoted">
                 <span class="slide-title-quote slide-title-quote--open mt-10">“</span>
-                <span class="slide-title-text">한국인과 외국인은 서로 친해지고 싶어하는데<br/>
-                서로를 이어주는 서비스가 부족하다</span>
+                <span class="slide-title-text">외국인과 친해지고 싶은데<br/>
+                언어 장벽을 넘기 힘들다</span>
                 <span class="slide-title-quote slide-title-quote--close mt-10">”</span>
               </h1>
             </div>
           </article>
         </section>
-
         <section class="slide">
           <article class="slide-shell">
             <div class="slide-copy slide-copy--goal-split">
               <p class="slide-kicker">문제</p>
-              <h1 class="slide-title">닭 vs 달걀 문제도 있다</h1>
+              <h1 class="slide-title">닭 vs 달걀 문제</h1>
               <div class="slide-goal-columns">
                 <article class="slide-goal slide-goal--left">
-                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">말이 통해야</span><br/>친구가 될 수 있음</h2>
+                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">외국인 친구를</span><br/>사귀고 싶다</h2>
                 </article>
                 <article class="slide-goal slide-goal--right">
-                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">말을 배우려면</span><br/>대화할 친구 필요함</h2>
+                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">외국어를</span><br/>배우고 싶다</h2>
                 </article>
               </div>
             </div>
           </article>
         </section>
-
         <section class="slide">
           <article class="slide-shell slide-shell--market-overview">
             <div class="slide-copy slide-copy--market-overview">
@@ -4245,7 +3844,6 @@
             <p class="slide-market-overview-caption">iOS·Android 합산 누적 다운로드 추정치 · KOF는 Google Play 기준</p>
           </article>
         </section>
-
         <section class="slide">
           <article class="slide-shell slide-shell--market slide-shell--market-categories">
             <div class="slide-copy slide-copy--market slide-copy--market-categories">
@@ -4257,57 +3855,70 @@
                 <section class="slide-market-category slide-market-category--voice">
                   <h2 class="slide-market-category-title">진솔한 음성 대화</h2>
                   <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 13%; --y: 36%; --s: clamp(60px, 4.8vw, 76px); --r: -8deg" src="./assets/logo-market-maum.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 33%; --y: 66%; --s: clamp(60px, 4.8vw, 76px); --r: 5deg" src="./assets/logo-market-connecting.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 52%; --y: 32%; --s: clamp(60px, 4.8vw, 76px); --r: -11deg" src="./assets/logo-market-wakie.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 71%; --y: 64%; --s: clamp(60px, 4.8vw, 76px); --r: 7deg" src="./assets/logo-market-doran.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 89%; --y: 36%; --s: clamp(60px, 4.8vw, 76px); --r: -6deg" src="./assets/logo-market-wizet.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 21%; --y: 42%; --s: clamp(72px, 5.7vw, 90px); --r: -8deg" src="./assets/logo-market-maum.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 55%; --y: 29%; --s: clamp(69px, 5.5vw, 86px); --r: 5deg" src="./assets/logo-market-connecting.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 83%; --y: 54%; --s: clamp(72px, 5.7vw, 90px); --r: -11deg" src="./assets/logo-market-wakie.jpg" alt="" />
                   </div>
                 </section>
                 <section class="slide-market-category slide-market-category--dating">
                   <h2 class="slide-market-category-title">글로벌 데이팅</h2>
                   <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 13%; --y: 38%; --s: clamp(60px, 4.8vw, 76px); --r: -9deg" src="./assets/logo-market-meeff.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 32%; --y: 66%; --s: clamp(60px, 4.8vw, 76px); --r: 8deg" src="./assets/logo-market-azar.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 51%; --y: 34%; --s: clamp(60px, 4.8vw, 76px); --r: -6deg" src="./assets/logo-tinder.png" alt="" />
-                    <img class="slide-market-logo" style="--x: 70%; --y: 64%; --s: clamp(60px, 4.8vw, 76px); --r: 10deg" src="./assets/logo-market-yubo.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 89%; --y: 36%; --s: clamp(60px, 4.8vw, 76px); --r: -7deg" src="./assets/logo-market-wippy.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 17%; --y: 38%; --s: clamp(72px, 5.7vw, 90px); --r: -9deg" src="./assets/logo-market-meeff.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 43%; --y: 55%; --s: clamp(69px, 5.5vw, 86px); --r: 8deg" src="./assets/logo-market-azar.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 67%; --y: 32%; --s: clamp(69px, 5.5vw, 86px); --r: -6deg" src="./assets/logo-tinder.png" alt="" />
+                    <img class="slide-market-logo" style="--x: 88%; --y: 54%; --s: clamp(69px, 5.5vw, 86px); --r: 10deg" src="./assets/logo-market-yubo.jpg" alt="" />
                   </div>
                 </section>
                 <section class="slide-market-category slide-market-category--offline">
                   <h2 class="slide-market-category-title">오프라인 모임</h2>
                   <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 18%; --y: 40%; --s: clamp(60px, 4.8vw, 76px); --r: -8deg" src="./assets/logo-market-timeleft.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 40%; --y: 70%; --s: clamp(60px, 4.8vw, 76px); --r: 5deg" src="./assets/logo-market-couchsurfing.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 61%; --y: 38%; --s: clamp(60px, 4.8vw, 76px); --r: 9deg" src="./assets/logo-market-meetup.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 82%; --y: 66%; --s: clamp(60px, 4.8vw, 76px); --r: -6deg" src="./assets/logo-market-gatchi.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 34%; --y: 46%; --s: clamp(72px, 5.9vw, 92px); --r: -8deg" src="./assets/logo-market-timeleft.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 50%; --y: 76%; --s: clamp(78px, 6.3vw, 100px); --r: 5deg" src="./assets/logo-market-couchsurfing.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 66%; --y: 54%; --s: clamp(72px, 5.9vw, 92px); --r: 9deg" src="./assets/logo-market-meetup.jpg" alt="" />
                   </div>
                 </section>
               </div>
             </div>
           </article>
         </section>
-
         <section class="slide">
           <article class="slide-shell">
             <div class="slide-copy slide-copy--goal-split">
               <p class="slide-kicker">해결책</p>
-              <h1 class="slide-title">전제를 아예 해소시켜버리면 어떨까?!</h1>
-              <div class="slide-goal-columns slide-goal-columns--both-crossed">
-                <article class="slide-goal slide-goal--left slide-goal--crossed">
-                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">말이 통해야</span><br/>친구가 될 수 있음</h2>
-                  <div class="slide-cross-mark" aria-hidden="true"></div>
+              <h1 class="slide-title">하나를 아예 해소시켜 버리면 어떨까?!</h1>
+              <div class="slide-goal-columns">
+                <article class="slide-goal slide-goal--left">
+                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">외국인 친구를</span><br/>사귀고 싶다</h2>
                 </article>
                 <article class="slide-goal slide-goal--right slide-goal--crossed">
-                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">말을 배우려면</span><br/>대화할 친구 필요함</h2>
+                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">외국어를</span><br/>배우고 싶다</h2>
                   <div class="slide-cross-mark" aria-hidden="true"></div>
+                  <span class="slide-goal-badge">통번역 제공</span>
                 </article>
-                <span class="slide-goal-badge slide-goal-badge--center">통번역 제공</span>
               </div>
             </div>
           </article>
         </section>
-
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--goal-split">
+              <p class="slide-kicker">해결책</p>
+              <h1 class="slide-title">편하게 대화에만 집중할 수 있지 않을까?!</h1>
+              <div class="slide-goal-columns slide-goal-columns--flow">
+                <article class="slide-goal slide-goal--left">
+                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">외국인 친구를</span><br/>사귀고 싶다</h2>
+                </article>
+                <article class="slide-goal slide-goal--right">
+                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">외국어를 못해도</span><br/>대화가 통한다!</h2>
+                </article>
+                <svg class="slide-goal-arrow" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+                  <path d="M 570 50 C 530 20 470 20 430 50" />
+                  <path d="M 430 50 L 478 7 M 430 50 L 486 76" />
+                </svg>
+              </div>
+            </div>
+          </article>
+        </section>
         <section class="slide">
           <article class="slide-shell">
             <div class="slide-copy slide-copy--center">
@@ -4321,194 +3932,11 @@
             </div>
           </article>
         </section>
-
-        <section class="slide">
-          <article class="slide-shell slide-shell--market slide-shell--market-categories">
-            <div class="slide-copy slide-copy--market slide-copy--market-categories">
-              <p class="slide-kicker">시장</p>
-              <h1 class="slide-title"><span>한국인과 외국인을 이어주는 서비스는</span><br/><span>지금도 우후죽순 생기고 있습니다</span></h1>
-            </div>
-            <div class="slide-side-media slide-side-media--market slide-side-media--market-categories" aria-hidden="true">
-              <div class="slide-market-grid slide-market-grid--categories slide-market-grid--categories-compact slide-market-grid--dense">
-                <section class="slide-market-category slide-market-category--language">
-                  <h2 class="slide-market-category-title">외국인 친구 매칭</h2>
-                  <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 30%; --y: 40%; --r: -6deg" src="./assets/logo-market-kfriends-blue.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 70%; --y: 40%; --r: 6deg" src="./assets/logo-market-kfriends.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 50%; --y: 80%; --r: -4deg" src="./assets/logo-market-kof.png" alt="" />
-                  </div>
-                </section>
-                <section class="slide-market-category slide-market-category--voice">
-                  <h2 class="slide-market-category-title">한일 교류</h2>
-                  <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 30%; --y: 38%; --r: -6deg" src="./assets/logo-market-connecting.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 70%; --y: 38%; --r: 6deg" src="./assets/logo-market-maum.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 30%; --y: 80%; --r: 5deg" src="./assets/logo-market-wizet.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 70%; --y: 80%; --r: -5deg" src="./assets/logo-market-doran.jpg" alt="" />
-                  </div>
-                </section>
-                <section class="slide-market-category slide-market-category--offline">
-                  <h2 class="slide-market-category-title">오프라인 모임</h2>
-                  <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 50%; --y: 58%; --r: -5deg" src="./assets/logo-market-gatchi.jpg" alt="" />
-                  </div>
-                </section>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--kfriends-goal">
-              <p class="slide-kicker">시장</p>
-              <h1 class="slide-title">대표 주자<br/>K프렌즈</h1>
-            </div>
-            <div class="slide-side-media slide-side-media--kfriends-goal" style="top: 50%; transform: translateY(-50%);">
-              <div class="slide-kfriends-brand">
-                <img class="slide-kfriends-brand-logo" src="./assets/logo-market-kfriends-blue.jpg" alt="Kfriends 앱 로고" />
-                <p class="slide-kfriends-brand-name">K-Friends</p>
-                <p class="slide-kfriends-brand-count">약 450만</p>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--kfriends-goal">
-              <p class="slide-kicker">시장</p>
-              <h1 class="slide-title">조악한데도<br/>잘 됩니다</h1>
-              <p class="slide-body" style="max-width: min(30rem, 100%);">2년에 한 번 업데이트하고<br/>완성도도 조악한데<br/>여전히 많이 다운받고, 다들 결제하며 씁니다.</p>
-            </div>
-            <div class="slide-side-media slide-side-media--kfriends-goal">
-              <div class="slide-kfriends-goal-gallery">
-                <img class="slide-kfriends-goal-image slide-kfriends-goal-image--story" src="./assets/kfriends-story.png" alt="Kfriends 스토리 화면" />
-                <img class="slide-kfriends-goal-image slide-kfriends-goal-image--version-history" src="./assets/kfriends-version-history.png" alt="Kfriends 버전 기록 화면" />
-              </div>
-              <p class="slide-kfriends-goal-caption">
-                <img class="slide-kfriends-goal-caption-logo" src="./assets/logo-market-kfriends-blue.jpg" alt="Kfriends 앱 로고" />
-                <span>Kfriends 앱 화면. 2년에 한 번씩 업데이트.</span>
-              </p>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell slide-shell--market slide-shell--market-categories">
-            <div class="slide-copy slide-copy--market slide-copy--market-categories">
-              <p class="slide-kicker">시장</p>
-              <h1 class="slide-title">그만큼 수요가 넘칩니다</h1>
-            </div>
-            <div class="slide-side-media slide-side-media--market slide-side-media--market-categories" aria-hidden="true">
-              <div class="slide-market-grid slide-market-grid--categories slide-market-grid--categories-compact slide-market-grid--dense">
-                <section class="slide-market-category slide-market-category--language">
-                  <h2 class="slide-market-category-title">외국인 친구 매칭</h2>
-                  <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 30%; --y: 40%; --r: -6deg" src="./assets/logo-market-kfriends-blue.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 70%; --y: 40%; --r: 6deg" src="./assets/logo-market-kfriends.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 50%; --y: 80%; --r: -4deg" src="./assets/logo-market-kof.png" alt="" />
-                  </div>
-                </section>
-                <section class="slide-market-category slide-market-category--voice">
-                  <h2 class="slide-market-category-title">한일 교류</h2>
-                  <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 30%; --y: 38%; --r: -6deg" src="./assets/logo-market-connecting.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 70%; --y: 38%; --r: 6deg" src="./assets/logo-market-maum.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 30%; --y: 80%; --r: 5deg" src="./assets/logo-market-wizet.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 70%; --y: 80%; --r: -5deg" src="./assets/logo-market-doran.jpg" alt="" />
-                  </div>
-                </section>
-                <section class="slide-market-category slide-market-category--offline">
-                  <h2 class="slide-market-category-title">오프라인 모임</h2>
-                  <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 50%; --y: 58%; --r: -5deg" src="./assets/logo-market-gatchi.jpg" alt="" />
-                  </div>
-                </section>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell slide-shell--ai-requirements slide-shell--problem">
-            <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
-              <p class="slide-kicker">문제</p>
-              <h1 class="slide-title slide-title--wrap">다들 겪고 있는 문제도 비슷합니다</h1>
-            </div>
-            <div class="slide-side-media slide-side-media--ai-requirements">
-              <div class="slide-ai-requirements-grid">
-                <article class="slide-ai-requirement">
-                  <h2 class="slide-ai-requirement-title">언어 장벽</h2>
-                  <p class="slide-ai-requirement-description">말이 안 통해 대화가 금방 끊김</p>
-                </article>
-                <article class="slide-ai-requirement">
-                  <h2 class="slide-ai-requirement-title">비매너 회원</h2>
-                  <p class="slide-ai-requirement-description">불쾌한 경험 때문에 떠남</p>
-                </article>
-                <article class="slide-ai-requirement">
-                  <h2 class="slide-ai-requirement-title">일회성 관계</h2>
-                  <p class="slide-ai-requirement-description">한 번 인사하고 흐지부지</p>
-                </article>
-                <article class="slide-ai-requirement">
-                  <h2 class="slide-ai-requirement-title">겉도는 대화</h2>
-                  <p class="slide-ai-requirement-description">비슷한 얘기만 반복됨</p>
-                </article>
-                <article class="slide-ai-requirement">
-                  <h2 class="slide-ai-requirement-title">콘텐츠 부재</h2>
-                  <p class="slide-ai-requirement-description">연결 이상의 즐길 거리가 없음</p>
-                </article>
-                <article class="slide-ai-requirement">
-                  <h2 class="slide-ai-requirement-title">확실한 BM 부재</h2>
-                  <p class="slide-ai-requirement-description">돈을 낼 정도는 아님</p>
-                </article>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell slide-shell--ai-requirements slide-shell--problem">
-            <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
-              <p class="slide-kicker">문제</p>
-              <h1 class="slide-title">여기서 저희는<br/>언어 문제부터 관심을 가졌습니다</h1>
-            </div>
-            <div class="slide-side-media slide-side-media--ai-requirements">
-              <div class="slide-ai-requirements-grid">
-                <article class="slide-ai-requirement slide-ai-requirement--focus">
-                  <h2 class="slide-ai-requirement-title">언어 장벽</h2>
-                  <p class="slide-ai-requirement-description">말이 안 통해 대화가 금방 끊김</p>
-                </article>
-                <article class="slide-ai-requirement slide-ai-requirement--dim">
-                  <h2 class="slide-ai-requirement-title">비매너 회원</h2>
-                  <p class="slide-ai-requirement-description">불쾌한 경험 때문에 떠남</p>
-                </article>
-                <article class="slide-ai-requirement slide-ai-requirement--dim">
-                  <h2 class="slide-ai-requirement-title">일회성 관계</h2>
-                  <p class="slide-ai-requirement-description">한 번 인사하고 흐지부지</p>
-                </article>
-                <article class="slide-ai-requirement slide-ai-requirement--dim">
-                  <h2 class="slide-ai-requirement-title">겉도는 대화</h2>
-                  <p class="slide-ai-requirement-description">비슷한 얘기만 반복됨</p>
-                </article>
-                <article class="slide-ai-requirement slide-ai-requirement--dim">
-                  <h2 class="slide-ai-requirement-title">콘텐츠 부재</h2>
-                  <p class="slide-ai-requirement-description">연결 이상의 즐길 거리가 없음</p>
-                </article>
-                <article class="slide-ai-requirement slide-ai-requirement--dim">
-                  <h2 class="slide-ai-requirement-title">확실한 BM 부재</h2>
-                  <p class="slide-ai-requirement-description">돈을 낼 정도는 아님</p>
-                </article>
-              </div>
-            </div>
-          </article>
-        </section>
-
         <section class="slide">
           <article class="slide-shell slide-shell--market slide-shell--market-categories">
             <div class="slide-copy slide-copy--market slide-copy--market-categories">
               <p class="slide-kicker">원인</p>
-              <h1 class="slide-title"><span>그렇다면 소셜링 서비스들이 지금까지</span><br/><span>통번역을 제공하지 못했던 이유는 뭘까요?</span></h1>
+              <h1 class="slide-title"><span>그렇다면 소셜링 서비스들이 지금까지</span><br/><span>통번역을 제공하지 못했던 이유는 뭘까?</span></h1>
             </div>
             <div class="slide-side-media slide-side-media--market slide-side-media--market-categories slide-side-media--market-categories--language" aria-hidden="true">
               <div class="slide-market-grid slide-market-grid--categories slide-market-grid--categories-four">
@@ -4526,42 +3954,37 @@
                 <section class="slide-market-category slide-market-category--voice">
                   <h2 class="slide-market-category-title">진솔한 음성 대화</h2>
                   <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 15%; --y: 34%; --s: clamp(60px, 4.8vw, 76px); --r: -8deg" src="./assets/logo-market-maum.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 50%; --y: 28%; --s: clamp(60px, 4.8vw, 76px); --r: 5deg" src="./assets/logo-market-connecting.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 84%; --y: 36%; --s: clamp(60px, 4.8vw, 76px); --r: -11deg" src="./assets/logo-market-wakie.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 32%; --y: 68%; --s: clamp(60px, 4.8vw, 76px); --r: 7deg" src="./assets/logo-market-doran.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 68%; --y: 68%; --s: clamp(60px, 4.8vw, 76px); --r: -6deg" src="./assets/logo-market-wizet.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 21%; --y: 42%; --s: clamp(72px, 5.7vw, 90px); --r: -8deg" src="./assets/logo-market-maum.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 55%; --y: 29%; --s: clamp(69px, 5.5vw, 86px); --r: 5deg" src="./assets/logo-market-connecting.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 83%; --y: 54%; --s: clamp(72px, 5.7vw, 90px); --r: -11deg" src="./assets/logo-market-wakie.jpg" alt="" />
                   </div>
                 </section>
                 <section class="slide-market-category slide-market-category--dating">
                   <h2 class="slide-market-category-title">글로벌 데이팅</h2>
                   <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 15%; --y: 34%; --s: clamp(60px, 4.8vw, 76px); --r: -9deg" src="./assets/logo-market-meeff.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 50%; --y: 28%; --s: clamp(60px, 4.8vw, 76px); --r: 8deg" src="./assets/logo-market-azar.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 84%; --y: 36%; --s: clamp(60px, 4.8vw, 76px); --r: -6deg" src="./assets/logo-tinder.png" alt="" />
-                    <img class="slide-market-logo" style="--x: 32%; --y: 68%; --s: clamp(60px, 4.8vw, 76px); --r: 10deg" src="./assets/logo-market-yubo.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 68%; --y: 68%; --s: clamp(60px, 4.8vw, 76px); --r: -7deg" src="./assets/logo-market-wippy.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 17%; --y: 38%; --s: clamp(72px, 5.7vw, 90px); --r: -9deg" src="./assets/logo-market-meeff.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 43%; --y: 55%; --s: clamp(69px, 5.5vw, 86px); --r: 8deg" src="./assets/logo-market-azar.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 67%; --y: 32%; --s: clamp(69px, 5.5vw, 86px); --r: -6deg" src="./assets/logo-tinder.png" alt="" />
+                    <img class="slide-market-logo" style="--x: 88%; --y: 54%; --s: clamp(69px, 5.5vw, 86px); --r: 10deg" src="./assets/logo-market-yubo.jpg" alt="" />
                   </div>
                 </section>
                 <section class="slide-market-category slide-market-category--offline">
                   <h2 class="slide-market-category-title">오프라인 모임</h2>
                   <div class="slide-market-logo-cloud">
-                    <img class="slide-market-logo" style="--x: 24%; --y: 38%; --s: clamp(60px, 4.8vw, 76px); --r: -8deg" src="./assets/logo-market-timeleft.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 74%; --y: 36%; --s: clamp(60px, 4.8vw, 76px); --r: 5deg" src="./assets/logo-market-couchsurfing.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 30%; --y: 72%; --s: clamp(60px, 4.8vw, 76px); --r: 9deg" src="./assets/logo-market-meetup.jpg" alt="" />
-                    <img class="slide-market-logo" style="--x: 70%; --y: 72%; --s: clamp(60px, 4.8vw, 76px); --r: -6deg" src="./assets/logo-market-gatchi.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 34%; --y: 46%; --s: clamp(72px, 5.9vw, 92px); --r: -8deg" src="./assets/logo-market-timeleft.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 50%; --y: 76%; --s: clamp(78px, 6.3vw, 100px); --r: 5deg" src="./assets/logo-market-couchsurfing.jpg" alt="" />
+                    <img class="slide-market-logo" style="--x: 66%; --y: 54%; --s: clamp(72px, 5.9vw, 92px); --r: 9deg" src="./assets/logo-market-meetup.jpg" alt="" />
                   </div>
                 </section>
               </div>
             </div>
           </article>
         </section>
-
         <section class="slide">
-          <article class="slide-shell slide-shell--ai-requirements slide-shell--problem">
+          <article class="slide-shell slide-shell--ai-requirements">
             <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
               <p class="slide-kicker">문제</p>
-              <h1 class="slide-title slide-title--wrap">소셜링 상황의 까다로운 요구사항들을<br/>기존의 AI로는 충족할 수 없었기 때문입니다</h1>
+              <h1 class="slide-title">소셜링 상황의 빡센 요구사항들을<br/>기존의 AI로는 충족할 수 없었기 때문입니다</h1>
             </div>
             <div class="slide-side-media slide-side-media--ai-requirements">
               <div class="slide-ai-requirements-grid">
@@ -4605,12 +4028,11 @@
             </div>
           </article>
         </section>
-
         <section class="slide">
           <article class="slide-shell slide-shell--ai-requirements slide-shell--ai-requirements-solution">
             <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
               <p class="slide-kicker">해결책</p>
-              <h1 class="slide-title slide-title--wrap">현재는 이 모든 요구사항이<br/>AI 발전 덕분에 해결 가능합니다</h1>
+              <h1 class="slide-title">현재는 이 모든 요구사항이<br/>AI 발전 덕분에 해결 가능합니다</h1>
             </div>
             <div class="slide-side-media slide-side-media--ai-requirements">
               <div class="slide-ai-requirements-grid">
@@ -4654,7 +4076,6 @@
             </div>
           </article>
         </section>
-
         <section class="slide">
           <article class="slide-shell">
             <div class="slide-copy">
@@ -4673,7 +4094,6 @@
             </div>
           </article>
         </section>
-
         <section class="slide">
           <article class="slide-shell">
             <div class="slide-copy slide-copy--with-side-media">
@@ -4698,7 +4118,6 @@
             </div>
           </article>
         </section>
-
         <section class="slide">
           <article class="slide-shell">
             <div class="slide-copy slide-copy--with-side-media">
@@ -4718,13 +4137,12 @@
             </div>
           </article>
         </section>
-
         <section class="slide">
           <article class="slide-shell">
             <div class="slide-copy slide-copy--with-side-media">
               <p class="slide-kicker">고객</p>
               <h1 class="slide-title">유저 중 일부는<br/>
-                HashChat에 의존합니다
+                벌써 HashChat에 의존합니다
               </h1>
               <p class="slide-body">
                 한 일본인 유저는 2주간 HashChat을 매일 2.5시간씩 사용했습니다.<br/>
@@ -4747,448 +4165,13 @@
             </div>
           </article>
         </section>
-
-        <section class="slide">
-          <article class="slide-shell slide-shell--market-overview">
-            <div class="slide-copy slide-copy--market-overview">
-              <p class="slide-kicker">고객</p>
-              <h1 class="slide-title"><span>일부 서비스들은 통번역을 나름 제공하지만</span><br/><span>아직 부족합니다</span></h1>
-            </div>
-            <div class="slide-market-overview-row slide-market-overview-row--three">
-              <article class="slide-market-overview-item">
-                <img class="slide-market-overview-logo" src="./assets/logo-hellotalk.png" alt="" />
-                <p class="slide-market-overview-name">HelloTalk</p>
-              </article>
-              <article class="slide-market-overview-item">
-                <img class="slide-market-overview-logo" src="./assets/logo-market-kfriends-blue.jpg" alt="" />
-                <p class="slide-market-overview-name">K-Friends</p>
-              </article>
-              <article class="slide-market-overview-item">
-                <img class="slide-market-overview-logo" src="./assets/logo-market-connecting.jpg" alt="" />
-                <p class="slide-market-overview-name">커넥팅</p>
-              </article>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--kfriends-goal">
-              <p class="slide-kicker">해결책</p>
-              <h1 class="slide-title">저희는 훨씬 싸고 편한<br/>통번역 경험을 제공합니다</h1>
-            </div>
-            <div class="slide-side-media slide-side-media--kfriends-goal slide-side-media--voicetalk">
-              <img class="slide-voicetalk-image" src="./assets/hashchat-voicetalk-ko.jpg" alt="HashChat 실시간 통역 보이스톡 화면" />
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--goal-split">
-              <p class="slide-kicker">배운 점</p>
-              <h1 class="slide-title">4개월 운영하며 깊이 깨달은 두 가지</h1>
-              <div class="slide-goal-columns">
-                <article class="slide-goal slide-goal--left">
-                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">번역 툴로 시작하면</span><br/>업무용으로만 쓴다</h2>
-                </article>
-                <article class="slide-goal slide-goal--right">
-                  <h2 class="slide-goal-text"><span class="slide-goal-emphasis">콜드 스타트는</span><br/>걱정할 필요 없다</h2>
-                </article>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--center">
-              <p class="slide-kicker">배운 점 1</p>
-              <h1 class="slide-title">번역 툴로 시작하면<br/>소셜링 용도로는 아무도 쓰지 않습니다</h1>
-              <p class="slide-body" style="max-width: none;">번역 품질에는 만족했지만, 친구를 만나러 번역 앱을 켜지는 않았습니다.<br/>소셜링은 헬로톡 같은 다른 앱에서 하고, HashChat은 보조 도구였습니다.</p>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell slide-shell--ai-requirements">
-            <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
-              <p class="slide-kicker">배운 점 1</p>
-              <h1 class="slide-title slide-title--wrap">실제로 쓰인 곳은 대부분 업무 현장이었습니다</h1>
-            </div>
-            <div class="slide-side-media slide-side-media--ai-requirements">
-              <div class="slide-ai-requirements-grid slide-roadmap-grid">
-                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--named">
-                  <h2 class="slide-ai-requirement-title">미용실 사장님</h2>
-                  <p class="slide-ai-requirement-description slide-roadmap-description">외국인 손님 상담·응대</p>
-                </article>
-                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--named">
-                  <h2 class="slide-ai-requirement-title">통역가 취업</h2>
-                  <p class="slide-ai-requirement-description slide-roadmap-description">영어를 못해도 통역 업무</p>
-                </article>
-                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--named">
-                  <h2 class="slide-ai-requirement-title">여행 가이드</h2>
-                  <p class="slide-ai-requirement-description slide-roadmap-description">일본인 관광객 안내</p>
-                </article>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--center">
-              <p class="slide-kicker">배운 점 2</p>
-              <h1 class="slide-title">네트워크 효과가 없어도<br/>소셜링 서비스는 생각보다 잘 쓰입니다</h1>
-              <p class="slide-body" style="max-width: none;">유저가 적은 초기에도 게시글을 올리고, 댓글을 달아 줍니다.</p>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell slide-shell--market-overview">
-            <div class="slide-copy slide-copy--market-overview">
-              <p class="slide-kicker">배운 점 2</p>
-              <h1 class="slide-title"><span>비슷한 시기에 시작한 서비스들과</span><br/><span>HashChat에서 직접 확인했습니다</span></h1>
-            </div>
-            <div class="slide-market-overview-row slide-market-overview-row--three slide-market-overview-row--four">
-              <article class="slide-market-overview-item">
-                <img class="slide-market-overview-logo" src="./assets/logo-market-wizet.jpg" alt="" />
-                <p class="slide-market-overview-name">위제트<br/>Wizet</p>
-              </article>
-              <article class="slide-market-overview-item">
-                <img class="slide-market-overview-logo" src="./assets/logo-market-doran.jpg" alt="" />
-                <p class="slide-market-overview-name">도란<br/>Doran</p>
-              </article>
-              <article class="slide-market-overview-item">
-                <img class="slide-market-overview-logo" src="./assets/logo-market-gatchi.jpg" alt="" />
-                <p class="slide-market-overview-name">같이<br/>Gatchi</p>
-              </article>
-              <article class="slide-market-overview-item">
-                <img class="slide-market-overview-logo" src="./assets/site/hashchat-icon.png" alt="" />
-                <p class="slide-market-overview-name">해시챗<br/>HashChat</p>
-              </article>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--center">
-              <p class="slide-kicker">배운 점</p>
-              <h1 class="slide-title">그래서 11월부터 소셜링 서비스로<br/>완전 개편을 시작했습니다</h1>
-              <p class="slide-body" style="max-width: none;">콜드 스타트를 걱정하기보다 진정성 있게 다가가면,<br/>유저들도 이해하고 함께 시작해 줍니다.</p>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--kfriends-goal">
-              <p class="slide-kicker">해결책</p>
-              <h1 class="slide-title" style="white-space: normal; font-size: clamp(2.4rem, 4vw, 4.6rem);">언어 학습 위주의 서비스는<br/>대부분 쉽게 이탈합니다</h1>
-            </div>
-            <div class="slide-side-media slide-side-media--kfriends-goal slide-side-media--voicetalk">
-              <img class="slide-voicetalk-image slide-voicetalk-image--plain" src="./assets/deck-language-learning-chat.png" alt="언어 학습 위주 채팅 화면 예시" />
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--kfriends-goal">
-              <p class="slide-kicker">해결책</p>
-              <h1 class="slide-title" style="white-space: normal; font-size: clamp(2.4rem, 4vw, 4.6rem);">HashChat은<br/>언어 장벽을 없애고<br/>놀이만을 목표로 합니다</h1>
-            </div>
-            <div class="slide-side-media slide-side-media--kfriends-goal slide-side-media--voicetalk">
-              <img class="slide-voicetalk-image slide-voicetalk-image--plain" src="./assets/deck-play-voice-chat.jpg" alt="여러 나라 사람들이 헤드셋을 끼고 각자 언어로 대화하는 그림" />
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--center">
-              <h1 class="slide-title slide-title--part">2부<br/>수익 모델</h1>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell slide-shell--ai-requirements slide-shell--problem">
-            <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
-              <p class="slide-kicker">수익 모델</p>
-              <h1 class="slide-title">유저가 충분히 쌓이면<br/>수익 모델을 해결합니다</h1>
-            </div>
-            <div class="slide-side-media slide-side-media--ai-requirements">
-              <div class="slide-ai-requirements-grid">
-                <article class="slide-ai-requirement slide-ai-requirement--dim">
-                  <h2 class="slide-ai-requirement-title">언어 장벽</h2>
-                  <p class="slide-ai-requirement-description">말이 안 통해 대화가 금방 끊김</p>
-                </article>
-                <article class="slide-ai-requirement slide-ai-requirement--dim">
-                  <h2 class="slide-ai-requirement-title">비매너 회원</h2>
-                  <p class="slide-ai-requirement-description">불쾌한 경험 때문에 떠남</p>
-                </article>
-                <article class="slide-ai-requirement slide-ai-requirement--dim">
-                  <h2 class="slide-ai-requirement-title">일회성 관계</h2>
-                  <p class="slide-ai-requirement-description">한 번 인사하고 흐지부지</p>
-                </article>
-                <article class="slide-ai-requirement slide-ai-requirement--dim">
-                  <h2 class="slide-ai-requirement-title">겉도는 대화</h2>
-                  <p class="slide-ai-requirement-description">비슷한 얘기만 반복됨</p>
-                </article>
-                <article class="slide-ai-requirement slide-ai-requirement--dim">
-                  <h2 class="slide-ai-requirement-title">콘텐츠 부재</h2>
-                  <p class="slide-ai-requirement-description">연결 이상의 즐길 거리가 없음</p>
-                </article>
-                <article class="slide-ai-requirement slide-ai-requirement--focus">
-                  <h2 class="slide-ai-requirement-title">확실한 BM 부재</h2>
-                  <p class="slide-ai-requirement-description">돈을 낼 정도는 아님</p>
-                </article>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell slide-shell--ai-requirements">
-            <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
-              <p class="slide-kicker">수익 모델</p>
-              <h1 class="slide-title">외국인 유저들이 한국인과의 대화에서<br/>얻고자 하는 건 구체적으로 세 가지입니다</h1>
-            </div>
-            <div class="slide-side-media slide-side-media--ai-requirements">
-              <div class="slide-ai-requirements-grid slide-roadmap-grid">
-                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--plain">
-                  <h2 class="slide-ai-requirement-title">한국어 학습</h2>
-                </article>
-                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--plain">
-                  <h2 class="slide-ai-requirement-title">한국 여행 정보</h2>
-                </article>
-                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--plain">
-                  <h2 class="slide-ai-requirement-title">오프라인 만남</h2>
-                </article>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell slide-shell--ai-requirements">
-            <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
-              <p class="slide-kicker">수익 모델</p>
-              <h1 class="slide-title">이 중 한국 여행 정보 제공으로<br/>수익을 해결합니다</h1>
-            </div>
-            <div class="slide-side-media slide-side-media--ai-requirements">
-              <div class="slide-ai-requirements-grid slide-roadmap-grid">
-                <article class="slide-ai-requirement slide-ai-requirement--dim slide-roadmap-step slide-roadmap-step--plain">
-                  <h2 class="slide-ai-requirement-title">한국어 학습</h2>
-                </article>
-                <article class="slide-ai-requirement slide-ai-requirement--focus slide-roadmap-step slide-roadmap-step--plain">
-                  <h2 class="slide-ai-requirement-title">한국 여행 정보</h2>
-                </article>
-                <article class="slide-ai-requirement slide-ai-requirement--dim slide-roadmap-step slide-roadmap-step--plain">
-                  <h2 class="slide-ai-requirement-title">오프라인 만남</h2>
-                </article>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell slide-shell--ai-requirements">
-            <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
-              <p class="slide-kicker">수익 모델</p>
-              <h1 class="slide-title">외국인 관광객이 가장 궁금해하는<br/>여행 정보는 세 가지입니다</h1>
-            </div>
-            <div class="slide-side-media slide-side-media--ai-requirements">
-              <div class="slide-ai-requirements-grid slide-roadmap-grid">
-                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--plain">
-                  <h2 class="slide-ai-requirement-title">맛집</h2>
-                </article>
-                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--plain">
-                  <h2 class="slide-ai-requirement-title">미용실</h2>
-                </article>
-                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--plain">
-                  <h2 class="slide-ai-requirement-title">미용 병원</h2>
-                </article>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--with-side-media slide-copy--offline-work">
-              <p class="slide-kicker">고객</p>
-              <h1 class="slide-title">이미 HashChat을 사용하셨던<br/>미용실 사장님들이 꽤 계십니다</h1>
-            </div>
-            <div class="slide-side-media slide-side-media--offline-work">
-              <img
-                class="slide-preview-image slide-preview-image--offline-work"
-                src="./assets/offline-work-mingle.png"
-                alt="오프라인 및 업무용 통번역 수요를 보여주는 모바일 화면"
-              />
-              <p class="slide-offline-work-caption">
-                미용실 사장님들이 외국인 관광객 대면할 때 많이 사용
-              </p>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell slide-shell--ai-requirements">
-            <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
-              <p class="slide-kicker">수익 모델</p>
-              <h1 class="slide-title">인스타그램을 운영하는<br/>이 매장들을 하나하나 영업해서<br/>입점시킬 계획입니다</h1>
-            </div>
-            <div class="slide-side-media slide-side-media--ai-requirements">
-              <div class="slide-ai-requirements-grid slide-roadmap-grid">
-                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--plain">
-                  <h2 class="slide-ai-requirement-title">맛집</h2>
-                  <p class="slide-store-count">약 4~6만</p>
-                </article>
-                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--plain">
-                  <h2 class="slide-ai-requirement-title">미용실</h2>
-                  <p class="slide-store-count">약 1.1만</p>
-                </article>
-                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--plain">
-                  <h2 class="slide-ai-requirement-title">미용 병원</h2>
-                  <p class="slide-store-count">약 3천</p>
-                </article>
-              </div>
-              <p class="slide-store-count-caption">인스타그램 계정을 운영하는 매장 수</p>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell slide-shell--ai-requirements">
-            <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
-              <p class="slide-kicker">수익 모델</p>
-              <h1 class="slide-title slide-title--wrap">해시챗이 이 사업자들에게 제공하려는 가치</h1>
-            </div>
-            <div class="slide-side-media slide-side-media--ai-requirements">
-              <div class="slide-ai-requirements-grid slide-roadmap-grid">
-                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--named">
-                  <h2 class="slide-ai-requirement-title">노출 &amp; 홍보</h2>
-                  <p class="slide-ai-requirement-description slide-roadmap-description">외국인 고객 유치</p>
-                </article>
-                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--named">
-                  <h2 class="slide-ai-requirement-title">통번역</h2>
-                  <p class="slide-ai-requirement-description slide-roadmap-description">편리한 상담/예약 &amp; 콘텐츠 국제화</p>
-                </article>
-                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--named">
-                  <h2 class="slide-ai-requirement-title">AI 상담</h2>
-                  <p class="slide-ai-requirement-description slide-roadmap-description">24시간 간편한 CS 운영</p>
-                </article>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell slide-shell--ai-requirements">
-            <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
-              <p class="slide-kicker">수익 모델</p>
-              <h1 class="slide-title slide-title--wrap">해시챗이 외국인 관광객에게 제공하려는 가치</h1>
-            </div>
-            <div class="slide-side-media slide-side-media--ai-requirements">
-              <div class="slide-ai-requirements-grid slide-roadmap-grid slide-roadmap-grid--two">
-                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--named">
-                  <h2 class="slide-ai-requirement-title">한국인과의 소셜링</h2>
-                </article>
-                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--named">
-                  <h2 class="slide-ai-requirement-title">콘텐츠 중심의 여행 계획</h2>
-                </article>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--kfriends-goal">
-              <p class="slide-kicker">수익 모델</p>
-              <h1 class="slide-title slide-title--toki">Toki라는 서비스가<br/>여행 계획과 SNS 콘텐츠의<br/>결합의 힘을 잘 보여줬습니다</h1>
-            </div>
-            <div class="slide-side-media slide-side-media--kfriends-goal slide-side-media--voicetalk slide-side-media--toki">
-              <img class="slide-toki-image slide-toki-image--app" src="./assets/deck-toki-itinerary.jpg" alt="Toki 여행 일정 관리 앱 화면" />
-              <img class="slide-toki-image slide-toki-image--saved" src="./assets/deck-toki-saved-places.jpg" alt="Toki SNS 핫플 AI 저장 앱 화면" />
-              <img class="slide-toki-image slide-toki-image--post" src="./assets/deck-toki-logo.jpg" alt="Toki 여행 앱 추천 SNS 게시물" />
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell slide-shell--ai-requirements">
-            <div class="slide-copy slide-copy--center slide-copy--ai-requirements">
-              <p class="slide-kicker">목표</p>
-              <h1 class="slide-title slide-title--wrap">HashChat이 이루려는 3가지</h1>
-            </div>
-            <div class="slide-side-media slide-side-media--ai-requirements">
-              <div class="slide-ai-requirements-grid slide-roadmap-grid">
-                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--named">
-                  <h2 class="slide-ai-requirement-title">사람 연결</h2>
-                  <p class="slide-ai-requirement-description slide-roadmap-description">한국인과 외국인을 잇는다</p>
-                </article>
-                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--named">
-                  <h2 class="slide-ai-requirement-title">여행 상품 연결</h2>
-                  <p class="slide-ai-requirement-description slide-roadmap-description">국내 사업자와 외국인 관광객을 잇는다</p>
-                </article>
-                <article class="slide-ai-requirement slide-roadmap-step slide-roadmap-step--named">
-                  <h2 class="slide-ai-requirement-title">여행 컨텐츠 국제화</h2>
-                  <p class="slide-ai-requirement-description slide-roadmap-description">한국 여행 콘텐츠를 전 세계로</p>
-                </article>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--center">
-              <h1 class="slide-title slide-title--part">3부<br/>최종 목표</h1>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--with-musk-exception slide-copy--with-cursor-logo">
-              <p class="slide-kicker">최종 목표</p>
-              <h1 class="slide-title">올 4월 X의 자동 번역이<br/>세상을 뒤집어 놓았습니다</h1>
-              <p class="slide-body">
-                열광적인 반응을 예상하지 못하신 분은 반성하셔야 됩니다.<br/>
-                단순히 '번역 보기' 버튼을 자동적용한 것에 불과한데<br/>
-                사람들이 열광한 이유는 무엇일까요?<br/>
-                사용 환경에 완전히 통합하는 것이 그만큼 중요하기 때문입니다.<br/>
-                저는 4/17에 출시예정인 X Chat도 기대하고 있습니다.
-              </p>
-            </div>
-            <div class="slide-side-media slide-side-media--musk-exception">
-              <div class="slide-musk-stack">
-                <img class="slide-musk-photo" src="./assets/elon-musk-hyuni-2023.png" alt="Elon Musk" />
-                <div class="slide-musk-service-list">
-                  <section class="slide-ai-native-item slide-musk-service-item">
-                    <img class="slide-ai-native-logo" src="./assets/logo-x.svg" alt="" />
-                    <h2 class="slide-ai-native-name">모든 컨텐츠 자동번역</h2>
-                  </section>
-                  <section class="slide-ai-native-item slide-musk-service-item">
-                    <img class="slide-ai-native-logo slide-ai-native-logo--xchat" src="./assets/logo-xchat.jpg" alt="" />
-                    <h2 class="slide-ai-native-name">4/17 출시 예정</h2>
-                  </section>
-                </div>
-              </div>
-            </div>
-          </article>
-        </section>
-
         <section class="slide">
           <article class="slide-shell">
             <div class="slide-copy slide-copy--with-side-media slide-copy--addon-subtitles">
               <p class="slide-kicker">고객</p>
-              <h1 class="slide-title">HashChat도 애드온 자막 수요로<br/>활용하는 고객들이 꽤 계셨습니다</h1>
+              <h1 class="slide-title">이외에도 애드온 자막 수요를<br/>
+                정말 많이 발견했습니다
+              </h1>
               <p class="slide-body slide-addon-subtitle-body">
                 샤오홍슈, 로블록스, 디스코드와 함께 HashChat을 사용하는 유저들이 있습니다.<br/>
                 이외에도 자막이 없는 콘텐츠를 볼 때 HashChat을 활용하고 싶어하는 수요가 종종 있었습니다.
@@ -5220,39 +4203,118 @@
             </div>
           </article>
         </section>
-
         <section class="slide">
-          <article class="slide-shell slide-shell--market-overview">
-            <div class="slide-copy slide-copy--market-overview">
-              <p class="slide-kicker">최종 목표</p>
-              <h1 class="slide-title"><span>기존 소셜 미디어는 비용 문제로</span><br/><span>번역이 아직 매우 제한적으로 제공됩니다</span></h1>
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media slide-copy--offline-work">
+              <p class="slide-kicker">고객</p>
+              <h1 class="slide-title">오프라인/업무용 통번역으로<br/>
+                사용하시는 분들도 많습니다
+              </h1>
+              <p class="slide-body slide-offline-work-body">
+                영어를 잘 못하는데 HashChat 덕분에 통역가로 취업한 아프리카 청년 한 분<br/>
+                일본인 관광객 대상 서울 여행 가이드로 보이는 분 한 분 등이 계십니다
+              </p>
             </div>
-            <div class="slide-market-overview-row slide-market-overview-row--three slide-market-overview-row--four">
-              <article class="slide-market-overview-item">
-                <img class="slide-market-overview-logo" src="./assets/logo-market-x.jpg" alt="" />
-                <p class="slide-market-overview-name">X</p>
-              </article>
-              <article class="slide-market-overview-item">
-                <img class="slide-market-overview-logo" src="./assets/logo-instagram.png" alt="" />
-                <p class="slide-market-overview-name">Instagram</p>
-              </article>
-              <article class="slide-market-overview-item">
-                <img class="slide-market-overview-logo" src="./assets/logo-market-threads.jpg" alt="" />
-                <p class="slide-market-overview-name">Threads</p>
-              </article>
-              <article class="slide-market-overview-item">
-                <img class="slide-market-overview-logo" src="./assets/logo-wechat.jpg" alt="" />
-                <p class="slide-market-overview-name">WeChat</p>
-              </article>
+            <div class="slide-side-media slide-side-media--offline-work">
+              <img
+                class="slide-preview-image slide-preview-image--offline-work"
+                src="./assets/offline-work-mingle.png"
+                alt="오프라인 및 업무용 통번역 수요를 보여주는 모바일 화면"
+              />
+              <p class="slide-offline-work-caption">
+                미용실 사장님들이 외국인 관광객 대면할 때 많이 사용
+              </p>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell slide-shell--market slide-shell--market-categories slide-shell--customer-experiences">
+            <div class="slide-copy slide-copy--market slide-copy--market-categories slide-copy--customer-experiences">
+              <p class="slide-kicker">고객</p>
+              <h1 class="slide-title">정리하면 7 가지의 UX가 존재합니다<br/>
+                이를 하나씩 각개격파 할 생각입니다
+              </h1>
+            </div>
+            <div class="slide-side-media slide-side-media--market slide-side-media--market-categories slide-side-media--market-categories--seven" aria-hidden="true">
+              <div class="slide-market-grid slide-market-grid--categories slide-market-grid--categories-seven">
+                <section class="slide-market-category slide-market-category--language slide-market-category--pair">
+                  <h2 class="slide-market-category-title">온라인 문화교류</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--r: -8deg" src="./assets/logo-hellotalk.png" alt="" />
+                    <img class="slide-market-logo" style="--r: 7deg" src="./assets/logo-market-kfriends-blue.jpg" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--voice">
+                  <h2 class="slide-market-category-title">보이스톡 서비스</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--r: -5deg" src="./assets/logo-discord.png" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--addon slide-market-category--pair">
+                  <h2 class="slide-market-category-title">애드온 자막</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--r: -7deg" src="./assets/logo-market-immersive-translate.jpg" alt="" />
+                    <img class="slide-market-logo" style="--r: 8deg" src="./assets/logo-market-caplo.jpg" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--offline">
+                  <h2 class="slide-market-category-title">오프라인 만남</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--r: -6deg" src="./assets/logo-market-couchsurfing.jpg" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--tourist">
+                  <h2 class="slide-market-category-title">오프라인 관광객 응대</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--r: 6deg" src="./assets/logo-google-translate.jpg" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--travel slide-market-category--triple">
+                  <h2 class="slide-market-category-title">관광지 정보/상담/예약</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--r: -8deg" src="./assets/logo-market-konest.jpg" alt="" />
+                    <img class="slide-market-logo" style="--r: 5deg" src="./assets/logo-market-fresha.jpg" alt="" />
+                    <img class="slide-market-logo" style="--r: 9deg" src="./assets/logo-market-gangnam-unnie.jpg" alt="" />
+                  </div>
+                </section>
+                <section class="slide-market-category slide-market-category--meeting">
+                  <h2 class="slide-market-category-title">다국어 회의</h2>
+                  <div class="slide-market-logo-cloud">
+                    <img class="slide-market-logo" style="--r: -5deg" src="./assets/logo-cuckoo.png" alt="" />
+                  </div>
+                </section>
+              </div>
             </div>
           </article>
         </section>
 
         <section class="slide">
           <article class="slide-shell">
-            <div class="slide-copy slide-copy--center">
-              <p class="slide-kicker">최종 목표</p>
-              <h1 class="slide-title">여행 컨텐츠에만 집중하면<br/>통번역 비용을 견딜 수 있습니다</h1>
+            <div class="slide-copy slide-copy--kfriends-goal">
+              <p class="slide-kicker">목표</p>
+              <h1 class="slide-title">첫 번째 목표는<br/>K프렌즈 유저 흡수입니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--kfriends-goal">
+              <div class="slide-kfriends-goal-gallery">
+                <img
+                  class="slide-kfriends-goal-image slide-kfriends-goal-image--story"
+                  src="./assets/kfriends-story.png"
+                  alt="Kfriends 스토리 화면"
+                />
+                <img
+                  class="slide-kfriends-goal-image slide-kfriends-goal-image--version-history"
+                  src="./assets/kfriends-version-history.png"
+                  alt="Kfriends 버전 기록 화면"
+                />
+              </div>
+              <p class="slide-kfriends-goal-caption">
+                <img
+                  class="slide-kfriends-goal-caption-logo"
+                  src="./assets/logo-market-kfriends-blue.jpg"
+                  alt="Kfriends 앱 로고"
+                />
+                <span>Kfriends 앱 화면. 2년에 한 번씩 업데이트.</span>
+              </p>
             </div>
           </article>
         </section>
@@ -5278,14 +4340,32 @@
         </section>
 
         <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <p class="slide-kicker">비전</p>
+              <h1 class="slide-title"><br/>통번역으로 시작해서<br/>AI 네이티브 메신저/SNS로!
+              </h1>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide slide--hero">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <h1 class="slide-title">팀원 구합니다</h1>
+              <p class="slide-body">제품향 인재든 사업향 인재든, 문과생이든 이과생이든 상관 없습니다.</p>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
           <article class="slide-shell slide-shell--download-qr">
             <div class="slide-copy slide--hero slide-copy--download-qr slide-copy--final-cta">
               <h1 class="slide-title">감사합니다.<br/>Q &amp; A</h1>
               <nav class="slide-final-links" aria-label="HashChat links">
                 <div class="slide-final-link-row">
-                  <a class="slide-final-link slide-final-link--brand" href="https://hashchat.minglelabs.app/">
-                    <img class="slide-final-logo--hashchat" src="./assets/site/hashchat-icon.png" alt="" />
-                    <span>HashChat</span>
+                  <a class="slide-final-link slide-final-link--brand" href="https://mingle-landing.vercel.app/normal">
+                    <img class="slide-final-logo--mingle" src="./assets/logo-mingle.png" alt="HashChat" />
                   </a>
                   <a class="slide-final-link slide-final-link--github" href="https://github.com/minglelabs/mingle">
                     <img class="slide-final-logo--github" src="./assets/logo-github.svg" alt="" />
@@ -5311,23 +4391,22 @@
             </div>
             <div class="slide-side-media slide-side-media--download-qr">
               <div class="slide-download-qr-label">
-                <img class="slide-download-app-icon" src="./assets/site/hashchat-icon.png" alt="HashChat 앱 아이콘" />
+                <img class="slide-download-app-icon" src="./assets/mingle-icon.png" alt="HashChat 앱 아이콘" />
                 <span>HashChat 다운로드 링크 👇</span>
               </div>
               <a
                 class="slide-download-qr-link"
-                href="https://hashchat.minglelabs.app/get"
+                href="https://mingle-landing.vercel.app/download"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="HashChat 앱 설치 페이지 열기"
               >
-                <img class="slide-download-qr" src="./assets/qr-hashchat-get.svg" alt="HashChat 앱 설치용 QR 코드" />
+                <img class="slide-download-qr" src="./assets/qr-mingle-download.svg" alt="HashChat 앱 설치용 QR 코드" />
               </a>
             </div>
           </article>
         </section>
       </div>
-      <div class="page-brand" aria-hidden="true">HashChat</div>
       <div class="page-controls" aria-label="페이지 이동">
         <button class="page-home-button" id="page-home-button" type="button" aria-label="처음으로 이동">
           <svg class="page-home-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
