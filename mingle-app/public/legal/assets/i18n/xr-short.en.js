@@ -1,7 +1,7 @@
 window.DECK_EN = {
 "blocks": {
-"언어 장벽 없는음성 메신저 HashChat": "A voice messenger<br/>without language barriers",
-"헬로톡, 디스코드보다 편한 외국인과의 대화 경험을 만듭니다.최종 업데이트 - 2026-11-26": "Talking with people abroad, made easier than on HelloTalk or Discord.<br/>Last updated: Nov 26, 2026",
+"언어 장벽 없이한국인을 만나는 곳HashChat": "Meet Koreans,<br/>no language barrier<br/>HashChat",
+"한국 여행·한국인 친구 매칭으로 시작해 메신저/SNS로 확장합니다.최종 업데이트 - 2026-11-26": "Starting with Korea travel and Korean friend matching, growing into a messenger and social network.<br/>Last updated: Nov 26, 2026",
 "HashChat 다운로드 링크 👇": "<img alt=\"HashChat app icon\" class=\"slide-download-app-icon\" src=\"./assets/site/hashchat-icon.png\"/> <span>Download HashChat 👇</span>",
 "문제": "Problem",
 "“ 외국인과 친해지고 싶은데 언어 장벽을 넘기 힘들다 ”": "<span class=\"slide-title-quote slide-title-quote--open mt-10\">“</span> <span class=\"slide-title-text\">I want to make friends abroad,<br/> but the language gets in the way</span> <span class=\"slide-title-quote slide-title-quote--close mt-10\">”</span>",
@@ -97,8 +97,8 @@ window.DECK_EN = {
 },
 "texts": {},
 "attrs": {
-"헬로톡, 디스코드보다 편한 외국인과의 대화 경험을 만듭니다.": "Talking with people abroad, made easier than on HelloTalk or Discord.",
-"언어 장벽 없는 음성 메신저 HashChat": "HashChat: a voice messenger without language barriers",
+"한국 여행·한국인 친구 매칭으로 시작해 메신저/SNS로 확장합니다.": "Starting with Korea travel and Korean friend matching, growing into a messenger and social network.",
+"언어 장벽 없이 한국인을 만나는 곳 HashChat": "HashChat: meet Koreans without language barriers",
 "HashChat 앱 아이콘": "HashChat app icon",
 "HashChat 앱 설치 페이지 열기": "Open the HashChat install page",
 "HashChat 앱 설치용 QR 코드": "QR code to install HashChat",
