@@ -27,7 +27,7 @@ window.DECK_EN = {
 "위제트": "Wizet",
 "도란": "Doran",
 "갓치": "Gatchi",
-"그래서 11월부터소셜링 서비스로 바로 시작했습니다": "So in November we launched<br/>straight as a social service",
+"그래서 11월부터 소셜링 서비스로완전 개편을 시작했습니다": "So in November we started<br/>a complete revamp into a social service",
 "콜드 스타트를 걱정하기보다 진정성 있게 다가가면,유저들도 이해하고 함께 시작해 줍니다.": "Instead of worrying about the cold start, show up sincerely,<br/>and users understand and start with you.",
 "이미 HashChat을 사용하셨던미용실 사장님들이 꽤 계십니다": "Quite a few hair salon owners<br/>have already used HashChat",
 "해시챗이 이 사업자들에게 제공하려는 가치": "What HashChat aims to offer these businesses",
