@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { resolvePostCategoryCopy } from "@/i18n/post-category-copy";
 import { PRIMARY_UI_LOCALES } from "@/i18n/mingle-locales";
 import {
+  EMPTY_POST_INTRO_EXTRAS,
   POST_CATEGORIES,
   POST_HOBBIES,
   parsePostCategory,
@@ -33,7 +34,7 @@ describe("post categories", () => {
     expect(postIntroProblem({ text: "안녕하세요, 서울에 사는 민지예요", hobbies: ["travel"] })).toBeNull();
     const route = read("src/app/api/posts/route.ts");
     expect(route).toContain("'intro_hobbies_required'");
-    expect(route).toContain("await applyPostCategory({ postId: result.post.id, authorId: userId, category, hobbies, publishedAt: result.post.publishedAt })");
+    expect(route).toContain("await applyPostCategory({ postId: result.post.id, authorId: userId, category, hobbies, introExtras, publishedAt: result.post.publishedAt })");
   });
 
   it("takes an hour post out of every list once its hour is over", () => {
@@ -50,9 +51,9 @@ describe("post categories", () => {
   });
 
   it("reads a stored self-introduction defensively", () => {
-    expect(readPostIntro({ country: "kr", age: 27, heightCm: 177.4, hobbies: ["travel", "x"] })).toEqual({ country: "KR", age: 27, heightCm: 177, hobbies: ["travel"] });
+    expect(readPostIntro({ country: "kr", age: 27, heightCm: 177.4, hobbies: ["travel", "x"] })).toEqual({ country: "KR", age: 27, heightCm: 177, hobbies: ["travel"], ...EMPTY_POST_INTRO_EXTRAS });
     expect(readPostIntro(null)).toBeNull();
-    expect(readPostIntro({ country: "Korea", age: -1 })).toEqual({ country: null, age: null, heightCm: null, hobbies: [] });
+    expect(readPostIntro({ country: "Korea", age: -1 })).toEqual({ country: null, age: null, heightCm: null, hobbies: [], ...EMPTY_POST_INTRO_EXTRAS });
   });
 
   it("is picked on the write screen and shown on the card, in every app language", () => {

@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { POST_HOUR_MS, type PostCategory, type PostHobby, type PostIntro } from '@/lib/post-category'
+import { EMPTY_POST_INTRO_EXTRAS, POST_HOUR_MS, type PostCategory, type PostHobby, type PostIntro, type PostIntroExtras } from '@/lib/post-category'
 import { resolveNationalityCountry } from '@/lib/nationality'
 import { calculateProfileAge } from '@/server/user-profile'
 
@@ -14,6 +14,8 @@ export async function applyPostCategory(args: {
   authorId: string
   category: PostCategory
   hobbies: PostHobby[]
+  /** Job, personality, food, animals, drinking, interests (all optional). */
+  introExtras?: PostIntroExtras
   publishedAt: Date
 }): Promise<void> {
   // A call post is up for an hour too: its author has to be around to answer.
@@ -34,6 +36,7 @@ export async function applyPostCategory(args: {
     age: author ? calculateProfileAge(author.birthDate) ?? null : null,
     heightCm: typeof author?.heightCm === 'number' ? author.heightCm : null,
     hobbies: args.hobbies,
+    ...(args.introExtras ?? EMPTY_POST_INTRO_EXTRAS),
   }
   await prisma.post.updateMany({ where: { id: args.postId, authorId: args.authorId }, data: { category: 'intro', intro } })
 }

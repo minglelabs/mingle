@@ -25,7 +25,68 @@ export const POST_INTRO_HOBBIES_MAX = 5;
 /** A self-introduction says something: this many characters at least. */
 export const POST_INTRO_TEXT_MIN = 10;
 
-export type PostIntro = {
+/**
+ * More of a self-introduction (owner, 2026-11-26), all optional and all
+ * picked from lists, so every viewer reads them in their own language: job,
+ * personality, favourite food and animal, drinking, and what they are into
+ * these days.
+ */
+export const POST_INTRO_JOBS = ["student", "office", "freelance", "business", "professional", "public", "creator", "service", "job_seeking", "other"] as const;
+export const POST_INTRO_PERSONALITIES = ["outgoing", "introvert", "warm", "funny", "calm", "lively", "honest", "planner", "spontaneous"] as const;
+export const POST_INTRO_FOODS = ["korean", "japanese", "chinese", "western", "street", "dessert", "spicy", "meat", "seafood", "vegetarian"] as const;
+export const POST_INTRO_ANIMALS = ["dog", "cat", "rabbit", "hamster", "bird", "fish", "reptile"] as const;
+export const POST_INTRO_DRINKS = ["never", "sometimes", "often", "social"] as const;
+export const POST_INTRO_INTERESTS = ["fitness", "money", "self_growth", "dating", "trip_plans", "korean", "food_hunt", "new_hobby", "career", "kpop"] as const;
+/** At most this many of each list where several can be picked. */
+export const POST_INTRO_MULTI_MAX = 3;
+
+export type PostIntroJob = (typeof POST_INTRO_JOBS)[number];
+export type PostIntroPersonality = (typeof POST_INTRO_PERSONALITIES)[number];
+export type PostIntroFood = (typeof POST_INTRO_FOODS)[number];
+export type PostIntroAnimal = (typeof POST_INTRO_ANIMALS)[number];
+export type PostIntroDrink = (typeof POST_INTRO_DRINKS)[number];
+export type PostIntroInterest = (typeof POST_INTRO_INTERESTS)[number];
+
+export type PostIntroExtras = {
+  job: PostIntroJob | null;
+  personality: PostIntroPersonality[];
+  foods: PostIntroFood[];
+  animals: PostIntroAnimal[];
+  drink: PostIntroDrink | null;
+  interests: PostIntroInterest[];
+};
+
+export const EMPTY_POST_INTRO_EXTRAS: PostIntroExtras = { job: null, personality: [], foods: [], animals: [], drink: null, interests: [] };
+
+function pickOne<T extends string>(list: readonly T[], value: unknown): T | null {
+  return (list as readonly unknown[]).includes(value) ? (value as T) : null;
+}
+
+function pickSome<T extends string>(list: readonly T[], value: unknown): T[] {
+  if (!Array.isArray(value)) return [];
+  const out: T[] = [];
+  for (const entry of value) {
+    if (!(list as readonly unknown[]).includes(entry) || out.includes(entry as T)) continue;
+    out.push(entry as T);
+    if (out.length >= POST_INTRO_MULTI_MAX) break;
+  }
+  return out;
+}
+
+/** What a client sent (or a stored row holds): known keys only, at most three of each list. */
+export function sanitizePostIntroExtras(value: unknown): PostIntroExtras {
+  const row = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  return {
+    job: pickOne(POST_INTRO_JOBS, row.job),
+    personality: pickSome(POST_INTRO_PERSONALITIES, row.personality),
+    foods: pickSome(POST_INTRO_FOODS, row.foods),
+    animals: pickSome(POST_INTRO_ANIMALS, row.animals),
+    drink: pickOne(POST_INTRO_DRINKS, row.drink),
+    interests: pickSome(POST_INTRO_INTERESTS, row.interests),
+  };
+}
+
+export type PostIntro = PostIntroExtras & {
   /** ISO 3166-1 alpha-2, from the profile. */
   country: string | null;
   age: number | null;
@@ -65,6 +126,7 @@ export function readPostIntro(value: unknown): PostIntro | null {
     age: number(row.age),
     heightCm: number(row.heightCm),
     hobbies: sanitizePostHobbies(row.hobbies),
+    ...sanitizePostIntroExtras(row),
   };
 }
 

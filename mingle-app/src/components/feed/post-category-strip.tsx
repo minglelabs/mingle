@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import FlagEmoji from "@/components/flag-emoji";
 import PostCallButton from "@/components/feed/post-call-button";
 import { resolvePostCategoryCopy } from "@/i18n/post-category-copy";
+import { resolvePostIntroExtrasCopy } from "@/i18n/post-intro-extras-copy";
 import type { AppLocale } from "@/i18n";
 import { formatProfileAge } from "@/i18n/profile-age-copy";
 import { countryFlagEmoji, getCountryDisplayName } from "@/lib/nationality";
@@ -36,6 +37,7 @@ export default function PostCategoryStrip({
   ownPost?: boolean;
 }) {
   const copy = useMemo(() => resolvePostCategoryCopy(locale), [locale]);
+  const extrasCopy = useMemo(() => resolvePostIntroExtrasCopy(locale), [locale]);
   // The minutes run down while the card is on screen.
   const [now, setNow] = useState(() => Date.now());
   const isCall = category === "call" && Boolean(expiresAt);
@@ -83,6 +85,13 @@ export default function PostCategoryStrip({
         {typeof intro.age === "number" ? <span className={PILL}>{formatProfileAge(intro.age, locale as AppLocale)}</span> : null}
         {typeof intro.heightCm === "number" ? <span className={`${PILL} tabular-nums`}>{intro.heightCm}cm</span> : null}
         {intro.hobbies.map((hobby) => <span key={hobby} className={PILL}>#{copy.hobbies[hobby]}</span>)}
+        {/* The optional rest (2026-11-26): job, drinking, personality, food, animals, lately. */}
+        {intro.job ? <span className={PILL} data-qa="post-intro-job">💼 {extrasCopy.jobs[intro.job]}</span> : null}
+        {intro.drink ? <span className={PILL} data-qa="post-intro-drink">🍷 {extrasCopy.drinks[intro.drink]}</span> : null}
+        {(intro.personality ?? []).map((entry) => <span key={`p-${entry}`} className={PILL}>🙂 {extrasCopy.personality[entry]}</span>)}
+        {(intro.foods ?? []).map((entry) => <span key={`f-${entry}`} className={PILL}>🍽 {extrasCopy.foods[entry]}</span>)}
+        {(intro.animals ?? []).map((entry) => <span key={`a-${entry}`} className={PILL}>🐾 {extrasCopy.animals[entry]}</span>)}
+        {(intro.interests ?? []).map((entry) => <span key={`i-${entry}`} className={PILL}>✨ {extrasCopy.interests[entry]}</span>)}
       </div>
     );
   }

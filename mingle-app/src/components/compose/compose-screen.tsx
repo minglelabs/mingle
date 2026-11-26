@@ -2,7 +2,7 @@
 
 import ComposeCategoryPicker from '@/components/compose/compose-category-picker'
 import { POST_CALL_LISTEN_EVENT } from '@/lib/post-call'
-import { postIntroProblem, type PostCategory, type PostHobby } from '@/lib/post-category'
+import { EMPTY_POST_INTRO_EXTRAS, postIntroProblem, type PostCategory, type PostHobby, type PostIntroExtras } from '@/lib/post-category'
 import { requestProfileBasics } from '@/lib/profile-basics'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -144,6 +144,7 @@ export default function ComposeScreen({
   // The post's kind (see @/lib/post-category); a new post starts as an ordinary one.
   const [category, setCategory] = useState<PostCategory>('free')
   const [hobbies, setHobbies] = useState<PostHobby[]>([])
+  const [introExtras, setIntroExtras] = useState<PostIntroExtras>(EMPTY_POST_INTRO_EXTRAS)
   const objectUrl = useRef<string | null>(null)
   // Latest image, read at save time so a debounced autosave (or an upload that
   // finishes later) never persists a stale image field.
@@ -539,6 +540,7 @@ export default function ComposeScreen({
         draftId,
         category,
         hobbies: category === 'intro' ? hobbies : undefined,
+        introExtras: category === 'intro' ? introExtras : undefined,
       })
       if (!accepted) {
         // Another publish started in between: same handling as above.
@@ -737,6 +739,8 @@ export default function ComposeScreen({
           category={category}
           onCategoryChange={setCategory}
           hobbies={hobbies}
+          introExtras={introExtras}
+          onIntroExtrasChange={setIntroExtras}
           onHobbiesChange={setHobbies}
           problem={introProblem}
         />

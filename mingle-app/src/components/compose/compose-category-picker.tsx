@@ -9,7 +9,8 @@ import type { AppLocale } from '@/i18n'
 import { formatProfileAge } from '@/i18n/profile-age-copy'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { countryFlagEmoji, getCountryDisplayName } from '@/lib/nationality'
-import { POST_CATEGORIES, POST_HOBBIES, POST_INTRO_HOBBIES_MAX, type PostCategory, type PostHobby } from '@/lib/post-category'
+import { POST_CATEGORIES, POST_HOBBIES, POST_INTRO_HOBBIES_MAX, type PostCategory, type PostHobby, type PostIntroExtras } from '@/lib/post-category'
+import ComposeIntroExtras from './compose-intro-extras'
 
 // Whether this is the app does not change while the page is open.
 const subscribeNever = () => () => undefined
@@ -28,6 +29,8 @@ export default function ComposeCategoryPicker({
   onCategoryChange,
   hobbies,
   onHobbiesChange,
+  introExtras,
+  onIntroExtrasChange,
   problem,
 }: {
   locale: string
@@ -35,6 +38,9 @@ export default function ComposeCategoryPicker({
   onCategoryChange: (category: PostCategory) => void
   hobbies: readonly PostHobby[]
   onHobbiesChange: (hobbies: PostHobby[]) => void
+  /** Job, personality, food, animals, drinking, interests (optional). */
+  introExtras: PostIntroExtras
+  onIntroExtrasChange: (next: PostIntroExtras) => void
   /** Why a self-introduction cannot be posted yet (shown under the form). */
   problem: 'hobbies' | 'text' | null
 }) {
@@ -132,6 +138,7 @@ export default function ComposeCategoryPicker({
             })}
           </div>
           {problem ? <p role="status" className="mt-2 text-[13px] font-semibold text-amber-700">{problem === 'hobbies' ? copy.needHobby : copy.needText}</p> : null}
+          <ComposeIntroExtras locale={locale} value={introExtras} onChange={onIntroExtrasChange} />
         </div>
       ) : null}
     </section>

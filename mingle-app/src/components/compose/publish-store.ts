@@ -50,6 +50,8 @@ export type PublishInput = {
   /** The post's kind and, for a self-introduction, the hobbies picked (see @/lib/post-category). Absent: an ordinary post. */
   category?: 'free' | 'hour' | 'intro' | 'call'
   hobbies?: string[]
+  /** The rest of a self-introduction (@/lib/post-category PostIntroExtras). */
+  introExtras?: Record<string, unknown>
 }
 
 export type PublishExtraImage = {
@@ -320,7 +322,7 @@ async function runPipeline(initialInput: PublishInput) {
           ? { imageObjectKey: input.imageObjectKey, imageWidth: input.imageWidth, imageHeight: input.imageHeight }
           : {}),
       ...(input.category && input.category !== 'free' ? { category: input.category } : {}),
-      ...(input.category === 'intro' ? { hobbies: input.hobbies ?? [] } : {}),
+      ...(input.category === 'intro' ? { hobbies: input.hobbies ?? [], introExtras: input.introExtras ?? {} } : {}),
     }),
   })
 

@@ -16,7 +16,7 @@ describe('attendance', () => {
   })
 
   it('reads the amounts, 0 turning a part off', () => {
-    expect(readAttendanceCoins({})).toEqual({ daily: 100, weekBonus: 300 })
-    expect(readAttendanceCoins({ ATTENDANCE_DAILY_COINS: '50', ATTENDANCE_WEEK_BONUS_COINS: '0' })).toEqual({ daily: 50, weekBonus: 0 })
+    expect(readAttendanceCoins({} as unknown as NodeJS.ProcessEnv)).toEqual({ daily: 100, weekBonus: 300 })
+    expect(readAttendanceCoins({ ATTENDANCE_DAILY_COINS: '50', ATTENDANCE_WEEK_BONUS_COINS: '0' } as unknown as NodeJS.ProcessEnv)).toEqual({ daily: 50, weekBonus: 0 })
   })
 })

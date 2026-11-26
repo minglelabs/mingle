@@ -7,7 +7,7 @@ import { parseImageKeyInput, parseImageListInput } from '@/server/posts/post-ima
 import { parseImageDimensions } from '@/server/posts/post-image-dimensions'
 import { POST_BODY_MAX_LENGTH, publishPost } from '@/server/posts/publish-post'
 import { queueOperatorAppPostForReview } from '@/server/operator-post-reserve/queue-app-post'
-import { parsePostCategory, postIntroProblem, sanitizePostHobbies } from '@/lib/post-category'
+import { parsePostCategory, postIntroProblem, sanitizePostHobbies, sanitizePostIntroExtras } from '@/lib/post-category'
 import { applyPostCategory } from '@/server/posts/post-category'
 
 export const runtime = 'nodejs'
@@ -68,6 +68,7 @@ export async function POST(request: NextRequest) {
   // The post's kind (see @/lib/post-category). A self-introduction needs a hobby and some text.
   const category = parsePostCategory(input.category)
   const hobbies = sanitizePostHobbies(input.hobbies)
+  const introExtras = sanitizePostIntroExtras(input.introExtras)
   if (category === 'intro') {
     const problem = postIntroProblem({ text, hobbies })
     if (problem) return json({ error: problem === 'hobbies' ? 'intro_hobbies_required' : 'intro_text_required' }, { status: 400 })
@@ -105,7 +106,7 @@ export async function POST(request: NextRequest) {
   // The kind is written right after the post exists (the publish pipeline is
   // shared with the seed script and knows nothing about kinds).
   if (result.kind === 'created' && category !== 'free') {
-    await applyPostCategory({ postId: result.post.id, authorId: userId, category, hobbies, publishedAt: result.post.publishedAt })
+    await applyPostCategory({ postId: result.post.id, authorId: userId, category, hobbies, introExtras, publishedAt: result.post.publishedAt })
       .catch((error) => console.error('[posts] category_failed', error instanceof Error ? error.name : 'unknown'))
   }
 

@@ -4,12 +4,12 @@ import { parseDmOpenAnswer } from './dm-open-coins'
 
 describe('dm open coins', () => {
   it('reads the price and the wait, off when asked', () => {
-    expect(readDmOpenCoins({})).toBe(500)
-    expect(readDmOpenCoins({ DM_OPEN_COINS: '300' })).toBe(300)
-    expect(readDmOpenCoins({ DM_OPEN_COINS: 'off' })).toBeNull()
-    expect(readDmOpenCoins({ DM_OPEN_COINS: '0' })).toBeNull()
-    expect(readDmOpenRefundHours({})).toBe(48)
-    expect(readDmOpenRefundHours({ DM_OPEN_REFUND_HOURS: '24' })).toBe(24)
+    expect(readDmOpenCoins({} as unknown as NodeJS.ProcessEnv)).toBe(500)
+    expect(readDmOpenCoins({ DM_OPEN_COINS: '300' } as unknown as NodeJS.ProcessEnv)).toBe(300)
+    expect(readDmOpenCoins({ DM_OPEN_COINS: 'off' } as unknown as NodeJS.ProcessEnv)).toBeNull()
+    expect(readDmOpenCoins({ DM_OPEN_COINS: '0' } as unknown as NodeJS.ProcessEnv)).toBeNull()
+    expect(readDmOpenRefundHours({} as unknown as NodeJS.ProcessEnv)).toBe(48)
+    expect(readDmOpenRefundHours({ DM_OPEN_REFUND_HOURS: '24' } as unknown as NodeJS.ProcessEnv)).toBe(24)
   })
 
   it('reads the server question, and nothing else', () => {
