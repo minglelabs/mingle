@@ -6,6 +6,7 @@ window.DECK_EN = {
 "문제": "Problem",
 "“ 한국인과 외국인은 서로 친해지고 싶어하는데 서로를 이어주는 서비스가 부족하다 ”": "<span class=\"slide-title-quote slide-title-quote--open mt-10\">“</span> <span class=\"slide-title-text\">Koreans and foreigners want to be friends,<br/> but few services bring them together</span> <span class=\"slide-title-quote slide-title-quote--close mt-10\">”</span>",
 "닭 vs 달걀 문제": "The chicken-and-egg problem",
+"이미 HashChat을 사용하셨던미용실 사장님들이 꽤 계십니다": "Quite a few hair salon owners<br/>have already used HashChat",
 "해시챗이 이 사업자들에게 제공하려는 가치": "What HashChat aims to offer these businesses",
 "해시챗이 외국인 관광객에게 제공하려는 가치": "What HashChat aims to offer foreign tourists",
 "현재 HashChat도 애드온 자막 수요로활용하는 고객들이 꽤 계십니다": "Quite a few customers already use HashChat<br/>as add-on captions",
