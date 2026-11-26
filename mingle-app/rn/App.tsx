@@ -166,6 +166,7 @@ import {
 import NativeQrScanner, {
   type NativeQrScannerRequest,
 } from './src/nativeQrScanner';
+import PhotoGalleryModal, { type PhotoGalleryAnswer, type PhotoGalleryLabels, type PhotoGalleryRequest } from './src/photoGallery/PhotoGalleryModal';
 import {
   buildNativeProfileLinkEventScript,
   parseNativeProfileLink,
@@ -1004,6 +1005,16 @@ type NativeImageSaveCommand = {
   };
 };
 
+// The write screen's own gallery (src/photoGallery, web: src/lib/native-photo-gallery.ts).
+type NativePhotoGalleryOpenCommand = {
+  type: 'native_photo_gallery_open';
+  payload?: {
+    requestId?: string;
+    max?: number;
+    labels?: Partial<PhotoGalleryLabels>;
+  };
+};
+
 type NativeFaceCheckCommand = {
   type: 'native_face_check';
   payload?: {
@@ -1122,6 +1133,7 @@ type WebViewCommand =
   | NativeQrSaveCommand
   | NativeImageSaveCommand
   | NativeFaceCheckCommand
+  | NativePhotoGalleryOpenCommand
   | NativePushRegisterCommand
   | NativeNavigationStateCommand
   | NativeBackAtTabRootCommand
@@ -2894,6 +2906,7 @@ function AppInner(): React.JSX.Element {
   const [isEdgeSwipeSuppressedByWeb, setIsEdgeSwipeSuppressedByWeb] = useState(false);
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
   const [qrScannerRequest, setQrScannerRequest] = useState<NativeQrScannerRequest | null>(null);
+  const [photoGalleryRequest, setPhotoGalleryRequest] = useState<PhotoGalleryRequest | null>(null);
   const canRenderNativeBanner = versionGate.status === 'ready';
   const shouldHideNativeBanners = useMemo(
     () => shouldHideNativeBannersForPathname(currentWebPathname),
@@ -3494,6 +3507,34 @@ function AppInner(): React.JSX.Element {
   const emitFaceCheckToWeb = useCallback((payload: NativeFaceCheckEvent) => {
     if (!isPageReadyRef.current || !webViewRef.current) return;
     const script = `window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_FACE_CHECK_EVENT)}, { detail: ${JSON.stringify(payload)} })); true;`;
+    webViewRef.current.injectJavaScript(script);
+  }, []);
+
+  // The write screen's own gallery: opens over the page, answers with the photos picked.
+  const handleNativePhotoGalleryOpen = useCallback((payload?: NativePhotoGalleryOpenCommand['payload']) => {
+    const requestId = typeof payload?.requestId === 'string' ? payload.requestId.trim().slice(0, 64) : '';
+    if (!requestId) return;
+    const max = typeof payload?.max === 'number' && Number.isFinite(payload.max) ? Math.min(10, Math.max(1, Math.round(payload.max))) : 10;
+    const text = (value: unknown, fallback: string) => (typeof value === 'string' && value.trim() ? value.trim().slice(0, 120) : fallback);
+    const labels = payload?.labels ?? {};
+    setPhotoGalleryRequest({
+      requestId,
+      max,
+      labels: {
+        title: text(labels.title, 'Photos'),
+        next: text(labels.next, 'Next'),
+        close: text(labels.close, 'Close'),
+        limited: text(labels.limited, 'Allow more photos'),
+        denied: text(labels.denied, 'Allow access to your photos to pick them here.'),
+        openSettings: text(labels.openSettings, 'Open Settings'),
+      },
+    });
+  }, []);
+
+  const handlePhotoGalleryAnswer = useCallback((answer: PhotoGalleryAnswer) => {
+    setPhotoGalleryRequest(null);
+    if (!webViewRef.current) return;
+    const script = `window.dispatchEvent(new CustomEvent('mingle:native-photos', { detail: ${JSON.stringify(answer)} })); true;`;
     webViewRef.current.injectJavaScript(script);
   }, []);
 
@@ -4679,6 +4720,11 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (parsed.type === 'native_photo_gallery_open') {
+      handleNativePhotoGalleryOpen(parsed.payload);
+      return;
+    }
+
     if (
       parsed.type === 'native_pip_start'
       || parsed.type === 'native_pip_update'
@@ -5200,6 +5246,7 @@ function AppInner(): React.JSX.Element {
     handleNativeQrSave,
     handleNativeImageSave,
     handleNativeFaceCheck,
+    handleNativePhotoGalleryOpen,
     handleNativeStart,
     handleNativeStop,
     handleNativeStatusRequest,
@@ -5632,6 +5679,7 @@ function AppInner(): React.JSX.Element {
       ttsStream: isNativeTtsStreamAvailable(),
       contacts: isNativeContactsAvailable(),
       faceCheck: typeof (NativeModules as { NativeQrImageModule?: NativeQrImageModule }).NativeQrImageModule?.detectFaces === 'function',
+      photoGallery: true,
       earphoneMicrophoneChoice: nativeEarphoneMicrophoneChoiceAvailable,
       micPermissionRequest: isNativeMicPermissionRequestAvailable(),
       deviceId: NATIVE_RUNTIME_CONFIG.deviceId,
@@ -6038,6 +6086,7 @@ function AppInner(): React.JSX.Element {
           onRead={handleNativeQrRead}
         />
       ) : null}
+      <PhotoGalleryModal request={photoGalleryRequest} onAnswer={handlePhotoGalleryAnswer} />
     </View>
   );
 }

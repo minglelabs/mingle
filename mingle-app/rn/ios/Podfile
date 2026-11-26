@@ -15,7 +15,7 @@ platform :ios, min_ios_version_supported
 # New Architecture pods used by the app (including Google Mobile Ads).
 ENV['RCT_USE_PREBUILT_RNCORE'] = '0'
 prepare_react_native_project!
-setup_permissions(['Camera', 'LocationWhenInUse'])
+setup_permissions(['Camera', 'LocationWhenInUse', 'PhotoLibrary'])
 
 # Do not embed prebuilt RN framework dSYMs inside the app bundle.
 # The archive still contains symbols, but App Store validation rejects bundled dSYMs.

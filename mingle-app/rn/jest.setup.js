@@ -131,16 +131,38 @@ jest.mock('react-native-camera-kit', () => {
 
 jest.mock('react-native-permissions', () => ({
   PERMISSIONS: {
-    IOS: { CAMERA: 'ios.permission.CAMERA' },
-    ANDROID: { CAMERA: 'android.permission.CAMERA' },
+    IOS: { CAMERA: 'ios.permission.CAMERA', PHOTO_LIBRARY: 'ios.permission.PHOTO_LIBRARY' },
+    ANDROID: {
+      CAMERA: 'android.permission.CAMERA',
+      READ_MEDIA_IMAGES: 'android.permission.READ_MEDIA_IMAGES',
+      READ_MEDIA_VISUAL_USER_SELECTED: 'android.permission.READ_MEDIA_VISUAL_USER_SELECTED',
+      READ_EXTERNAL_STORAGE: 'android.permission.READ_EXTERNAL_STORAGE',
+    },
   },
   RESULTS: {
     GRANTED: 'granted',
     DENIED: 'denied',
     BLOCKED: 'blocked',
+    LIMITED: 'limited',
     UNAVAILABLE: 'unavailable',
   },
+  check: jest.fn(async () => 'granted'),
   request: jest.fn(async () => 'granted'),
+  openSettings: jest.fn(async () => undefined),
+  openPhotoPicker: jest.fn(async () => undefined),
+}));
+
+// The write screen's gallery (src/photoGallery).
+jest.mock('@react-native-camera-roll/camera-roll', () => ({
+  CameraRoll: {
+    getPhotos: jest.fn(async () => ({ edges: [], page_info: { has_next_page: false } })),
+    getPhotoThumbnail: jest.fn(async () => ({ thumbnailBase64: '' })),
+  },
+}));
+
+jest.mock('@react-native-community/image-editor', () => ({
+  __esModule: true,
+  default: { cropImage: jest.fn(async () => ({ uri: '', base64: '' })) },
 }));
 
 jest.mock('react-native-google-mobile-ads', () => {

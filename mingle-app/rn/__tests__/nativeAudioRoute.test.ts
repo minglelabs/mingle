@@ -115,6 +115,7 @@ describe('capabilities message (contract A.1)', () => {
       ttsStream: false,
       contacts: false,
       faceCheck: false,
+      photoGallery: false,
       earphoneMicrophoneChoice: false,
       micPermissionRequest: false,
     });
@@ -127,6 +128,7 @@ describe('capabilities message (contract A.1)', () => {
       ttsStream: false,
       contacts: false,
       faceCheck: false,
+      photoGallery: false,
       earphoneMicrophoneChoice: false,
       micPermissionRequest: false,
     });
@@ -142,6 +144,7 @@ describe('capabilities message (contract A.1)', () => {
       ttsStream: false,
       contacts: false,
       faceCheck: false,
+      photoGallery: false,
       earphoneMicrophoneChoice: false,
       micPermissionRequest: false,
     });
@@ -157,6 +160,7 @@ describe('capabilities message (contract A.1)', () => {
       ttsStream: false,
       contacts: false,
       faceCheck: false,
+      photoGallery: false,
       earphoneMicrophoneChoice: false,
       micPermissionRequest: false,
     });

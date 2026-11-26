@@ -470,7 +470,15 @@ export default function ComposeScreen({
     if (!isNativePhotoGalleryAvailable()) return false
     const room = MAX_POST_PHOTOS - photos.length
     if (room <= 0) return true
-    void openNativePhotoGallery(room).then(async (files) => {
+    const galleryCopy = resolveComposePhotoCopy(locale)
+    void openNativePhotoGallery(room, {
+      title: galleryCopy.pickTitle,
+      next: galleryCopy.galleryNext,
+      close: galleryCopy.galleryClose,
+      limited: galleryCopy.galleryLimited,
+      denied: galleryCopy.galleryDenied,
+      openSettings: galleryCopy.galleryOpenSettings,
+    }).then(async (files) => {
       if (!files) return
       const prepared: PreparedImage[] = []
       for (const file of files.slice(0, room)) {

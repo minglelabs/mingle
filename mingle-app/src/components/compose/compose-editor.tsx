@@ -216,6 +216,7 @@ export default function ComposeEditor(props: ComposeEditorProps) {
   }
 
   const photoCopy = resolveComposePhotoCopy(props.locale)
+  const [captionFocused, setCaptionFocused] = useState(false)
   const openPicker = () => {
     if (props.onRequestPhotos?.()) return
     fileInputRef.current?.click()
@@ -288,22 +289,30 @@ export default function ComposeEditor(props: ComposeEditorProps) {
 
   if (props.photoFirst && multi) {
     const photos = props.photos ?? []
+    // No photo and the person is writing: the post is a text post, so the
+    // text takes the screen on the post's own background (as its card will
+    // show it) and the photo tile shrinks to a bar (owner, 2026-11-27: a
+    // photo is never required). The same elements stay mounted, so the
+    // keyboard stays up while the layout changes (same elements, new classes).
+    const textMode = photos.length === 0 && (captionFocused || props.sourceText.trim().length > 0)
     return (
-      <div className="pb-4" data-qa="compose-photo-first">
+      <div className="pb-4" data-qa="compose-photo-first" data-text-mode={textMode ? '1' : '0'}>
         {photos.length === 0 ? (
           <button
             type="button"
             data-qa="compose-photo-pick"
             onClick={openPicker}
             disabled={props.disabled || preparing}
-            className="relative flex w-full flex-col items-center justify-center gap-2 bg-gradient-to-b from-amber-50 via-orange-50 to-orange-100 text-slate-800 transition active:brightness-95 disabled:opacity-70"
-            style={{ height: 'min(46vh, 110vw)' }}
+            className={textMode
+              ? 'mx-4 mt-3 flex h-11 w-[calc(100%-2rem)] items-center justify-center gap-2 rounded-xl border border-dashed border-foreground/20 text-[14px] font-semibold text-foreground/60 transition active:bg-foreground/5 disabled:opacity-70'
+              : 'relative flex w-full flex-col items-center justify-center gap-2 bg-gradient-to-b from-amber-50 via-orange-50 to-orange-100 text-slate-800 transition active:brightness-95 disabled:opacity-70'}
+            style={textMode ? undefined : { height: 'min(46vh, 110vw)' }}
           >
-            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-orange-500 shadow-[0_6px_20px_rgba(249,115,22,0.25)]">
-              {preparing ? <Loader2 size={28} className="animate-spin" aria-hidden="true" /> : <ImagePlus size={30} strokeWidth={2} aria-hidden="true" />}
+            <span className={textMode ? 'flex items-center' : 'flex h-16 w-16 items-center justify-center rounded-full bg-white text-orange-500 shadow-[0_6px_20px_rgba(249,115,22,0.25)]'}>
+              {preparing ? <Loader2 size={textMode ? 18 : 28} className="animate-spin" aria-hidden="true" /> : <ImagePlus size={textMode ? 18 : 30} strokeWidth={2} aria-hidden="true" />}
             </span>
-            <span className="text-[17px] font-bold">{photoCopy.pickTitle}</span>
-            <span className="text-[13px] text-slate-500">{photoCopy.pickHint.replace('{max}', String(MAX_POST_PHOTOS))}</span>
+            <span className={textMode ? '' : 'text-[17px] font-bold'}>{textMode ? copy.addPhoto : photoCopy.pickTitle}</span>
+            <span className={textMode ? 'hidden' : 'text-[13px] text-slate-500'}>{photoCopy.pickHint.replace('{max}', String(MAX_POST_PHOTOS))}</span>
           </button>
         ) : (
           <div className="relative bg-slate-950" style={{ height: 'min(52vh, 125vw)' }} data-qa="compose-photo-pager">
@@ -347,12 +356,16 @@ export default function ComposeEditor(props: ComposeEditorProps) {
           </div>
         )}
 
-        <div className="flex gap-3 px-4 pt-3">
+        <div
+          className={textMode ? 'mx-4 mt-3 flex min-h-[38vh] gap-3 rounded-3xl px-5 py-5 shadow-[0_6px_24px_rgba(15,23,42,0.10)]' : 'flex gap-3 px-4 pt-3'}
+          style={textMode ? { background: preset.background, color: preset.textColor } : undefined}
+          data-qa="compose-caption"
+        >
           {props.author.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={props.author.imageUrl} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" draggable={false} />
+            <img src={props.author.imageUrl} alt="" className={textMode ? 'hidden' : 'h-9 w-9 shrink-0 rounded-full object-cover'} draggable={false} />
           ) : (
-            <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-[14px] font-bold text-secondary-foreground">
+            <span aria-hidden="true" className={textMode ? 'hidden' : 'flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-[14px] font-bold text-secondary-foreground'}>
               {displayName.replace(/^@/, '').charAt(0).toUpperCase()}
             </span>
           )}
@@ -364,10 +377,14 @@ export default function ComposeEditor(props: ComposeEditorProps) {
               dir="auto"
               value={props.sourceText}
               onChange={(e) => props.onChangeText(e.target.value)}
-              placeholder={photoCopy.captionPlaceholder}
+              placeholder={textMode ? copy.editorPlaceholder : photoCopy.captionPlaceholder}
               disabled={props.disabled}
               rows={2}
-              className="block min-h-[3em] w-full resize-none overflow-hidden bg-transparent pt-1.5 text-[16px] leading-[1.5] outline-none placeholder:text-foreground/35"
+              onFocus={() => setCaptionFocused(true)}
+              onBlur={() => setCaptionFocused(false)}
+              className={textMode
+                ? 'block min-h-[3em] w-full resize-none overflow-hidden bg-transparent text-[22px] font-semibold leading-[1.45] outline-none placeholder:opacity-40'
+                : 'block min-h-[3em] w-full resize-none overflow-hidden bg-transparent pt-1.5 text-[16px] leading-[1.5] outline-none placeholder:text-foreground/35'}
               style={{ whiteSpace: 'pre-wrap' }}
             />
           </div>

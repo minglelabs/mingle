@@ -7,10 +7,13 @@
 // `capabilities` message have it; every other shell (and a browser) keeps the
 // system photo picker of <input type="file">.
 //
-// Web -> shell: { type: 'native_photo_gallery_open', payload: { requestId, max } }
+// Web -> shell: { type: 'native_photo_gallery_open', payload: { requestId, max, labels } }
+//   (labels: the gallery's words in the page's language; the shell has none of its own)
 // Shell -> web: CustomEvent 'mingle:native-photos' with
 //   { requestId, type: 'picked', photos: [{ dataUrl, name? }] } or
-//   { requestId, type: 'cancelled' } (also when access was refused).
+//   { requestId, type: 'cancelled' }, or
+//   { requestId, type: 'denied' } (photo access refused: this page keeps the
+//   system picker from then on).
 
 import { NATIVE_SHELL_CAPABILITIES_STATE_KEY } from '@/lib/native-device-audio'
 
@@ -31,8 +34,11 @@ export function parseNativePhotoGalleryCapability(detail: unknown): boolean {
   return record.type === 'capabilities' && record.photoGallery === true
 }
 
+// Photo access was refused in the app's gallery: the system picker (which needs no access) from then on.
+let refusedThisSession = false
+
 export function isNativePhotoGalleryAvailable(): boolean {
-  if (typeof window === 'undefined') return false
+  if (typeof window === 'undefined' || refusedThisSession) return false
   const nativeWindow = window as GalleryWindow
   return typeof nativeWindow.ReactNativeWebView?.postMessage === 'function'
     && parseNativePhotoGalleryCapability(nativeWindow[NATIVE_SHELL_CAPABILITIES_STATE_KEY])
@@ -55,8 +61,10 @@ export function filesFromNativePhotos(detail: NativePhotosDetail | null): File[]
   return files.length > 0 ? files : null
 }
 
+export type NativePhotoGalleryLabels = { title: string; next: string; close: string; limited: string; denied: string; openSettings: string }
+
 /** Opens the app's gallery and waits for the photos picked (null when closed without any). */
-export function openNativePhotoGallery(max: number): Promise<File[] | null> {
+export function openNativePhotoGallery(max: number, labels: NativePhotoGalleryLabels): Promise<File[] | null> {
   const requestId = `photos-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
   return new Promise((resolve) => {
     const timer = window.setTimeout(() => finish(null), GALLERY_TIMEOUT_MS)
@@ -67,6 +75,7 @@ export function openNativePhotoGallery(max: number): Promise<File[] | null> {
     function finish(detail: NativePhotosDetail | null) {
       window.clearTimeout(timer)
       window.removeEventListener(NATIVE_PHOTOS_EVENT, handle)
+      if (detail?.type === 'denied') refusedThisSession = true
       try {
         resolve(filesFromNativePhotos(detail))
       } catch {
@@ -75,7 +84,7 @@ export function openNativePhotoGallery(max: number): Promise<File[] | null> {
     }
     window.addEventListener(NATIVE_PHOTOS_EVENT, handle)
     ;(window as GalleryWindow).ReactNativeWebView?.postMessage?.(
-      JSON.stringify({ type: 'native_photo_gallery_open', payload: { requestId, max } }),
+      JSON.stringify({ type: 'native_photo_gallery_open', payload: { requestId, max, labels } }),
     )
   })
 }

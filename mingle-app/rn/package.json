@@ -12,6 +12,8 @@
   "dependencies": {
     "@livekit/react-native": "^3.0.0",
     "@livekit/react-native-webrtc": "^144.2.0",
+    "@react-native-camera-roll/camera-roll": "7.10.2",
+    "@react-native-community/image-editor": "^5.1.0",
     "@react-native/new-app-screen": "0.84.0",
     "livekit-client": "^2.19.0",
     "react": "19.2.3",

@@ -40,6 +40,8 @@ export type NativeShellCapabilities = {
   ttsStream: boolean;
   contacts: boolean;
   faceCheck: boolean;
+  /** The write screen's own gallery (src/photoGallery). */
+  photoGallery: boolean;
   earphoneMicrophoneChoice: boolean;
   micPermissionRequest: boolean;
   deviceId?: string;
@@ -70,6 +72,7 @@ export function buildNativeShellCapabilities(options: {
   ttsStream?: boolean;
   contacts?: boolean;
   faceCheck?: boolean;
+  photoGallery?: boolean;
   earphoneMicrophoneChoice?: boolean;
   micPermissionRequest?: boolean;
   deviceId?: string | null;
@@ -85,6 +88,7 @@ export function buildNativeShellCapabilities(options: {
     ttsStream: options.ttsStream === true,
     contacts: options.contacts === true,
     faceCheck: options.faceCheck === true,
+    photoGallery: options.photoGallery === true,
     earphoneMicrophoneChoice: options.earphoneMicrophoneChoice === true,
     micPermissionRequest: options.micPermissionRequest === true,
     ...(device ?? {}),
