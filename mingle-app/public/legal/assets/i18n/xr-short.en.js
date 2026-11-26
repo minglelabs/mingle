@@ -6,6 +6,8 @@ window.DECK_EN = {
 "문제": "Problem",
 "“ 한국인과 외국인은 서로 친해지고 싶어하는데 서로를 이어주는 서비스가 부족하다 ”": "<span class=\"slide-title-quote slide-title-quote--open mt-10\">“</span> <span class=\"slide-title-text\">Koreans and foreigners want to be friends,<br/> but few services bring them together</span> <span class=\"slide-title-quote slide-title-quote--close mt-10\">”</span>",
 "닭 vs 달걀 문제": "The chicken-and-egg problem",
+"해시챗이 이 사업자들에게 제공하는 가치": "What HashChat offers these businesses",
+"해시챗이 외국인 관광객에게 제공하는 가치": "What HashChat offers foreign tourists",
 "외국인 관광객에게 제공하는 가치는두 가지입니다": "What we offer foreign tourists<br/>comes down to two things",
 "한국인과의 소셜링": "Socializing with Koreans",
 "콘텐츠 중심의 여행 계획": "Content-driven trip planning",
