@@ -86,7 +86,7 @@ window.DECK_EN = {
 "외국인 친구 매칭": "Friend matching",
 "한일 교류": "Korea–Japan exchange",
 "대표 주자K프렌즈": "The leader:<br/>K-Friends",
-"형편없는데도잘 됩니다": "Rough as it is,<br/>it still does well",
+"조악한데도잘 됩니다": "Rough as it is,<br/>it still does well",
 "그만큼 수요가 넘칩니다": "That is how much demand there is",
 "다들 겪고 있는 문제도 비슷합니다": "And they all face similar problems",
 "언어 장벽": "Language barrier",
