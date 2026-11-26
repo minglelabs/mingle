@@ -460,14 +460,33 @@
         display: grid;
         gap: 10px;
         justify-items: start;
+        gap: clamp(14px, 1.6vw, 24px);
         margin-top: clamp(28px, 2.6vw, 42px);
-        font-size: clamp(2rem, 2.8vw, 3rem);
-        font-weight: 560;
+        font-size: clamp(2.6rem, 4.4vw, 4.8rem);
+        font-weight: 700;
+      }
+
+      .slide-copy .slide-title.slide-title--part {
+        font-size: clamp(4rem, 8vw, 9rem);
+        line-height: 1.12;
+      }
+
+      .slide-side-media.slide-side-media--voicetalk {
+        top: 50%;
+        transform: translateY(-50%);
+      }
+
+      .slide-voicetalk-image {
+        display: block;
+        height: min(80vh, 680px);
+        width: auto;
+        border-radius: clamp(18px, 1.8vw, 28px);
+        box-shadow: 0 24px 52px rgba(45, 42, 30, 0.18);
       }
 
       .slide-toc-item {
         display: grid;
-        grid-template-columns: clamp(2.2rem, 2.6vw, 2.8rem) auto;
+        grid-template-columns: max-content auto;
         column-gap: clamp(16px, 1.4vw, 24px);
         align-items: baseline;
         width: fit-content;
@@ -3086,6 +3105,20 @@
         height: 150px;
       }
 
+      html.is-mobile-viewport .slide-copy .slide-title.slide-title--part {
+        font-size: clamp(3rem, 15vw, 4.4rem);
+      }
+
+      html.is-mobile-viewport .slide-side-media.slide-side-media--voicetalk {
+        top: auto;
+        transform: none;
+      }
+
+      html.is-mobile-viewport .slide-voicetalk-image {
+        height: 54vh;
+        margin-inline: auto;
+      }
+
       html.is-mobile-viewport .slide-goal-arrow {
         top: 50%;
         height: 68px;
@@ -3908,6 +3941,24 @@
         </section>
         <section class="slide">
           <article class="slide-shell">
+            <div class="slide-copy slide-copy--toc">
+              <p class="slide-kicker">목차</p>
+              <h1 class="slide-title">
+                <a class="slide-toc-item" href="#3"><span class="slide-toc-index">1부</span><span class="slide-toc-text">문제와 해결책</span></a>
+                <a class="slide-toc-item" href="#25"><span class="slide-toc-index">2부</span><span class="slide-toc-text">확장 전략</span></a>
+              </h1>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <h1 class="slide-title slide-title--part">1부<br/>문제와 해결책</h1>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell">
             <div class="slide-copy slide-copy--center">
               <p class="slide-kicker">문제</p>
               <h1 class="slide-title slide-title--quoted">
@@ -4481,6 +4532,24 @@
                 <img class="slide-market-overview-logo" src="./assets/logo-market-connecting.jpg" alt="" />
                 <p class="slide-market-overview-name">커넥팅</p>
               </article>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--kfriends-goal">
+              <p class="slide-kicker">해결책</p>
+              <h1 class="slide-title">저희는 훨씬 싸고 편한<br/>통번역 경험을 제공합니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--kfriends-goal slide-side-media--voicetalk">
+              <img class="slide-voicetalk-image" src="./assets/hashchat-voicetalk-ko.jpg" alt="HashChat 실시간 통역 보이스톡 화면" />
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <h1 class="slide-title slide-title--part">2부<br/>확장 전략</h1>
             </div>
           </article>
         </section>
