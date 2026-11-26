@@ -18,7 +18,7 @@ window.DECK_EN = {
 "편리한 상담/예약": "Easy inquiries and bookings",
 "AI 상담": "AI support",
 "24시간 간편한 CS 운영": "Simple customer service, 24/7",
-"인스타그램을 운영하는이 매장들에 모두 연락해콘텐츠를 올려두도록 입점시킵니다": "We will contact every one<br/>of these shops on Instagram<br/>and onboard them to post their content",
+"인스타그램을 운영하는이 매장들을 하나하나 영업해서입점시킬 계획입니다": "We plan to reach out to these shops<br/>on Instagram one by one<br/>and bring them on board",
 "약 4~6만": "~40–60K",
 "약 1.1만": "~11K",
 "약 3천": "~3K",
