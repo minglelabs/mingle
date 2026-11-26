@@ -1,5 +1,6 @@
 // Notifications sent by the HashChat team: no actor user, text in `body`.
-export const TEAM_NOTIFICATION_TYPES = ["feedback_reply", "report_reply", "report_status"] as const;
+// post_removed: staff took the user's post down for breaking the community rules (`targetId` is the post).
+export const TEAM_NOTIFICATION_TYPES = ["feedback_reply", "report_reply", "report_status", "post_removed"] as const;
 export type TeamNotificationType = (typeof TEAM_NOTIFICATION_TYPES)[number];
 
 // Everything the in-app notification list shows.
