@@ -24,6 +24,7 @@ import { isSupportedLocale } from "@/i18n/config";
 import { prisma } from "@/lib/prisma";
 import { captureMingleEvent } from "@/lib/posthog-server";
 import { checkDailyNewChatLimit } from "@/server/daily-new-chat-limit";
+import { chargeDmOpen, quoteDmOpen, type DmOpenQuote } from "@/server/dm-open-charge";
 import { isNewRoomBlockedForMen } from "@/server/male-dm-block";
 import { readFirstMessageNeeds, readFirstMessageNeedsForInvitees } from "@/server/first-message-gate";
 
@@ -286,7 +287,7 @@ export async function postDirectConversationResponse(request: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  let body: { targetUserId?: unknown; locale?: unknown; force?: unknown } | null = null;
+  let body: { targetUserId?: unknown; locale?: unknown; force?: unknown; acceptDmOpenCoins?: unknown } | null = null;
   try {
     body = await request.json();
   } catch {
@@ -302,6 +303,8 @@ export async function postDirectConversationResponse(request: NextRequest) {
     ? body.locale.trim()
     : "en";
   const force = body?.force === true;
+  // The price the user agreed to on the "this costs Hash" question (see @/server/dm-open-charge).
+  const acceptedDmOpenCoins = typeof body?.acceptDmOpenCoins === "number" ? body.acceptDmOpenCoins : 0;
 
   const trackingHints = resolvedUser.tracking
     ? {
@@ -313,6 +316,7 @@ export async function postDirectConversationResponse(request: NextRequest) {
   // The first-message gate, then one new person a day (see @/server/daily-new-chat-limit). Only a first
   // room with someone counts: a person there is already a room with, whoever
   // opened it, is never "new". A failed check lets the room through.
+  let dmOpenQuote: DmOpenQuote | null = null;
   try {
     const existingRoom = await findExistingConversationWithExactMembers({
       userId: resolvedUser.userId,
@@ -331,6 +335,17 @@ export async function postDirectConversationResponse(request: NextRequest) {
       const dailyLimit = await checkDailyNewChatLimit(resolvedUser.userId, targetUserId);
       if (!dailyLimit.allowed) {
         return NextResponse.json({ error: "daily_new_chat_limit", limit: dailyLimit.limit }, { status: 429 });
+      }
+      // A man opening a room with a woman pays Hash, given back if she does not write (see @/server/dm-open-charge).
+      dmOpenQuote = await quoteDmOpen(resolvedUser.userId, targetUserId);
+      if (dmOpenQuote) {
+        const { coins, refundHours, balance } = dmOpenQuote;
+        if (balance < coins) {
+          return NextResponse.json({ error: "dm_open_coins_short", coins, refundHours, balance }, { status: 402 });
+        }
+        if (acceptedDmOpenCoins < coins) {
+          return NextResponse.json({ error: "dm_open_price", coins, refundHours, balance }, { status: 402 });
+        }
       }
     }
   } catch (error) {
@@ -357,6 +372,13 @@ export async function postDirectConversationResponse(request: NextRequest) {
     }
     console.error("[conversations/direct] create_failed", error);
     return NextResponse.json({ error: "conversation_channel_create_conflict" }, { status: 409 });
+  }
+  if (dmOpenQuote && !conversationResult.reused) {
+    const channelId = (conversationResult.conversation as { id?: unknown } | null)?.id;
+    if (typeof channelId === "string" && channelId) {
+      await chargeDmOpen({ userId: resolvedUser.userId, targetUserId, channelId, coins: dmOpenQuote.coins })
+        .catch((error) => console.error("[conversations/direct] dm_open_charge_failed", error instanceof Error ? error.message : "unknown"));
+    }
   }
   captureConversationProductEvent({
     request,

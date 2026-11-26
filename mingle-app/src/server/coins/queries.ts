@@ -240,6 +240,11 @@ export async function getCoinHistory(userId: string, cursor: string | null): Pro
       })
       continue
     }
+    // Opening a new room (see @/server/dm-open-charge) is its own line, not usage.
+    if (row.type === 'spend' && (row.meta as { kind?: unknown } | null)?.kind === 'dm_open') {
+      items.push({ id: row.id.toString(), type: 'removal', reason: 'dm_open', coins: shownCoinsDelta(row.amountMicro, row.balanceAfterMicro), at })
+      continue
+    }
     if (row.type !== 'spend') {
       items.push({ id: row.id.toString(), type: 'removal', reason: row.type, coins: shownCoinsDelta(row.amountMicro, row.balanceAfterMicro), at, ...counterpartOf(row.meta) })
       continue

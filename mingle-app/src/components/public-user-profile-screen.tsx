@@ -5,6 +5,7 @@ import { resolvePeopleSafetyCopy } from "@/i18n/people-safety-copy";
 import { isRecipientBlocksMen } from "@/lib/use-start-direct-conversation";
 import { requestProfileBasics } from "@/lib/profile-basics";
 import { resolveProfileLikesCopy } from "@/i18n/profile-likes-copy";
+import { passDmOpenCoins } from "@/lib/dm-open-coins";
 import { parseFirstMessageSetupNeeds, requestFirstMessageSetup } from "@/lib/first-message-setup";
 import { resolveVerificationBadgesCopy } from "@/i18n/verification-badges-copy";
 import ProfileBio from "@/components/profile-bio";
@@ -524,10 +525,10 @@ export default function PublicUserProfileScreen({
 
   const requestDirectConversation = useCallback(async (force: boolean) => {
     if (!profile) throw new Error("direct_conversation_failed");
-    const send = () => fetch(buildClientApiPath("/conversations/direct"), {
+    const send = (extra: { acceptDmOpenCoins?: number } = {}) => fetch(buildClientApiPath("/conversations/direct"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ targetUserId: profile.id, locale, force }),
+      body: JSON.stringify({ targetUserId: profile.id, locale, force, ...extra }),
     });
     let response = await send();
     if (response.status === 403) {
@@ -545,6 +546,10 @@ export default function PublicUserProfileScreen({
         response = await send();
       }
     }
+    // A new room with her costs Hash: asked first (see @/lib/dm-open-coins).
+    const paid = await passDmOpenCoins(response, (extra) => send(extra));
+    if (!paid) throw new Error("dm_open_cancelled");
+    response = paid;
     if (response.status === 429) {
       // The free daily number of new people is used up (server/daily-new-chat-limit).
       const limited = await response.json().catch(() => ({})) as { error?: string; limit?: number };
@@ -590,7 +595,7 @@ export default function PublicUserProfileScreen({
       }
       await openDirectConversation(conversation);
     } catch (error) {
-      if (!(error instanceof Error && (error.message === "daily_new_chat_limit" || error.message === "first_message_setup" || error.message === "recipient_blocks_men"))) setMessageError(true);
+      if (!(error instanceof Error && (error.message === "daily_new_chat_limit" || error.message === "first_message_setup" || error.message === "recipient_blocks_men" || error.message === "dm_open_cancelled"))) setMessageError(true);
     } finally {
       setIsMessagePending(false);
     }
@@ -605,7 +610,7 @@ export default function PublicUserProfileScreen({
       await openDirectConversation(existingConversation);
       setExistingConversation(null);
     } catch (error) {
-      if (!(error instanceof Error && (error.message === "daily_new_chat_limit" || error.message === "first_message_setup" || error.message === "recipient_blocks_men"))) setMessageError(true);
+      if (!(error instanceof Error && (error.message === "daily_new_chat_limit" || error.message === "first_message_setup" || error.message === "recipient_blocks_men" || error.message === "dm_open_cancelled"))) setMessageError(true);
     } finally {
       setIsMessagePending(false);
     }
@@ -621,7 +626,7 @@ export default function PublicUserProfileScreen({
       await openDirectConversation(conversation);
       setExistingConversation(null);
     } catch (error) {
-      if (!(error instanceof Error && (error.message === "daily_new_chat_limit" || error.message === "first_message_setup" || error.message === "recipient_blocks_men"))) setMessageError(true);
+      if (!(error instanceof Error && (error.message === "daily_new_chat_limit" || error.message === "first_message_setup" || error.message === "recipient_blocks_men" || error.message === "dm_open_cancelled"))) setMessageError(true);
     } finally {
       setIsMessagePending(false);
     }

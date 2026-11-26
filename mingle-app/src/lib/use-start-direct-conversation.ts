@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";
+import { passDmOpenCoins } from "@/lib/dm-open-coins";
 import { parseFirstMessageSetupNeeds, requestFirstMessageSetup } from "@/lib/first-message-setup";
 import { requestProfileBasics } from "@/lib/profile-basics";
 import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
@@ -40,10 +41,10 @@ export function useStartDirectConversation(locale: string) {
     busyRef.current = true;
     setPendingUserId(targetUserId);
     try {
-      const send = () => fetch(buildClientApiPath("/conversations/direct"), {
+      const send = (extra: { acceptDmOpenCoins?: number } = {}) => fetch(buildClientApiPath("/conversations/direct"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetUserId, locale, force: false }),
+        body: JSON.stringify({ targetUserId, locale, force: false, ...extra }),
       });
       let response = await send();
       if (response.status === 403 && await isRecipientBlocksMen(response)) return { kind: "recipient_blocks_men" };
@@ -54,6 +55,10 @@ export function useStartDirectConversation(locale: string) {
           response = await send();
         }
       }
+      // A new room with her costs Hash: asked first (see @/lib/dm-open-coins).
+      const paid = await passDmOpenCoins(response, (extra) => send(extra));
+      if (!paid) return { kind: "cancelled" };
+      response = paid;
       if (response.status === 429) {
         const limited = await response.json().catch(() => ({})) as { error?: string; limit?: number };
         if (limited.error === "daily_new_chat_limit") {

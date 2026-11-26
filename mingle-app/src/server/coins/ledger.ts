@@ -11,6 +11,7 @@ import { computeDailyFreeGrant, planLotSpend, type LotAllocation } from './lot-p
 // only ever inserts into it.
 
 export type CoinLotSource = 'daily_free' | 'purchase' | 'admin_grant' | 'signup_bonus' | 'refund_reversal' | 'gift' | 'referral'
+  | 'attendance' | 'attendance_bonus' | 'dm_open_refund'
 export type CoinLedgerType = 'grant' | 'spend' | 'expire' | 'refund_clawback' | 'admin_revoke' | 'adjust' | 'gift_sent'
 
 type WalletState = {

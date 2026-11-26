@@ -14,6 +14,7 @@ import DormantAccountGate from "@/components/dormant-account-gate";
 import PostCallHost from "@/components/post-call/post-call-host";
 import { FIRST_RUN_COVER_SCRIPT } from "@/lib/first-run-cover";
 import FirstMessageGate from "@/components/first-message-gate";
+import DmOpenCoinsGate from "@/components/dm-open-coins-gate";
 import KeyboardInsetVar from "@/components/keyboard-inset-var";
 import PushPermissionPrompt from "@/components/push-permission-prompt";
 import LastSignInMethodRecorder from "@/components/last-sign-in-method-recorder";
@@ -148,6 +149,7 @@ export default async function RootLayout({
                 <DormantAccountGate />
                 <PostCallHost />
                 <FirstMessageGate />
+                <DmOpenCoinsGate />
                 <KeyboardInsetVar />
                 <PushPermissionPrompt />
                 <LastSignInMethodRecorder />

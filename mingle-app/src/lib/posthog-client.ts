@@ -32,6 +32,7 @@ export type MingleClientEvent =
   | "mingle_first_run_step"
   | "mingle_profile_basics_step"
   | "mingle_first_message_gate"
+  | "mingle_dm_open_coins"
   | "mingle_selfie_verify"
   | "mingle_push_prompt"
   // The phone number screen, step by step (sign-in and verification), see phone-verify-sheet.

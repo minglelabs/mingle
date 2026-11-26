@@ -1074,6 +1074,24 @@ model ProfileVisitorUnlock {
 /// 2026-11-26; src/server/contact-avoid.ts): on the explore tab the account
 /// and whoever has that number do not see each other. `allowed` lets one
 /// person through.
+/// Hash a man paid to open a 1:1 room with a woman (owner, 2026-11-26;
+/// src/server/dm-open-charge.ts). Given back when she has not written by
+/// `refundDueAt`. `outcome`: answered | refunded.
+model DmOpenCharge {
+  id           String    @id @default(cuid())
+  channelId    String    @unique @map("channel_id")
+  senderUserId String    @map("sender_user_id")
+  targetUserId String    @map("target_user_id")
+  chargedMicro BigInt    @map("charged_micro")
+  refundDueAt  DateTime  @map("refund_due_at")
+  settledAt    DateTime? @map("settled_at")
+  outcome      String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@index([senderUserId, settledAt], map: "app_dm_open_charges_sender_settled_idx")
+  @@map("app_dm_open_charges")
+}
+
 model ContactAvoid {
   ownerId     String   @map("owner_id")
   contactHash String   @map("contact_hash")
