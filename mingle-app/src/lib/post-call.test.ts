@@ -70,7 +70,25 @@ describe("1:1 voice talk from a post", () => {
     expect(read("src/server/api/controllers/shared/voice-call-controller.ts")).toContain("if (created && !duoCall) {");
   });
 
-  it("has its own screen: the room screen in call dress, and an incoming screen anywhere", () => {
+  it("opens over whatever tab is on screen, folds into a bubble on back, and keeps the call going", () => {
+    const host = read("src/components/post-call/post-call-host.tsx");
+    expect(read("src/app/layout.tsx")).toContain("<PostCallHost />");
+    expect(read("src/components/feed/post-call-button.tsx")).toContain("openPostCall(view);");
+    expect(host).toContain('if (action === "accept" && answered) openPostCall(answered);');
+    expect(host).toContain('data-qa="post-call-bubble"');
+    const screen = read("src/components/post-call/post-call-screen.tsx");
+    // Back (edge swipe, Android back) folds the screen; it does not hang up.
+    expect(screen).toContain("onClose={minimizePostCall}");
+    // One glass bar: own face, photo, text, send; face and photo fold away while typing.
+    expect(screen).toContain('data-qa="post-call-bar"');
+    expect(screen).toContain("focused ? 'pointer-events-none -mr-1.5 max-w-0 overflow-hidden opacity-0'");
+    // The generic room bubble leaves this call alone.
+    expect(read("src/components/post-call/use-post-call-session.ts")).toContain("setLiveRoomOwnCall(conversationId)");
+    // Typed lines are translated into the other person's language on the server.
+    expect(read("src/server/post-call-lines.ts")).toContain("const targets = [...new Set([theirs, mine].filter(Boolean))];");
+  });
+
+  it("keeps the old call dress of the room screen for a hidden room opened by its address", () => {
     const room = read("src/components/LivePhoneDemo/LivePhoneDemo.tsx");
     expect(room).toContain("variant={isDuoCall ? 'duo' : isVoiceRoom ? 'room' : 'panel'}");
     expect(room).toContain("data-duo-call={isDuoCall ? 'on' : undefined}");
@@ -94,7 +112,6 @@ describe("1:1 voice talk from a post", () => {
     for (const qa of ["duo-call-translate", "duo-call-read-aloud", "duo-call-mic", "duo-call-hang-up", "duo-call-accept", "duo-call-decline"]) {
       expect(stage).toContain(`qa="${qa}"`);
     }
-    expect(read("src/app/layout.tsx")).toContain("<IncomingPostCallGate />");
     const css = read("src/app/globals.css");
     expect(css).toContain('[data-duo-call="on"] [data-qa="live-demo-header"]');
   });

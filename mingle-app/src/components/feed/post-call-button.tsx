@@ -1,30 +1,21 @@
 "use client";
 
 import { Loader2, Phone } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { isVoiceTalkAvailable } from "@/components/LivePhoneDemo/VoiceTalkPanel";
 import { resolvePostCallCopy } from "@/i18n/post-call-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
-import { replaceWithConversationListThenPush, type DirectConversationNavigationRouter } from "@/lib/direct-conversation-navigation";
-import { markPostCallEntry, parsePostCallView } from "@/lib/post-call";
-import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
-
-/** Opens the call screen of a call just asked for or just answered (the hidden room `conversationId`). */
-export function openPostCallScreen(router: DirectConversationNavigationRouter, locale: string, conversationId: string): void {
-  markPostCallEntry(conversationId);
-  const listHref = buildNativeAwareTabPath(`/${locale}/conversations`, new URLSearchParams(window.location.search), { skipConversationRestore: true, tabRoot: true });
-  replaceWithConversationListThenPush(router, listHref, conversationId);
-}
+import { parsePostCallView } from "@/lib/post-call";
+import { openPostCall } from "@/lib/post-call-session";
 
 /**
  * The call button on a call post's card (owner, 2026-11-25): rings the
- * author and opens the call screen, where the caller waits for an answer.
+ * author and opens the call screen right over the feed (no tab change, no
+ * room to load; src/components/post-call), where the caller waits.
  * See src/server/post-calls.ts for who may call and when.
  */
 export default function PostCallButton({ postId, locale }: { postId: string; locale: string }) {
-  const router = useRouter();
   const copy = useMemo(() => resolvePostCallCopy(locale), [locale]);
   const [busy, setBusy] = useState(false);
 
@@ -48,13 +39,13 @@ export default function PostCallButton({ postId, locale }: { postId: string; loc
         toast(body?.error === "busy" || body?.error === "caller_busy" ? copy.busy : body?.error === "too_soon" ? copy.tooSoon : copy.unavailable);
         return;
       }
-      openPostCallScreen(router, locale, view.conversationId);
+      openPostCall(view);
     } catch {
       toast(copy.unavailable);
     } finally {
       setBusy(false);
     }
-  }, [busy, copy, locale, postId, router]);
+  }, [busy, copy, locale, postId]);
 
   return (
     <button

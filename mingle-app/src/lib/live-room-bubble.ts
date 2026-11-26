@@ -105,9 +105,20 @@ function sameView(left: LiveRoomBubbleView | null, right: LiveRoomBubbleView | n
     && left.count === right.count
 }
 
+/**
+ * A 1:1 voice talk from a post has its own bubble (src/components/post-call):
+ * its call never gets this one (src/components/post-call/use-post-call-session.ts).
+ */
+let ownCallRoomId: string | null = null
+export function setLiveRoomOwnCall(conversationId: string | null): void {
+  if (ownCallRoomId === conversationId) return
+  ownCallRoomId = conversationId
+  refresh()
+}
+
 function refresh(): void {
   const next = resolveLiveRoomBubble({
-    state,
+    state: ownCallRoomId && state.voice?.conversationId === ownCallRoomId ? { ...state, voice: null } : state,
     titleOf: (conversationId) => remembered.get(conversationId)?.title ?? '',
     imageOf: (userId) => images.get(userId) ?? null,
     lastSpeakerId,

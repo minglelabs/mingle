@@ -4,7 +4,7 @@ import { resolveNationalityCountry } from "@/lib/nationality";
 import { POST_CALL_RING_MS, isPostCallOver, type PostCallStatus, type PostCallView } from "@/lib/post-call";
 import { isNewRoomBlockedForMen } from "@/server/male-dm-block";
 import { visibleSinglePostWhere } from "@/server/posts/post-visibility";
-import { sendPushNotificationForVoiceCallStarted } from "@/server/push-notifications";
+import { sendPushNotificationForPostCall } from "@/server/push-notifications";
 import { calculateProfileAge } from "@/server/user-profile";
 
 /**
@@ -141,11 +141,10 @@ export async function startPostCall(args: { postId: string; callerId: string; lo
     select: CALL_SELECT,
   });
   // The author's phone rings even with the app closed; a tap opens the call.
-  void sendPushNotificationForVoiceCallStarted({
-    channelId: channel.id,
+  void sendPushNotificationForPostCall({
     callId: call.id,
-    starterUserId: args.callerId,
-    memberUserIds: [post.authorId],
+    callerUserId: args.callerId,
+    authorUserId: post.authorId,
   }).catch((error) => console.error("[post-call] ring_push_failed", error instanceof Error ? error.name : "unknown"));
   return { ok: true, call: await toView(call, args.callerId) };
 }
