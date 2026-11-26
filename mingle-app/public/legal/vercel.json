@@ -155,7 +155,7 @@
       "destination": "/blogs/:lang"
     },
     {
-      "source": "/blogs/:slug(ai-wrapper-business|ai-wrapper-business-surfers-3rd|hashchat-pitch-deck|hashchat-pitch-deck-short|virtually-deck|hashchat-social-network|ai-translators-comparison)",
+      "source": "/blogs/:slug(ai-wrapper-business|ai-wrapper-business-surfers-3rd|hashchat-pitch-deck|hashchat-pitch-deck-short|hashchat-pitch-deck-global-ota|virtually-deck|hashchat-social-network|ai-translators-comparison)",
       "has": [
         {
           "type": "query",
@@ -170,7 +170,7 @@
       "destination": "/blogs/en"
     },
     {
-      "source": "/blogs/:slug(ai-wrapper-business|ai-wrapper-business-surfers-3rd|hashchat-pitch-deck|hashchat-pitch-deck-short|virtually-deck|hashchat-social-network|ai-translators-comparison)",
+      "source": "/blogs/:slug(ai-wrapper-business|ai-wrapper-business-surfers-3rd|hashchat-pitch-deck|hashchat-pitch-deck-short|hashchat-pitch-deck-global-ota|virtually-deck|hashchat-social-network|ai-translators-comparison)",
       "destination": "/blogs/en/:slug"
     },
     {
