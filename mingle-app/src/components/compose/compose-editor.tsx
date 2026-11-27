@@ -59,6 +59,8 @@ export type ComposeEditorProps = {
   toolsNote?: ReactNode
   /** Drawn in the preview under the text, as the card will (the kind of post). */
   previewControl?: ReactNode
+  /** Drawn in the preview above the author row, as the card will (a call post's invitation). */
+  previewHeader?: ReactNode
 }
 
 /** Most photos one post may carry (the server enforces the same). */
@@ -273,6 +275,7 @@ export default function ComposeEditor(props: ComposeEditorProps) {
             images={multi ? props.photos?.map((photo) => ({ url: photo.url, width: photo.width, height: photo.height })) : undefined}
             author={props.author}
             controlSlot={props.previewControl}
+            headerSlot={props.previewHeader}
           />
           <div
             className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between px-3"

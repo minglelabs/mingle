@@ -15,7 +15,8 @@ import { openPostCall } from "@/lib/post-call-session";
  * room to load; src/components/post-call), where the caller waits.
  * See src/server/post-calls.ts for who may call and when.
  */
-export default function PostCallButton({ postId, locale, demo = false }: { postId: string; locale: string; demo?: boolean }) {
+/** Rings a call post's author (nothing in `demo`, the compose preview). */
+export function usePostCallAction(postId: string, locale: string, demo = false) {
   const copy = useMemo(() => resolvePostCallCopy(locale), [locale]);
   const [busy, setBusy] = useState(false);
 
@@ -46,7 +47,11 @@ export default function PostCallButton({ postId, locale, demo = false }: { postI
       setBusy(false);
     }
   }, [busy, copy, demo, locale, postId]);
+  return { call, busy, copy };
+}
 
+export default function PostCallButton({ postId, locale, demo = false }: { postId: string; locale: string; demo?: boolean }) {
+  const { call, busy, copy } = usePostCallAction(postId, locale, demo);
   return (
     <button
       type="button"

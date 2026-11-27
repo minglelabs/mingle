@@ -29,6 +29,7 @@ import FeedPostView from "@/components/feed/feed-post-view";
 import HeartBurst from "@/components/feed/heart-burst";
 import PostLanguageChips, { ORIGINAL_CHIP } from "@/components/feed/post-language-chips";
 import PostCategoryStrip from "@/components/feed/post-category-strip";
+import PostCallInvite from "@/components/feed/post-call-invite";
 import { buildLanguageChips } from "@/lib/language-chips";
 import { useViewerLanguages } from "@/lib/use-viewer-languages";
 import { resolveLanguageSearchCopy, resolveMoreLanguagesCopy } from "@/i18n/more-languages-copy";
@@ -633,7 +634,20 @@ export default function FeedPostCard({
   // account itself), and only for operator posts. Everyone else gets null.
   const operatorStats = useOperatorPostStats(post.id, viewerId);
 
+  // A voice talk post: its invitation (the call button) above the author row.
+  const callInvite = post.category === "call" && post.expiresAt ? (
+    <PostCallInvite
+      postId={post.id}
+      locale={locale}
+      title={post.callTitle}
+      author={post.author}
+      ownPost={Boolean(viewerId) && post.author.id === viewerId}
+    />
+  ) : null;
+
   const authorSlot = (
+    <>
+    {callInvite}
     <div className="relative mb-3 flex items-center gap-3">
       <button
         type="button"
@@ -716,6 +730,7 @@ export default function FeedPostCard({
         </span>
       ) : null}
     </div>
+    </>
   );
 
   // Text post: "See more" sits right under the centre preview (a large,
@@ -908,7 +923,7 @@ export default function FeedPostCard({
         actionSlot={actionSlot}
         controlSlot={(
           <>
-            <PostCategoryStrip category={post.category} expiresAt={post.expiresAt} intro={post.intro} callTitle={post.callTitle} locale={locale} postId={post.id} ownPost={Boolean(viewerId) && post.author.id === viewerId} />
+            <PostCategoryStrip category={post.category} expiresAt={post.expiresAt} intro={post.intro} withButton={false} locale={locale} postId={post.id} ownPost={Boolean(viewerId) && post.author.id === viewerId} />
             {controlSlot}
           </>
         )}

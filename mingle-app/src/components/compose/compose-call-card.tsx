@@ -9,7 +9,31 @@ import { sanitizeInterestLanguages, type InterestLanguage } from '@/lib/interest
 import { POST_CALL_TITLE_MAX } from '@/lib/post-category'
 import { resolveNationalityCountry } from '@/lib/nationality'
 
-type CallFacts = { nationality: string | null; primary: string[]; interest: InterestLanguage[] }
+export type CallFacts = { nationality: string | null; primary: string[]; interest: InterestLanguage[] }
+
+/** The author's own flag and languages, for a voice talk post being written (read once). */
+export function useOwnCallFacts(enabled: boolean): CallFacts | null {
+  const [facts, setFacts] = useState<CallFacts | null>(null)
+  useEffect(() => {
+    if (!enabled || facts) return
+    let cancelled = false
+    void fetch(buildClientApiPath('/profile'), { cache: 'no-store' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: { nationalityCountry?: unknown; primaryLanguages?: unknown; interestLanguages?: unknown } | null) => {
+        if (cancelled || !body) return
+        const primary = Array.isArray(body.primaryLanguages) ? body.primaryLanguages.filter((code): code is string => typeof code === 'string') : []
+        // The profile answers interest languages as { code, level } pairs.
+        setFacts({
+          nationality: typeof body.nationalityCountry === 'string' ? body.nationalityCountry : null,
+          primary,
+          interest: sanitizeInterestLanguages(body.interestLanguages, primary),
+        })
+      })
+      .catch(() => undefined)
+    return () => { cancelled = true }
+  }, [enabled, facts])
+  return facts
+}
 
 /**
  * On top of a 1:1 voice talk post being written (owner, 2026-11-27): who will
@@ -23,6 +47,7 @@ export default function ComposeCallCard({
   title,
   onTitleChange,
   author,
+  facts,
 }: {
   locale: string
   /** The default title, shown until the author writes their own. */
@@ -31,26 +56,9 @@ export default function ComposeCallCard({
   title: string
   onTitleChange: (next: string) => void
   author: { name: string | null; handle: string; imageUrl: string | null }
+  /** The author's flag and languages (useOwnCallFacts), null while loading. */
+  facts: CallFacts | null
 }) {
-  const [facts, setFacts] = useState<CallFacts | null>(null)
-  useEffect(() => {
-    let cancelled = false
-    void fetch(buildClientApiPath('/profile'), { cache: 'no-store' })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((body: { nationalityCountry?: unknown; primaryLanguages?: unknown; interestLanguages?: unknown; interestLanguageLevels?: unknown } | null) => {
-        if (cancelled || !body) return
-        const primary = Array.isArray(body.primaryLanguages) ? body.primaryLanguages.filter((code): code is string => typeof code === 'string') : []
-        const codes = Array.isArray(body.interestLanguages) ? body.interestLanguages : []
-        const levels = Array.isArray(body.interestLanguageLevels) ? body.interestLanguageLevels : []
-        setFacts({
-          nationality: typeof body.nationalityCountry === 'string' ? body.nationalityCountry : null,
-          primary,
-          interest: sanitizeInterestLanguages(codes.map((code, index) => ({ code, level: levels[index] })), primary),
-        })
-      })
-      .catch(() => undefined)
-    return () => { cancelled = true }
-  }, [])
 
   const displayName = author.name?.trim() || (author.handle ? `@${author.handle}` : '')
   return (

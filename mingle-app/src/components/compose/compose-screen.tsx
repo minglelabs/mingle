@@ -1,6 +1,7 @@
 'use client'
 
-import ComposeCallCard from '@/components/compose/compose-call-card'
+import ComposeCallCard, { useOwnCallFacts } from '@/components/compose/compose-call-card'
+import PostCallInvite from '@/components/feed/post-call-invite'
 import PostCategoryStrip from '@/components/feed/post-category-strip'
 import ComposeCategoryPicker, { ComposeCategoryStep } from '@/components/compose/compose-category-picker'
 import { POST_CALL_LISTEN_EVENT } from '@/lib/post-call'
@@ -158,6 +159,7 @@ export default function ComposeScreen({
   const [introExtras, setIntroExtras] = useState<PostIntroExtras>(EMPTY_POST_INTRO_EXTRAS)
   // A voice talk post's own title; empty: the default invitation.
   const [callTitle, setCallTitle] = useState('')
+  const callFacts = useOwnCallFacts(category === 'call')
   const objectUrl = useRef<string | null>(null)
   // Latest image, read at save time so a debounced autosave (or an upload that
   // finishes later) never persists a stale image field.
@@ -862,7 +864,7 @@ export default function ComposeScreen({
         {/* The write form unfolds under the kind picked: the caption, then the photos (each removable, more addable). */}
         <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:duration-300">
         {/* A voice talk post: who takes the calls and the invitation, before the text. */}
-        {category === 'call' ? <ComposeCallCard locale={locale} headline={stepCopy.callHeadline} title={callTitle} onTitleChange={setCallTitle} author={author} /> : null}
+        {category === 'call' ? <ComposeCallCard locale={locale} headline={stepCopy.callHeadline} title={callTitle} onTitleChange={setCallTitle} author={author} facts={callFacts} /> : null}
         {/* A self-introduction: its choices (hobbies and more) first, the text after. */}
         {/* What goes with the kind picked (a self-introduction's hobbies and more). */}
         <ComposeCategoryPicker
@@ -891,8 +893,21 @@ export default function ComposeScreen({
           autoFocus={false}
           // The preview shows the kind as viewers will: a call post's title and its call button.
           previewControl={category === 'call' || category === 'hour'
-            ? <PostCategoryStrip category={category} expiresAt={new Date(Date.now() + POST_HOUR_MS - 1000).toISOString()} callTitle={sanitizePostCallTitle(callTitle)} locale={locale} demo={category === 'call'} />
+            ? <PostCategoryStrip category={category} expiresAt={new Date(Date.now() + POST_HOUR_MS - 1000).toISOString()} locale={locale} withButton={false} />
             : undefined}
+          previewHeader={category === 'call' ? (
+            <PostCallInvite
+              postId=""
+              locale={locale}
+              title={sanitizePostCallTitle(callTitle)}
+              author={{
+                ...author,
+                nationality: callFacts?.nationality ?? null,
+                languages: callFacts ? { primary: callFacts.primary, interest: callFacts.interest } : undefined,
+              }}
+              demo
+            />
+          ) : undefined}
           toolsNote={category === 'hour' ? <HourDeletesAt locale={locale} template={stepCopy.hourDeletesAt} /> : undefined}
           onRequestPhotos={requestNativePhotos}
           previewOpen={previewOpen}

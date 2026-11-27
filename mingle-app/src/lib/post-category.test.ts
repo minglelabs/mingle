@@ -63,7 +63,7 @@ describe("post categories", () => {
     const screen = read("src/components/compose/compose-screen.tsx");
     expect(screen).toContain("<ComposeCategoryPicker");
     expect(screen).toContain("const publishable = canPublish({ sourceText: text, hasImage }) && !introProblem");
-    expect(read("src/components/feed/feed-post-card.tsx")).toContain("<PostCategoryStrip category={post.category} expiresAt={post.expiresAt} intro={post.intro} callTitle={post.callTitle} locale={locale} postId={post.id} ownPost={Boolean(viewerId) && post.author.id === viewerId} />");
+    expect(read("src/components/feed/feed-post-card.tsx")).toContain("<PostCategoryStrip category={post.category} expiresAt={post.expiresAt} intro={post.intro} withButton={false} locale={locale} postId={post.id} ownPost={Boolean(viewerId) && post.author.id === viewerId} />");
   });
 
   it("lets a voice talk post carry its own title (방제), kept in its intro column", () => {
