@@ -19,7 +19,7 @@ import {
   ComposeHeader,
   ComposeHeaderTextButton,
   ComposePrimaryButton,
-  useKeyboardInset,
+  useKeyboardCover,
 } from './compose-chrome'
 import ComposeEditor, { MAX_POST_PHOTOS } from './compose-editor'
 import { composeGapCopy } from './compose-gap-copy'
@@ -209,7 +209,8 @@ export default function ComposeScreen({
       backHandlerRef.current = null
     }
   }, [backHandlerRef, previewOpen, mode])
-  const keyboardInset = useKeyboardInset()
+  const editorBoxRef = useRef<HTMLDivElement | null>(null)
+  const keyboardInset = useKeyboardCover(editorBoxRef)
 
   // A new post gets its random background once, on the client (a draft
   // restores its own below).
@@ -742,6 +743,8 @@ export default function ComposeScreen({
     <div
       className="flex h-full flex-col bg-card text-card-foreground"
       // Keep the bottom bar above the on-screen keyboard.
+      ref={editorBoxRef}
+      // Keep the content, the bottom bar included, above the on-screen keyboard.
       style={{ paddingBottom: keyboardInset }}
     >
       <ComposeHeader

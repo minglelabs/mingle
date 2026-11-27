@@ -217,6 +217,12 @@ export default function ComposeEditor(props: ComposeEditorProps) {
 
   const photoCopy = resolveComposePhotoCopy(props.locale)
   const [captionFocused, setCaptionFocused] = useState(false)
+  // Once the keyboard is up (and the layout has followed), bring the text box into view.
+  const keepCaretInView = () => {
+    for (const delay of [120, 360]) {
+      window.setTimeout(() => textareaRef.current?.scrollIntoView({ block: 'nearest' }), delay)
+    }
+  }
   const openPicker = () => {
     if (props.onRequestPhotos?.()) return
     fileInputRef.current?.click()
@@ -314,6 +320,14 @@ export default function ComposeEditor(props: ComposeEditorProps) {
             <span className={textMode ? '' : 'text-[17px] font-bold'}>{textMode ? copy.addPhoto : photoCopy.pickTitle}</span>
             <span className={textMode ? 'hidden' : 'text-[13px] text-slate-500'}>{photoCopy.pickHint.replace('{max}', String(MAX_POST_PHOTOS))}</span>
           </button>
+        ) : captionFocused ? (
+          // Writing the caption: the photos shrink to a row so the text and the keyboard fit.
+          <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 pt-3" data-qa="compose-photo-strip">
+            {photos.map((photo) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={photo.id} src={photo.url} alt="" className="h-16 w-16 shrink-0 rounded-xl object-cover" draggable={false} />
+            ))}
+          </div>
         ) : (
           <div className="relative bg-slate-950" style={{ height: 'min(52vh, 125vw)' }} data-qa="compose-photo-pager">
             <div ref={pagerRef} onScroll={onPagerScroll} className="no-scrollbar flex h-full snap-x snap-mandatory overflow-x-auto">
@@ -380,11 +394,14 @@ export default function ComposeEditor(props: ComposeEditorProps) {
               placeholder={textMode ? copy.editorPlaceholder : photoCopy.captionPlaceholder}
               disabled={props.disabled}
               rows={2}
-              onFocus={() => setCaptionFocused(true)}
+              onFocus={() => {
+                setCaptionFocused(true)
+                keepCaretInView()
+              }}
               onBlur={() => setCaptionFocused(false)}
               className={textMode
-                ? 'block min-h-[3em] w-full resize-none overflow-hidden bg-transparent text-[22px] font-semibold leading-[1.45] outline-none placeholder:opacity-40'
-                : 'block min-h-[3em] w-full resize-none overflow-hidden bg-transparent pt-1.5 text-[16px] leading-[1.5] outline-none placeholder:text-foreground/35'}
+                ? 'block min-h-[3em] w-full resize-none overflow-hidden bg-transparent text-[22px] font-semibold leading-[1.45] outline-none placeholder:text-current placeholder:opacity-60'
+                : 'block min-h-[3em] w-full resize-none overflow-hidden bg-transparent pt-1.5 text-[17px] leading-[1.5] outline-none placeholder:text-foreground/60'}
               style={{ whiteSpace: 'pre-wrap' }}
             />
           </div>
