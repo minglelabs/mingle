@@ -1,6 +1,6 @@
 'use client'
 
-import ComposeCategoryPicker from '@/components/compose/compose-category-picker'
+import ComposeCategoryPicker, { ComposeCategoryStep, ComposeCategorySummary } from '@/components/compose/compose-category-picker'
 import { POST_CALL_LISTEN_EVENT } from '@/lib/post-call'
 import { EMPTY_POST_INTRO_EXTRAS, postIntroProblem, type PostCategory, type PostHobby, type PostIntroExtras } from '@/lib/post-category'
 import { requestProfileBasics } from '@/lib/profile-basics'
@@ -147,6 +147,9 @@ export default function ComposeScreen({
   const clientPostId = useRef(generateClientPostId())
   // The post's kind (see @/lib/post-category); a new post starts as an ordinary one.
   const [category, setCategory] = useState<PostCategory>('free')
+  // A new post asks for its kind first, alone on the screen (owner, 2026-11-27);
+  // the write form opens under it once one is tapped. A draft goes straight to writing.
+  const [categoryChosen, setCategoryChosen] = useState(Boolean(initialDraftId))
   const [hobbies, setHobbies] = useState<PostHobby[]>([])
   const [introExtras, setIntroExtras] = useState<PostIntroExtras>(EMPTY_POST_INTRO_EXTRAS)
   const objectUrl = useRef<string | null>(null)
@@ -199,6 +202,11 @@ export default function ComposeScreen({
         setPreviewOpen(false)
         return true
       }
+      // Nothing written yet: back to the choice of kind.
+      if (mode === 'editor' && categoryChosen && !initialDraftId && !latest.current.text && imageRef.current.kind === 'none') {
+        setCategoryChosen(false)
+        return true
+      }
       if (mode === 'drafts') {
         setMode('editor')
         return true
@@ -208,7 +216,7 @@ export default function ComposeScreen({
     return () => {
       backHandlerRef.current = null
     }
-  }, [backHandlerRef, previewOpen, mode])
+  }, [backHandlerRef, previewOpen, mode, categoryChosen, initialDraftId])
   const editorBoxRef = useRef<HTMLDivElement | null>(null)
   const keyboardInset = useKeyboardCover(editorBoxRef)
 
@@ -218,18 +226,16 @@ export default function ComposeScreen({
     if (!initialDraftId) setBackgroundKey((current) => current ?? randomBackgroundKey())
   }, [initialDraftId])
 
-  // A new post opens on the app's gallery, Instagram-style (owner, 2026-11-27).
-  // Browsers and apps without it start on the write screen, the photo tile first.
-  const openGalleryFirstRef = useRef<() => void>(() => undefined)
-  useEffect(() => {
-    openGalleryFirstRef.current = () => { requestNativePhotos({ first: true }) }
-  })
+  // Once the kind is picked, a new post opens on the app's gallery, Instagram-style
+  // (owner, 2026-11-27). Browsers and apps without it open the write form, the photo tile first.
   const galleryOpenedFirstRef = useRef(false)
-  useEffect(() => {
-    if (!isSignedIn || initialDraftId || galleryOpenedFirstRef.current || !isNativePhotoGalleryAvailable()) return
+  function pickCategory(next: PostCategory) {
+    setCategory(next)
+    setCategoryChosen(true)
+    if (initialDraftId || galleryOpenedFirstRef.current || photos.length > 0 || !isNativePhotoGalleryAvailable()) return
     galleryOpenedFirstRef.current = true
-    openGalleryFirstRef.current()
-  }, [initialDraftId, isSignedIn])
+    requestNativePhotos({ first: true })
+  }
 
   // Analytics: compose entry, once per screen mount for a signed-in author.
   const composeOpenedRef = useRef(false)
@@ -347,6 +353,9 @@ export default function ComposeScreen({
     uploadSeq.current += 1
     setImage({ kind: 'none' })
     clearExtras()
+    setCategory('free')
+    setCategoryChosen(false)
+    galleryOpenedFirstRef.current = false
     setMode('editor')
   }
 
@@ -360,6 +369,7 @@ export default function ComposeScreen({
     setImage(draftImage(draft))
     clearExtras()
     clientPostId.current = generateClientPostId()
+    setCategoryChosen(true)
     setMode('editor')
   }
 
@@ -498,7 +508,9 @@ export default function ComposeScreen({
       recent: galleryCopy.galleryRecent,
     }).then(async ({ outcome, files }) => {
       if (outcome === 'cancelled' && options.first) {
-        leave()
+        // Closed before anything was picked: back to the choice of kind (it opens again from there).
+        galleryOpenedFirstRef.current = false
+        setCategoryChosen(false)
         return
       }
       if (outcome === 'skipped') {
@@ -808,7 +820,13 @@ export default function ComposeScreen({
           </p>
         ) : null}
 
-        {/* Photo first (owner, 2026-11-27): the photos, then the caption, then what kind of post. */}
+        {!categoryChosen ? (
+          <ComposeCategoryStep locale={locale} onPick={pickCategory} />
+        ) : (
+        <>
+        <ComposeCategorySummary locale={locale} category={category} onChange={() => setCategoryChosen(false)} />
+        {/* The write form unfolds under the kind picked: photos, then the caption. */}
+        <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:duration-300">
         <ComposeEditor
           locale={locale}
           sourceText={text}
@@ -829,7 +847,7 @@ export default function ComposeScreen({
           onPreviewOpenChange={setPreviewOpen}
         />
 
-        {/* What kind of post: an ordinary one, one that lasts an hour, a self-introduction, or calls. */}
+        {/* What goes with the kind picked (a self-introduction's hobbies and more). */}
         <ComposeCategoryPicker
           locale={locale}
           category={category}
@@ -839,11 +857,16 @@ export default function ComposeScreen({
           onIntroExtrasChange={setIntroExtras}
           onHobbiesChange={setHobbies}
           problem={introProblem}
+          compact
         />
+        </div>
+        </>
+        )}
       </div>
 
+      {categoryChosen ? (
       <div
-        className="shrink-0 border-t border-foreground/10 px-4 pt-2"
+        className="shrink-0 border-t border-foreground/10 px-4 pt-2 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-300"
         style={{
           paddingBottom: keyboardInset > 0 ? '10px' : 'max(env(safe-area-inset-bottom, 0px), 10px)',
         }}
@@ -867,6 +890,7 @@ export default function ComposeScreen({
           {copy.publish}
         </button>
       </div>
+      ) : null}
     </div>
   )
 }

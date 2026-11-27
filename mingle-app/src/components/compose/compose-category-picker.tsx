@@ -1,9 +1,10 @@
 'use client'
 
-import { Check, Clock, Lock, Phone } from 'lucide-react'
+import { Check, ChevronRight, Clock, Lock, Phone, Sparkles, UserRound } from 'lucide-react'
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import FlagEmoji from '@/components/flag-emoji'
 import { isVoiceTalkAvailable } from '@/components/LivePhoneDemo/VoiceTalkPanel'
+import { resolveComposeCategoryStepCopy } from '@/i18n/compose-category-step-copy'
 import { resolvePostCategoryCopy } from '@/i18n/post-category-copy'
 import type { AppLocale } from '@/i18n'
 import { formatProfileAge } from '@/i18n/profile-age-copy'
@@ -14,6 +15,82 @@ import ComposeIntroExtras from './compose-intro-extras'
 
 // Whether this is the app does not change while the page is open.
 const subscribeNever = () => () => undefined
+
+/** The kinds of post the author can pick here (a call post only in the app). */
+function useCategories() {
+  // A call post is answered in the app (its voice engine): only the app offers it.
+  const canTakeCalls = useSyncExternalStore(subscribeNever, isVoiceTalkAvailable, () => false)
+  return POST_CATEGORIES.filter((entry) => entry !== 'call' || canTakeCalls)
+}
+
+function CategoryIcon({ category, size }: { category: PostCategory; size: number }) {
+  if (category === 'hour') return <Clock size={size} strokeWidth={2.2} aria-hidden="true" />
+  if (category === 'call') return <Phone size={size - 1} strokeWidth={2.2} aria-hidden="true" />
+  if (category === 'intro') return <UserRound size={size} strokeWidth={2.2} aria-hidden="true" />
+  return <Sparkles size={size} strokeWidth={2.2} aria-hidden="true" />
+}
+
+/**
+ * The first step of a new post (owner, 2026-11-27): only the kind of post,
+ * one tap each; the write form opens under it once one is picked.
+ */
+export function ComposeCategoryStep({ locale, onPick }: { locale: string; onPick: (category: PostCategory) => void }) {
+  const copy = useMemo(() => resolvePostCategoryCopy(locale), [locale])
+  const stepCopy = useMemo(() => resolveComposeCategoryStepCopy(locale), [locale])
+  const categories = useCategories()
+  const hints: Record<PostCategory, string> = {
+    free: stepCopy.freeHint,
+    hour: copy.hourHint,
+    intro: stepCopy.introShort,
+    call: copy.callHint,
+  }
+  return (
+    <section data-qa="compose-category-step" className="px-4 pb-6 pt-5">
+      <h2 className="text-[22px] font-bold leading-tight">{stepCopy.question}</h2>
+      <div className="mt-4 flex flex-col gap-2.5" role="radiogroup" aria-label={copy.label}>
+        {categories.map((entry, index) => (
+          <button
+            key={entry}
+            type="button"
+            role="radio"
+            aria-checked={false}
+            data-qa={`compose-category-${entry}`}
+            onClick={() => onPick(entry)}
+            style={{ animationDelay: `${index * 40}ms` }}
+            className="flex min-h-[4.25rem] w-full items-center gap-3.5 rounded-2xl border border-foreground/10 bg-background px-4 py-3 text-left transition active:scale-[0.99] active:bg-foreground/5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:fill-mode-both motion-safe:duration-300"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+              <CategoryIcon category={entry} size={19} />
+            </span>
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="text-[16px] font-bold">{copy.categories[entry]}</span>
+              <span className="text-[13px] leading-snug text-foreground/55">{hints[entry]}</span>
+            </span>
+            <ChevronRight size={18} strokeWidth={2.2} className="shrink-0 text-foreground/30" aria-hidden="true" />
+          </button>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/** The kind picked, folded to one line above the write form; tapping it asks again. */
+export function ComposeCategorySummary({ locale, category, onChange }: { locale: string; category: PostCategory; onChange: () => void }) {
+  const copy = useMemo(() => resolvePostCategoryCopy(locale), [locale])
+  const stepCopy = useMemo(() => resolveComposeCategoryStepCopy(locale), [locale])
+  return (
+    <button
+      type="button"
+      data-qa="compose-category-summary"
+      onClick={onChange}
+      className="mx-4 mt-3 flex h-10 items-center gap-2 rounded-full bg-amber-50 pl-3 pr-3.5 text-[14px] font-semibold text-slate-950 transition active:scale-[0.98] motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-200"
+    >
+      <span className="text-amber-600"><CategoryIcon category={category} size={15} /></span>
+      {copy.categories[category]}
+      <span className="text-[13px] font-medium text-foreground/45">· {stepCopy.change}</span>
+    </button>
+  )
+}
 
 type ProfileFacts = { country: string | null; age: number | null; heightCm: number | null }
 
@@ -32,6 +109,7 @@ export default function ComposeCategoryPicker({
   introExtras,
   onIntroExtrasChange,
   problem,
+  compact = false,
 }: {
   locale: string
   category: PostCategory
@@ -43,6 +121,8 @@ export default function ComposeCategoryPicker({
   onIntroExtrasChange: (next: PostIntroExtras) => void
   /** Why a self-introduction cannot be posted yet (shown under the form). */
   problem: 'hobbies' | 'text' | null
+  /** The kind was picked in the first step: no chips, only what goes with the kind picked. */
+  compact?: boolean
 }) {
   const copy = useMemo(() => resolvePostCategoryCopy(locale), [locale])
   const [facts, setFacts] = useState<ProfileFacts | null>(null)
@@ -63,17 +143,19 @@ export default function ComposeCategoryPicker({
     return () => { cancelled = true }
   }, [category, facts])
 
-  // A call post is answered in the app (its voice engine): only the app offers it.
-  const canTakeCalls = useSyncExternalStore(subscribeNever, isVoiceTalkAvailable, () => false)
-  const categories = POST_CATEGORIES.filter((entry) => entry !== 'call' || canTakeCalls)
+  const categories = useCategories()
 
   const toggleHobby = (hobby: PostHobby) => {
     if (hobbies.includes(hobby)) onHobbiesChange(hobbies.filter((entry) => entry !== hobby))
     else if (hobbies.length < POST_INTRO_HOBBIES_MAX) onHobbiesChange([...hobbies, hobby])
   }
 
+  // Folded: the summary on top names the kind; only the self-introduction form stays here.
+  if (compact && category !== 'intro') return null
+
   return (
     <section data-qa="compose-category" className="border-t border-foreground/10 px-4 pb-4 pt-3">
+      {compact ? null : <>
       <p className="text-[12px] font-bold text-foreground/50">{copy.label}</p>
       <div className="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label={copy.label}>
         {categories.map((entry) => {
@@ -96,6 +178,7 @@ export default function ComposeCategoryPicker({
           )
         })}
       </div>
+      </>}
 
       {category === 'hour' ? <p className="mt-2 text-[13px] text-foreground/55" data-qa="compose-category-hour-hint">{copy.hourHint}</p> : null}
       {category === 'call' ? <p className="mt-2 text-[13px] text-foreground/55" data-qa="compose-category-call-hint">{copy.callHint}</p> : null}
