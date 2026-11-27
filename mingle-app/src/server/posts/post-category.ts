@@ -16,13 +16,19 @@ export async function applyPostCategory(args: {
   hobbies: PostHobby[]
   /** Job, personality, food, animals, drinking, interests (all optional). */
   introExtras?: PostIntroExtras
+  /** A voice talk post's own title (already sanitized); null: the default invitation. */
+  callTitle?: string | null
   publishedAt: Date
 }): Promise<void> {
   // A call post is up for an hour too: its author has to be around to answer.
   if (args.category === 'hour' || args.category === 'call') {
     await prisma.post.updateMany({
       where: { id: args.postId, authorId: args.authorId },
-      data: { category: args.category, expiresAt: new Date(args.publishedAt.getTime() + POST_HOUR_MS) },
+      data: {
+        category: args.category,
+        expiresAt: new Date(args.publishedAt.getTime() + POST_HOUR_MS),
+        ...(args.category === 'call' && args.callTitle ? { intro: { callTitle: args.callTitle } } : {}),
+      },
     })
     return
   }

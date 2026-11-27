@@ -78,6 +78,8 @@ export type FeedPostDto = {
   category?: 'hour' | 'intro' | 'call'
   expiresAt?: string
   intro?: PostIntro
+  /** A voice talk post's own title; absent: the viewer's default invitation. */
+  callTitle?: string
   image: FeedPostImageDto | null
   /**
    * Every photo in order, the first being `image`; swiped through sideways on

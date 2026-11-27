@@ -117,6 +117,21 @@ export function postIntroProblem(input: { text: string | null; hobbies: readonly
 }
 
 /** A stored `intro` column, read defensively (it is JSON). */
+/** A voice talk post's own title ("방제", owner 2026-11-27); none: the viewer's default invitation. */
+export const POST_CALL_TITLE_MAX = 40;
+
+export function sanitizePostCallTitle(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const title = value.replace(/\s+/g, " ").trim().slice(0, POST_CALL_TITLE_MAX).trim();
+  return title || null;
+}
+
+/** The title kept with a voice talk post (in its `intro` column, which a call post has no other use for). */
+export function readPostCallTitle(value: unknown): string | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return sanitizePostCallTitle((value as Record<string, unknown>).callTitle);
+}
+
 export function readPostIntro(value: unknown): PostIntro | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const row = value as Record<string, unknown>;

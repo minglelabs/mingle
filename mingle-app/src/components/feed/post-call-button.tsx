@@ -15,12 +15,12 @@ import { openPostCall } from "@/lib/post-call-session";
  * room to load; src/components/post-call), where the caller waits.
  * See src/server/post-calls.ts for who may call and when.
  */
-export default function PostCallButton({ postId, locale }: { postId: string; locale: string }) {
+export default function PostCallButton({ postId, locale, demo = false }: { postId: string; locale: string; demo?: boolean }) {
   const copy = useMemo(() => resolvePostCallCopy(locale), [locale]);
   const [busy, setBusy] = useState(false);
 
   const call = useCallback(async () => {
-    if (busy) return;
+    if (busy || demo) return;
     // The call runs in the app (its voice engine); a browser has none.
     if (!isVoiceTalkAvailable()) {
       toast(copy.appOnly);
@@ -45,7 +45,7 @@ export default function PostCallButton({ postId, locale }: { postId: string; loc
     } finally {
       setBusy(false);
     }
-  }, [busy, copy, locale, postId]);
+  }, [busy, copy, demo, locale, postId]);
 
   return (
     <button

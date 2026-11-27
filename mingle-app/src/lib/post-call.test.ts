@@ -117,7 +117,7 @@ describe("1:1 voice talk from a post", () => {
   });
 
   it("is a category of its own, with a call button for everyone but the author, in every app language", () => {
-    expect(read("src/components/feed/post-category-strip.tsx")).toContain("{postId && !ownPost ? <PostCallButton postId={postId} locale={locale} /> : null}");
+    expect(read("src/components/feed/post-category-strip.tsx")).toContain("postId && !ownPost ? <PostCallButton postId={postId} locale={locale} /> : null}");
     // Only the app offers the category: a browser cannot answer a call.
     expect(read("src/components/compose/compose-category-picker.tsx")).toContain("entry !== 'call' || canTakeCalls");
     const english = resolvePostCallCopy("en");

@@ -1,9 +1,10 @@
 'use client'
 
 import ComposeCallCard from '@/components/compose/compose-call-card'
+import PostCategoryStrip from '@/components/feed/post-category-strip'
 import ComposeCategoryPicker, { ComposeCategoryStep } from '@/components/compose/compose-category-picker'
 import { POST_CALL_LISTEN_EVENT } from '@/lib/post-call'
-import { EMPTY_POST_INTRO_EXTRAS, POST_HOUR_MS, postIntroProblem, type PostCategory, type PostHobby, type PostIntroExtras } from '@/lib/post-category'
+import { EMPTY_POST_INTRO_EXTRAS, POST_HOUR_MS, postIntroProblem, sanitizePostCallTitle, type PostCategory, type PostHobby, type PostIntroExtras } from '@/lib/post-category'
 import { requestProfileBasics } from '@/lib/profile-basics'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -155,6 +156,8 @@ export default function ComposeScreen({
   const [categoryChosen, setCategoryChosen] = useState(Boolean(initialDraftId))
   const [hobbies, setHobbies] = useState<PostHobby[]>([])
   const [introExtras, setIntroExtras] = useState<PostIntroExtras>(EMPTY_POST_INTRO_EXTRAS)
+  // A voice talk post's own title; empty: the default invitation.
+  const [callTitle, setCallTitle] = useState('')
   const objectUrl = useRef<string | null>(null)
   // Latest image, read at save time so a debounced autosave (or an upload that
   // finishes later) never persists a stale image field.
@@ -641,6 +644,7 @@ export default function ComposeScreen({
         category,
         hobbies: category === 'intro' ? hobbies : undefined,
         introExtras: category === 'intro' ? introExtras : undefined,
+        callTitle: category === 'call' ? sanitizePostCallTitle(callTitle) : undefined,
       })
       if (!accepted) {
         // Another publish started in between: same handling as above.
@@ -858,7 +862,7 @@ export default function ComposeScreen({
         {/* The write form unfolds under the kind picked: the caption, then the photos (each removable, more addable). */}
         <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:duration-300">
         {/* A voice talk post: who takes the calls and the invitation, before the text. */}
-        {category === 'call' ? <ComposeCallCard locale={locale} headline={stepCopy.callHeadline} author={author} /> : null}
+        {category === 'call' ? <ComposeCallCard locale={locale} headline={stepCopy.callHeadline} title={callTitle} onTitleChange={setCallTitle} author={author} /> : null}
         {/* A self-introduction: its choices (hobbies and more) first, the text after. */}
         {/* What goes with the kind picked (a self-introduction's hobbies and more). */}
         <ComposeCategoryPicker
@@ -885,6 +889,10 @@ export default function ComposeScreen({
           onRemovePhoto={handleRemovePhoto}
           author={author}
           autoFocus={false}
+          // The preview shows the kind as viewers will: a call post's title and its call button.
+          previewControl={category === 'call' || category === 'hour'
+            ? <PostCategoryStrip category={category} expiresAt={new Date(Date.now() + POST_HOUR_MS - 1000).toISOString()} callTitle={sanitizePostCallTitle(callTitle)} locale={locale} demo={category === 'call'} />
+            : undefined}
           toolsNote={category === 'hour' ? <HourDeletesAt locale={locale} template={stepCopy.hourDeletesAt} /> : undefined}
           onRequestPhotos={requestNativePhotos}
           previewOpen={previewOpen}

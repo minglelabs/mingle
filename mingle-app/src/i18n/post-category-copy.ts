@@ -1,4 +1,5 @@
 import { resolvePrimaryUiLocaleTag, type PrimaryUiLocale } from "@/i18n/mingle-locales";
+import { resolveComposeCategoryStepCopy } from "@/i18n/compose-category-step-copy";
 import { resolvePostCallCopy } from "@/i18n/post-call-copy";
 import { POST_HOBBIES, type PostCategory, type PostHobby } from "@/lib/post-category";
 
@@ -12,6 +13,8 @@ export type PostCategoryCopy = {
   introHint: string;
   /** Under the chips while "1:1 voice talk" is picked. */
   callHint: string;
+  /** A call post's title when its author wrote none ("1대1 보이스톡해요!"). */
+  callTitleDefault: string;
   hobbiesLabel: string;
   needHobby: string;
   needText: string;
@@ -44,7 +47,7 @@ const ROWS: Record<PrimaryUiLocale, Row> = {
   vi: ["Danh mục", "Tự do", "1 giờ", "Giới thiệu bản thân", "Bài đăng này biến mất sau một giờ.", "Chọn sở thích và giới thiệu bản thân. Quốc gia, tuổi và chiều cao lấy từ hồ sơ.", "Sở thích", "Hãy chọn ít nhất một sở thích.", "Hãy viết thêm một chút về bạn.", "Còn {n} phút", "Du lịch|Âm nhạc|Hoạt hình|Phim & phim bộ|Trò chơi|Thể thao|Nấu ăn|Cà phê & ẩm thực|Nhiếp ảnh|Đọc sách|Thời trang|Ngoại ngữ"],
 };
 
-function build(row: Row, call: { category: string; hint: string }): PostCategoryCopy {
+function build(row: Row, call: { category: string; hint: string }): Omit<PostCategoryCopy, "callTitleDefault"> {
   const names = row[10].split("|");
   return {
     label: row[0],
@@ -63,5 +66,5 @@ function build(row: Row, call: { category: string; hint: string }): PostCategory
 
 export function resolvePostCategoryCopy(rawLocale: string): PostCategoryCopy {
   const locale = resolvePrimaryUiLocaleTag(rawLocale) ?? "en";
-  return build(ROWS[locale] ?? ROWS.en, resolvePostCallCopy(rawLocale));
+  return { ...build(ROWS[locale] ?? ROWS.en, resolvePostCallCopy(rawLocale)), callTitleDefault: resolveComposeCategoryStepCopy(rawLocale).callHeadline };
 }

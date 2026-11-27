@@ -57,6 +57,8 @@ export type ComposeEditorProps = {
   onRequestPhotos?: () => boolean
   /** A short grey note in the row of tools under the text (an hour post's deletion time). */
   toolsNote?: ReactNode
+  /** Drawn in the preview under the text, as the card will (the kind of post). */
+  previewControl?: ReactNode
 }
 
 /** Most photos one post may carry (the server enforces the same). */
@@ -270,6 +272,7 @@ export default function ComposeEditor(props: ComposeEditorProps) {
             image={previewImage}
             images={multi ? props.photos?.map((photo) => ({ url: photo.url, width: photo.width, height: photo.height })) : undefined}
             author={props.author}
+            controlSlot={props.previewControl}
           />
           <div
             className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between px-3"

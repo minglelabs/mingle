@@ -27,6 +27,8 @@ export default function PostCategoryStrip({
   locale,
   postId,
   ownPost,
+  callTitle,
+  demo = false,
 }: {
   category?: Exclude<PostCategory, "free">;
   expiresAt?: string | null;
@@ -35,6 +37,10 @@ export default function PostCategoryStrip({
   /** For a call post: which post to call, and whether the viewer wrote it (no button then). */
   postId?: string;
   ownPost?: boolean;
+  /** A voice talk post's own title; none: the default invitation. */
+  callTitle?: string | null;
+  /** The compose preview: the call button as viewers see it, doing nothing. */
+  demo?: boolean;
 }) {
   const copy = useMemo(() => resolvePostCategoryCopy(locale), [locale]);
   const extrasCopy = useMemo(() => resolvePostIntroExtrasCopy(locale), [locale]);
@@ -52,12 +58,18 @@ export default function PostCategoryStrip({
     const minutes = postMinutesLeft(expiresAt, now);
     return (
       <div className="mt-1 flex flex-wrap items-center gap-1.5" data-qa="post-category-strip" data-post-category="call">
+        {/* The post's title ("방제"), so the call reads as an invitation. */}
+        <p className="w-full" data-qa="post-call-title">
+          <span className="inline-block max-w-full rounded-xl bg-white/90 px-3 py-1.5 text-[15px] font-bold leading-snug text-slate-900 shadow-[0_1px_4px_rgba(15,23,42,0.16)]" dir="auto">
+            {callTitle || copy.callTitleDefault}
+          </span>
+        </p>
         <span className={`${PILL} text-emerald-700`}>
           <Phone size={12} strokeWidth={2.6} aria-hidden="true" />
           {copy.categories.call}
           <span className="font-medium text-slate-500">· {copy.minutesLeft.replace("{n}", String(minutes ?? 1))}</span>
         </span>
-        {postId && !ownPost ? <PostCallButton postId={postId} locale={locale} /> : null}
+        {demo ? <PostCallButton postId="" locale={locale} demo /> : postId && !ownPost ? <PostCallButton postId={postId} locale={locale} /> : null}
       </div>
     );
   }

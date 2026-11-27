@@ -1,10 +1,12 @@
 'use client'
 
+import { Pencil } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { CompactLanguageLevels } from '@/components/profile-language-levels'
 import ProfileNationalityBadge from '@/components/profile-nationality-badge'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { sanitizeInterestLanguages, type InterestLanguage } from '@/lib/interest-languages'
+import { POST_CALL_TITLE_MAX } from '@/lib/post-category'
 import { resolveNationalityCountry } from '@/lib/nationality'
 
 type CallFacts = { nationality: string | null; primary: string[]; interest: InterestLanguage[] }
@@ -18,10 +20,16 @@ type CallFacts = { nationality: string | null; primary: string[]; interest: Inte
 export default function ComposeCallCard({
   locale,
   headline,
+  title,
+  onTitleChange,
   author,
 }: {
   locale: string
+  /** The default title, shown until the author writes their own. */
   headline: string
+  /** The post's own title ("방제", owner 2026-11-27): editable here, empty for the default. */
+  title: string
+  onTitleChange: (next: string) => void
   author: { name: string | null; handle: string; imageUrl: string | null }
 }) {
   const [facts, setFacts] = useState<CallFacts | null>(null)
@@ -52,14 +60,27 @@ export default function ComposeCallCard({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={author.imageUrl} alt="" className="h-14 w-14 rounded-full object-cover" draggable={false} />
         ) : (
-          <span aria-hidden="true" className="flex h-14 w-14 items-center justify-center rounded-full bg-secondary text-[18px] font-bold text-secondary-foreground">
+          <span aria-hidden="true" className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-[18px] font-bold text-amber-700 shadow-sm">
             {displayName.replace(/^@/, '').charAt(0).toUpperCase()}
           </span>
         )}
         <ProfileNationalityBadge country={resolveNationalityCountry(facts?.nationality ?? null, facts?.primary)} size={56} badgeSize={22} />
       </span>
-      <span className="flex min-w-0 flex-col gap-1">
-        <span className="text-[18px] font-bold leading-tight text-slate-950">{headline}</span>
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
+        <label className="flex min-w-0 items-center gap-1.5 border-b border-dashed border-amber-300 pb-0.5">
+          <span className="sr-only">{headline}</span>
+          <input
+            data-qa="compose-call-title"
+            value={title}
+            onChange={(event) => onTitleChange(event.target.value.slice(0, POST_CALL_TITLE_MAX))}
+            placeholder={headline}
+            enterKeyHint="done"
+            onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
+            className="min-w-0 flex-1 bg-transparent text-[18px] font-bold leading-tight text-slate-950 outline-none placeholder:text-slate-950"
+            dir="auto"
+          />
+          <Pencil size={15} strokeWidth={2.2} className="shrink-0 text-amber-600" aria-hidden="true" />
+        </label>
         {facts ? (
           <CompactLanguageLevels primaryLanguages={facts.primary} interestLanguages={facts.interest} locale={locale} textClass="text-slate-900" mutedClass="text-slate-300" />
         ) : null}
