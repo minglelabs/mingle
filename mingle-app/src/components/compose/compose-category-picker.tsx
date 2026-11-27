@@ -175,7 +175,7 @@ export default function ComposeCategoryPicker({
   if (compact && category !== 'intro') return null
 
   return (
-    <section data-qa="compose-category" className="border-t border-foreground/10 px-4 pb-4 pt-3">
+    <section data-qa="compose-category" className={compact ? 'px-4 pb-2 pt-1' : 'border-t border-foreground/10 px-4 pb-4 pt-3'}>
       {compact ? null : <>
       <p className="text-[12px] font-bold text-foreground/50">{copy.label}</p>
       <div className="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label={copy.label}>

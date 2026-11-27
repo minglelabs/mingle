@@ -55,6 +55,8 @@ export type ComposeEditorProps = {
    * itself (the app's own gallery), so the web picker stays closed.
    */
   onRequestPhotos?: () => boolean
+  /** A short grey note in the row of tools under the text (an hour post's deletion time). */
+  toolsNote?: ReactNode
 }
 
 /** Most photos one post may carry (the server enforces the same). */
@@ -580,6 +582,7 @@ export default function ComposeEditor(props: ComposeEditorProps) {
             <ToolButton label={copy.preview} onClick={() => setShowPreview(true)} disabled={props.disabled}>
               <Eye size={20} strokeWidth={1.9} aria-hidden="true" />
             </ToolButton>
+            {props.toolsNote ? <span className="ml-1 min-w-0 truncate text-[12px] text-foreground/45">{props.toolsNote}</span> : null}
 
             {/* Always announced; shown once the body nears the limit. */}
             <span

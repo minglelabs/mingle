@@ -1,8 +1,9 @@
 'use client'
 
+import ComposeCallCard from '@/components/compose/compose-call-card'
 import ComposeCategoryPicker, { ComposeCategoryStep } from '@/components/compose/compose-category-picker'
 import { POST_CALL_LISTEN_EVENT } from '@/lib/post-call'
-import { EMPTY_POST_INTRO_EXTRAS, postIntroProblem, type PostCategory, type PostHobby, type PostIntroExtras } from '@/lib/post-category'
+import { EMPTY_POST_INTRO_EXTRAS, POST_HOUR_MS, postIntroProblem, type PostCategory, type PostHobby, type PostIntroExtras } from '@/lib/post-category'
 import { requestProfileBasics } from '@/lib/profile-basics'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -245,7 +246,10 @@ export default function ComposeScreen({
   function pickCategory(next: PostCategory) {
     setCategory(next)
     setCategoryChosen(true)
-    // Then the writing, and only the writing: the caption box, focused.
+    // Then the writing, and only the writing: the caption box, focused. Not for a
+    // self-introduction (its choices come first) or a voice talk post (its card
+    // comes first): the keyboard would hide them (owner, 2026-11-27).
+    if (next === 'intro' || next === 'call') return
     window.setTimeout(() => document.getElementById('compose-body')?.focus({ preventScroll: true }), 80)
   }
 
@@ -853,6 +857,21 @@ export default function ComposeScreen({
         <>
         {/* The write form unfolds under the kind picked: the caption, then the photos (each removable, more addable). */}
         <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:duration-300">
+        {/* A voice talk post: who takes the calls and the invitation, before the text. */}
+        {category === 'call' ? <ComposeCallCard locale={locale} headline={stepCopy.callHeadline} author={author} /> : null}
+        {/* A self-introduction: its choices (hobbies and more) first, the text after. */}
+        {/* What goes with the kind picked (a self-introduction's hobbies and more). */}
+        <ComposeCategoryPicker
+          locale={locale}
+          category={category}
+          onCategoryChange={setCategory}
+          hobbies={hobbies}
+          introExtras={introExtras}
+          onIntroExtrasChange={setIntroExtras}
+          onHobbiesChange={setHobbies}
+          problem={introProblem}
+          compact
+        />
         <ComposeEditor
           locale={locale}
           sourceText={text}
@@ -866,23 +885,12 @@ export default function ComposeScreen({
           onRemovePhoto={handleRemovePhoto}
           author={author}
           autoFocus={false}
+          toolsNote={category === 'hour' ? <HourDeletesAt locale={locale} template={stepCopy.hourDeletesAt} /> : undefined}
           onRequestPhotos={requestNativePhotos}
           previewOpen={previewOpen}
           onPreviewOpenChange={setPreviewOpen}
         />
 
-        {/* What goes with the kind picked (a self-introduction's hobbies and more). */}
-        <ComposeCategoryPicker
-          locale={locale}
-          category={category}
-          onCategoryChange={setCategory}
-          hobbies={hobbies}
-          introExtras={introExtras}
-          onIntroExtrasChange={setIntroExtras}
-          onHobbiesChange={setHobbies}
-          problem={introProblem}
-          compact
-        />
         </div>
         </>
         ) : null}
@@ -916,4 +924,18 @@ export default function ComposeScreen({
       </div>
     </div>
   )
+}
+
+/**
+ * An hour post being written: when it would be deleted if posted this second
+ * (owner, 2026-11-27), ticking every second, e.g. "…13:14:29에 삭제돼요".
+ */
+function HourDeletesAt({ locale, template }: { locale: string; template: string }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+  const time = new Date(now + POST_HOUR_MS).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+  return <span data-qa="compose-hour-deletes-at" className="tabular-nums">{template.replace('{time}', time)}</span>
 }

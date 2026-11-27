@@ -15,6 +15,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  StatusBar,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -219,6 +220,7 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
   if (!galleryRequest) return null;
   return (
     <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={close}>
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
       <View style={[styles.root, { paddingTop: Platform.OS === 'ios' ? insets.top : 0 }]}>
         <View style={styles.bar}>
           <Pressable accessibilityRole="button" accessibilityLabel={labels?.close} onPress={close} hitSlop={12} style={styles.barSide}>
@@ -228,7 +230,7 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
             {labels?.title}{picked.length > 0 ? ` · ${picked.length}/${max}` : ''}
           </Text>
           <Pressable accessibilityRole="button" onPress={() => { void finish(); }} disabled={!canFinish || busy} hitSlop={12} style={[styles.barSide, styles.barRight]}>
-            {busy ? <ActivityIndicator color="#f97316" /> : <Text style={[styles.next, !canFinish && styles.nextOff]}>{labels?.next}</Text>}
+            {busy ? <ActivityIndicator color={ACCENT} /> : <Text style={[styles.next, !canFinish && styles.nextOff]}>{labels?.next}</Text>}
           </Pressable>
         </View>
 
@@ -243,7 +245,7 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
             </Pressable>
           </View>
         ) : access === 'checking' ? (
-          <View style={styles.denied}><ActivityIndicator color="#ffffff" /></View>
+          <View style={styles.denied}><ActivityIndicator color={ACCENT} /></View>
         ) : (
           <FlatList
             data={photos}
@@ -289,31 +291,34 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
   );
 }
 
+// Light, like the write screen it opens into (owner, 2026-11-27: the black gallery felt like another app).
+const INK = '#0f172a';
+const ACCENT = '#f97316';
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0b0b0f' },
-  bar: { height: 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 },
+  root: { flex: 1, backgroundColor: '#ffffff' },
+  bar: { height: 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(15,23,42,0.12)' },
   barSide: { minWidth: 64, height: 44, justifyContent: 'center' },
   barRight: { alignItems: 'flex-end' },
-  close: { color: '#ffffff', fontSize: 22, fontWeight: '600' },
-  title: { flex: 1, textAlign: 'center', color: '#ffffff', fontSize: 17, fontWeight: '700' },
-  next: { color: '#f97316', fontSize: 17, fontWeight: '700' },
-  nextOff: { color: 'rgba(255,255,255,0.35)' },
-  preview: { backgroundColor: '#000000' },
+  close: { color: INK, fontSize: 22, fontWeight: '500' },
+  title: { flex: 1, textAlign: 'center', color: INK, fontSize: 17, fontWeight: '700' },
+  next: { color: ACCENT, fontSize: 17, fontWeight: '700' },
+  nextOff: { color: 'rgba(15,23,42,0.3)' },
+  preview: { backgroundColor: '#f4f4f5' },
   previewImage: { width: '100%', height: '100%' },
-  limited: { marginHorizontal: 12, marginVertical: 10, paddingVertical: 10, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center' },
-  limitedText: { color: '#ffffff', fontSize: 14, fontWeight: '600' },
-  thumb: { flex: 1, backgroundColor: '#1f2937' },
-  thumbFocus: { opacity: 0.6 },
-  badge: { position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: '#ffffff', backgroundColor: 'rgba(0,0,0,0.25)', alignItems: 'center', justifyContent: 'center' },
-  badgeOn: { backgroundColor: '#f97316', borderColor: '#f97316' },
+  limited: { marginHorizontal: 12, marginBottom: 10, paddingVertical: 10, borderRadius: 12, backgroundColor: '#fff7ed', alignItems: 'center' },
+  limitedText: { color: '#c2410c', fontSize: 14, fontWeight: '600' },
+  thumb: { flex: 1, backgroundColor: '#f1f5f9' },
+  thumbFocus: { opacity: 0.55 },
+  badge: { position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: '#ffffff', backgroundColor: 'rgba(15,23,42,0.2)', alignItems: 'center', justifyContent: 'center' },
+  badgeOn: { backgroundColor: ACCENT, borderColor: '#ffffff' },
   badgeText: { color: '#ffffff', fontSize: 12, fontWeight: '800' },
   denied: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
-  deniedText: { color: '#ffffff', fontSize: 15, textAlign: 'center', lineHeight: 22 },
-  settings: { marginTop: 16, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14, backgroundColor: '#f97316' },
+  deniedText: { color: INK, fontSize: 15, textAlign: 'center', lineHeight: 22 },
+  settings: { marginTop: 16, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14, backgroundColor: ACCENT },
   settingsText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
   listBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
-  recent: { color: '#ffffff', fontSize: 17, fontWeight: '700' },
-  skipPill: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999, backgroundColor: '#ffffff' },
-  skipWide: { marginTop: 12, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14, backgroundColor: '#ffffff' },
-  skipText: { color: '#0b0b0f', fontSize: 15, fontWeight: '700' },
+  recent: { color: INK, fontSize: 17, fontWeight: '700' },
+  skipPill: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999, backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fdba74' },
+  skipWide: { marginTop: 12, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14, backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fdba74' },
+  skipText: { color: '#c2410c', fontSize: 15, fontWeight: '700' },
 });
