@@ -3527,6 +3527,8 @@ function AppInner(): React.JSX.Element {
         limited: text(labels.limited, 'Allow more photos'),
         denied: text(labels.denied, 'Allow access to your photos to pick them here.'),
         openSettings: text(labels.openSettings, 'Open Settings'),
+        skip: text(labels.skip, 'Text only'),
+        recent: text(labels.recent, 'Recents'),
       },
     });
   }, []);

@@ -218,6 +218,19 @@ export default function ComposeScreen({
     if (!initialDraftId) setBackgroundKey((current) => current ?? randomBackgroundKey())
   }, [initialDraftId])
 
+  // A new post opens on the app's gallery, Instagram-style (owner, 2026-11-27).
+  // Browsers and apps without it start on the write screen, the photo tile first.
+  const openGalleryFirstRef = useRef<() => void>(() => undefined)
+  useEffect(() => {
+    openGalleryFirstRef.current = () => { requestNativePhotos({ first: true }) }
+  })
+  const galleryOpenedFirstRef = useRef(false)
+  useEffect(() => {
+    if (!isSignedIn || initialDraftId || galleryOpenedFirstRef.current || !isNativePhotoGalleryAvailable()) return
+    galleryOpenedFirstRef.current = true
+    openGalleryFirstRef.current()
+  }, [initialDraftId, isSignedIn])
+
   // Analytics: compose entry, once per screen mount for a signed-in author.
   const composeOpenedRef = useRef(false)
   useEffect(() => {
@@ -466,8 +479,10 @@ export default function ComposeScreen({
   }
 
   // The app's own gallery, when the app has one (see @/lib/native-photo-gallery);
-  // false lets the editor open the system photo picker instead.
-  function requestNativePhotos(): boolean {
+  // false lets the editor open the system photo picker instead. `first`: the
+  // gallery opened by itself with the write screen (owner, 2026-11-27, as
+  // Instagram): closing it leaves the post, "text only" goes on to writing.
+  function requestNativePhotos(options: { first?: boolean } = {}): boolean {
     if (!isNativePhotoGalleryAvailable()) return false
     const room = MAX_POST_PHOTOS - photos.length
     if (room <= 0) return true
@@ -479,7 +494,18 @@ export default function ComposeScreen({
       limited: galleryCopy.galleryLimited,
       denied: galleryCopy.galleryDenied,
       openSettings: galleryCopy.galleryOpenSettings,
-    }).then(async (files) => {
+      skip: galleryCopy.galleryTextOnly,
+      recent: galleryCopy.galleryRecent,
+    }).then(async ({ outcome, files }) => {
+      if (outcome === 'cancelled' && options.first) {
+        leave()
+        return
+      }
+      if (outcome === 'skipped') {
+        // Straight to writing: the caption box, focused.
+        window.setTimeout(() => document.getElementById('compose-body')?.focus(), 80)
+        return
+      }
       if (!files) return
       const prepared: PreparedImage[] = []
       for (const file of files.slice(0, room)) {

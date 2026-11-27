@@ -401,7 +401,7 @@ export default function ComposeEditor(props: ComposeEditorProps) {
               onBlur={() => setCaptionFocused(false)}
               className={textMode
                 ? 'block min-h-[3em] w-full resize-none overflow-hidden bg-transparent text-[22px] font-semibold leading-[1.45] outline-none placeholder:text-current placeholder:opacity-60'
-                : 'block min-h-[3em] w-full resize-none overflow-hidden bg-transparent pt-1.5 text-[17px] leading-[1.5] outline-none placeholder:text-foreground/60'}
+                : 'block min-h-[3.5em] w-full resize-none overflow-hidden rounded-2xl bg-foreground/[0.05] px-3.5 py-2.5 text-[17px] leading-[1.5] outline-none placeholder:font-medium placeholder:text-foreground/70'}
               style={{ whiteSpace: 'pre-wrap' }}
             />
           </div>

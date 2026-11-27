@@ -13,7 +13,8 @@
 //   { requestId, type: 'picked', photos: [{ dataUrl, name? }] } or
 //   { requestId, type: 'cancelled' }, or
 //   { requestId, type: 'denied' } (photo access refused: this page keeps the
-//   system picker from then on).
+//   system picker from then on), or
+//   { requestId, type: 'skipped' } (no photo: write without one).
 
 import { NATIVE_SHELL_CAPABILITIES_STATE_KEY } from '@/lib/native-device-audio'
 
@@ -61,10 +62,22 @@ export function filesFromNativePhotos(detail: NativePhotosDetail | null): File[]
   return files.length > 0 ? files : null
 }
 
-export type NativePhotoGalleryLabels = { title: string; next: string; close: string; limited: string; denied: string; openSettings: string }
+export type NativePhotoGalleryLabels = { title: string; next: string; close: string; limited: string; denied: string; openSettings: string; skip: string; recent: string }
 
-/** Opens the app's gallery and waits for the photos picked (null when closed without any). */
-export function openNativePhotoGallery(max: number, labels: NativePhotoGalleryLabels): Promise<File[] | null> {
+export type NativePhotoGalleryResult =
+  | { outcome: 'picked'; files: File[] }
+  | { outcome: 'skipped' | 'cancelled' | 'denied'; files: null }
+
+function resultOf(detail: NativePhotosDetail | null): NativePhotoGalleryResult {
+  const files = filesFromNativePhotos(detail)
+  if (files) return { outcome: 'picked', files }
+  if (detail?.type === 'skipped') return { outcome: 'skipped', files: null }
+  if (detail?.type === 'denied') return { outcome: 'denied', files: null }
+  return { outcome: 'cancelled', files: null }
+}
+
+/** Opens the app's gallery and waits for how it closed: photos picked, text only, closed, or access refused. */
+export function openNativePhotoGallery(max: number, labels: NativePhotoGalleryLabels): Promise<NativePhotoGalleryResult> {
   const requestId = `photos-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
   return new Promise((resolve) => {
     const timer = window.setTimeout(() => finish(null), GALLERY_TIMEOUT_MS)
@@ -83,9 +96,9 @@ export function openNativePhotoGallery(max: number, labels: NativePhotoGalleryLa
         reason: (detail as { reason?: unknown } | null)?.reason ?? null,
       }
       try {
-        resolve(filesFromNativePhotos(detail))
+        resolve(resultOf(detail))
       } catch {
-        resolve(null)
+        resolve({ outcome: 'cancelled', files: null })
       }
     }
     window.addEventListener(NATIVE_PHOTOS_EVENT, handle)

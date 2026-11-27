@@ -31,6 +31,10 @@ export type PhotoGalleryLabels = {
   limited: string;
   denied: string;
   openSettings: string;
+  /** Go on to writing without a photo (2026-11-27: the gallery opens first, as Instagram's). */
+  skip: string;
+  /** Over the grid: which photos these are. */
+  recent: string;
 };
 
 export type PhotoGalleryRequest = { requestId: string; max: number; labels: PhotoGalleryLabels };
@@ -39,7 +43,9 @@ export type PhotoGalleryAnswer =
   | { requestId: string; type: 'picked'; photos: Array<{ dataUrl: string; name: string }> }
   | { requestId: string; type: 'cancelled'; reason?: string }
   /** Access refused: the web keeps the system picker from then on. */
-  | { requestId: string; type: 'denied' };
+  | { requestId: string; type: 'denied' }
+  /** No photo, write anyway. */
+  | { requestId: string; type: 'skipped' };
 
 /** The longest side of a photo handed to the web (the web shrinks it further for upload). */
 const MAX_SIDE = 1600;
@@ -178,8 +184,7 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
 
   const finish = useCallback(async () => {
     if (!requestId || busy) return;
-    // Nothing ticked: the photo on show is the one meant.
-    const ids = picked.length > 0 ? picked : focus ? [focus.node.id] : [];
+    const ids = picked;
     if (ids.length === 0) return;
     setBusy(true);
     const out: Array<{ dataUrl: string; name: string }> = [];
@@ -198,13 +203,17 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
     }
     setBusy(false);
     onAnswer(out.length > 0 ? { requestId, type: 'picked', photos: out } : { requestId, type: 'cancelled', reason: lastError || 'nothing_read' });
-  }, [busy, byId, focus, onAnswer, picked, requestId]);
+  }, [busy, byId, onAnswer, picked, requestId]);
+
+  const skip = useCallback(() => {
+    if (requestId) onAnswer({ requestId, type: 'skipped' });
+  }, [onAnswer, requestId]);
 
   const letMoreIn = useCallback(() => {
     void openPhotoPicker().catch(() => undefined).finally(() => { void loadPage(null); });
   }, [loadPage]);
 
-  const canFinish = picked.length > 0 || Boolean(focus);
+  const canFinish = picked.length > 0;
 
   // Nothing at all until the web asks (no idle Modal in the tree).
   if (!galleryRequest) return null;
@@ -229,6 +238,9 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
             <Pressable accessibilityRole="button" onPress={() => { void openSettings(); }} style={styles.settings}>
               <Text style={styles.settingsText}>{labels?.openSettings}</Text>
             </Pressable>
+            <Pressable accessibilityRole="button" onPress={skip} style={styles.skipWide}>
+              <Text style={styles.skipText}>{labels?.skip}</Text>
+            </Pressable>
           </View>
         ) : access === 'checking' ? (
           <View style={styles.denied}><ActivityIndicator color="#ffffff" /></View>
@@ -243,6 +255,12 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
               <View>
                 <View style={[styles.preview, { width, height: Math.round(width * 1.0) }]}>
                   {focus ? <Image source={{ uri: focus.node.image.uri }} style={styles.previewImage} resizeMode="contain" /> : null}
+                </View>
+                <View style={styles.listBar}>
+                  <Text style={styles.recent}>{labels?.recent}</Text>
+                  <Pressable accessibilityRole="button" onPress={skip} hitSlop={8} style={styles.skipPill} testID="photo-gallery-skip">
+                    <Text style={styles.skipText}>{labels?.skip}</Text>
+                  </Pressable>
                 </View>
                 {access === 'limited' && Platform.OS === 'ios' ? (
                   <Pressable accessibilityRole="button" onPress={letMoreIn} style={styles.limited}>
@@ -293,4 +311,9 @@ const styles = StyleSheet.create({
   deniedText: { color: '#ffffff', fontSize: 15, textAlign: 'center', lineHeight: 22 },
   settings: { marginTop: 16, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14, backgroundColor: '#f97316' },
   settingsText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
+  listBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
+  recent: { color: '#ffffff', fontSize: 17, fontWeight: '700' },
+  skipPill: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999, backgroundColor: '#ffffff' },
+  skipWide: { marginTop: 12, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14, backgroundColor: '#ffffff' },
+  skipText: { color: '#0b0b0f', fontSize: 15, fontWeight: '700' },
 });
