@@ -1,6 +1,6 @@
 'use client'
 
-import ComposeCategoryPicker, { ComposeCategoryStep, ComposeCategorySummary } from '@/components/compose/compose-category-picker'
+import ComposeCategoryPicker, { ComposeCategoryStep } from '@/components/compose/compose-category-picker'
 import { POST_CALL_LISTEN_EVENT } from '@/lib/post-call'
 import { EMPTY_POST_INTRO_EXTRAS, postIntroProblem, type PostCategory, type PostHobby, type PostIntroExtras } from '@/lib/post-category'
 import { requestProfileBasics } from '@/lib/profile-basics'
@@ -147,8 +147,9 @@ export default function ComposeScreen({
   const clientPostId = useRef(generateClientPostId())
   // The post's kind (see @/lib/post-category); a new post starts as an ordinary one.
   const [category, setCategory] = useState<PostCategory>('free')
-  // A new post asks for its kind first, alone on the screen (owner, 2026-11-27);
-  // the write form opens under it once one is tapped. A draft goes straight to writing.
+  // A new post asks for its kind on the write screen (after the app's gallery);
+  // the write form unfolds under it once one is tapped (owner, 2026-11-27).
+  // A draft goes straight to writing.
   const [categoryChosen, setCategoryChosen] = useState(Boolean(initialDraftId))
   const [hobbies, setHobbies] = useState<PostHobby[]>([])
   const [introExtras, setIntroExtras] = useState<PostIntroExtras>(EMPTY_POST_INTRO_EXTRAS)
@@ -226,15 +227,25 @@ export default function ComposeScreen({
     if (!initialDraftId) setBackgroundKey((current) => current ?? randomBackgroundKey())
   }, [initialDraftId])
 
-  // Once the kind is picked, a new post opens on the app's gallery, Instagram-style
-  // (owner, 2026-11-27). Browsers and apps without it open the write form, the photo tile first.
+  // A new post opens on the app's gallery, Instagram-style (owner, 2026-11-27);
+  // its "next" or "text only" comes back to the choice of kind. Browsers and
+  // apps without it start on the choice of kind.
+  const openGalleryFirstRef = useRef<() => void>(() => undefined)
+  useEffect(() => {
+    openGalleryFirstRef.current = () => { requestNativePhotos({ first: true }) }
+  })
   const galleryOpenedFirstRef = useRef(false)
+  useEffect(() => {
+    if (!isSignedIn || initialDraftId || galleryOpenedFirstRef.current || !isNativePhotoGalleryAvailable()) return
+    galleryOpenedFirstRef.current = true
+    openGalleryFirstRef.current()
+  }, [initialDraftId, isSignedIn])
+
   function pickCategory(next: PostCategory) {
     setCategory(next)
     setCategoryChosen(true)
-    if (initialDraftId || galleryOpenedFirstRef.current || photos.length > 0 || !isNativePhotoGalleryAvailable()) return
-    galleryOpenedFirstRef.current = true
-    requestNativePhotos({ first: true })
+    // Then the writing, and only the writing: the caption box, focused.
+    window.setTimeout(() => document.getElementById('compose-body')?.focus({ preventScroll: true }), 80)
   }
 
   // Analytics: compose entry, once per screen mount for a signed-in author.
@@ -355,7 +366,6 @@ export default function ComposeScreen({
     clearExtras()
     setCategory('free')
     setCategoryChosen(false)
-    galleryOpenedFirstRef.current = false
     setMode('editor')
   }
 
@@ -508,16 +518,11 @@ export default function ComposeScreen({
       recent: galleryCopy.galleryRecent,
     }).then(async ({ outcome, files }) => {
       if (outcome === 'cancelled' && options.first) {
-        // Closed before anything was picked: back to the choice of kind (it opens again from there).
-        galleryOpenedFirstRef.current = false
-        setCategoryChosen(false)
+        leave()
         return
       }
-      if (outcome === 'skipped') {
-        // Straight to writing: the caption box, focused.
-        window.setTimeout(() => document.getElementById('compose-body')?.focus(), 80)
-        return
-      }
+      // "Text only": on to the choice of kind (or the writing, when the kind is picked).
+      if (outcome === 'skipped') return
       if (!files) return
       const prepared: PreparedImage[] = []
       for (const file of files.slice(0, room)) {
@@ -820,12 +825,17 @@ export default function ComposeScreen({
           </p>
         ) : null}
 
-        {!categoryChosen ? (
-          <ComposeCategoryStep locale={locale} onPick={pickCategory} />
-        ) : (
+        {initialDraftId ? null : (
+          <ComposeCategoryStep
+            locale={locale}
+            chosen={categoryChosen ? category : null}
+            onPick={pickCategory}
+            onReopen={() => setCategoryChosen(false)}
+          />
+        )}
+        {categoryChosen ? (
         <>
-        <ComposeCategorySummary locale={locale} category={category} onChange={() => setCategoryChosen(false)} />
-        {/* The write form unfolds under the kind picked: photos, then the caption. */}
+        {/* The write form unfolds under the kind picked: the caption, then the photos (each removable, more addable). */}
         <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:duration-300">
         <ComposeEditor
           locale={locale}
@@ -839,9 +849,7 @@ export default function ComposeScreen({
           onAddPhotos={handleAddPhotos}
           onRemovePhoto={handleRemovePhoto}
           author={author}
-          // Photos come first: the keyboard would cover them.
           autoFocus={false}
-          photoFirst
           onRequestPhotos={requestNativePhotos}
           previewOpen={previewOpen}
           onPreviewOpenChange={setPreviewOpen}
@@ -861,7 +869,7 @@ export default function ComposeScreen({
         />
         </div>
         </>
-        )}
+        ) : null}
       </div>
 
       {categoryChosen ? (

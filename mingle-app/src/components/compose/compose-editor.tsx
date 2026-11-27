@@ -475,12 +475,14 @@ export default function ComposeEditor(props: ComposeEditorProps) {
             placeholder={copy.editorPlaceholder}
             disabled={props.disabled}
             rows={1}
-            className="mt-0.5 block min-h-[1.5em] w-full resize-none overflow-hidden bg-transparent text-[16px] leading-[1.5] outline-none placeholder:text-foreground/35"
+            onFocus={keepCaretInView}
+            className={`mt-0.5 block w-full resize-none overflow-hidden bg-transparent text-[16px] leading-[1.5] outline-none ${multi ? 'min-h-[4.5em] placeholder:text-foreground/50' : 'min-h-[1.5em] placeholder:text-foreground/35'}`}
             style={{ whiteSpace: 'pre-wrap' }}
           />
 
           {multi && photoCount > 0 ? (
-            <div className="no-scrollbar -mx-1 mt-2 flex gap-2 overflow-x-auto px-1 pb-1">
+            // Swiped sideways: each photo removable, and one more tile to add more.
+            <div className="no-scrollbar -mx-1 mt-2 flex gap-2 overflow-x-auto px-1 pb-1" data-qa="compose-photo-strip">
               {props.photos!.map((photo, index) => (
                 <div
                   key={photo.id}
@@ -503,6 +505,19 @@ export default function ComposeEditor(props: ComposeEditorProps) {
                   </div>
                 </div>
               ))}
+              {photoCount < MAX_POST_PHOTOS ? (
+                <button
+                  type="button"
+                  data-qa="compose-photo-add"
+                  onClick={openPicker}
+                  disabled={props.disabled || preparing}
+                  aria-label={copy.addPhoto}
+                  className="flex h-40 w-24 shrink-0 flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-foreground/20 text-[13px] font-semibold text-foreground/55 transition active:bg-foreground/5 disabled:opacity-60"
+                >
+                  {preparing ? <Loader2 size={20} className="animate-spin" aria-hidden="true" /> : <Plus size={22} strokeWidth={2.2} aria-hidden="true" />}
+                  <span className="tabular-nums">{photoCount}/{MAX_POST_PHOTOS}</span>
+                </button>
+              ) : null}
             </div>
           ) : null}
 
@@ -552,7 +567,7 @@ export default function ComposeEditor(props: ComposeEditorProps) {
           <div className="-ml-2 mt-1.5 flex items-center gap-0.5">
             <ToolButton
               label={!multi && props.imagePreviewUrl ? copy.replacePhoto : copy.addPhoto}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={multi ? openPicker : () => fileInputRef.current?.click()}
               disabled={props.disabled || preparing || (multi && photoCount >= MAX_POST_PHOTOS)}
             >
               <ImagePlus size={20} strokeWidth={1.9} aria-hidden="true" />

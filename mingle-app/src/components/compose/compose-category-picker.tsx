@@ -31,10 +31,23 @@ function CategoryIcon({ category, size }: { category: PostCategory; size: number
 }
 
 /**
- * The first step of a new post (owner, 2026-11-27): only the kind of post,
- * one tap each; the write form opens under it once one is picked.
+ * The kind of a new post, asked on the write screen once the gallery has
+ * closed (owner, 2026-11-27): one big row each. Tapping one keeps it where it
+ * is while the question and the other rows fold away, and the write form
+ * unfolds under it; tapping the kept row again opens the choice back up.
  */
-export function ComposeCategoryStep({ locale, onPick }: { locale: string; onPick: (category: PostCategory) => void }) {
+export function ComposeCategoryStep({
+  locale,
+  chosen,
+  onPick,
+  onReopen,
+}: {
+  locale: string
+  /** The kind picked, or null while the choice is open. */
+  chosen: PostCategory | null
+  onPick: (category: PostCategory) => void
+  onReopen: () => void
+}) {
   const copy = useMemo(() => resolvePostCategoryCopy(locale), [locale])
   const stepCopy = useMemo(() => resolveComposeCategoryStepCopy(locale), [locale])
   const categories = useCategories()
@@ -44,51 +57,55 @@ export function ComposeCategoryStep({ locale, onPick }: { locale: string; onPick
     intro: stepCopy.introShort,
     call: copy.callHint,
   }
+  const open = chosen === null
+  // Folds to nothing (height and opacity), so what is under it slides up smoothly.
+  const fold = (shown: boolean) =>
+    `grid transition-[grid-template-rows,opacity] duration-300 ease-out ${shown ? 'grid-rows-[1fr] opacity-100' : 'pointer-events-none grid-rows-[0fr] opacity-0'}`
   return (
-    <section data-qa="compose-category-step" className="px-4 pb-6 pt-5">
-      <h2 className="text-[22px] font-bold leading-tight">{stepCopy.question}</h2>
-      <div className="mt-4 flex flex-col gap-2.5" role="radiogroup" aria-label={copy.label}>
-        {categories.map((entry, index) => (
-          <button
-            key={entry}
-            type="button"
-            role="radio"
-            aria-checked={false}
-            data-qa={`compose-category-${entry}`}
-            onClick={() => onPick(entry)}
-            style={{ animationDelay: `${index * 40}ms` }}
-            className="flex min-h-[4.25rem] w-full items-center gap-3.5 rounded-2xl border border-foreground/10 bg-background px-4 py-3 text-left transition active:scale-[0.99] active:bg-foreground/5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:fill-mode-both motion-safe:duration-300"
-          >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-600">
-              <CategoryIcon category={entry} size={19} />
-            </span>
-            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="text-[16px] font-bold">{copy.categories[entry]}</span>
-              <span className="text-[13px] leading-snug text-foreground/55">{hints[entry]}</span>
-            </span>
-            <ChevronRight size={18} strokeWidth={2.2} className="shrink-0 text-foreground/30" aria-hidden="true" />
-          </button>
-        ))}
+    <section data-qa="compose-category-step" data-open={open ? '1' : '0'} className="px-4 pt-3">
+      <div className={fold(open)} aria-hidden={!open}>
+        <div className="min-h-0 overflow-hidden">
+          <h2 className="pb-3 pt-2 text-[22px] font-bold leading-tight">{stepCopy.question}</h2>
+        </div>
+      </div>
+      <div role="radiogroup" aria-label={copy.label}>
+        {categories.map((entry) => {
+          const picked = entry === chosen
+          return (
+            <div key={entry} className={fold(open || picked)} aria-hidden={!open && !picked}>
+              <div className="min-h-0 overflow-hidden">
+                <div className="pb-2.5">
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={picked}
+                    data-qa={`compose-category-${entry}`}
+                    tabIndex={open || picked ? 0 : -1}
+                    onClick={() => (picked ? onReopen() : onPick(entry))}
+                    className={`flex min-h-[4.25rem] w-full items-center gap-3.5 rounded-2xl border px-4 py-3 text-left transition active:scale-[0.99] ${
+                      picked ? 'border-amber-300 bg-amber-50' : 'border-foreground/10 bg-background active:bg-foreground/5'
+                    }`}
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100/70 text-amber-600">
+                      <CategoryIcon category={entry} size={19} />
+                    </span>
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className="text-[16px] font-bold">{copy.categories[entry]}</span>
+                      <span className="text-[13px] leading-snug text-foreground/55">{hints[entry]}</span>
+                    </span>
+                    {picked ? (
+                      <span className="shrink-0 text-[13px] font-semibold text-foreground/45">{stepCopy.change}</span>
+                    ) : (
+                      <ChevronRight size={18} strokeWidth={2.2} className="shrink-0 text-foreground/30" aria-hidden="true" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })}
       </div>
     </section>
-  )
-}
-
-/** The kind picked, folded to one line above the write form; tapping it asks again. */
-export function ComposeCategorySummary({ locale, category, onChange }: { locale: string; category: PostCategory; onChange: () => void }) {
-  const copy = useMemo(() => resolvePostCategoryCopy(locale), [locale])
-  const stepCopy = useMemo(() => resolveComposeCategoryStepCopy(locale), [locale])
-  return (
-    <button
-      type="button"
-      data-qa="compose-category-summary"
-      onClick={onChange}
-      className="mx-4 mt-3 flex h-10 items-center gap-2 rounded-full bg-amber-50 pl-3 pr-3.5 text-[14px] font-semibold text-slate-950 transition active:scale-[0.98] motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-200"
-    >
-      <span className="text-amber-600"><CategoryIcon category={category} size={15} /></span>
-      {copy.categories[category]}
-      <span className="text-[13px] font-medium text-foreground/45">· {stepCopy.change}</span>
-    </button>
   )
 }
 
