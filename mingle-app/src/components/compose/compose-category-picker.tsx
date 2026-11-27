@@ -38,13 +38,16 @@ function CategoryIcon({ category, size }: { category: PostCategory; size: number
  */
 export function ComposeCategoryStep({
   locale,
-  chosen,
+  selected,
+  open,
   onPick,
   onReopen,
 }: {
   locale: string
-  /** The kind picked, or null while the choice is open. */
-  chosen: PostCategory | null
+  /** The kind marked (an ordinary post until another is tapped). */
+  selected: PostCategory
+  /** The choice is on screen (false: folded to the kind picked, the form under it). */
+  open: boolean
   onPick: (category: PostCategory) => void
   onReopen: () => void
 }) {
@@ -57,7 +60,6 @@ export function ComposeCategoryStep({
     intro: stepCopy.introShort,
     call: copy.callHint,
   }
-  const open = chosen === null
   // Folds to nothing (height and opacity), so what is under it slides up smoothly.
   const fold = (shown: boolean) =>
     `grid transition-[grid-template-rows,opacity] duration-300 ease-out ${shown ? 'grid-rows-[1fr] opacity-100' : 'pointer-events-none grid-rows-[0fr] opacity-0'}`
@@ -70,7 +72,7 @@ export function ComposeCategoryStep({
       </div>
       <div role="radiogroup" aria-label={copy.label}>
         {categories.map((entry) => {
-          const picked = entry === chosen
+          const picked = entry === selected
           return (
             <div key={entry} className={fold(open || picked)} aria-hidden={!open && !picked}>
               <div className="min-h-0 overflow-hidden">
@@ -81,7 +83,7 @@ export function ComposeCategoryStep({
                     aria-checked={picked}
                     data-qa={`compose-category-${entry}`}
                     tabIndex={open || picked ? 0 : -1}
-                    onClick={() => (picked ? onReopen() : onPick(entry))}
+                    onClick={() => (open ? onPick(entry) : onReopen())}
                     className={`flex min-h-[4.25rem] w-full items-center gap-3.5 rounded-2xl border px-4 py-3 text-left transition active:scale-[0.99] ${
                       picked ? 'border-amber-300 bg-amber-50' : 'border-foreground/10 bg-background active:bg-foreground/5'
                     }`}
@@ -93,8 +95,10 @@ export function ComposeCategoryStep({
                       <span className="text-[16px] font-bold">{copy.categories[entry]}</span>
                       <span className="text-[13px] leading-snug text-foreground/55">{hints[entry]}</span>
                     </span>
-                    {picked ? (
+                    {picked && !open ? (
                       <span className="shrink-0 text-[13px] font-semibold text-foreground/45">{stepCopy.change}</span>
+                    ) : picked ? (
+                      <Check size={20} strokeWidth={2.8} className="shrink-0 text-amber-600" aria-hidden="true" />
                     ) : (
                       <ChevronRight size={18} strokeWidth={2.2} className="shrink-0 text-foreground/30" aria-hidden="true" />
                     )}

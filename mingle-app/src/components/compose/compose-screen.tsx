@@ -41,6 +41,7 @@ import { prepareComposeImage, type PreparedImage } from './compose-image'
 import { isNativePhotoGalleryAvailable, openNativePhotoGallery } from '@/lib/native-photo-gallery'
 import { resolveComposePhotoCopy } from '@/i18n/compose-photo-copy'
 import { resolvePostCategoryCopy } from '@/i18n/post-category-copy'
+import { resolveComposeCategoryStepCopy } from '@/i18n/compose-category-step-copy'
 
 const AUTOSAVE_DEBOUNCE_MS = 1200
 
@@ -583,7 +584,12 @@ export default function ComposeScreen({
   const publishable = canPublish({ sourceText: text, hasImage }) && !introProblem
   const photoCopy = resolveComposePhotoCopy(locale)
   const categoryCopy = resolvePostCategoryCopy(locale)
-  const blockedReason = publishable
+  const stepCopy = resolveComposeCategoryStepCopy(locale)
+  // Before the kind is confirmed, the same bottom button posts at once when there
+  // is something to post (an ordinary post by default: photos, then one tap), and
+  // otherwise goes on to the writing (owner, 2026-11-27).
+  const continueFirst = !categoryChosen && !publishable
+  const blockedReason = publishable || continueFirst
     ? null
     : text.length > MAX_POST_LENGTH
       ? photoCopy.textTooLong
@@ -828,11 +834,21 @@ export default function ComposeScreen({
         {initialDraftId ? null : (
           <ComposeCategoryStep
             locale={locale}
-            chosen={categoryChosen ? category : null}
+            selected={category}
+            open={!categoryChosen}
             onPick={pickCategory}
             onReopen={() => setCategoryChosen(false)}
           />
         )}
+        {!categoryChosen && photos.length > 0 ? (
+          // The photos picked in the gallery, so the button below plainly posts them.
+          <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 pb-2 pt-1" data-qa="compose-step-photos">
+            {photos.map((photo) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={photo.id} src={photo.url} alt="" className="h-16 w-16 shrink-0 rounded-xl object-cover" draggable={false} />
+            ))}
+          </div>
+        ) : null}
         {categoryChosen ? (
         <>
         {/* The write form unfolds under the kind picked: the caption, then the photos (each removable, more addable). */}
@@ -872,9 +888,9 @@ export default function ComposeScreen({
         ) : null}
       </div>
 
-      {categoryChosen ? (
+      {/* Always here, in the easiest place to tap: above the keyboard, else at the bottom. */}
       <div
-        className="shrink-0 border-t border-foreground/10 px-4 pt-2 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-300"
+        className="shrink-0 border-t border-foreground/10 px-4 pt-2"
         style={{
           paddingBottom: keyboardInset > 0 ? '10px' : 'max(env(safe-area-inset-bottom, 0px), 10px)',
         }}
@@ -891,14 +907,13 @@ export default function ComposeScreen({
         <button
           type="button"
           data-qa="compose-publish"
-          onClick={() => void handlePublish()}
-          disabled={!publishable}
+          onClick={() => (continueFirst ? pickCategory(category) : void handlePublish())}
+          disabled={!publishable && !continueFirst}
           className="flex h-12 w-full items-center justify-center rounded-2xl bg-primary text-[16px] font-bold text-primary-foreground transition active:scale-[0.99] disabled:bg-foreground/10 disabled:text-foreground/35"
         >
-          {copy.publish}
+          {continueFirst ? stepCopy.continue : copy.publish}
         </button>
       </div>
-      ) : null}
     </div>
   )
 }
