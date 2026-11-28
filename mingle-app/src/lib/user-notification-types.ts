@@ -1,6 +1,7 @@
 // Notifications sent by the HashChat team: no actor user, text in `body`.
 // sign_in_attached: another sign-in method or number was attached to the account (docs/one-account-per-person.md).
-export const TEAM_NOTIFICATION_TYPES = ["feedback_reply", "report_reply", "report_status", "sign_in_attached"] as const;
+// post_removed: staff took the user's post down for breaking the community rules (`targetId` is the post).
+export const TEAM_NOTIFICATION_TYPES = ["feedback_reply", "report_reply", "report_status", "sign_in_attached", "post_removed"] as const;
 export type TeamNotificationType = (typeof TEAM_NOTIFICATION_TYPES)[number];
 
 // Everything the in-app notification list shows.

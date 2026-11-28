@@ -60,6 +60,8 @@ const DECKS = [
     og: { en: "/assets/og-hashchat.png?v=20261112", ko: "/assets/og-hashchat.png?v=20261112" } },
   { slug: "hashchat-pitch-deck-short", deck: "/xr-short", date: "2026-09-02",
     og: { en: "/assets/og-hashchat.png?v=20261112", ko: "/assets/og-hashchat.png?v=20261112" } },
+  { slug: "hashchat-pitch-deck-global-ota", deck: "/xr-hashchat", date: "2026-11-27",
+    og: { en: "/assets/og-hashchat.png?v=20261112", ko: "/assets/og-hashchat.png?v=20261112" } },
   { slug: "virtually-deck", deck: "/xr-virtually", date: "2026-09-13",
     og: { en: "/assets/virtually-vtuber-cover.png", ko: "/assets/virtually-vtuber-cover.png" } },
 ];

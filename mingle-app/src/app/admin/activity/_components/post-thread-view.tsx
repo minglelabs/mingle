@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { ChevronLeft, Heart, Loader2, MessageCircle, SendHorizontal, X } from 'lucide-react'
 import type { OperatorPostStats } from '@/lib/operator-post-stats'
+import { PostHideButton } from './post-hide-button'
 import type { InboxPerson } from '@/server/operator-inbox/inbox'
 import type { OperatorPostThread, StoredTranslation, ThreadComment } from '@/server/operator-activity/thread'
 import { OperatorPostStatsRow } from '../../_components/operator-post-stats-row'
@@ -171,6 +172,7 @@ function CommentRow({ postId, comment, korean, nowMs, focused, isReply, canReply
             <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
               <ProfileLink userId={comment.author.userId} className="min-w-0 truncate text-sm font-semibold text-slate-900">{inboxPersonLabel(comment.author)}</ProfileLink>
               <span className="text-xs text-slate-500">{formatInboxRelativeTime(comment.createdAt, nowMs)}</span>
+              {comment.hidden ? <span className="rounded-full bg-rose-50 px-1.5 py-0.5 text-[11px] font-medium text-rose-700 ring-1 ring-rose-200">앱에서 숨겨짐</span> : null}
             </p>
             <p className="mt-0.5 whitespace-pre-wrap break-words text-[15px] leading-6 text-slate-800">
               {comment.replyTo ? <span className="mr-1 text-sky-700">@{comment.replyTo.label.replace(/^@/, '')}</span> : null}
@@ -413,6 +415,11 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
       <div className={embedded ? 'w-full' : 'mx-auto w-full max-w-2xl flex-1 px-3 py-3'}>
         {embedded ? null : (
         <article className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          {post.deleted || post.hidden ? (
+            <p className="mb-2 rounded-lg bg-rose-50 px-2.5 py-1.5 text-xs font-medium text-rose-700 ring-1 ring-rose-200">
+              {post.deleted ? '작성자가 삭제한 글이에요 (앱에 안 보임)' : '앱에서 숨겨진 글이에요 (신고·운영진 조치)'}
+            </p>
+          ) : null}
           <p className="flex min-w-0 items-center gap-2">
             <ProfileLink userId={post.author.userId}>
               <InboxAvatar person={post.author} size={36} />
@@ -442,6 +449,9 @@ export function PostThreadView({ initialThread, focusCommentId, postStats = null
             <span className="inline-flex min-h-7 items-center gap-1"><MessageCircle size={13} aria-hidden="true" />{post.commentCount}</span>
           </div>
           <OperatorPostStatsRow stats={postStats} className="mt-2" />
+          <div className="mt-2">
+            {post.deleted ? null : <PostHideButton key={`${postId}:${post.hidden ? 1 : 0}`} postId={postId} initiallyHidden={post.hidden === true} />}
+          </div>
         </article>
         )}
 

@@ -23,6 +23,7 @@ const DECKS = [
   { slug: "ai-wrapper-business-surfers-3rd", deck: "/presentations/surfers-3rd-ai-wrapper" },
   { slug: "hashchat-pitch-deck", deck: "/xr" },
   { slug: "hashchat-pitch-deck-short", deck: "/xr-short" },
+  { slug: "hashchat-pitch-deck-global-ota", deck: "/xr-hashchat" },
   { slug: "virtually-deck", deck: "/xr-virtually" },
 ];
 const LANGS = ["en", "ko"];

@@ -61,16 +61,19 @@ export const AVATAR_CATEGORIES: ReadonlyArray<{ key: AvatarCategory; ko: string;
   // Staff (2026-11-09): too few profile pictures showed a face; the face now leads.
   { key: 'face', ko: '얼굴 위주', weight: 72 },
   { key: 'partial', ko: '얼굴 일부·가림', weight: 14 },
-  { key: 'back', ko: '뒷모습', weight: 6 },
-  { key: 'body', ko: '몸 위주', weight: 10 },
-  { key: 'part', ko: '손·발·부분', weight: 2 },
+  // Staff (2026-11-28): no profile photo without a face any more (back, body, part, object,
+  // animal and scenery are 0; a photo without a face is for posts only).
+  { key: 'back', ko: '뒷모습', weight: 0 },
+  { key: 'body', ko: '몸 위주', weight: 0 },
+  { key: 'part', ko: '손·발·부분', weight: 0 },
   { key: 'group', ko: '여러 명', weight: 6 },
   // Staff 2026-11-24: more scenery, solid-color and fan (a singer or actor they like) pictures, a little less anime.
-  { key: 'object', ko: '사물', weight: 7 },
-  { key: 'animal', ko: '동물', weight: 4 },
-  { key: 'scenery', ko: '풍경·장소', weight: 9 },
+  { key: 'object', ko: '사물', weight: 0 },
+  { key: 'animal', ko: '동물', weight: 0 },
+  { key: 'scenery', ko: '풍경·장소', weight: 0 },
   // Staff like 2D profile pictures (2026-11): about one in five accounts gets an anime-style drawing.
-  { key: 'other', ko: '그림·글자', weight: 40 },
+  // 2026-11-28: 40 → 20 so drawings stay about one in seven once the faceless photos left.
+  { key: 'other', ko: '그림·글자', weight: 20 },
 ]
 
 /** East Asian profiles hide the face more; Western and Latin American ones show it more. */
@@ -117,18 +120,19 @@ export const AVATAR_SUBTYPES: Record<AvatarCategory, readonly Subtype[]> = {
     // Staff (2026-11-23): many real people use their ID or studio profile photo; almost none here did.
     sub('id_photo', '증명사진', 3.5, 'a head-and-shoulders ID photo'),
   ],
+  // Staff (2026-11-28): the face must still be seen; shots where it is not are 0.
   partial: [
-    sub('mirror_phone', '폰으로 가린 거울 셀카', 5, 'a mirror selfie where the phone covers most of the face'),
+    sub('mirror_phone', '폰으로 가린 거울 셀카', 0, 'a mirror selfie where the phone covers most of the face'),
     sub('hand_cover', '손으로 가림', 3, 'one hand covering the mouth or one eye'),
     sub('mask', '마스크', 2.5, 'wearing a plain face mask, only the eyes visible'),
     sub('sunglasses', '선글라스', 2.5, 'wearing sunglasses that hide the eyes'),
     sub('cap_brim', '모자 챙', 2.5, 'a cap pulled low so the brim shadows the eyes'),
     sub('hair_cover', '머리카락으로 가림', 2, 'hair falling across half of the face'),
     sub('object_cover', '컵·꽃·책으로 가림', 2.5, 'holding a cup, a flower or a book in front of the lower face'),
-    sub('cropped_half', '얼굴 절반 잘림', 3, 'framed so that only half of the face is inside the picture'),
-    sub('below_eyes', '눈 아래만', 2, 'cropped so only the nose, lips and chin are in frame'),
-    sub('backlit', '역광', 2, 'strongly backlit so the face is mostly in shadow'),
-    sub('motion_blur', '흔들림', 1.5, 'slightly motion-blurred, the face soft and hard to make out'),
+    sub('cropped_half', '얼굴 절반 잘림', 0, 'framed so that only half of the face is inside the picture'),
+    sub('below_eyes', '눈 아래만', 0, 'cropped so only the nose, lips and chin are in frame'),
+    sub('backlit', '역광', 0, 'strongly backlit so the face is mostly in shadow'),
+    sub('motion_blur', '흔들림', 0, 'slightly motion-blurred, the face soft and hard to make out'),
     sub('pet_cover', '반려동물로 가림', 1, 'holding a pet up so it covers part of the face'),
   ],
   back: [
@@ -229,14 +233,15 @@ export const AVATAR_SUBTYPES: Record<AvatarCategory, readonly Subtype[]> = {
     sub('landmark', '여행지', 1.5, 'a famous kind of landmark photographed like a tourist would'),
     sub('fan_concert', '콘서트·팬캠', 10, 'a concert seen from the crowd on a phone: a big lit stage far away, the performers tiny, blurred and unrecognizable under the stage lights, raised lightsticks glowing in the dark foreground'),
   ],
+  // Staff (2026-11-28): only drawings with a face; no lettering, color or landscape.
   other: [
     sub('anime_icon', '애니풍 그림', 21, 'an anime-style drawing'),
-    sub('sticker_char', '캐릭터 스티커', 2.5, 'a cute, simple cartoon animal or blob character in the style of a messenger-app sticker, on a plain white background, with two or three hand-drawn words in a speech bubble in the everyday language of {country}'),
-    sub('lettering', '글자 이미지', 1, 'a short word or a name in loose hand-lettered script on a soft pastel background'),
+    sub('sticker_char', '캐릭터 스티커', 0, 'a cute, simple cartoon animal or blob character in the style of a messenger-app sticker, on a plain white background, with two or three hand-drawn words in a speech bubble in the everyday language of {country}'),
+    sub('lettering', '글자 이미지', 0, 'a short word or a name in loose hand-lettered script on a soft pastel background'),
     sub('doodle', '낙서풍 자화상', 2, 'a simple hand-drawn doodle self-portrait on paper, in an original style'),
-    sub('watercolor', '수채화', 1, 'a small amateur watercolor painting of a landscape'),
-    sub('emoji_plain', '단색 배경', 0.5, 'a plain pastel background with one small simple shape in the center'),
-    sub('solid_color', '단색', 4, 'one flat solid color filling the whole square and nothing else: black, white, grey, beige, navy or a soft pastel'),
+    sub('watercolor', '수채화', 0, 'a small amateur watercolor painting of a landscape'),
+    sub('emoji_plain', '단색 배경', 0, 'a plain pastel background with one small simple shape in the center'),
+    sub('solid_color', '단색', 0, 'one flat solid color filling the whole square and nothing else: black, white, grey, beige, navy or a soft pastel'),
   ],
 }
 
@@ -840,13 +845,14 @@ function dressNote(persona: AvatarPersona, gender: 'female' | 'male' | null): st
  * picked separately (staff, 2026-11: the pictures all looked alike), so two
  * accounts rarely share the art style, the colors, the pose or the background.
  */
+// Staff (2026-11-28): a profile picture always shows a face, so a drawing is of a person.
 const ANIME_SUBJECTS: readonly Option[] = [
   ['person', 12, 'person'],
-  ['cat', 1.5, 'cat'],
-  ['dog', 1.2, 'dog'],
-  ['critter', 1, 'critter'],
-  ['object', 1.3, 'object'],
-  ['landscape', 0.9, 'landscape'],
+  ['cat', 0, 'cat'],
+  ['dog', 0, 'dog'],
+  ['critter', 0, 'critter'],
+  ['object', 0, 'object'],
+  ['landscape', 0, 'landscape'],
 ]
 
 /**

@@ -204,6 +204,9 @@ export function referenceAgeRange(attributes: ReferenceAttributes | null | undef
 
 /** Persona countries the photo's main person suits; null when the photo does not say. */
 export function referenceCountries(attributes: ReferenceAttributes | null | undefined): readonly string[] | null {
+  // The country read from the photo itself (writing, place, style) wins over the look alone (staff, 2026-11-28).
+  const country = attributes?.people?.[0]?.country
+  if (country) return [country]
   const ancestry = attributes?.people?.[0]?.ancestry
   return ancestry ? ANCESTRY_COUNTRIES[ancestry] ?? null : null
 }

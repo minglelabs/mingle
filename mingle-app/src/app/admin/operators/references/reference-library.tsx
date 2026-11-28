@@ -561,6 +561,7 @@ function ReferenceEditor({ item, canDraw, autoTag, onSave, onRemove, onItems, on
       const body = await response.json().catch(() => ({})) as { error?: string; referenceUsed?: boolean }
       if (!response.ok) {
         throw new Error(body.error === 'reference_unavailable' ? '이미 쓴 사진이에요.'
+          : body.error === 'reference_no_face' ? '얼굴이 안 보이는 사진은 프사로 못 써요. 포스팅에만 쓰여요.'
           : body.error === 'seedream_unconfigured' ? 'Seedream API 키가 아직 없어요(Railway SEEDREAM_API_KEY).'
             : body.error === 'cannot_draw_here' ? '이 서버는 ChatGPT로 그릴 수 없어요. Seedream으로 바꿔 보세요.' : '계정을 만들지 못했어요.')
       }

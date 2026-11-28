@@ -51,6 +51,7 @@ import {
   shouldApplyPendingTurnPartialTranslationResponse,
   shouldOpenNativeMicSettingsOnRetry,
   shouldTriggerPartialTranslate,
+  shouldWaitForInFlightPartialTranslate,
   shouldOverrideTranslationByPriority,
 } from './use-realtime-stt'
 
@@ -2030,7 +2031,7 @@ describe('use-realtime-stt pure logic', () => {
     }).shouldRequest).toBe(true)
   })
 
-  it('clause mode asks again on a new punctuation mark or a long stretch of new text', () => {
+  it('clause mode asks again every 10 new characters', () => {
     const base = {
       mode: 'clause' as const,
       isInitialRequest: false,
@@ -2044,12 +2045,20 @@ describe('use-realtime-stt pure logic', () => {
       ...base, currentText, lastRequestedText, textLength: currentText.length,
     }).shouldRequest
 
-    // More words, no new mark: wait.
-    expect(ask('I dropped out of college after the first six months', 'I dropped out')).toBe(false)
-    // A comma with words after it: a possible cut point.
-    expect(ask('I dropped out of college, but then', 'I dropped out')).toBe(true)
-    // Same marks as the last request: wait.
-    expect(ask('I dropped out of college, but then stayed', 'I dropped out of college, but then')).toBe(false)
+    expect(ask('I dropped out of', 'I dropped out')).toBe(false)
+    expect(ask('I dropped out of college', 'I dropped out')).toBe(true)
+    expect(ask('그래서 오늘은 회의를', '그래서')).toBe(false)
+    expect(ask('그래서 오늘은 회의를 해', '그래서')).toBe(true)
+  })
+
+  it('waits for the interim request in flight unless it hangs or the languages changed', () => {
+    const wait = (input: Partial<Parameters<typeof shouldWaitForInFlightPartialTranslate>[0]>) => shouldWaitForInFlightPartialTranslate({
+      hasActiveRequest: true, targetLanguagesChanged: false, elapsedSinceLastRequestMs: 1000, ...input,
+    })
+    expect(wait({})).toBe(true)
+    expect(wait({ hasActiveRequest: false })).toBe(false)
+    expect(wait({ targetLanguagesChanged: true })).toBe(false)
+    expect(wait({ elapsedSinceLastRequestMs: 9000 })).toBe(false)
   })
 
   it('can still use char threshold mode when enabled', () => {

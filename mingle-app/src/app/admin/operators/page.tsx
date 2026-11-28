@@ -23,7 +23,7 @@ function takeFirst(value: string | string[] | undefined): string {
   return Array.isArray(value) ? value[0] ?? '' : ''
 }
 
-const SCOPE_LABEL: Record<AccountListScope, string> = { all: '전체', operator: '운영 계정', user: '실제 유저' }
+const SCOPE_LABEL: Record<AccountListScope, string> = { all: '전체', operator: '운영 계정', live: '올라간 계정', review: '검토 중', user: '실제 유저' }
 
 
 export default async function OperatorsPage({ searchParams }: OperatorsPageProps) {
@@ -74,8 +74,8 @@ export default async function OperatorsPage({ searchParams }: OperatorsPageProps
         </button>
       </form>
 
-      <div className="mt-3 flex gap-2 text-sm">
-        {(['all', 'operator', 'user'] as const).map((value) => (
+      <div className="mt-3 flex flex-wrap gap-2 text-sm">
+        {(['all', 'operator', 'live', 'review', 'user'] as const).map((value) => (
           <Link
             key={value}
             href={listHref(list.query, 1, value)}

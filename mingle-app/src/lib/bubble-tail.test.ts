@@ -1,15 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildInterimTailPartialTranslations,
-  countInterimCutCandidates,
   extendFixedSource,
   isSafeInterimCut,
+  isTailRestKey,
+  joinTailDisplay,
   joinTailTranslations,
   matchTailCutAfter,
   parseBubbleTail,
+  pickTailRests,
   planBubbleTail,
-  resolveInterimFillFallbackChars,
   shouldRequestInterimFill,
+  tailRestKey,
 } from './bubble-tail'
 
 describe('bubble tail', () => {
@@ -80,39 +82,16 @@ describe('previous bubble piece', () => {
 })
 
 describe('interim fill gate', () => {
-  it('counts marks with words after them and sentence ends', () => {
-    expect(countInterimCutCandidates('I think, maybe')).toBe(1)
-    expect(countInterimCutCandidates('I think,')).toBe(0)
-    expect(countInterimCutCandidates('Yes.')).toBe(1)
-    expect(countInterimCutCandidates('안녕하세요. 오늘은')).toBe(1)
-    expect(countInterimCutCandidates('今日は天気が良いので、午後から')).toBe(1)
-    expect(countInterimCutCandidates('it costs 3.5 dollars or 1,000 won')).toBe(0)
-  })
-
-  it('uses the shorter fallback for dense scripts, judged from the text', () => {
-    expect(resolveInterimFillFallbackChars('오늘 회의에서는 다음 분기')).toBe(30)
-    expect(resolveInterimFillFallbackChars('今日は天気がとても良い')).toBe(30)
-    expect(resolveInterimFillFallbackChars('Today I want to talk about')).toBe(60)
-    expect(resolveInterimFillFallbackChars('')).toBe(60)
-  })
-
-  it('asks on a new mark, or after the fallback stretch without one', () => {
-    expect(shouldRequestInterimFill('먼저 결과를 정리하고, 그다음에', '먼저 결과를')).toBe(true)
-    expect(shouldRequestInterimFill('먼저 결과를 정리하고', '먼저 결과를')).toBe(false)
+  it('asks every 10 new characters, spaces included, in any script', () => {
     expect(shouldRequestInterimFill('same text', 'same text')).toBe(false)
-    // Many marks close together: one request per stretch of new text, not per mark.
-    expect(shouldRequestInterimFill('하... 그럼... 어', '하')).toBe(true)
-    expect(shouldRequestInterimFill('하... 그럼', '하')).toBe(false)
-    expect(shouldRequestInterimFill('Yes. No. Well, I', 'Yes')).toBe(false)
-    expect(shouldRequestInterimFill('Yes. No. Well, I mean, maybe', 'Yes')).toBe(true)
-    const korean = '가'.repeat(45)
-    expect(shouldRequestInterimFill(korean, '가가가')).toBe(true)
-    // Unpunctuated speech: about one clause of new text is enough.
-    expect(shouldRequestInterimFill('야 지금 일부 번역하는 거 있잖아 좀 더 잘게 일부 번역하는', '야')).toBe(true)
-    expect(shouldRequestInterimFill('야 지금 일부 번역하는 거 있잖아', '야')).toBe(false)
-    const english = 'word '.repeat(12).trim()
-    expect(shouldRequestInterimFill(english, 'word')).toBe(false)
-    expect(shouldRequestInterimFill('word '.repeat(18).trim(), 'word')).toBe(true)
+    expect(shouldRequestInterimFill('', '')).toBe(false)
+    // 9 new characters: not yet.
+    expect(shouldRequestInterimFill('먼저 결과를 정리하고', '먼저')).toBe(false)
+    // 10 new characters (with spaces).
+    expect(shouldRequestInterimFill('먼저 결과를 정리하고,', '먼저')).toBe(true)
+    expect(shouldRequestInterimFill('Hi there, h', 'Hi')).toBe(false)
+    expect(shouldRequestInterimFill('Hi there, how ar', 'Hi')).toBe(true)
+    expect(shouldRequestInterimFill('今日は天気がとても良いです', '今日は')).toBe(true)
   })
 })
 
@@ -120,10 +99,10 @@ describe('buildInterimTailPartialTranslations', () => {
   const plan = planBubbleTail({ translatedSource: 'Hello.', translations: { ko: '안녕.' } }, 'Hello. Nice to meet you. And', ['ko'])!
   const key = 'cutAfter'
 
-  it('waits until the answer names a cut the finished answer would keep', () => {
-    expect(buildInterimTailPartialTranslations(plan, { values: { [key]: 'Nice to' }, complete: new Set() }, ['ko'], key)).toBeNull()
-    expect(buildInterimTailPartialTranslations(plan, { values: { [key]: 'Bye.', ko: '잘' }, complete: new Set([key]) }, ['ko'], key)).toBeNull()
+  it('waits until the answer has named its cut', () => {
+    expect(buildInterimTailPartialTranslations(plan, { values: { [key]: 'Nice to', ko: '만나' }, complete: new Set() }, ['ko'], key)).toBeNull()
     expect(buildInterimTailPartialTranslations(plan, { values: { [key]: 'meet you.' }, complete: new Set([key]) }, ['ko'], key)).toBeNull()
+    expect(buildInterimTailPartialTranslations(plan, { values: { [key]: 'Bye.', ko: '잘' }, complete: new Set([key]) }, ['ko'], key)).toBeNull()
   })
 
   it('shows the fixed part followed by the fill so far', () => {
@@ -131,5 +110,28 @@ describe('buildInterimTailPartialTranslations', () => {
       values: { [key]: 'meet you.', ko: '만나서 반' },
       complete: new Set([key]),
     }, ['ko'], key)).toEqual({ ko: '안녕. 만나서 반' })
+  })
+
+  it('adds the provisional rest after the fill', () => {
+    expect(buildInterimTailPartialTranslations(plan, {
+      values: { [key]: 'meet you.', ko: '만나서 반가워.', rest_ko: '그리고' },
+      complete: new Set([key, 'ko']),
+    }, ['ko'], key)).toEqual({ ko: '안녕. 만나서 반가워. 그리고' })
+    // No cut yet: the fixed part and the rest.
+    expect(buildInterimTailPartialTranslations(plan, {
+      values: { [key]: '', ko: '', rest_ko: '만나서 반가워. 그리고' },
+      complete: new Set([key, 'ko']),
+    }, ['ko'], key)).toEqual({ ko: '안녕. 만나서 반가워. 그리고' })
+  })
+})
+
+describe('tail rest helpers', () => {
+  it('reads the rest per language and joins it for display', () => {
+    expect(tailRestKey('en')).toBe('rest_en')
+    expect(isTailRestKey('rest_en')).toBe(true)
+    expect(isTailRestKey('en')).toBe(false)
+    expect(pickTailRests({ rest_en: ' and then ', rest_ja: '', en: 'x' }, ['en', 'ja'])).toEqual({ en: 'and then' })
+    expect(joinTailDisplay({ en: 'Hi.', ja: 'こんにちは。' }, { en: 'And', ja: 'それで' }, ['en', 'ja']))
+      .toEqual({ en: 'Hi. And', ja: 'こんにちは。それで' })
   })
 })

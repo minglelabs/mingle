@@ -385,8 +385,8 @@ export function parsePartialTranslateMode(rawMode: string | undefined): PartialT
   if (normalized === 'time') return 'time'
   if (normalized === 'both') return 'both'
   if (normalized === 'char') return 'char'
-  // Default: a new request when the tail may have a new cut point (a new
-  // punctuation mark, or a long stretch of new text). See shouldRequestInterimFill.
+  // Default: a new request every few new characters (each answer fixes the
+  // finished sentences and shows the rest provisionally). See shouldRequestInterimFill.
   return 'clause'
 }
 
@@ -438,6 +438,18 @@ export function shouldTriggerPartialTranslate(input: {
     shouldRequest: triggered,
     nextLastTranslateLen: triggered ? nextLastTranslateLen : input.lastTranslateLen,
   }
+}
+
+/** An interim request older than this no longer holds back the next one. */
+export const PARTIAL_TRANSLATE_IN_FLIGHT_TIMEOUT_MS = 8_000
+
+export function shouldWaitForInFlightPartialTranslate(input: {
+  hasActiveRequest: boolean
+  targetLanguagesChanged: boolean
+  elapsedSinceLastRequestMs: number
+}): boolean {
+  if (!input.hasActiveRequest || input.targetLanguagesChanged) return false
+  return input.elapsedSinceLastRequestMs < PARTIAL_TRANSLATE_IN_FLIGHT_TIMEOUT_MS
 }
 
 const PARTIAL_TRANSLATE_MODE = parsePartialTranslateMode(
@@ -7373,12 +7385,17 @@ export default function useRealtimeSTT({
       }
 
       const runtime = getPendingTurnTranslationRuntime(pendingTurn.utteranceId)
-      // A request already streaming into the bubble finishes first: aborting it
-      // would pull back the words just shown. Its answer re-runs this effect.
-      if (runtime.streamingController && runtime.streamingController === runtime.controller
-        && !runtime.streamingController.signal.aborted) continue
       const isInitialPartialRequest = !runtime.hasFiredInitialRequest
       const targetLanguagesChanged = runtime.lastTargetSignature !== targetLanguageSignature
+      // A request in flight finishes first: requests go out every few
+      // characters, so aborting the previous one would often leave the bubble
+      // with no answer at all. Its answer re-runs this effect, which then asks
+      // for the text heard meanwhile. A request that hangs is replaced.
+      if (shouldWaitForInFlightPartialTranslate({
+        hasActiveRequest: Boolean(runtime.controller && !runtime.controller.signal.aborted),
+        targetLanguagesChanged,
+        elapsedSinceLastRequestMs: Math.max(0, Date.now() - runtime.lastRequestedAtMs),
+      })) continue
       const scheduleDecision = shouldTriggerPartialTranslate({
         mode: partialTranslateMode,
         isInitialRequest: isInitialPartialRequest,
@@ -7539,7 +7556,8 @@ export default function useRealtimeSTT({
         if (result.tailFill) {
           bubbleTailByUtteranceIdRef.current[pendingTurn.utteranceId] = result.tailFill
         }
-        applyTranslationsToPendingTurn(result.tailFill?.translations ?? result.translations, () => ({
+        // Fixed part + this fill + the provisional rest (display only; tailFill keeps the fixed part).
+        applyTranslationsToPendingTurn(result.translations, () => ({
           originalDisplayText: result.sourceDisplayText
             ? { source: trimmed, text: result.sourceDisplayText }
             : undefined,

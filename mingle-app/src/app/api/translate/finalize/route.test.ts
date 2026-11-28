@@ -386,6 +386,59 @@ describe('/api/translate/finalize route', () => {
     expect(json.tailFill).toBeUndefined()
   })
 
+  it('shows the provisional rest after the fill but fixes only the fill', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"cutAfter":"그리고 집에 갔어.","en":"And then we went home.","rest_en":"But on the way"}',
+        usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 5, totalTokenCount: 10 },
+      },
+    })
+    const POST = await importRouteWithEnv()
+
+    const res = await POST(makeJsonRequest({
+      text: '어제 친구를 만났어. 그리고 집에 갔어. 그런데 가는',
+      sourceLanguage: 'ko',
+      targetLanguages: ['en'],
+      isFinal: false,
+      bubbleTail: {
+        translatedSource: '어제 친구를 만났어.',
+        translations: { en: 'I met a friend yesterday.' },
+      },
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.translations).toEqual({ en: 'I met a friend yesterday. And then we went home. But on the way' })
+    expect(json.tailFill.translatedSource).toBe('어제 친구를 만났어. 그리고 집에 갔어.')
+    expect(json.tailFill.translations).toEqual({ en: 'I met a friend yesterday. And then we went home.' })
+  })
+
+  it('shows the provisional rest when no sentence is finished yet', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"cutAfter":"","en":"","rest_en":"But on the way"}',
+        usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 1, totalTokenCount: 6 },
+      },
+    })
+    const POST = await importRouteWithEnv()
+
+    const res = await POST(makeJsonRequest({
+      text: '어제 친구를 만났어. 그런데 가는',
+      sourceLanguage: 'ko',
+      targetLanguages: ['en'],
+      isFinal: false,
+      bubbleTail: {
+        translatedSource: '어제 친구를 만났어.',
+        translations: { en: 'I met a friend yesterday.' },
+      },
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.translations).toEqual({ en: 'I met a friend yesterday. But on the way' })
+    expect(json.tailFill).toBeUndefined()
+  })
+
   it('ignores an interim fill whose source is not the start of the tail', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
