@@ -71,8 +71,8 @@ export default function HomeFeedLayer({ locale }: { locale: string }) {
         <Suspense fallback={null}>
           {appAccess.reason === "banned"
             ? <BannedGate locale={locale} />
-            : appAccess.reason === "needs_phone"
-              ? <PhoneGate locale={locale} onAccess={setAppAccess} />
+            : appAccess.reason === "needs_phone" || appAccess.reason === "needs_phone_in_korea"
+              ? <PhoneGate locale={locale} onAccess={setAppAccess} inKorea={appAccess.reason === "needs_phone_in_korea"} />
               : <InviteGate locale={locale} onAccess={setAppAccess} />}
         </Suspense>
       ) : null}

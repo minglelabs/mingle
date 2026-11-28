@@ -1,9 +1,11 @@
+import { readRequestCountry } from '@/server/request-country'
 import { describe, expect, it, vi } from 'vitest'
 
 const db = vi.hoisted(() => ({ findUnique: vi.fn(), updateMany: vi.fn() }))
 vi.mock('@/lib/prisma', () => ({ prisma: { user: { findUnique: db.findUnique, updateMany: db.updateMany } } }))
 vi.mock('@/server/referral', () => ({ ReferralError: class extends Error {}, redeemReferralCode: vi.fn() }))
 
+import { readRequestCountry } from '@/server/request-country'
 import { isReviewAccount, needsPhoneNumber, readAppAccess, resolveAppAccess } from '@/server/app-access'
 
 const newUser = {
@@ -113,6 +115,24 @@ describe('required phone number', () => {
     expect(needsPhoneNumber(noPhone, on, true, 'ja')).toBe(false)
     const everyone = { ...on, PHONE_REQUIRED_LOCALES: '*' } as unknown as NodeJS.ProcessEnv
     expect(needsPhoneNumber(noPhone, everyone, true, 'en')).toBe(true)
+  })
+
+  // 2026-11-28: "I have no Korean number" skips the number only outside Korea.
+  it('still asks for the number in Korea after "no Korean number"; outside Korea it does not', () => {
+    expect(needsPhoneNumber(noPhone, on, true, 'ko', false, true)).toBe(true)
+    expect(needsPhoneNumber(noPhone, on, true, 'en', false, true)).toBe(true)
+    expect(needsPhoneNumber(noPhone, on, true, 'ko', false, false)).toBe(false)
+    expect(needsPhoneNumber(noPhone, on, true, 'ko', false, null)).toBe(false)
+    expect(needsPhoneNumber(newUser, on, true, 'ko', false, true)).toBe(false)
+  })
+
+  it('reads the country of a request from a proxy header or its IP', () => {
+    const headers = (values: Record<string, string>) => ({ get: (name: string) => values[name] ?? null })
+    expect(readRequestCountry(headers({ 'cf-ipcountry': 'kr' }))).toBe('KR')
+    expect(readRequestCountry(headers({ 'x-forwarded-for': '211.234.10.1, 10.0.0.1' }))).toBe('KR')
+    expect(readRequestCountry(headers({ 'x-forwarded-for': '8.8.8.8' }))).toBe('US')
+    expect(readRequestCountry(headers({ 'x-forwarded-for': '127.0.0.1' }))).toBeNull()
+    expect(readRequestCountry(headers({}))).toBeNull()
   })
 })
 

@@ -34,7 +34,7 @@ import { ReferralError, redeemReferralCode } from '@/server/referral'
  * on a device a ban closed, gets 'banned' (src/server/identity/ban.ts).
  */
 export type AppAccessReason =
-  | 'gate_off' | 'other_locale' | 'existing' | 'invited' | 'granted' | 'staff' | 'review' | 'needs_invite' | 'waitlisted' | 'needs_phone' | 'banned'
+  | 'gate_off' | 'other_locale' | 'existing' | 'invited' | 'granted' | 'staff' | 'review' | 'needs_invite' | 'waitlisted' | 'needs_phone' | 'needs_phone_in_korea' | 'banned'
 
 export type AppAccess = { allowed: boolean; reason: AppAccessReason }
 
@@ -51,7 +51,17 @@ export type AppAccessUser = {
 }
 
 /** Who counts as Korean for the required phone number: the first screen's answer, else the profile's nationality, else the app language. */
-export type KoreanSignal = { locale?: string | null; korean?: boolean | null; nationalityCountry?: string | null }
+export type KoreanSignal = {
+  locale?: string | null
+  korean?: boolean | null
+  nationalityCountry?: string | null
+  /**
+   * Using the app from Korea right now (the request's IP country is KR). There,
+   * "I have no Korean number" does not skip the number (owner, 2026-11-28):
+   * only someone shown to be outside Korea may use the app without one.
+   */
+  inKorea?: boolean | null
+}
 
 function readGateSince(env: NodeJS.ProcessEnv): Date | null {
   const raw = env.INVITE_GATE_SINCE?.trim()
@@ -104,6 +114,7 @@ export function isPhoneRequiredFor(signal: KoreanSignal, env: NodeJS.ProcessEnv 
   const locales = (env.PHONE_REQUIRED_LOCALES ?? 'ko').split(',').map((entry) => entry.trim().toLowerCase()).filter(Boolean)
   if (locales.length === 0 || locales.includes('*')) return true
   if (locales.includes('ko')) {
+    if (signal.inKorea === true) return true
     // Known not Korean: only the other listed app languages still count.
     const others = locales.filter((entry) => entry !== 'ko')
     const inOtherLocale = () => {
@@ -124,9 +135,10 @@ export function needsPhoneNumber(
   canSendCodes: boolean = isPhoneVerificationAvailable(),
   locale?: string | null,
   korean?: boolean | null,
+  inKorea?: boolean | null,
 ): boolean {
   if (!isPhoneRequiredOn(env) || !canSendCodes) return false
-  if (!isPhoneRequiredFor({ locale, korean, nationalityCountry: user.nationalityCountry }, env)) return false
+  if (!isPhoneRequiredFor({ locale, korean, nationalityCountry: user.nationalityCountry, inKorea }, env)) return false
   if (user.phoneE164) return false
   if (user.isOperator || user.isOfficial) return false
   return !isReviewAccount(user, env)
@@ -149,10 +161,14 @@ const ACCESS_SELECT = {
   waitlistedAt: true, accessGrantedAt: true, bannedAt: true, nationalityCountry: true,
 } as const
 
-export async function readAppAccess(userId: string, locale?: string | null, options: { deviceBlocked?: boolean; korean?: boolean | null } = {}): Promise<AppAccess> {
+export async function readAppAccess(
+  userId: string,
+  locale?: string | null,
+  options: { deviceBlocked?: boolean; korean?: boolean | null; inKorea?: boolean | null } = {},
+): Promise<AppAccess> {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: ACCESS_SELECT })
   const phoneRequired = isPhoneRequiredOn() && isPhoneVerificationAvailable()
-    && isPhoneRequiredFor({ locale, korean: options.korean, nationalityCountry: user?.nationalityCountry })
+    && isPhoneRequiredFor({ locale, korean: options.korean, nationalityCountry: user?.nationalityCountry, inKorea: options.inKorea })
   if (user?.bannedAt) return { allowed: false, reason: 'banned' }
   if (options.deviceBlocked && user && !user.isOperator && !user.isOfficial) return { allowed: false, reason: 'banned' }
   if (!phoneRequired) {
@@ -160,7 +176,11 @@ export async function readAppAccess(userId: string, locale?: string | null, opti
     if (!isInviteGateLocale(locale)) return { allowed: true, reason: 'other_locale' }
   }
   if (!user) return phoneRequired && !isInviteGateOn() ? { allowed: true, reason: 'gate_off' } : { allowed: false, reason: 'needs_invite' }
-  if (phoneRequired && needsPhoneNumber(user, process.env, true, locale, options.korean)) return { allowed: false, reason: 'needs_phone' }
+  if (phoneRequired && needsPhoneNumber(user, process.env, true, locale, options.korean, options.inKorea)) {
+    // Said "no Korean number" (or not Korean) but is in Korea: the number is still needed, and the gate says why.
+    const saidNotKorean = options.korean === false || (options.korean == null && Boolean(user.nationalityCountry) && user.nationalityCountry?.toUpperCase() !== 'KR')
+    return { allowed: false, reason: options.inKorea && saidNotKorean ? 'needs_phone_in_korea' : 'needs_phone' }
+  }
   const access = resolveAppAccess(user, process.env, locale)
   if (access.reason !== 'needs_invite') return access
   // Stopped by the gate for the first time: onto the waitlist, no button needed.

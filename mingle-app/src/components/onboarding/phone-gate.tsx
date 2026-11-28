@@ -22,7 +22,20 @@ type Access = { allowed: boolean; reason: string };
  * is proved with the same SMS sheet the contact sync uses. Once it is saved,
  * the server is asked again, so the invite gate can still follow.
  */
-export default function PhoneGate({ locale, onAccess }: { locale: string; onAccess: (access: Access) => void }) {
+export default function PhoneGate({
+  locale,
+  onAccess,
+  inKorea = false,
+}: {
+  locale: string;
+  onAccess: (access: Access) => void;
+  /**
+   * The server answered "needs_phone_in_korea": "no Korean number" was said
+   * from Korea (IP), where the number is still needed (owner, 2026-11-28).
+   * The gate says why and no longer offers the way around it.
+   */
+  inKorea?: boolean;
+}) {
   const copy = useMemo(() => resolvePhoneGateCopy(locale), [locale]);
   const sheetCopy = useMemo(() => resolvePhoneFriendsCopy(locale), [locale]);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -93,6 +106,11 @@ export default function PhoneGate({ locale, onAccess }: { locale: string; onAcce
         >
           {copy.start}
         </button>
+        {inKorea ? (
+          <p role="alert" data-qa="phone-gate-in-korea" className="mt-5 max-w-[360px] rounded-2xl bg-white/90 px-4 py-3 text-[0.95rem] font-semibold leading-relaxed text-slate-950">
+            {copy.inKorea}
+          </p>
+        ) : (
         <button
           type="button"
           data-qa="phone-gate-not-korean"
@@ -102,6 +120,7 @@ export default function PhoneGate({ locale, onAccess }: { locale: string; onAcce
         >
           {copy.notKorean}
         </button>
+        )}
       </div>
       <button
         type="button"

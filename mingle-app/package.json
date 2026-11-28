@@ -61,6 +61,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.34.0",
+    "geoip-country": "5.0.202611070310",
     "heic-convert": "2.1.0",
     "lucide-react": "^0.563.0",
     "next": "16.1.6",

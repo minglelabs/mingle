@@ -1,3 +1,4 @@
+import { readRequestCountry } from '@/server/request-country'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
@@ -37,7 +38,9 @@ export async function getAppAccess(request?: NextRequest) {
   // "korean": the first screen's "Are you Korean?" answer (1 / 0), when the device has one.
   const rawKorean = request?.nextUrl.searchParams.get('korean')
   const korean = rawKorean === '1' ? true : rawKorean === '0' ? false : null
-  return json(await readAppAccess(userId, readLocale(request?.nextUrl.searchParams.get('locale')), { deviceBlocked: Boolean(device?.blocked), korean }))
+  // Where the request comes from: in Korea, "no Korean number" does not skip the number.
+  const inKorea = request ? readRequestCountry(request.headers) === 'KR' : null
+  return json(await readAppAccess(userId, readLocale(request?.nextUrl.searchParams.get('locale')), { deviceBlocked: Boolean(device?.blocked), korean, inKorea }))
 }
 
 /** POST /account/access { code } — enters an invite code at the gate. */
