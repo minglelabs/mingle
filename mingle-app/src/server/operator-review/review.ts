@@ -15,7 +15,7 @@ import { drawReservePostImage, libraryPhotoForPost, PHOTO_NO_REFERENCE, type Red
 import { MAX_RESERVE_EXTRA_IMAGES, reserveExtraImages, type ReserveExtraImage } from '@/server/operator-post-reserve/extra-images'
 import { decodePostPhoto } from '@/server/operator-post-reserve/post-photo'
 import { pickScheduledPublishAt } from '@/server/operator-post-reserve/schedule'
-import { loadExistingReserveTexts, loadReservePersona, PHOTO_REQUESTED, publishReservePostNow } from '@/server/operator-post-reserve/worker'
+import { fitReserveTextToPhoto, loadExistingReserveTexts, loadReservePersona, loadReserveTextProfile, PHOTO_REQUESTED, publishReservePostNow } from '@/server/operator-post-reserve/worker'
 import { applyAvatarCandidate, candidateDrawing, discardAvatarCandidate } from '@/server/operators/avatar-candidate'
 import { seedreamConfigured, type ImageEngine } from '@/server/seedream/client'
 import { showAccountHiddenByTakedown } from '@/server/operators/account-takedown'
@@ -78,6 +78,8 @@ async function drawPostPhotoInBackground(reserveId: string, operatorUserId: stri
   try {
     let noReference = false
     const image = await drawReservePostImage(operatorUserId, description, staffReference, context, { ...drawOptions, onNoReference: () => { noReference = true } })
+    // Drawn from a reference photo: the text is rewritten to go with it, before the card shows it.
+    if (image?.photoDescription) await fitReserveTextToPhoto(reserveId, image.photoDescription)
     await prisma.operatorPostReserve.updateMany({
       where: { id: reserveId, state: 'regenerating' },
       data: image
@@ -1016,19 +1018,7 @@ export async function draftReviewPostText(
   try {
     const persona = await loadReservePersona(row.operatorUserId, now, { includeInactive: true })
     if (!persona) return { ok: false, error: 'regenerate_failed' }
-    const account = await prisma.user.findUnique({
-      where: { id: row.operatorUserId },
-      select: { primaryLanguages: true, interestLanguages: true, interestLanguageLevels: true, operatorAccount: { select: { personaGender: true } } },
-    })
-    const profile = {
-      gender: account?.operatorAccount?.personaGender ?? null,
-      age: persona.age,
-      city: persona.city,
-      country: persona.country,
-      bio: persona.bio,
-      speaks: account?.primaryLanguages ?? [persona.language],
-      learning: account ? zipInterestLanguages(account.interestLanguages, account.interestLanguageLevels).map((item) => ({ language: item.code, level: item.level })) : [],
-    }
+    const profile = await loadReserveTextProfile(row.operatorUserId, persona)
     const photo = row.imagePrompt ? decodePostPhoto(row.imagePrompt) : null
     const text = await rewriteReservePostText({
       persona,

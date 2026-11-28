@@ -183,3 +183,14 @@ describe('photo look variation', () => {
     for (const line of Object.values(PHOTO_AXES).flatMap((axis) => axis.options)) expect(line).not.toMatch(/sunset|dusk|golden hour|glow|rim light/i)
   })
 })
+
+describe('studiesOwnLanguage', () => {
+  it('flags a study photo of the language the persona grew up with', async () => {
+    const { studiesOwnLanguage } = await import('./post-image')
+    const essay = 'A photo of a handwritten Korean essay on white paper inside a spiral-bound notebook.'
+    expect(studiesOwnLanguage(essay, 'KR')).toBe(true)
+    expect(studiesOwnLanguage(essay, 'JP')).toBe(false)
+    expect(studiesOwnLanguage('A street sign in Korean at a crossing.', 'KR')).toBe(false)
+    expect(studiesOwnLanguage(essay, null)).toBe(false)
+  })
+})
