@@ -31,11 +31,11 @@ describe('dormant accounts', () => {
     expect(canReleaseDormancy({ ...photo, imageFaceCheck: 'no_face', faceVerifiedAt: new Date() })).toBe(false)
   })
 
-  it('puts accounts without a photo to sleep once, and leaves operators alone', () => {
+  // 2026-11-29: the owner chose not to put existing accounts to sleep at release.
+  it('adds the column without putting existing accounts to sleep', () => {
     const sql = read('prisma/migrations/20261125160000_add_dormant_at/migration.sql')
-    expect(sql).toContain('"image" IS NULL OR btrim("image") = \'\'')
-    expect(sql).toContain('"is_operator" = false')
-    expect(sql).toContain('"is_official" = false')
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS "dormant_at"')
+    expect(sql).not.toContain('UPDATE "app"')
   })
 
   it('is hidden by the one rule every list of accounts and their content follows', () => {
