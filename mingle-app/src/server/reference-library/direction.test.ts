@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { WIDE_POST_DISTANCE, widenPostShot, referenceAgeRange, referenceCountries, referenceDirectionLines, referencePersonaFit, referencePersonaLine, referenceSeasonClashes, referenceSeasonsToAvoid } from './direction'
 import { referenceRecreateLines } from './library'
+import { parseReferenceAttributes } from './classify'
+import { pickSeedCountry } from '@/server/operators/seed-plan'
 
 describe('referenceDirectionLines', () => {
   it('turns the analysis into direction lines, flaws included', () => {
@@ -89,5 +91,31 @@ describe('referenceRecreateLines widen', () => {
     expect(lines).not.toContain('the camera angle and distance')
     const kept = referenceRecreateLines({ kind: 'face', look: 'a woman in her 20s' }).join('\n')
     expect(kept).toContain('the camera angle and distance')
+  })
+})
+
+describe('the country a reference photo suits (staff 2026-11-28)', () => {
+  it('takes the country read from the photo over the look alone', () => {
+    expect(referenceCountries({ people: [{ ancestry: 'east_asian', country: 'JP' }] })).toEqual(['JP'])
+    expect(referenceCountries({ people: [{ ancestry: 'east_asian' }] })).toEqual(['KR', 'JP', 'TW', 'CN'])
+    expect(parseReferenceAttributes({ people: [{ country: 'tw', age: '30s' }] })?.people?.[0]).toEqual({ country: 'TW', age: '30s' })
+    expect(parseReferenceAttributes({ people: [{ country: 'XX' }] })?.people?.[0]?.country).toBeUndefined()
+  })
+
+  it('draws a new account\'s country by the plan\'s shares, not the one furthest behind', () => {
+    const counts = new Map<string, number>()
+    let seed = 1
+    const random = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646
+    for (let index = 0; index < 5000; index += 1) {
+      const code = pickSeedCountry(null, random)
+      counts.set(code, (counts.get(code) ?? 0) + 1)
+    }
+    const kr = (counts.get('KR') ?? 0) / 5000
+    expect(kr).toBeGreaterThan(0.25)
+    expect(kr).toBeLessThan(0.4)
+    expect(counts.get('JP') ?? 0).toBeGreaterThan(800)
+    expect(counts.size).toBeGreaterThan(15)
+    expect(pickSeedCountry(['JP', 'TW'], () => 0.99)).toBe('TW')
+    expect(pickSeedCountry(['ZZ'], random)).toBe('ZZ')
   })
 })

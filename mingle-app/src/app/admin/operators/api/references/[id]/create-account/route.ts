@@ -30,6 +30,6 @@ export async function POST(request: Request, context: Ctx) {
   if (engine === 'pool' && !canDrawImagesHere()) return json({ error: 'cannot_draw_here' }, 409)
   const { id } = await context.params
   const result = await createNextSeedAccount(auth.ctx, { inReview: true, referenceId: id, engine })
-  if (!result.done) return json({ error: result.reason }, result.reason === 'reference_unavailable' ? 409 : 502)
+  if (!result.done) return json({ error: result.reason }, result.reason === 'reference_unavailable' || result.reason === 'reference_no_face' ? 409 : 502)
   return json({ ok: true, userId: result.account.userId, referenceUsed: result.referenceUsed === true })
 }

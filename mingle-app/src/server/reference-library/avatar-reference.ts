@@ -4,7 +4,8 @@ import { referenceNeedLabel, referencePersonaFit, referenceSeasonClashes, refere
 import { claimReferencePhoto, listReferencePhotos, loadReferenceBytes, referenceKindOf, releaseReferencePhoto, type ReferenceGender, type ReferenceKind, type ReferencePhoto } from './library'
 
 /** A profile photo is drawn from a library shot of one person: face shown, or not. */
-const AVATAR_KINDS: readonly ReferenceKind[] = ['face', 'person']
+// A profile photo always shows a face (staff, 2026-11-28): a photo without one is for posts only.
+const AVATAR_KINDS: readonly ReferenceKind[] = ['face']
 
 export type AvatarLibraryReference = { reference: AvatarReference; kind: ReferenceKind; note?: string | null; attributes?: ReferenceAttributes | null }
 

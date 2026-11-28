@@ -70,3 +70,23 @@ export function mostUnderrepresentedCountry(currentByCountry: ReadonlyMap<string
   }
   return best
 }
+
+/**
+ * A country for the next new account, drawn at random by the plan's shares
+ * (only among `allowed`, when given, e.g. the countries a reference photo
+ * suits). Staff (2026-11-28): filling the country furthest behind first made
+ * every new account Korean for days after Korea's share was raised; a draw
+ * mixes countries from the first account.
+ */
+export function pickSeedCountry(allowed?: readonly string[] | null, random: () => number = Math.random): string {
+  const entries = Object.entries(DEFAULT_SEED_PLAN).filter(([code, planned]) => planned > 0 && (!allowed?.length || allowed.includes(code)))
+  // A photo whose country is not in the plan still decides the country.
+  if (!entries.length) return allowed?.[0] ?? 'KR'
+  const total = entries.reduce((sum, [, planned]) => sum + planned, 0)
+  let roll = random() * total
+  for (const [code, planned] of entries) {
+    roll -= planned
+    if (roll < 0) return code
+  }
+  return entries[entries.length - 1][0]
+}

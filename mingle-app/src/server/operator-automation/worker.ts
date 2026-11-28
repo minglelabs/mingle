@@ -4,7 +4,7 @@ import { assignReferencePhoto, claimReferencePhoto, loadReferenceBytes, referenc
 import { generateOperatorAvatar, type AvatarGenerationResult } from '@/server/operator-avatars/generate'
 import { createOperatorAccount, type CreatedOperatorAccount } from '@/server/operators/create-operator'
 import { generatePersonaDrafts } from '@/server/operators/persona-draft'
-import { mostUnderrepresentedCountry, SEED_MALE_LEANING, SEED_MALE_SHARE } from '@/server/operators/seed-plan'
+import { pickSeedCountry, SEED_MALE_LEANING, SEED_MALE_SHARE } from '@/server/operators/seed-plan'
 import { referenceAgeRange, referenceCountries } from '@/server/reference-library/direction'
 import type { ReferenceAttributes } from '@/server/reference-library/classify'
 import { generateReservePosts, isKoreaCountry, pickReserveTopics, reservePosterProfile } from '@/server/operator-post-reserve/generate'
@@ -100,7 +100,7 @@ export function koreanDay(now: Date): string {
 }
 
 export type AccountStepResult =
-  | { done: false; reason: 'target_reached' | 'draft_failed' | 'reference_unavailable' }
+  | { done: false; reason: 'target_reached' | 'draft_failed' | 'reference_unavailable' | 'reference_no_face' }
   | { done: true; country: string; account: CreatedOperatorAccount; referenceUsed?: boolean }
 
 /** Creates one account in the country furthest below its share of the seed plan. */
@@ -118,33 +118,48 @@ export async function createNextSeedAccount(
   const random = options.random ?? Math.random
   const rows = await prisma.operatorAccount.groupBy({
     by: ['personaCountry'],
-    // Accounts still hidden for review count too, or the same country is picked every time.
+    // Accounts still hidden for review count toward the target too.
     where: { user: { isOperator: true, isDeleted: false } },
     _count: { _all: true },
   })
   const total = rows.reduce((sum, row) => sum + row._count._all, 0)
   if (options.totalTarget != null && total >= options.totalTarget) return { done: false, reason: 'target_reached' }
-  const byCountry = new Map(rows.flatMap((row) => (row.personaCountry ? [[row.personaCountry, row._count._all] as const] : [])))
 
   // 레퍼런스 짤 저장소: while unused photos are left, each new account's profile photo is drawn from one.
   const canDraw = options.engine === 'seedream' || canDrawImagesHere()
   const drawsHere = options.inReview === true && canDraw
+  // The country comes first, drawn by the plan's shares (staff, 2026-11-28), and the
+  // library photo must suit it: one read as another country is skipped.
+  const due = options.referenceId ? null : pickSeedCountry(null, random)
   // The library is mostly women, and a new account takes its photo's gender: a
-  // turn for a male-leaning country asks for a man's photo from there first (staff, 2026-11-26).
-  const due = mostUnderrepresentedCountry(byCountry)
-  const wantMale = !options.referenceId && SEED_MALE_LEANING.has(due) && random() < SEED_MALE_SHARE
+  // turn for a male-leaning country asks for a man's photo first (staff, 2026-11-26).
+  const wantMale = due !== null && SEED_MALE_LEANING.has(due) && random() < SEED_MALE_SHARE
   const reference = drawsHere || options.referenceId
     ? await claimReferencePhoto({
         userId: 'pending', kind: 'avatar', id: options.referenceId ?? null,
-        ...(wantMale ? { gender: 'male' as const, prefer: (item: { attributes?: ReferenceAttributes | null }) => referenceCountries(item.attributes)?.includes(due) ?? false } : {}),
+        // A profile photo always shows a face (staff, 2026-11-28).
+        kinds: ['face'],
+        ...(wantMale ? { gender: 'male' as const } : {}),
+        ...(due ? {
+          skip: (item: { attributes?: ReferenceAttributes | null }) => {
+            const countries = referenceCountries(item.attributes)
+            return countries !== null && !countries.includes(due)
+          },
+          prefer: (item: { attributes?: ReferenceAttributes | null }) => referenceCountries(item.attributes)?.includes(due) ?? false,
+        } : {}),
       }).catch(() => null)
     : null
   if (options.referenceId && !reference) return { done: false, reason: 'reference_unavailable' }
+  // Staff picked a photo without a face: never a profile photo.
+  if (reference && referenceKindOf(reference) !== 'face') {
+    await releaseReferencePhoto(reference.id).catch(() => {})
+    return { done: false, reason: 'reference_no_face' }
+  }
   // A profile photo from the library: the persona is made to suit its person (about the
   // same age, a country of the same look), since only the face is changed (staff, 2026-11-25).
   const referenceKind = reference ? referenceKindOf(reference) : null
   const suits = reference && referenceKind !== 'thing' ? reference.attributes : null
-  const country = mostUnderrepresentedCountry(byCountry, referenceCountries(suits))
+  const country = due ?? pickSeedCountry(referenceCountries(suits), random)
   const ages = referenceAgeRange(suits)
   try {
     const { drafts } = await generatePersonaDrafts({

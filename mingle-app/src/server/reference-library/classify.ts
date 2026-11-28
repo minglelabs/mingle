@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import sharp from 'sharp'
 import { OPERATOR_TEXT_MODEL } from '@/server/llm/generate-json'
+import { PERSONA_COUNTRIES } from '@/server/operators/persona-countries'
 import { isReferenceKind, referenceKindHasGender, type ReferenceGender, type ReferenceKind } from './library'
 
 /**
@@ -54,6 +55,8 @@ export const REFERENCE_PERSON_AXES = {
 type AxisValue<T extends Record<string, readonly string[]>> = { [K in keyof T]?: T[K][number] }
 
 export type ReferencePersonAttributes = AxisValue<typeof REFERENCE_PERSON_AXES> & {
+  /** The persona country this person most likely lives in (code from PERSONA_COUNTRIES), from the whole photo. */
+  country?: string
   faceVisible?: boolean
   hair?: string
   outfit?: string
@@ -78,6 +81,8 @@ export type ReferenceAttributes = AxisValue<typeof REFERENCE_AXES> & {
   people?: ReferencePersonAttributes[]
 }
 
+const PERSONA_COUNTRY_CODES = new Set(PERSONA_COUNTRIES.map((country) => country.code))
+
 const INSTRUCTIONS = [
   'You tag one photo for a library of reference photos that an image generator will redraw (with new faces). Look carefully and answer with JSON only.',
   'First count the people who are a subject of the photo (not tiny passers-by far away). A photo-booth strip or collage that shows the same person in several panels counts that person once in peopleCount, and every figure in appearances.',
@@ -95,6 +100,8 @@ const INSTRUCTIONS = [
   '  people: one object per distinct person, the most prominent first, at most 4, each with:',
   ...Object.entries(REFERENCE_PERSON_AXES).map(([key, values]) => `    ${key}: ${values.join(' | ')}`),
   '    faceVisible: true | false; hair, outfit, expression, pose, gaze: a few words each',
+  `    country: where this person most likely lives, one code of ${PERSONA_COUNTRIES.map((country) => country.code).join(' | ')}, judged from the whole photo: writing and signs (Hangul means KR, kana JP, simplified Chinese CN, traditional Chinese TW, Thai TH, Cyrillic RU or KZ...), shops, brands, streets, car plates, landmarks, the setting, and the person's style, makeup and fashion; leave it out only when nothing points anywhere`,
+  '    age: judge it as a stranger would from the face, skin, eyes, hairline, build and style, not from how youthful the outfit or pose is. Do not default to early_20s: someone who looks 30 or older is 30s or older. When torn between two bands, choose the older one.',
   '  attractiveness is how the person comes across in the photo for casting a similar-looking stand-in: ordinary (everyday look), pleasant (good-looking), striking (model-like, turns heads). ancestry is the apparent look only.',
   'Never name or guess who anyone is.',
   'Answer: {"kind": "...", "gender": ..., "summary": "...", "attributes": {...}}',
@@ -136,6 +143,7 @@ export function parseReferenceAttributes(raw: unknown): ReferenceAttributes | nu
         const person = entry as Record<string, unknown>
         return [compact({
           ...Object.fromEntries(Object.entries(REFERENCE_PERSON_AXES).map(([key, values]) => [key, pickAxis(values, person[key])])),
+          country: typeof person.country === 'string' && PERSONA_COUNTRY_CODES.has(person.country.trim().toUpperCase()) ? person.country.trim().toUpperCase() : undefined,
           faceVisible: typeof person.faceVisible === 'boolean' ? person.faceVisible : undefined,
           hair: shortText(person.hair),
           outfit: shortText(person.outfit),
