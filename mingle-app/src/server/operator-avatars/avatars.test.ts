@@ -68,17 +68,17 @@ describe('avatar taxonomy', () => {
     expect(others.size).toBeGreaterThan(8)
   })
 
-  it('shows a face (whole or partly) in most of the photos', () => {
-    const seen = sampleCategories(american, 2000)
-    // Among photos: drawings (category "other") are counted apart.
-    const photos = 2000 - (seen.get('other') ?? 0)
-    const faces = (seen.get('face') ?? 0) + (seen.get('partial') ?? 0)
-    expect(faces / photos).toBeGreaterThan(0.65)
-    expect(faces / photos).toBeLessThan(0.9)
-    // Korean accounts hide the face more, but still show it in most photos.
-    const kr = sampleCategories(korean, 2000)
-    expect(((kr.get('face') ?? 0) + (kr.get('partial') ?? 0)) / (2000 - (kr.get('other') ?? 0))).toBeGreaterThan(0.5)
-    for (const { key } of AVATAR_CATEGORIES) expect(seen.get(key) ?? 0).toBeGreaterThan(0)
+  it('always shows a face (staff 2026-11-28): never a back, body, hands, a thing, an animal or a view', () => {
+    for (const persona of [american, korean, { ...korean, bio: '고양이 두 마리 집사 · 헬스 · 여행' }]) {
+      const seen = sampleCategories(persona, 2000)
+      for (const key of ['back', 'body', 'part', 'object', 'animal', 'scenery']) expect(seen.get(key) ?? 0).toBe(0)
+      expect(seen.get('face') ?? 0).toBeGreaterThan(seen.get('partial') ?? 0)
+    }
+    for (let index = 0; index < 1500; index += 1) {
+      const spec = pickAvatarSpec(korean, seededRandom(`face-only:${index}`))
+      expect(['mirror_phone', 'cropped_half', 'below_eyes', 'backlit', 'motion_blur', 'sticker_char', 'lettering', 'watercolor', 'emoji_plain', 'solid_color']).not.toContain(spec.subtype)
+      if (spec.subtype === 'anime_icon') expect(spec.attributes.animeSubject).toBe('person')
+    }
   })
 
   it('hides the face more for East Asian accounts than for Western ones', () => {
@@ -86,12 +86,6 @@ describe('avatar taxonomy', () => {
     const us = sampleCategories(american, 2000)
     expect(kr.get('face') ?? 0).toBeLessThan(us.get('face') ?? 0)
     expect(kr.get('partial') ?? 0).toBeGreaterThan(us.get('partial') ?? 0)
-    expect(kr.get('back') ?? 0).toBeGreaterThan(us.get('back') ?? 0)
-  })
-
-  it('follows the bio: a cat person mostly gets a cat', () => {
-    const seen = sampleCategories({ ...korean, bio: '고양이 두 마리 집사' }, 1000)
-    expect((seen.get('animal') ?? 0) / (1000 - (seen.get('other') ?? 0))).toBeGreaterThan(0.2)
   })
 
   it('keeps the outfit, light and flaws consistent with the person and the place', () => {
@@ -400,7 +394,8 @@ describe('automation rules', () => {
     mocks.createAccount.mockResolvedValue({ userId: 'op_new', handle: 'yui', requestedHandle: 'yui', bioQueued: false })
     mocks.userFindFirst.mockResolvedValue(null) // no account without a photo
     expect(await runOperatorAutomation({ now: () => NOW })).toEqual({ avatar: 'none', account: 'created', posts: 'off', engagement: 'off' })
-    expect(mocks.drafts.mock.calls[0][0]).toMatchObject({ count: 1, countries: ['JP'] })
+    // The country is drawn by the plan's shares (staff 2026-11-28).
+    expect(mocks.drafts.mock.calls[0][0]).toMatchObject({ count: 1, countries: [expect.any(String)] })
     expect(mocks.createAccount).toHaveBeenCalledWith(expect.objectContaining({ sessionId: null }), { name: 'Yui', handle: 'yui' }, expect.anything())
   })
 
@@ -447,14 +442,13 @@ describe('describeFace', () => {
 })
 
 describe('anime-style profile pictures', () => {
-  it('are about one in seven, mostly the account\'s own gender, sometimes a pet or a thing', () => {
+  it('are about one in seven, mostly the account\'s own gender, and always a person', () => {
     const male = { ...american, gender: 'male' as const }
     const anime = Array.from({ length: 3000 }, (_, index) => pickAvatarSpec(male, seededRandom(`anime:${index}`))).filter((spec) => spec.subtype === 'anime_icon')
     expect(anime.length / 3000).toBeGreaterThan(0.11)
     expect(anime.length / 3000).toBeLessThan(0.2)
-    const subjects = new Set(anime.map((spec) => spec.attributes.animeSubject))
-    expect([...subjects].sort()).toEqual(['cat', 'critter', 'dog', 'landscape', 'object', 'person'])
-    for (const spec of anime.filter((item) => item.attributes.animeSubject === 'person')) expect(spec.prompt).toMatch(/young man/)
+    expect(new Set(anime.map((spec) => spec.attributes.animeSubject))).toEqual(new Set(['person']))
+    for (const spec of anime) expect(spec.prompt).toMatch(/young man/)
   })
 
   it('differ in style, palette, background, pose and look from one account to the next', () => {
@@ -501,13 +495,12 @@ describe('good-looking accounts', () => {
 })
 
 describe('profile mix (staff 2026-11-24)', () => {
-  it('has scenery, solid-color and fan pictures, and fan pictures never show a recognizable face', () => {
+  it('never has a picture without a face any more (staff 2026-11-28)', () => {
     const korean = { ...american, countryCode: 'KR', gender: 'female' as const }
     const specs = Array.from({ length: 4000 }, (_, index) => pickAvatarSpec(korean, seededRandom(`mix:${index}`)))
-    const share = (test: (spec: (typeof specs)[number]) => boolean) => specs.filter(test).length / specs.length
-    expect(share((spec) => spec.category === 'scenery' && spec.subtype !== 'fan_concert')).toBeGreaterThan(0.02)
-    expect(share((spec) => spec.subtype === 'solid_color')).toBeGreaterThan(0.02)
-    expect(share((spec) => spec.subtype === 'fan_goods' || spec.subtype === 'fan_concert')).toBeGreaterThan(0.02)
-    for (const spec of specs.filter((item) => item.subtype.startsWith('fan_'))) expect(spec.prompt).toMatch(/unrecognizable|no face can be made out/)
+    for (const spec of specs) {
+      expect(['scenery', 'object', 'animal', 'back', 'body', 'part']).not.toContain(spec.category)
+      expect(['solid_color', 'fan_goods', 'fan_concert']).not.toContain(spec.subtype)
+    }
   })
 })
