@@ -590,7 +590,9 @@ export default function ComposeScreen({
   }))
   // A self-introduction needs a hobby and some text before it can be posted.
   const introProblem = category === 'intro' ? postIntroProblem({ text, hobbies }) : null
-  const publishable = canPublish({ sourceText: text, hasImage }) && !introProblem
+  // A voice talk post may go up with its title alone (owner, 2026-11-28): no text or photo needed.
+  const hasContent = canPublish({ sourceText: text, hasImage }) || (category === 'call' && text.length <= MAX_POST_LENGTH)
+  const publishable = hasContent && !introProblem
   const photoCopy = resolveComposePhotoCopy(locale)
   const categoryCopy = resolvePostCategoryCopy(locale)
   const stepCopy = resolveComposeCategoryStepCopy(locale)
@@ -602,7 +604,7 @@ export default function ComposeScreen({
     ? null
     : text.length > MAX_POST_LENGTH
       ? photoCopy.textTooLong
-      : !canPublish({ sourceText: text, hasImage })
+      : !hasContent
         ? photoCopy.needContent
         : introProblem === 'hobbies'
           ? categoryCopy.needHobby

@@ -62,7 +62,8 @@ export async function POST(request: NextRequest) {
   const hasText = text !== null && text.trim().length > 0
   const hasImage = imageObjectKey !== null
 
-  if (!hasText && !hasImage) return json({ error: 'text_or_image_required' }, { status: 400 })
+  // A voice talk post may go up with its title alone (owner, 2026-11-28).
+  if (!hasText && !hasImage && parsePostCategory(input.category) !== 'call') return json({ error: 'text_or_image_required' }, { status: 400 })
   if (text !== null && text.length > POST_BODY_MAX_LENGTH) return json({ error: 'text_too_long' }, { status: 400 })
 
   // The post's kind (see @/lib/post-category). A self-introduction needs a hobby and some text.

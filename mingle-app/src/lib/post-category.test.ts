@@ -62,7 +62,10 @@ describe("post categories", () => {
   it("is picked on the write screen and shown on the card, in every app language", () => {
     const screen = read("src/components/compose/compose-screen.tsx");
     expect(screen).toContain("<ComposeCategoryPicker");
-    expect(screen).toContain("const publishable = canPublish({ sourceText: text, hasImage }) && !introProblem");
+    expect(screen).toContain("const publishable = hasContent && !introProblem");
+    // A voice talk post may go up with its title alone (2026-11-28), here and on the server.
+    expect(screen).toContain("(category === 'call' && text.length <= MAX_POST_LENGTH)");
+    expect(read("src/app/api/posts/route.ts")).toContain("parsePostCategory(input.category) !== 'call'");
     expect(read("src/components/feed/feed-post-card.tsx")).toContain("<PostCategoryStrip category={post.category} expiresAt={post.expiresAt} intro={post.intro} withButton={false} locale={locale} postId={post.id} ownPost={Boolean(viewerId) && post.author.id === viewerId} />");
   });
 
