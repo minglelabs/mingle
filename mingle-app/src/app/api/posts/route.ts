@@ -95,6 +95,8 @@ export async function POST(request: NextRequest) {
   if (queued) return json({ postId: null, queuedForReview: true, reserveId: queued.reserveId }, { status: 202 })
 
   const result = await publishPost({
+    // A voice talk post may carry only its title (checked above).
+    allowEmpty: parsePostCategory(input.category) === 'call',
     authorId: userId,
     text: hasText ? text : null,
     imageObjectKey,
