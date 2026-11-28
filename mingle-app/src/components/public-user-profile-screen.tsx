@@ -4,7 +4,6 @@ import NamePronunciationButton from "@/components/name-pronunciation-button";
 import { resolvePeopleSafetyCopy } from "@/i18n/people-safety-copy";
 import { isRecipientBlocksMen } from "@/lib/use-start-direct-conversation";
 import { requestProfileBasics } from "@/lib/profile-basics";
-import { resolveProfileLikesCopy } from "@/i18n/profile-likes-copy";
 import { passDmOpenCoins } from "@/lib/dm-open-coins";
 import { parseFirstMessageSetupNeeds, requestFirstMessageSetup } from "@/lib/first-message-setup";
 import { resolveVerificationBadgesCopy } from "@/i18n/verification-badges-copy";
@@ -53,7 +52,6 @@ import {
   Check,
   ChevronLeft,
   Loader2,
-  Heart,
   MessageCircle,
   MoreHorizontal,
   ScanFace,
@@ -444,38 +442,6 @@ export default function PublicUserProfileScreen({
     }
     return false;
   }, 70), [open, reportOpen]);
-
-  // A heart on the profile (owner, 2026-11-25), as on a dating app. Shown at once, undone if the server says no.
-  const [liked, setLiked] = useState(false);
-  const [likeBusy, setLikeBusy] = useState(false);
-  useEffect(() => {
-    if (!open || isOwnProfile || !sessionUserId || !normalizedUserId) return;
-    let cancelled = false;
-    void fetch(buildClientApiPath(`/users/${encodeURIComponent(normalizedUserId)}/like`), { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((body: { liked?: unknown } | null) => {
-        if (!cancelled) setLiked(body?.liked === true);
-      })
-      .catch(() => undefined);
-    return () => { cancelled = true; };
-  }, [isOwnProfile, normalizedUserId, open, sessionUserId]);
-  const handleToggleLike = useCallback(async () => {
-    if (isOwnProfile || !profile || likeBusy || profile.isBlocked) return;
-    const next = !liked;
-    if (next && !(await requestProfileBasics())) return;
-    setLikeBusy(true);
-    setLiked(next);
-    setActionError(false);
-    try {
-      const response = await fetch(buildClientApiPath(`/users/${encodeURIComponent(profile.id)}/like`), { method: next ? "POST" : "DELETE" });
-      if (!response.ok) throw new Error("like_failed");
-    } catch {
-      setLiked(!next);
-      setActionError(true);
-    } finally {
-      setLikeBusy(false);
-    }
-  }, [isOwnProfile, likeBusy, liked, profile]);
 
   const handleToggleFollow = useCallback(async () => {
     if (isOwnProfile || !profile || isActionPending || profile.isBlocked) return;
@@ -873,19 +839,6 @@ export default function PublicUserProfileScreen({
 
               {!isOwnProfile ? (
                 <div className="mt-2 flex gap-2">
-                  {/* A heart on the profile, next to the main action. */}
-                  <button
-                    type="button"
-                    data-qa="profile-like"
-                    data-liked={liked ? "true" : "false"}
-                    aria-pressed={liked}
-                    aria-label={liked ? resolveProfileLikesCopy(locale).sent : resolveProfileLikesCopy(locale).send}
-                    onClick={() => void handleToggleLike()}
-                    disabled={profile.isBlocked}
-                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border transition active:scale-95 disabled:opacity-50 ${liked ? "border-rose-200 bg-rose-50" : "border-gray-200 bg-white"}`}
-                  >
-                    <Heart size={22} strokeWidth={2.2} className={liked ? "fill-rose-500 text-rose-500" : "text-slate-500"} aria-hidden="true" />
-                  </button>
                   <button
                     type="button"
                     data-qa="profile-message"

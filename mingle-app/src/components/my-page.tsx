@@ -122,7 +122,6 @@ import PhoneVerifySheet from "@/components/contacts/phone-verify-sheet";
 import { resolveVerificationBadgesCopy } from "@/i18n/verification-badges-copy";
 import { resolvePeopleSafetyCopy } from "@/i18n/people-safety-copy";
 import ProfileVisitorsSection from "@/components/profile-visitors-section";
-import ProfileLikesPill from "@/components/profile-likes-pill";
 import { resolvePhoneFriendsCopy } from "@/i18n/phone-friends-copy";
 import { resolvePhoneGateCopy } from "@/i18n/phone-gate-copy";
 import StaffAdminEntry from "@/components/staff-admin-entry";
@@ -2797,8 +2796,6 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
               {profile.handle ? <span className="min-w-0 truncate text-[13px] text-gray-500">{formatHandle(profile.handle)}</span> : null}
             </p>
             <MemberNumberLine memberNumber={profile.memberNumber} locale={locale} />
-            {/* Hearts this account got on its profile: nothing while there are none. */}
-            <ProfileLikesPill locale={locale} />
             <ProfileLanguageLevels
               primaryLanguages={primaryLanguages}
               interestLanguages={profile.interestLanguages ?? NO_INTEREST_LANGUAGES}
