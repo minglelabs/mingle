@@ -3,6 +3,8 @@ package com.minglelabs.mingle.rn
 import android.Manifest
 import android.content.ContentValues
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
@@ -11,6 +13,10 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.WritableNativeMap
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.face.FaceDetection
+import com.google.mlkit.vision.face.FaceDetectorOptions
 
 class NativeQrImageModule(
   reactContext: ReactApplicationContext,
@@ -33,6 +39,45 @@ class NativeQrImageModule(
       return
     }
     saveToGallery(dataUrl, fileName, mimeType, "native_image", promise)
+  }
+
+  /**
+   * Looks for faces in a photo on the phone (ML Kit face detection, model
+   * bundled in the app); the photo never leaves it. Resolves the number of
+   * faces and the width of the largest one as a share of the photo's width.
+   * (Android's old android.media.FaceDetector missed clear faces, and gave
+   * different answers for the same photo.)
+   */
+  @ReactMethod
+  fun detectFaces(dataUrl: String, promise: Promise) {
+    val bitmap = try {
+      val bytes = Base64.decode(dataUrl.substringAfter("base64,", ""), Base64.DEFAULT)
+      BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    } catch (error: Throwable) {
+      null
+    }
+    if (bitmap == null) {
+      promise.reject("native_face_invalid_image", "Could not decode the photo.")
+      return
+    }
+    val detector = FaceDetection.getClient(
+      FaceDetectorOptions.Builder()
+        .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
+        .setMinFaceSize(FACE_CHECK_MIN_FACE_SIZE)
+        .build(),
+    )
+    detector.process(InputImage.fromBitmap(bitmap, 0))
+      .addOnSuccessListener { faces ->
+        val largest = faces.maxOfOrNull { it.boundingBox.width().toDouble() / bitmap.width } ?: 0.0
+        val result = WritableNativeMap()
+        result.putInt("faces", faces.size)
+        result.putDouble("largestFaceWidth", minOf(1.0, maxOf(0.0, largest)))
+        promise.resolve(result)
+      }
+      .addOnFailureListener { error ->
+        promise.reject("native_face_check_failed", error.message ?: "Could not check the photo.", error)
+      }
+      .addOnCompleteListener { detector.close() }
   }
 
   private fun saveToGallery(dataUrl: String, fileName: String, mimeType: String, errorPrefix: String, promise: Promise) {
@@ -101,6 +146,11 @@ class NativeQrImageModule(
         error,
       )
     }
+  }
+
+  private companion object {
+    /** Smallest face to look for, as a share of the photo's width. */
+    const val FACE_CHECK_MIN_FACE_SIZE = 0.08f
   }
 
   private fun normalizeFileName(rawFileName: String, mimeType: String): String {

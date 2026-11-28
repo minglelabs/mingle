@@ -22,7 +22,8 @@ type PushTarget = {
 export type PushMessage = {
   notificationId: string;
   /**
-   * conversation_message | follow | comment | comment_reply | voice_call_started |
+   * conversation_message | follow | comment | comment_reply | important_notice |
+   * voice_call_started | conversation_join_request | conversation_join_accepted |
    * operator_inbox_message (staff alert, copy from
    * `resolveOperatorInboxPushCopy`). Any other type gets a generic copy.
    */
@@ -32,6 +33,8 @@ export type PushMessage = {
   actorLabel: string;
   recipientLanguage: string;
   messagePreview?: string;
+  /** important_notice only: the notice's title in the recipient's language (the body is `messagePreview`). */
+  noticeTitle?: string;
   sessionKey?: string;
   conversationId?: string;
   /** In-app destination the tap should open (e.g. feedHref with post/comment). */
@@ -238,6 +241,13 @@ export function resolvePushCopy(message: PushMessage): { title: string; body: st
       : (message.messagePreview || "").replace(/\s+/g, " ").trim() || "…";
     const copy = CONVERSATION_MESSAGE_PUSH_COPY[locale];
     return { title: copy.title, body: `${label}${copy.separator}${preview}` };
+  }
+  if (message.type === "important_notice") {
+    // The notice's own words, already picked for the recipient's language.
+    return {
+      title: (message.noticeTitle || "HashChat").slice(0, 120),
+      body: (message.messagePreview || "").replace(/\s+/g, " ").trim().slice(0, 240) || "…",
+    };
   }
   if (message.type === "conversation_join_request" || message.type === "conversation_join_accepted") {
     const locale = resolveLegalDocumentLocale(resolveSupportedLocaleTag(message.recipientLanguage.trim()) ?? "en");
@@ -710,8 +720,10 @@ async function deliverConversationMessagePush(args: {
   // the native tap handler has no room to open (a message push carries no url).
   const channel = await prisma.appConversationChannel.findUnique({
     where: { sessionKey: args.sessionKey },
-    select: { id: true },
+    select: { id: true, isDuoCall: true },
   });
+  // A 1:1 voice talk from a post: its lines are read on the call screen, which is open.
+  if (channel?.isDuoCall) return;
   const channelId = channel?.id ?? "";
 
   const users = await prisma.user.findMany({
@@ -806,6 +818,33 @@ export async function sendPushNotificationForVoiceCallStarted(args: {
       conversationId: args.channelId,
       navigationUrl: `/${roomLocale}/conversations?conversation=${encodeURIComponent(args.channelId)}`,
       collapseKey: `voice-call-${args.callId}`,
+    };
+  });
+}
+
+/**
+ * A 1:1 voice talk from a post rings its author (owner, 2026-11-26): the tap
+ * opens the app on the explore tab, where the incoming screen is already up
+ * (src/components/post-call-host.tsx asks for it as the app opens).
+ */
+export async function sendPushNotificationForPostCall(args: { callId: string; callerUserId: string; authorUserId: string }): Promise<void> {
+  if (!readApnsConfig() && !readFcmConfig()) return;
+  const caller = await prisma.user.findUnique({
+    where: { id: args.callerUserId },
+    select: { name: true, handle: true, isOfficial: true, isOperator: true },
+  });
+  const callerName = caller?.name?.trim() || (caller?.handle ? `@${caller.handle}` : "Someone");
+  const badge = resolveAccountBadge(caller);
+  await sendPushToUsers([args.authorUserId], (recipient) => {
+    const locale = resolveSupportedLocaleTag(recipient.language) ?? "en";
+    return {
+      notificationId: args.callId,
+      type: "voice_call_started",
+      actorId: args.callerUserId,
+      actorLabel: withAccountBadgeLabel(callerName, badge, recipient.language),
+      recipientLanguage: recipient.language,
+      navigationUrl: `/${locale}/explore`,
+      collapseKey: `post-call-${args.callId}`,
     };
   });
 }

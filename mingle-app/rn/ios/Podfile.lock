@@ -1395,6 +1395,49 @@ PODS:
     - React-RCTFBReactNativeSpec
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
+  - react-native-cameraroll (7.10.2):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
+  - react-native-image-editor (5.1.0):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-RCTImage
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
   - react-native-safe-area-context (5.6.2):
     - hermes-engine
     - RCTRequired
@@ -1948,6 +1991,8 @@ DEPENDENCIES:
   - React-logger (from `../node_modules/react-native/ReactCommon/logger`)
   - React-Mapbuffer (from `../node_modules/react-native/ReactCommon`)
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
+  - "react-native-cameraroll (from `../node_modules/@react-native-camera-roll/camera-roll`)"
+  - "react-native-image-editor (from `../node_modules/@react-native-community/image-editor`)"
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
   - react-native-webview (from `../node_modules/react-native-webview`)
   - React-NativeModulesApple (from `../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios`)
@@ -2080,6 +2125,10 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon"
   React-microtasksnativemodule:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/microtasks"
+  react-native-cameraroll:
+    :path: "../node_modules/@react-native-camera-roll/camera-roll"
+  react-native-image-editor:
+    :path: "../node_modules/@react-native-community/image-editor"
   react-native-safe-area-context:
     :path: "../node_modules/react-native-safe-area-context"
   react-native-webview:
@@ -2207,6 +2256,8 @@ SPEC CHECKSUMS:
   React-logger: dd3e5f78709d5b029336be395a67bbcdc775e2ed
   React-Mapbuffer: 261a08eb9672ca9658c3d3cc7fbe28ea99bf4633
   React-microtasksnativemodule: 428fb1904cfa0734d4404ed27ba4d985fa625310
+  react-native-cameraroll: b735f80580b2404cef0bb4f04bbe00c0e05f9a6e
+  react-native-image-editor: 81316fcdc5b25ecc1983e3e04d1498f53128f01c
   react-native-safe-area-context: 2b9d2620593f440441e525fa927cf81df9ab58c6
   react-native-webview: 4eb142f08e1f05ffece13c1483c281c17341b20f
   React-NativeModulesApple: 126e9fc928b57696c16f6945f9921e3f97af4106
@@ -2245,9 +2296,9 @@ SPEC CHECKSUMS:
   ReactNativeCameraKit: 3d3f6c2aa5ebe24b341f96087d994b4d6764204d
   ReactNativeDependencies: f5f69fa1834d44f9e51377ea4720e6bfd0f55be6
   RNGoogleMobileAds: ae9d28f5e6e784e3135e54a1d0aba4739171fc0f
-  RNPermissions: fc0597955f0d27ef862a3ee490dde79f0cc1d24e
+  RNPermissions: 87e7fd402dcf61246375258f2c21f44420ed7b5c
   Yoga: b8206e6746bd28c028572774cece66d5348240c1
 
-PODFILE CHECKSUM: 3a4fc850c13f83964f8101057425a53795010189
+PODFILE CHECKSUM: 619faacb339da446c2cb1580acc9ac32c1e2d45e
 
 COCOAPODS: 1.15.2

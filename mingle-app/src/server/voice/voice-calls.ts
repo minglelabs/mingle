@@ -23,7 +23,12 @@ export type VoiceParticipantRecord = {
   interpretOn: boolean;
   speechLanguage: string | null;
   joinedAt: Date;
+  /** "speaker" (the default) or "listener". */
+  role?: string;
+  handRaisedAt?: Date | null;
 };
+
+export type VoiceRole = "speaker" | "listener";
 
 // Every method runs inside the channel-scoped transaction opened by
 // VoiceStore.withChannelLock, so reads and writes see one consistent state.
@@ -36,7 +41,13 @@ export interface VoiceTx {
     userId: string;
     interpretOn: boolean;
     speechLanguage: string | null;
+    /** Set on a new row and on a returning one; left out, the role stays as it is. */
+    role?: VoiceRole;
   }): Promise<void>;
+  /** This person's row in the call, in it now or not. */
+  findParticipant(callId: string, userId: string): Promise<{ role: string; active: boolean } | null>;
+  /** Changes the role and/or the raised hand of someone in the call. */
+  updateParticipantStage(input: { callId: string; userId: string; role?: VoiceRole; handRaisedAt?: Date | null }): Promise<void>;
   markParticipantLeft(input: { callId: string; userId: string; at: Date }): Promise<void>;
   countAllParticipants(callId: string): Promise<number>;
   // Flips live -> ended. Returns true only for the caller that actually ended it.
@@ -72,8 +83,20 @@ export type VoiceCallView = {
     interpretOn: boolean;
     speechLanguage: string | null;
     joinedAt: string;
+    role: VoiceRole;
+    /** A listener asking for the stage. */
+    handRaised: boolean;
   }>;
 };
+
+export function participantRole(participant: { role?: string | null }): VoiceRole {
+  return participant.role === "listener" ? "listener" : "speaker";
+}
+
+/** Seats on the stage of a call (also the cap of a chat room's call, where everyone is on it). */
+export function voiceStageSeats(call: { maxParticipants: number }): number {
+  return Math.min(call.maxParticipants, VOICE_MAX_PARTICIPANTS);
+}
 
 export class VoiceRoomFullError extends Error {
   constructor() {
@@ -110,6 +133,8 @@ export function toCallView(call: VoiceCallRecord, participants: VoiceParticipant
       interpretOn: participant.interpretOn,
       speechLanguage: participant.speechLanguage,
       joinedAt: participant.joinedAt.toISOString(),
+      role: participantRole(participant),
+      handRaised: participantRole(participant) === "listener" && Boolean(participant.handRaisedAt),
     })),
   };
 }
@@ -124,7 +149,21 @@ export async function getLiveCallView(store: VoiceStore, channelId: string): Pro
 
 export async function joinVoiceCall(
   store: VoiceStore,
-  input: { channelId: string; userId: string; lang: string | null; interpretOn: boolean; now?: Date },
+  input: {
+    channelId: string;
+    userId: string;
+    lang: string | null;
+    interpretOn: boolean;
+    now?: Date;
+    /**
+     * An open room's call has a stage: the host and whoever starts the call
+     * speak, everyone else comes in as a listener (and is not counted against
+     * the stage's seats). Someone the host put on the stage keeps the seat
+     * across a reconnect while one is free. Left out: a chat room's call,
+     * where everyone speaks.
+     */
+    stage?: { hostUserId: string };
+  },
 ): Promise<VoiceCallView & { created: boolean }> {
   const now = input.now ?? new Date();
   return store.withChannelLock(input.channelId, async (tx) => {
@@ -139,7 +178,13 @@ export async function joinVoiceCall(
     }
     const active = await tx.listActiveParticipants(call.id);
     const alreadyIn = active.some((participant) => participant.userId === input.userId);
-    if (!alreadyIn && active.length >= Math.min(call.maxParticipants, VOICE_MAX_PARTICIPANTS)) {
+    let role: VoiceRole | undefined;
+    if (input.stage) {
+      const previous = await tx.findParticipant(call.id, input.userId);
+      const speakersElsewhere = active.filter((participant) => participant.userId !== input.userId && participantRole(participant) === "speaker").length;
+      const wantsStage = created || input.userId === input.stage.hostUserId || (previous !== null && participantRole(previous) === "speaker");
+      role = wantsStage && speakersElsewhere < voiceStageSeats(call) ? "speaker" : "listener";
+    } else if (!alreadyIn && active.length >= voiceStageSeats(call)) {
       throw new VoiceRoomFullError();
     }
     await tx.upsertActiveParticipant({
@@ -147,6 +192,7 @@ export async function joinVoiceCall(
       userId: input.userId,
       interpretOn: input.interpretOn,
       speechLanguage: input.lang,
+      ...(role ? { role } : {}),
     });
     // `created`: this join started the call, so the room's other members are told.
     return { ...toCallView(call, await tx.listActiveParticipants(call.id)), created };

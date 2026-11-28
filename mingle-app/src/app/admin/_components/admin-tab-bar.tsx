@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Bell, ChartLine, Ellipsis, Flag, ImagePlus, Inbox, ListChecks, MessageCircleHeart, Rows3, UsersRound, type LucideIcon } from "lucide-react";
+import { Bell, ChartLine, Clock3, Ellipsis, Flag, ImagePlus, Inbox, ListChecks, MessageCircleHeart, Rows3, UsersRound, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   ADMIN_TABS,
@@ -21,6 +21,7 @@ const TAB_ICONS: Record<AdminTabKey, LucideIcon> = {
   review: ListChecks,
   feed: Rows3,
   operators: UsersRound,
+  waitlist: Clock3,
   references: ImagePlus,
   reports: Flag,
   feedback: MessageCircleHeart,
@@ -89,7 +90,7 @@ export function AdminTabBar({ badges }: { badges?: AdminTabBadges }) {
       aria-label="관리자 메뉴"
       className="shrink-0 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] backdrop-blur lg:order-first lg:w-52 lg:overflow-y-auto lg:border-r lg:border-t-0 lg:bg-white lg:pr-0"
     >
-      {/* Ten tabs: on a phone the row scrolls sideways (the current one is scrolled into view). */}
+      {/* Eleven tabs: on a phone the row scrolls sideways (the current one is scrolled into view). */}
       <ul className="mx-auto flex w-full max-w-2xl overflow-x-auto overscroll-x-contain [scrollbar-width:none] lg:mx-0 lg:max-w-none lg:flex-col lg:gap-1 lg:overflow-visible lg:p-3 [&::-webkit-scrollbar]:hidden">
         {ADMIN_TABS.map((tab) => (
           <li key={tab.key} className="min-w-[4.25rem] flex-1 lg:min-w-0 lg:flex-none">

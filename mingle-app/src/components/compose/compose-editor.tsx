@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { Eye, ImagePlus, Loader2, Palette, RefreshCw, X } from 'lucide-react'
+import { Eye, ImagePlus, Loader2, Palette, Plus, RefreshCw, X } from 'lucide-react'
 import type { FeedPostImageDto } from '@/lib/feed-post-dto'
 import FeedPostPreview from '@/components/feed/feed-post-preview'
 import { resolveBackgroundPreset } from '@/lib/post-backgrounds'
 import { composeCopy, formatComposeCopy, type ComposeCopy } from '@/i18n/compose-copy'
+import { resolveComposePhotoCopy } from '@/i18n/compose-photo-copy'
 import { ComposeImageError, PICKER_IMAGE_TYPES, prepareComposeImage, type PreparedImage } from './compose-image'
 import { composeGapCopy, type ComposeGapCopy } from './compose-gap-copy'
 import { MAX_POST_LENGTH } from './compose-state'
@@ -43,6 +44,23 @@ export type ComposeEditorProps = {
   photos?: ReadonlyArray<{ id: string; url: string; width: number | null; height: number | null }>
   onAddPhotos?: (prepared: PreparedImage[]) => void
   onRemovePhoto?: (index: number) => void
+  /**
+   * The new-post screen, photo first (owner, 2026-11-27): a big photo area on
+   * top (a large "choose photos" tile until one is picked, then the photos
+   * full width, swiped through) and the caption under it. Needs `onAddPhotos`.
+   */
+  photoFirst?: boolean
+  /**
+   * Asked before the web photo picker opens: true when it handled the request
+   * itself (the app's own gallery), so the web picker stays closed.
+   */
+  onRequestPhotos?: () => boolean
+  /** A short grey note in the row of tools under the text (an hour post's deletion time). */
+  toolsNote?: ReactNode
+  /** Drawn in the preview under the text, as the card will (the kind of post). */
+  previewControl?: ReactNode
+  /** Drawn in the preview above the author row, as the card will (a call post's invitation). */
+  previewHeader?: ReactNode
 }
 
 /** Most photos one post may carry (the server enforces the same). */
@@ -203,6 +221,28 @@ export default function ComposeEditor(props: ComposeEditorProps) {
     }
   }
 
+  const photoCopy = resolveComposePhotoCopy(props.locale)
+  const [captionFocused, setCaptionFocused] = useState(false)
+  // Once the keyboard is up (and the layout has followed), bring the text box into view.
+  const keepCaretInView = () => {
+    for (const delay of [120, 360]) {
+      window.setTimeout(() => textareaRef.current?.scrollIntoView({ block: 'nearest' }), delay)
+    }
+  }
+  const openPicker = () => {
+    if (props.onRequestPhotos?.()) return
+    fileInputRef.current?.click()
+  }
+  // Which photo of the swiped row is on screen (for its remove button and the counter).
+  const pagerRef = useRef<HTMLDivElement>(null)
+  const [pageIndex, setPageIndex] = useState(0)
+  const currentPage = Math.min(pageIndex, Math.max(0, photoCount - 1))
+  const onPagerScroll = () => {
+    const pager = pagerRef.current
+    if (!pager || pager.clientWidth === 0) return
+    setPageIndex(Math.round(Math.abs(pager.scrollLeft) / pager.clientWidth))
+  }
+
   const previewImage: FeedPostImageDto | null = props.imagePreviewUrl
     ? {
         url: props.imagePreviewUrl,
@@ -212,6 +252,197 @@ export default function ComposeEditor(props: ComposeEditorProps) {
     : null
 
   const preset = resolveBackgroundPreset(props.backgroundKey)
+
+  const sharedTail = (
+    <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={PICKER_IMAGE_TYPES.join(',')}
+        multiple={multi}
+        className="hidden"
+        onChange={(e) => void (multi ? handleFiles(e.target.files) : handleFile(e.target.files?.[0]))}
+      />
+
+      {/* Full-screen preview: exactly the feed card, over the editor. */}
+      {showPreview ? (
+        <div className="fixed inset-0 z-[70] bg-black" role="dialog" aria-modal="true" aria-label={copy.previewTitle}>
+          <FeedPostPreview
+            locale={props.locale}
+            text={props.sourceText}
+            backgroundKey={preset.key}
+            image={previewImage}
+            images={multi ? props.photos?.map((photo) => ({ url: photo.url, width: photo.width, height: photo.height })) : undefined}
+            author={props.author}
+            controlSlot={props.previewControl}
+            headerSlot={props.previewHeader}
+          />
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between px-3"
+            style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}
+          >
+            <button
+              type="button"
+              onClick={() => setShowPreview(false)}
+              aria-label={copy.backToEdit}
+              className="pointer-events-auto inline-flex h-11 w-11 items-center justify-center"
+            >
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm transition active:scale-90">
+                <X size={20} strokeWidth={2.4} aria-hidden="true" />
+              </span>
+            </button>
+            <span className="rounded-full bg-black/55 px-3 py-1.5 text-[13px] font-semibold text-white backdrop-blur-sm">
+              {copy.previewTitle}
+            </span>
+            <span className="h-11 w-11" aria-hidden="true" />
+          </div>
+        </div>
+      ) : null}
+    </>
+  )
+
+  if (props.photoFirst && multi) {
+    const photos = props.photos ?? []
+    // No photo and the person is writing: the post is a text post, so the
+    // text takes the screen on the post's own background (as its card will
+    // show it) and the photo tile shrinks to a bar (owner, 2026-11-27: a
+    // photo is never required). The same elements stay mounted, so the
+    // keyboard stays up while the layout changes (same elements, new classes).
+    const textMode = photos.length === 0 && (captionFocused || props.sourceText.trim().length > 0)
+    return (
+      <div className="pb-4" data-qa="compose-photo-first" data-text-mode={textMode ? '1' : '0'}>
+        {photos.length === 0 ? (
+          <button
+            type="button"
+            data-qa="compose-photo-pick"
+            onClick={openPicker}
+            disabled={props.disabled || preparing}
+            className={textMode
+              ? 'mx-4 mt-3 flex h-11 w-[calc(100%-2rem)] items-center justify-center gap-2 rounded-xl border border-dashed border-foreground/20 text-[14px] font-semibold text-foreground/60 transition active:bg-foreground/5 disabled:opacity-70'
+              : 'relative flex w-full flex-col items-center justify-center gap-2 bg-gradient-to-b from-amber-50 via-orange-50 to-orange-100 text-slate-800 transition active:brightness-95 disabled:opacity-70'}
+            style={textMode ? undefined : { height: 'min(46vh, 110vw)' }}
+          >
+            <span className={textMode ? 'flex items-center' : 'flex h-16 w-16 items-center justify-center rounded-full bg-white text-orange-500 shadow-[0_6px_20px_rgba(249,115,22,0.25)]'}>
+              {preparing ? <Loader2 size={textMode ? 18 : 28} className="animate-spin" aria-hidden="true" /> : <ImagePlus size={textMode ? 18 : 30} strokeWidth={2} aria-hidden="true" />}
+            </span>
+            <span className={textMode ? '' : 'text-[17px] font-bold'}>{textMode ? copy.addPhoto : photoCopy.pickTitle}</span>
+            <span className={textMode ? 'hidden' : 'text-[13px] text-slate-500'}>{photoCopy.pickHint.replace('{max}', String(MAX_POST_PHOTOS))}</span>
+          </button>
+        ) : captionFocused ? (
+          // Writing the caption: the photos shrink to a row so the text and the keyboard fit.
+          <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 pt-3" data-qa="compose-photo-strip">
+            {photos.map((photo) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={photo.id} src={photo.url} alt="" className="h-16 w-16 shrink-0 rounded-xl object-cover" draggable={false} />
+            ))}
+          </div>
+        ) : (
+          <div className="relative bg-slate-950" style={{ height: 'min(52vh, 125vw)' }} data-qa="compose-photo-pager">
+            <div ref={pagerRef} onScroll={onPagerScroll} className="no-scrollbar flex h-full snap-x snap-mandatory overflow-x-auto">
+              {photos.map((photo) => (
+                <div key={photo.id} className="relative h-full w-full shrink-0 snap-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={photo.url} alt="" className="h-full w-full object-contain" draggable={false} />
+                </div>
+              ))}
+            </div>
+            {photos.length > 1 ? (
+              <span className="absolute left-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-[12px] font-semibold tabular-nums text-white backdrop-blur-sm" data-qa="compose-photo-counter">
+                {currentPage + 1}/{photos.length}
+              </span>
+            ) : null}
+            <div className="absolute right-1.5 top-1.5">
+              <PhotoOverlayButton
+                label={copy.removePhoto}
+                onClick={() => {
+                  props.onRemovePhoto?.(currentPage)
+                  setImageError(null)
+                }}
+                disabled={props.disabled}
+              >
+                <X size={16} strokeWidth={2.6} aria-hidden="true" />
+              </PhotoOverlayButton>
+            </div>
+            {photos.length < MAX_POST_PHOTOS ? (
+              <button
+                type="button"
+                data-qa="compose-photo-add"
+                onClick={openPicker}
+                disabled={props.disabled || preparing}
+                className="absolute bottom-3 right-3 inline-flex h-9 items-center gap-1 rounded-full bg-white/90 px-3 text-[13px] font-bold text-slate-900 shadow-md backdrop-blur-sm active:scale-95 disabled:opacity-60"
+              >
+                {preparing ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Plus size={16} strokeWidth={2.6} aria-hidden="true" />}
+                {photoCopy.addMore}
+              </button>
+            ) : null}
+          </div>
+        )}
+
+        <div
+          className={textMode ? 'mx-4 mt-3 flex min-h-[38vh] gap-3 rounded-3xl px-5 py-5 shadow-[0_6px_24px_rgba(15,23,42,0.10)]' : 'flex gap-3 px-4 pt-3'}
+          style={textMode ? { background: preset.background, color: preset.textColor } : undefined}
+          data-qa="compose-caption"
+        >
+          {props.author.imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={props.author.imageUrl} alt="" className={textMode ? 'hidden' : 'h-9 w-9 shrink-0 rounded-full object-cover'} draggable={false} />
+          ) : (
+            <span aria-hidden="true" className={textMode ? 'hidden' : 'flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-[14px] font-bold text-secondary-foreground'}>
+              {displayName.replace(/^@/, '').charAt(0).toUpperCase()}
+            </span>
+          )}
+          <div className="min-w-0 flex-1">
+            <label htmlFor="compose-body" className="sr-only">{photoCopy.captionPlaceholder}</label>
+            <textarea
+              ref={textareaRef}
+              id="compose-body"
+              dir="auto"
+              value={props.sourceText}
+              onChange={(e) => props.onChangeText(e.target.value)}
+              placeholder={textMode ? copy.editorPlaceholder : photoCopy.captionPlaceholder}
+              disabled={props.disabled}
+              rows={2}
+              onFocus={() => {
+                setCaptionFocused(true)
+                keepCaretInView()
+              }}
+              onBlur={() => setCaptionFocused(false)}
+              className={textMode
+                ? 'block min-h-[3em] w-full resize-none overflow-hidden bg-transparent text-[22px] font-semibold leading-[1.45] outline-none placeholder:text-current placeholder:opacity-60'
+                : 'block min-h-[3.5em] w-full resize-none overflow-hidden rounded-2xl bg-foreground/[0.05] px-3.5 py-2.5 text-[17px] leading-[1.5] outline-none placeholder:font-medium placeholder:text-foreground/70'}
+              style={{ whiteSpace: 'pre-wrap' }}
+            />
+          </div>
+        </div>
+        {imageError ? <p role="alert" className="mx-4 mt-2 text-[13px] text-destructive">{imageError}</p> : null}
+        <div className="mt-2 flex items-center gap-2 px-4">
+          <button
+            type="button"
+            onClick={() => setShowPreview(true)}
+            disabled={props.disabled}
+            data-qa="compose-preview"
+            className="inline-flex h-8 items-center gap-1.5 rounded-full bg-foreground/5 px-3 text-[13px] font-semibold text-foreground/70 active:bg-foreground/10 disabled:opacity-50"
+          >
+            <Eye size={15} strokeWidth={2.2} aria-hidden="true" />
+            {photoCopy.previewLabel}
+          </button>
+          {photos.length === 0 ? <span className="min-w-0 truncate text-[12px] text-foreground/45">{photoCopy.textOnly}</span> : null}
+          <span
+            role="status"
+            aria-live="polite"
+            className={
+              length >= COUNTER_VISIBLE_FROM
+                ? `ml-auto text-[13px] font-medium tabular-nums ${overLimit ? 'text-destructive' : 'text-foreground/45'}`
+                : 'sr-only'
+            }
+          >
+            {formatComposeCopy(copy.charCount, { count: length, max: MAX_POST_LENGTH })}
+          </span>
+        </div>
+        {sharedTail}
+      </div>
+    )
+  }
 
   return (
     <div className="px-4 pb-6 pt-3">
@@ -252,12 +483,14 @@ export default function ComposeEditor(props: ComposeEditorProps) {
             placeholder={copy.editorPlaceholder}
             disabled={props.disabled}
             rows={1}
-            className="mt-0.5 block min-h-[1.5em] w-full resize-none overflow-hidden bg-transparent text-[16px] leading-[1.5] outline-none placeholder:text-foreground/35"
+            onFocus={keepCaretInView}
+            className={`mt-0.5 block w-full resize-none overflow-hidden bg-transparent text-[16px] leading-[1.5] outline-none ${multi ? 'min-h-[4.5em] placeholder:text-foreground/50' : 'min-h-[1.5em] placeholder:text-foreground/35'}`}
             style={{ whiteSpace: 'pre-wrap' }}
           />
 
           {multi && photoCount > 0 ? (
-            <div className="no-scrollbar -mx-1 mt-2 flex gap-2 overflow-x-auto px-1 pb-1">
+            // Swiped sideways: each photo removable, and one more tile to add more.
+            <div className="no-scrollbar -mx-1 mt-2 flex gap-2 overflow-x-auto px-1 pb-1" data-qa="compose-photo-strip">
               {props.photos!.map((photo, index) => (
                 <div
                   key={photo.id}
@@ -280,6 +513,19 @@ export default function ComposeEditor(props: ComposeEditorProps) {
                   </div>
                 </div>
               ))}
+              {photoCount < MAX_POST_PHOTOS ? (
+                <button
+                  type="button"
+                  data-qa="compose-photo-add"
+                  onClick={openPicker}
+                  disabled={props.disabled || preparing}
+                  aria-label={copy.addPhoto}
+                  className="flex h-40 w-24 shrink-0 flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-foreground/20 text-[13px] font-semibold text-foreground/55 transition active:bg-foreground/5 disabled:opacity-60"
+                >
+                  {preparing ? <Loader2 size={20} className="animate-spin" aria-hidden="true" /> : <Plus size={22} strokeWidth={2.2} aria-hidden="true" />}
+                  <span className="tabular-nums">{photoCount}/{MAX_POST_PHOTOS}</span>
+                </button>
+              ) : null}
             </div>
           ) : null}
 
@@ -329,7 +575,7 @@ export default function ComposeEditor(props: ComposeEditorProps) {
           <div className="-ml-2 mt-1.5 flex items-center gap-0.5">
             <ToolButton
               label={!multi && props.imagePreviewUrl ? copy.replacePhoto : copy.addPhoto}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={multi ? openPicker : () => fileInputRef.current?.click()}
               disabled={props.disabled || preparing || (multi && photoCount >= MAX_POST_PHOTOS)}
             >
               <ImagePlus size={20} strokeWidth={1.9} aria-hidden="true" />
@@ -342,6 +588,7 @@ export default function ComposeEditor(props: ComposeEditorProps) {
             <ToolButton label={copy.preview} onClick={() => setShowPreview(true)} disabled={props.disabled}>
               <Eye size={20} strokeWidth={1.9} aria-hidden="true" />
             </ToolButton>
+            {props.toolsNote ? <span className="ml-1 min-w-0 truncate text-[12px] text-foreground/45">{props.toolsNote}</span> : null}
 
             {/* Always announced; shown once the body nears the limit. */}
             <span
@@ -359,47 +606,7 @@ export default function ComposeEditor(props: ComposeEditorProps) {
         </div>
       </div>
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept={PICKER_IMAGE_TYPES.join(',')}
-        multiple={multi}
-        className="hidden"
-        onChange={(e) => void (multi ? handleFiles(e.target.files) : handleFile(e.target.files?.[0]))}
-      />
-
-      {/* Full-screen preview: exactly the feed card, over the editor. */}
-      {showPreview ? (
-        <div className="fixed inset-0 z-[70] bg-black" role="dialog" aria-modal="true" aria-label={copy.previewTitle}>
-          <FeedPostPreview
-            locale={props.locale}
-            text={props.sourceText}
-            backgroundKey={preset.key}
-            image={previewImage}
-            images={multi ? props.photos?.map((photo) => ({ url: photo.url, width: photo.width, height: photo.height })) : undefined}
-            author={props.author}
-          />
-          <div
-            className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between px-3"
-            style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}
-          >
-            <button
-              type="button"
-              onClick={() => setShowPreview(false)}
-              aria-label={copy.backToEdit}
-              className="pointer-events-auto inline-flex h-11 w-11 items-center justify-center"
-            >
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm transition active:scale-90">
-                <X size={20} strokeWidth={2.4} aria-hidden="true" />
-              </span>
-            </button>
-            <span className="rounded-full bg-black/55 px-3 py-1.5 text-[13px] font-semibold text-white backdrop-blur-sm">
-              {copy.previewTitle}
-            </span>
-            <span className="h-11 w-11" aria-hidden="true" />
-          </div>
-        </div>
-      ) : null}
+      {sharedTail}
     </div>
   )
 }

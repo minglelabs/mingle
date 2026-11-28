@@ -30,6 +30,10 @@ export type PhoneFriendsCopy = {
   errorCode: string;
   errorTooMany: string;
   errorUnavailable: string;
+  /** The number already belongs to another account that has a history. */
+  errorInUse: string;
+  /** A permanent ban closed the number. */
+  errorBlocked: string;
   errorGeneric: string;
 };
 
@@ -46,6 +50,7 @@ const PHONE_FRIENDS_COPY_BY_LOCALE: Record<PrimaryUiLocale, PhoneFriendsCopy> = 
     noMatches: "아직 HashChat에 있는 친구가 없어요. 아래에서 초대해 보세요!",
     errorPhone: "번호를 다시 확인해 주세요.", errorCode: "인증번호가 맞지 않아요.",
     errorTooMany: "오늘은 더 보낼 수 없어요. 내일 다시 시도해 주세요.", errorUnavailable: "지금은 번호 인증을 할 수 없어요.",
+    errorInUse: "이 번호는 다른 계정에서 쓰고 있어요. 그 계정으로 로그인해 주세요.", errorBlocked: "이 번호는 사용할 수 없어요.",
     errorGeneric: "잠시 후 다시 시도해 주세요.",
   },
   en: {
@@ -60,6 +65,7 @@ const PHONE_FRIENDS_COPY_BY_LOCALE: Record<PrimaryUiLocale, PhoneFriendsCopy> = 
     noMatches: "None of your contacts are on HashChat yet. Invite them below!",
     errorPhone: "Check the number and try again.", errorCode: "That code is not right.",
     errorTooMany: "No more codes today. Try again tomorrow.", errorUnavailable: "Phone verification isn't available right now.",
+    errorInUse: "This number is used by another account. Please sign in to that account.", errorBlocked: "This number can't be used.",
     errorGeneric: "Please try again in a moment.",
   },
   ja: {
@@ -74,6 +80,7 @@ const PHONE_FRIENDS_COPY_BY_LOCALE: Record<PrimaryUiLocale, PhoneFriendsCopy> = 
     noMatches: "HashChatにいる友だちはまだいません。下から招待してみましょう!",
     errorPhone: "番号をもう一度確認してください。", errorCode: "認証コードが違います。",
     errorTooMany: "今日はこれ以上送れません。明日もう一度お試しください。", errorUnavailable: "現在、電話番号の認証はできません。",
+    errorInUse: "この番号は別のアカウントで使われています。そのアカウントでログインしてください。", errorBlocked: "この番号は使用できません。",
     errorGeneric: "しばらくしてからもう一度お試しください。",
   },
   "zh-CN": {
@@ -88,6 +95,7 @@ const PHONE_FRIENDS_COPY_BY_LOCALE: Record<PrimaryUiLocale, PhoneFriendsCopy> = 
     noMatches: "通讯录里还没有人在用 HashChat。在下面邀请他们吧！",
     errorPhone: "请检查号码后重试。", errorCode: "验证码不正确。",
     errorTooMany: "今天不能再发送了，请明天再试。", errorUnavailable: "暂时无法验证手机号。",
+    errorInUse: "这个号码已被其他账号使用，请登录那个账号。", errorBlocked: "无法使用这个号码。",
     errorGeneric: "请稍后再试。",
   },
   "zh-TW": {
@@ -102,6 +110,7 @@ const PHONE_FRIENDS_COPY_BY_LOCALE: Record<PrimaryUiLocale, PhoneFriendsCopy> = 
     noMatches: "通訊錄裡還沒有人在用 HashChat。在下面邀請他們吧！",
     errorPhone: "請確認號碼後再試一次。", errorCode: "驗證碼不正確。",
     errorTooMany: "今天無法再傳送，請明天再試。", errorUnavailable: "目前無法驗證手機號碼。",
+    errorInUse: "這個號碼已被其他帳號使用，請登入那個帳號。", errorBlocked: "無法使用這個號碼。",
     errorGeneric: "請稍後再試。",
   },
   fr: {
@@ -116,6 +125,7 @@ const PHONE_FRIENDS_COPY_BY_LOCALE: Record<PrimaryUiLocale, PhoneFriendsCopy> = 
     noMatches: "Aucun de vos contacts n'est encore sur HashChat. Invitez-les ci-dessous !",
     errorPhone: "Vérifiez le numéro et réessayez.", errorCode: "Ce code n'est pas bon.",
     errorTooMany: "Plus de codes aujourd'hui. Réessayez demain.", errorUnavailable: "La vérification du numéro n'est pas disponible pour le moment.",
+    errorInUse: "Ce numéro est utilisé par un autre compte. Connectez-vous à ce compte.", errorBlocked: "Ce numéro ne peut pas être utilisé.",
     errorGeneric: "Réessayez dans un instant.",
   },
   de: {
@@ -130,6 +140,7 @@ const PHONE_FRIENDS_COPY_BY_LOCALE: Record<PrimaryUiLocale, PhoneFriendsCopy> = 
     noMatches: "Noch keiner deiner Kontakte ist auf HashChat. Lade sie unten ein!",
     errorPhone: "Prüfe die Nummer und versuche es erneut.", errorCode: "Der Code stimmt nicht.",
     errorTooMany: "Heute keine weiteren Codes. Versuche es morgen wieder.", errorUnavailable: "Die Nummernbestätigung ist gerade nicht verfügbar.",
+    errorInUse: "Diese Nummer wird von einem anderen Konto verwendet. Melde dich bei diesem Konto an.", errorBlocked: "Diese Nummer kann nicht verwendet werden.",
     errorGeneric: "Bitte versuche es gleich noch einmal.",
   },
   es: {
@@ -144,6 +155,7 @@ const PHONE_FRIENDS_COPY_BY_LOCALE: Record<PrimaryUiLocale, PhoneFriendsCopy> = 
     noMatches: "Ninguno de tus contactos está en HashChat todavía. ¡Invítalos abajo!",
     errorPhone: "Revisa el número e inténtalo de nuevo.", errorCode: "Ese código no es correcto.",
     errorTooMany: "No se pueden enviar más códigos hoy. Inténtalo mañana.", errorUnavailable: "La verificación del número no está disponible ahora.",
+    errorInUse: "Este número lo usa otra cuenta. Inicia sesión en esa cuenta.", errorBlocked: "Este número no se puede usar.",
     errorGeneric: "Inténtalo de nuevo en un momento.",
   },
   pt: {
@@ -158,6 +170,7 @@ const PHONE_FRIENDS_COPY_BY_LOCALE: Record<PrimaryUiLocale, PhoneFriendsCopy> = 
     noMatches: "Nenhum contato seu está no HashChat ainda. Convide-os abaixo!",
     errorPhone: "Confira o número e tente de novo.", errorCode: "Esse código não está certo.",
     errorTooMany: "Não dá para enviar mais códigos hoje. Tente amanhã.", errorUnavailable: "A verificação de número não está disponível agora.",
+    errorInUse: "Este número é usado por outra conta. Entre nessa conta.", errorBlocked: "Este número não pode ser usado.",
     errorGeneric: "Tente de novo em instantes.",
   },
   it: {
@@ -172,6 +185,7 @@ const PHONE_FRIENDS_COPY_BY_LOCALE: Record<PrimaryUiLocale, PhoneFriendsCopy> = 
     noMatches: "Nessuno dei tuoi contatti è ancora su HashChat. Invitali qui sotto!",
     errorPhone: "Controlla il numero e riprova.", errorCode: "Il codice non è corretto.",
     errorTooMany: "Oggi non si possono inviare altri codici. Riprova domani.", errorUnavailable: "La verifica del numero non è disponibile ora.",
+    errorInUse: "Questo numero è usato da un altro account. Accedi a quell'account.", errorBlocked: "Questo numero non può essere usato.",
     errorGeneric: "Riprova tra un momento.",
   },
   ru: {
@@ -186,6 +200,7 @@ const PHONE_FRIENDS_COPY_BY_LOCALE: Record<PrimaryUiLocale, PhoneFriendsCopy> = 
     noMatches: "Пока никого из ваших контактов нет в HashChat. Пригласите их ниже!",
     errorPhone: "Проверьте номер и попробуйте снова.", errorCode: "Неверный код.",
     errorTooMany: "Сегодня больше кодов отправить нельзя. Попробуйте завтра.", errorUnavailable: "Подтверждение номера сейчас недоступно.",
+    errorInUse: "Этот номер используется другим аккаунтом. Войдите в тот аккаунт.", errorBlocked: "Этот номер нельзя использовать.",
     errorGeneric: "Попробуйте ещё раз чуть позже.",
   },
   ar: {
@@ -200,6 +215,7 @@ const PHONE_FRIENDS_COPY_BY_LOCALE: Record<PrimaryUiLocale, PhoneFriendsCopy> = 
     noMatches: "لا أحد من جهات اتصالك على HashChat بعد. ادعهم من الأسفل!",
     errorPhone: "تحقّق من الرقم وحاول مجددًا.", errorCode: "الرمز غير صحيح.",
     errorTooMany: "لا يمكن إرسال رموز أخرى اليوم. حاول غدًا.", errorUnavailable: "توثيق الرقم غير متاح حاليًا.",
+    errorInUse: "هذا الرقم مستخدم في حساب آخر. سجّل الدخول إلى ذلك الحساب.", errorBlocked: "لا يمكن استخدام هذا الرقم.",
     errorGeneric: "حاول مرة أخرى بعد قليل.",
   },
   hi: {
@@ -214,6 +230,7 @@ const PHONE_FRIENDS_COPY_BY_LOCALE: Record<PrimaryUiLocale, PhoneFriendsCopy> = 
     noMatches: "आपके संपर्कों में से अभी कोई HashChat पर नहीं है। नीचे से उन्हें आमंत्रित करें!",
     errorPhone: "नंबर जाँचकर फिर से कोशिश करें।", errorCode: "यह कोड सही नहीं है।",
     errorTooMany: "आज और कोड नहीं भेजे जा सकते। कल फिर कोशिश करें।", errorUnavailable: "अभी नंबर सत्यापन उपलब्ध नहीं है।",
+    errorInUse: "यह नंबर किसी दूसरे खाते में इस्तेमाल हो रहा है। कृपया उस खाते से लॉग इन करें।", errorBlocked: "यह नंबर इस्तेमाल नहीं किया जा सकता।",
     errorGeneric: "थोड़ी देर बाद फिर कोशिश करें।",
   },
   th: {
@@ -228,6 +245,7 @@ const PHONE_FRIENDS_COPY_BY_LOCALE: Record<PrimaryUiLocale, PhoneFriendsCopy> = 
     noMatches: "ยังไม่มีรายชื่อติดต่อของคุณใน HashChat ชวนพวกเขาด้านล่างเลย!",
     errorPhone: "ตรวจสอบเบอร์แล้วลองอีกครั้ง", errorCode: "รหัสไม่ถูกต้อง",
     errorTooMany: "วันนี้ส่งรหัสเพิ่มไม่ได้แล้ว ลองใหม่พรุ่งนี้", errorUnavailable: "ตอนนี้ยังยืนยันเบอร์ไม่ได้",
+    errorInUse: "เบอร์นี้ถูกใช้กับบัญชีอื่นอยู่ กรุณาเข้าสู่ระบบด้วยบัญชีนั้น", errorBlocked: "ใช้เบอร์นี้ไม่ได้",
     errorGeneric: "โปรดลองอีกครั้งในอีกสักครู่",
   },
   vi: {
@@ -242,6 +260,7 @@ const PHONE_FRIENDS_COPY_BY_LOCALE: Record<PrimaryUiLocale, PhoneFriendsCopy> = 
     noMatches: "Chưa có ai trong danh bạ của bạn dùng HashChat. Hãy mời họ bên dưới!",
     errorPhone: "Kiểm tra lại số rồi thử lại.", errorCode: "Mã không đúng.",
     errorTooMany: "Hôm nay không gửi thêm mã được. Hãy thử lại vào ngày mai.", errorUnavailable: "Hiện chưa thể xác minh số.",
+    errorInUse: "Số này đang được một tài khoản khác dùng. Hãy đăng nhập vào tài khoản đó.", errorBlocked: "Không thể dùng số này.",
     errorGeneric: "Vui lòng thử lại sau giây lát.",
   },
 };

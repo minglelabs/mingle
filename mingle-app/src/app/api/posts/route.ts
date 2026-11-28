@@ -7,6 +7,8 @@ import { parseImageKeyInput, parseImageListInput } from '@/server/posts/post-ima
 import { parseImageDimensions } from '@/server/posts/post-image-dimensions'
 import { POST_BODY_MAX_LENGTH, publishPost } from '@/server/posts/publish-post'
 import { queueOperatorAppPostForReview } from '@/server/operator-post-reserve/queue-app-post'
+import { parsePostCategory, postIntroProblem, sanitizePostCallTitle, sanitizePostHobbies, sanitizePostIntroExtras } from '@/lib/post-category'
+import { applyPostCategory } from '@/server/posts/post-category'
 
 export const runtime = 'nodejs'
 
@@ -60,8 +62,19 @@ export async function POST(request: NextRequest) {
   const hasText = text !== null && text.trim().length > 0
   const hasImage = imageObjectKey !== null
 
-  if (!hasText && !hasImage) return json({ error: 'text_or_image_required' }, { status: 400 })
+  // A voice talk post may go up with its title alone (owner, 2026-11-28).
+  if (!hasText && !hasImage && parsePostCategory(input.category) !== 'call') return json({ error: 'text_or_image_required' }, { status: 400 })
   if (text !== null && text.length > POST_BODY_MAX_LENGTH) return json({ error: 'text_too_long' }, { status: 400 })
+
+  // The post's kind (see @/lib/post-category). A self-introduction needs a hobby and some text.
+  const category = parsePostCategory(input.category)
+  const hobbies = sanitizePostHobbies(input.hobbies)
+  const introExtras = sanitizePostIntroExtras(input.introExtras)
+  const callTitle = category === 'call' ? sanitizePostCallTitle(input.callTitle) : null
+  if (category === 'intro') {
+    const problem = postIntroProblem({ text, hobbies })
+    if (problem) return json({ error: problem === 'hobbies' ? 'intro_hobbies_required' : 'intro_text_required' }, { status: 400 })
+  }
 
   // Client-supplied language is only a fallback hint; the server detects.
   const clientHint = typeof sourceLanguage === 'string' && sourceLanguage.trim() ? sourceLanguage.trim() : null
@@ -82,6 +95,8 @@ export async function POST(request: NextRequest) {
   if (queued) return json({ postId: null, queuedForReview: true, reserveId: queued.reserveId }, { status: 202 })
 
   const result = await publishPost({
+    // A voice talk post may carry only its title (checked above).
+    allowEmpty: parsePostCategory(input.category) === 'call',
     authorId: userId,
     text: hasText ? text : null,
     imageObjectKey,
@@ -91,6 +106,13 @@ export async function POST(request: NextRequest) {
     clientPostId,
     backgroundKey: input.backgroundKey,
   })
+
+  // The kind is written right after the post exists (the publish pipeline is
+  // shared with the seed script and knows nothing about kinds).
+  if (result.kind === 'created' && category !== 'free') {
+    await applyPostCategory({ postId: result.post.id, authorId: userId, category, hobbies, introExtras, callTitle, publishedAt: result.post.publishedAt })
+      .catch((error) => console.error('[posts] category_failed', error instanceof Error ? error.name : 'unknown'))
+  }
 
   switch (result.kind) {
     case 'created':

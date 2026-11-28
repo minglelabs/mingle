@@ -15,10 +15,10 @@ function PartyScenario() {
       <div className="absolute bottom-0 left-0 w-48 h-48 bg-orange-200/30 rounded-full blur-3xl" />
 
       <div className="relative grid md:grid-cols-5 gap-4 items-center">
-        {/* Step 1: Party */}
+        {/* Step 1: Make a local friend */}
         <div className="text-center">
           <div className="w-16 h-16 rounded-full bg-white border-2 border-amber-300 flex items-center justify-center mx-auto mb-3 text-2xl shadow-md">
-            🎉
+            👋
           </div>
           <h4 className="font-semibold mb-1 text-sm text-text-primary">{t('partyScenario.step1Title')}</h4>
           <p className="text-xs text-text-muted">
@@ -54,10 +54,10 @@ function PartyScenario() {
           <ArrowRight size={24} className="text-amber-400" />
         </div>
 
-        {/* Step 3: Continue */}
+        {/* Step 3: Call with interpretation */}
         <div className="text-center">
           <div className="w-16 h-16 rounded-full bg-white border-2 border-accent-green/50 flex items-center justify-center mx-auto mb-3 text-2xl shadow-md">
-            💬
+            📞
           </div>
           <h4 className="font-semibold mb-1 text-sm text-text-primary">{t('partyScenario.step3Title')}</h4>
           <p className="text-xs text-text-muted">
@@ -70,7 +70,7 @@ function PartyScenario() {
       <div className="mt-8 pt-6 border-t border-amber-200">
         <div className="flex items-center justify-center gap-4 flex-wrap">
           <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-full border border-amber-200 shadow-sm">
-            <span className="text-lg">🎊</span>
+            <span className="text-lg">🤝</span>
             <span className="text-sm text-text-primary">{t('partyScenario.resultFriends')}</span>
           </div>
           <div className="flex items-center gap-2 bg-accent-primary/10 px-4 py-2 rounded-full border border-accent-primary/30">

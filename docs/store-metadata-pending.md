@@ -14,7 +14,14 @@ Google Play 스토어 정보는 앱 버전과 상관없이 언제든 올릴 수 
 
 ## 대기 중
 
-- 음성 통화가 배포되면: 3번 슬라이드(`03-voice`)를 통화 화면으로 바꾸고, 한국어 부제에 `·통화`(일본어 `・通話`)를 붙인다. 그 전에는 넣지 않는다.
+- **두 스토어를 같은 날 올린다** (2026-11-21, 사장님 결정): Play는 언제든 올릴 수 있지만, 두 스토어가 다른 말을 하지 않도록 다음 iOS 버전을 제출하는 날 `ios-appstore-sync-metadata`와 `google-play-console-sync.mjs`를 같이 돌린다.
+  - 함께 들어간 것(2026-11-21): 러시아어 제목 "HashChat: дружи с корейцами"(두 스토어), 영어 키워드에 `captions`, 아직 없는 기능을 광고하던 `07-women` 스크린샷을 두 스토어 `upload-held/`로 빼고 나머지 번호를 당김, Play 피처 그래픽에 브랜드 문구("Make Korean friends, even before your Korean is good").
+  - Play 홍보 영상 칸(`storeListing.video`): 안드로이드 기기 오디오 데모(cqg7txhMUHE, 백그라운드 마이크 심사용 화면 녹화. 심사용 칸 `foregroundServiceDisclosureVideoUrl`에는 그대로 둔다) 대신 애니메이션 루프탑 바 데이트 쇼츠(aRdHSUisSKM "she only speaks Korean, he only speaks English", 한국 여성 × 미국 남성, `~/Downloads/hashchat-batch-1119/05_dinner_KR-woman_US-man.mp4`)로 바꿨다. 2026-11-21에 사장님 선택으로 HashChat 유튜브 채널에 공개 게시(AI 사용 표시 켬, 아동용 아님).
+  - iOS 마케팅 URL은 `https://minglelabs.app`. AdMob이 iOS 앱을 확인하는 app-ads.txt를 2026-11-21에 그 사이트(`NamHyeongKeol/minglelabs`)에 올렸다.
+
+- 한국인-외국인 교류·언어교환 리포지셔닝(`docs/positioning-korean-friends.md`): 15개 언어 제목·부제·홍보 문구·설명·키워드와 스크린샷 8장을 새로 만들었다. 다음 iOS 버전 제출 때 `ios-appstore-sync-metadata`와 `scripts/ios-appstore-upload.sh`로 올리고, Play는 `google-play-console-sync.mjs`로 올린다. 옛 검색어(해시챗·밍글·번역기·동시통역, 영어 `translator,easiest,global,hangout,mingle`)는 키워드와 설명 끝 문단에 남겨 두었다. 키워드는 지금 계약 테스트처럼 글자 수 100으로 맞췄다(한·중·일 등은 100바이트를 넘지만 지금 스토어에 나간 값과 같은 방식).
+
+- 보이스톡(#377, 2.5.0): 3번 슬라이드(`03-voice`)의 통화 패널을 앱과 같은 아이콘 버튼 4개(마이크·통역·읽어 주기·나가기)로 다시 그렸고, 한국어 부제는 `실시간 통역 언어교환 톡·통화`, 일본어 부제는 `リアルタイム通訳で言語交換・通話`로 바꿨다. 리포지셔닝 문구와 함께 2.5.0 제출 때 올린다.
 
 ## 반영 완료
 

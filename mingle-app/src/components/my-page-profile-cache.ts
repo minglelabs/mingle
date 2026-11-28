@@ -28,16 +28,23 @@ export type MyPageProfileRecord = {
   /** Public gender and age shown in the header badge. */
   gender?: ProfileGender | null;
   age?: number | null;
+  heightCm?: number | null;
   followersCount: number;
   followingCount: number;
   /** Operator / official account; absent means false. */
   isOfficial?: boolean;
+  /** Passed the selfie check for the current photo (memory only, from the API). */
+  faceVerified?: boolean;
+  /** "Member #N" (see @/server/member-number); absent for staff accounts. */
+  memberNumber?: number | null;
+  /** A woman's "no new chats from men" (memory only, from the API). */
+  blockMaleDms?: boolean;
 };
 
 // Only what the profile header shows is written to disk. Location, birth date,
 // gender/age and the unpublished bio draft stay in memory and are restored by the API
 // refresh that follows every mount.
-type PersistedMyPageProfile = Omit<MyPageProfileRecord, "bioDraft" | "birthDate" | "gender" | "age" | "location">;
+type PersistedMyPageProfile = Omit<MyPageProfileRecord, "bioDraft" | "birthDate" | "gender" | "age" | "heightCm" | "location" | "faceVerified" | "memberNumber" | "blockMaleDms">;
 
 type PersistedMyPageProfileRecord = {
   savedAt: number;

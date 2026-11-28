@@ -18,6 +18,10 @@ describe('interest language prompt gate', () => {
     expect(shouldShowInterestPrompt(record, now + 10 * INTEREST_PROMPT_GAP_MS)).toBe(false)
   })
 
+  it('never asks while the first "say something" is pending', () => {
+    expect(shouldShowInterestPrompt(parseInterestPromptRecord(null), 1, { firstSpeakPending: true })).toBe(false)
+  })
+
   it('reads a broken record as never asked', () => {
     expect(parseInterestPromptRecord('{oops')).toEqual({ count: 0, lastShownAt: 0 })
     expect(parseInterestPromptRecord('{"count":-1,"lastShownAt":"x"}')).toEqual({ count: 0, lastShownAt: 0 })

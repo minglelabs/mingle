@@ -1,5 +1,5 @@
 export type AuthPanelStep = "provider" | "terms";
-export type AuthProvider = "apple" | "google" | "email";
+export type AuthProvider = "apple" | "google" | "email" | "phone";
 export type EmailAuthSheetMode = "login" | "signup" | "forgot";
 export type EmailAuthErrorCode =
   | "required"
@@ -9,8 +9,36 @@ export type AuthGateSessionStatus = "loading" | "authenticated" | "unauthenticat
 
 export const AUTH_GATE_BACKGROUND_STYLE =
   "linear-gradient(160deg, #FBBC32 0%, #F97316 100%)";
+// At least 45% of the screen (owner: 40% on 2026-11-22, raised to 45% on
+// 2026-11-23); the buttons sit in the middle of it.
 export const AUTH_GATE_PANEL_CLASSNAME =
   "rounded-t-[2rem] bg-[#1C1C1E] px-5 pb-[calc(1.05rem+env(safe-area-inset-bottom))] pt-4";
+
+// Inline, not classes: the app's WebView kept an old stylesheet without the new
+// class, so the panel stayed short on the phones (2026-11-22).
+export const AUTH_GATE_PANEL_STYLE = {
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "center",
+  flexShrink: 0,
+  minHeight: "45vh",
+} as const;
+
+// 0.45 measured ~42% of the screen on the owner's iPhone 11 Pro (the WebView
+// draws CSS pixels a little smaller than the screen's points), so the app asks
+// for 0.48 to land at ~45% (owner, 2026-11-23: "a bit more").
+export const AUTH_GATE_PANEL_SCREEN_SHARE = 0.48;
+
+/**
+ * The panel's minimum height. Inside the app, `vh` is the WebView's own height,
+ * which on an iPhone is shorter than the screen (40vh came out ~37% of the
+ * screen in the owner's screenshot), so there it is a share of the whole
+ * screen in pixels. A browser keeps `45vh`.
+ */
+export function resolveAuthGatePanelMinHeight(args: { isNativeApp: boolean; screenHeight: number }): string | number {
+  if (!args.isNativeApp || !(args.screenHeight > 0)) return AUTH_GATE_PANEL_STYLE.minHeight;
+  return Math.round(args.screenHeight * AUTH_GATE_PANEL_SCREEN_SHARE);
+}
 
 export type AuthPanelDraftState = {
   authPanelStep: AuthPanelStep;

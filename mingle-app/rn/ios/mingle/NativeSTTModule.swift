@@ -4,6 +4,7 @@ import Foundation
 import os
 import React
 import ReplayKit
+import Security
 import UIKit
 import UserNotifications
 
@@ -1081,6 +1082,21 @@ class NativeSTTModule: RCTEventEmitter {
             try audioSession.setPreferredInput(phoneMicrophone)
         } catch {
             NSLog("[NativeSTTModule] setPreferredInput failed: %@", error.localizedDescription)
+        }
+        // iOS 17+ keeps an app-wide "input muted" switch per app (the voice talk's mic
+        // mute sets it, and iOS remembers it). While it is on, the microphone delivers
+        // pure silence to this engine although permission and route look fine
+        // (iPhone 11 Pro, 2026-11-22: every STT session sent peak 0). STT always needs the mic.
+        if #available(iOS 17.0, *) {
+            let application = AVAudioApplication.shared
+            if application.isInputMuted {
+                do {
+                    try application.setInputMuted(false)
+                    NSLog("[NativeSTTModule] input was muted app-wide; unmuted for STT")
+                } catch {
+                    NSLog("[NativeSTTModule] unmute input failed: %@", error.localizedDescription)
+                }
+            }
         }
         // Port types and numeric audio metadata only; never log device names or speech.
         let inputs = audioSession.currentRoute.inputs.map { $0.portType.rawValue }.joined(separator: ",")
@@ -2652,6 +2668,25 @@ class NativeSTTModule: RCTEventEmitter {
         ])
     }
 
+    /// Asks for the microphone alone (no session): the first-run "HashChat is
+    /// spoken" screen asks before sign-in, and the speak trial then just starts.
+    @objc(requestMicrophonePermission:rejecter:)
+    func requestMicrophonePermission(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter _: @escaping RCTPromiseRejectBlock
+    ) {
+        let audioSession = AVAudioSession.sharedInstance()
+        guard audioSession.recordPermission == .undetermined else {
+            resolve(["permission": resolveMicrophonePermissionStatus(), "platform": "ios"])
+            return
+        }
+        audioSession.requestRecordPermission { [weak self] _ in
+            DispatchQueue.main.async {
+                resolve(["permission": self?.resolveMicrophonePermissionStatus() ?? "unknown", "platform": "ios"])
+            }
+        }
+    }
+
     @objc(stop:resolver:rejecter:)
     func stop(
         _ options: NSDictionary?,
@@ -3162,6 +3197,85 @@ class NativeRuntimeConfigModule: NSObject, CLLocationManagerDelegate {
         #endif
     }
 
+    private static let deviceIdKeychainService = "com.minglelabs.mingle.device-id"
+    private static let deviceIdKeychainAccount = "device-id-v1"
+    private static var cachedDeviceId: String?
+
+    /// A UUID made once and stored in this device's keychain. It is not an
+    /// advertising id and reads nothing about the hardware; it only tells the
+    /// server that two installs are the same phone. `ThisDeviceOnly` keeps it
+    /// out of backups and off a new phone restored from one.
+    private static func readOrCreateDeviceId() -> String {
+        if let cached = cachedDeviceId { return cached }
+        let baseQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: deviceIdKeychainService,
+            kSecAttrAccount as String: deviceIdKeychainAccount,
+        ]
+        var readQuery = baseQuery
+        readQuery[kSecReturnData as String] = true
+        readQuery[kSecMatchLimit as String] = kSecMatchLimitOne
+        var item: CFTypeRef?
+        let readStatus = SecItemCopyMatching(readQuery as CFDictionary, &item)
+        if readStatus == errSecSuccess,
+           let data = item as? Data,
+           let stored = String(data: data, encoding: .utf8),
+           stored.count >= 8 {
+            cachedDeviceId = stored
+            return stored
+        }
+        // Anything but "not found" (for example the keychain is still locked
+        // right after a reboot): send no value now rather than overwrite one.
+        guard readStatus == errSecItemNotFound else { return "" }
+
+        let created = UUID().uuidString.lowercased()
+        var addQuery = baseQuery
+        addQuery[kSecValueData as String] = Data(created.utf8)
+        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        guard SecItemAdd(addQuery as CFDictionary, nil) == errSecSuccess else { return "" }
+        cachedDeviceId = created
+        return created
+    }
+
+    // "This phone already has an account" (owner, 2026-11-25): kept in the
+    // keychain, so it outlives deleting the app, like the device id. Only the
+    // last sign-in method; never a token or anything about the account.
+    private static let accountHintKeychainService = "com.minglelabs.mingle.account-hint"
+    private static let accountHintKeychainAccount = "account-hint-v1"
+
+    private static func accountHintQuery() -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: accountHintKeychainService,
+            kSecAttrAccount as String: accountHintKeychainAccount,
+        ]
+    }
+
+    private static func readAccountHint() -> String {
+        var query = accountHintQuery()
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var item: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
+              let data = item as? Data,
+              let stored = String(data: data, encoding: .utf8) else { return "" }
+        return stored
+    }
+
+    @objc(setAccountHint:)
+    func setAccountHint(_ hint: String) {
+        let value = hint.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty, value.count <= 256, value != Self.readAccountHint() else { return }
+        let query = Self.accountHintQuery()
+        let data = Data(value.utf8)
+        if SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary) == errSecItemNotFound {
+            var addQuery = query
+            addQuery[kSecValueData as String] = data
+            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            SecItemAdd(addQuery as CFDictionary, nil)
+        }
+    }
+
     private static func runtimeConfigPayload() -> [String: Any] {
         let payload: [String: Any] = [
             "webAppBaseUrl": NativeSTTModule.readRuntimeConfigURL(
@@ -3188,6 +3302,12 @@ class NativeRuntimeConfigModule: NSObject, CLLocationManagerDelegate {
             "conversationRestoreConversationId": UserDefaults.standard.string(forKey: conversationRestoreConversationIdKey) ?? "",
             "conversationRestoreCreatedAtMs": readConversationRestoreCreatedAtMs(),
             "launchedFromExternalIntent": launchedFromExternalIntent ? "1" : "0",
+            // One account per person (docs/one-account-per-person.md): a random
+            // id kept in the keychain, so it survives a reinstall. Empty when
+            // the keychain cannot be used; the web then sends no device value.
+            "deviceId": readOrCreateDeviceId(),
+            "deviceKind": "keychain",
+            "accountHint": readAccountHint(),
         ]
         return payload.merging(MingleLastScreenSnapshotStore.runtimeConfigPayload()) { current, _ in current }
     }

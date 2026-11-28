@@ -30,8 +30,8 @@ describe("v1.1.0 home entry rollout gate", () => {
     redirectMock.mockClear();
   });
 
-  it("sends a supported app (2.2.0+) to the feed", () => {
-    expect(landingFor({ apiNamespace: "ios/v2.2.0" })).toBe("/ko/feed?apiNamespace=ios%2Fv2.2.0");
+  it("sends a supported app (2.2.0+) to the home tab", () => {
+    expect(landingFor({ apiNamespace: "ios/v2.2.0" })).toBe("/ko/explore?apiNamespace=ios%2Fv2.2.0");
   });
 
   it("sends a pre-2.2.0 app (2.1.x / 2.0.x) to the conversation list, not the feed", () => {
@@ -39,8 +39,8 @@ describe("v1.1.0 home entry rollout gate", () => {
     expect(landingFor({ apiNamespace: "ios/v2.0.4" })).toBe("/ko/conversations?apiNamespace=ios%2Fv2.0.4");
   });
 
-  it("sends a plain web visitor (no namespace) to the feed", () => {
-    expect(landingFor({})).toBe("/ko/feed");
+  it("sends a plain web visitor (no namespace) to the home tab", () => {
+    expect(landingFor({})).toBe("/ko/explore");
   });
 
   it("preserves a deep-link query through the feed redirect", () => {

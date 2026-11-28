@@ -281,7 +281,7 @@ export default function FollowListScreen({
       open={open}
       onClose={navigateBack}
       ariaLabel={activeLabel}
-      className="fixed inset-0 z-[100] flex min-h-0 w-full flex-col overflow-hidden bg-white text-slate-950"
+      className="keyboard-safe fixed inset-0 z-[100] flex min-h-0 w-full flex-col overflow-hidden bg-white text-slate-950"
       style={{ touchAction: "pan-y" }}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}

@@ -14,6 +14,14 @@ describe('native banner navigation state', () => {
     expect(resolveNativeBannerZoneForUrl('https://mingle.example/ko/mypage')).toBe('hidden');
   });
 
+  it('leaves the voice-room and explore tabs to the web (no zone inferred, so nothing changes)', () => {
+    expect(resolveNativeBannerZoneForUrl('https://mingle.example/ko/voice')).toBeNull();
+    expect(resolveNativeBannerZoneForUrl('https://mingle.example/en/explore/')).toBeNull();
+    expect(resolveNativeBannerZoneForUrl('https://mingle.example/ko/explore/people')).toBe('hidden');
+    const shown: NativeBannerNavigationState = { activeZone: 'list', stableZone: 'list', pendingNavigationZone: null };
+    expect(resolveNativeBannerNavigationState(shown, 'https://mingle.example/ko/explore')).toBe(shown);
+  });
+
   it('only allows the exact conversations route, not its sub-routes or other screens', () => {
     expect(resolveNativeBannerZoneForUrl('https://mingle.example/ko/conversations/')).toBe('list');
     expect(resolveNativeBannerZoneForUrl('https://mingle.example/ko/conversations/new-group')).toBe('hidden');

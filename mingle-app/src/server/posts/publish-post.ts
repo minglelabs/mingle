@@ -67,6 +67,8 @@ export type PublishPostInput = {
   clientPostId?: unknown
   /** Raw requested background; a non-catalog value falls back to random. */
   backgroundKey?: unknown
+  /** A voice talk post may go up with its title alone (owner, 2026-11-28): no text or image needed. */
+  allowEmpty?: boolean
 }
 
 export type PublishedPost = { id: string; backgroundKey: string | null; publishedAt: Date }
@@ -89,7 +91,7 @@ export async function publishPost(input: PublishPostInput): Promise<PublishPostR
   const { authorId, imageObjectKey } = input
   const text = typeof input.text === 'string' && input.text.trim().length > 0 ? input.text : null
   const hasImage = imageObjectKey !== null
-  if (text === null && !hasImage) throw new Error('publishPost: text or image is required')
+  if (text === null && !hasImage && !input.allowEmpty) throw new Error('publishPost: text or image is required')
 
   // Idempotency via clientPostId — a retry of the same request must not create
   // a second post or a second set of translations.

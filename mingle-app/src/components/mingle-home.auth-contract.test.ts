@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   AUTH_GATE_BACKGROUND_STYLE,
   AUTH_GATE_PANEL_CLASSNAME,
+  AUTH_GATE_PANEL_STYLE,
+  resolveAuthGatePanelMinHeight,
   createProviderResetAuthPanelState,
   createProviderSelectionAuthPanelState,
   resolveAuthGateVisualState,
@@ -16,6 +18,11 @@ describe("mingle-home auth contracts", () => {
       "pb-[calc(1.05rem+env(safe-area-inset-bottom))]",
     );
     expect(AUTH_GATE_PANEL_CLASSNAME).toContain("bg-[#1C1C1E]");
+    expect(AUTH_GATE_PANEL_STYLE.minHeight).toBe("45vh");
+    // Inside the app: 45% of the whole screen (the WebView's vh is shorter than the screen).
+    expect(resolveAuthGatePanelMinHeight({ isNativeApp: true, screenHeight: 812 })).toBe(390);
+    expect(resolveAuthGatePanelMinHeight({ isNativeApp: false, screenHeight: 812 })).toBe("45vh");
+    expect(resolveAuthGatePanelMinHeight({ isNativeApp: true, screenHeight: 0 })).toBe("45vh");
   });
 
   it("slides provider selection into the terms step with both required agreements prechecked", () => {

@@ -2,6 +2,7 @@
 
 import { LoadingMessage } from "@/components/loading-message";
 import { resolveLastUsedSignInCopy } from "@/i18n/last-sign-in-method-copy";
+import { resolveBrandTagline } from "@/i18n/loading-messages";
 import {
   markPendingSignInMethod,
   readLastSignInMethod,
@@ -9,22 +10,31 @@ import {
   type SignInMethod,
 } from "@/lib/last-sign-in-method";
 import { resolveSignInFailedCopy } from "@/i18n/sign-in-failed-copy";
-import { ArrowLeft, Check, Loader2, Mail, X } from "lucide-react";
+import { ArrowLeft, Check, Loader2, Mail, Smartphone, X } from "lucide-react";
 import {
   forwardRef,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useImperativeHandle,
   useMemo,
   useRef,
   useState,
   type FormEvent,
+  type ReactNode,
 } from "react";
+import type { SpeechLengthLevel } from "@/lib/speech-length";
+import PhoneVerifySheet from "@/components/contacts/phone-verify-sheet";
+import { resolvePhoneFriendsCopy } from "@/i18n/phone-friends-copy";
+import { resolvePhoneSignInCopy } from "@/i18n/phone-sign-in-copy";
+import { isKoreanUser } from "@/lib/korean-signup";
+import { buildClientApiPath } from "@/lib/api-contract";
 import { MessageReactionsProvider } from "./LivePhoneDemo/MessageReactions";
 import { MessageRecallProvider } from "./LivePhoneDemo/MessageRecall";
 import { MessageRetranslateProvider } from "./LivePhoneDemo/MessageRetranslate";
 import { MessageReadReceiptsProvider } from "./LivePhoneDemo/MessageReadReceipts";
 import { signIn, signOut, useSession } from "next-auth/react";
+import { waitForNativeDeviceIdentity } from "@/lib/native-device-identity";
 import {
   clearNativeAuthAttempt,
   readNativeAuthAttempt,
@@ -42,6 +52,8 @@ import LivePhoneDemo, {
 import {
   AUTH_GATE_BACKGROUND_STYLE,
   AUTH_GATE_PANEL_CLASSNAME,
+  AUTH_GATE_PANEL_STYLE,
+  resolveAuthGatePanelMinHeight,
   createProviderResetAuthPanelState,
   createProviderSelectionAuthPanelState,
   resolveAuthGateVisualState,
@@ -64,7 +76,7 @@ import {
   captureMingleClientEvent,
   resetMinglePostHogIdentity,
 } from "@/lib/posthog-client";
-import type { ConversationChannelOtherMember } from "@/lib/app-conversations";
+import type { ConversationChannelOtherMember, ConversationChannelSummary } from "@/lib/app-conversations";
 
 type MingleHomeProps = {
   dictionary: AppDictionary;
@@ -97,6 +109,12 @@ type MingleHomeProps = {
   isVisible?: boolean;
   /** Render only the existing authentication surface without mounting a room. */
   authOnly?: boolean;
+  /**
+   * The speak trial before sign-in: a room without the sign-in gate, the menu
+   * or saved settings, starting on `speechLength`, with `headerAccessory`
+   * (the countdown) in the header.
+   */
+  trial?: { speechLength: SpeechLengthLevel; headerAccessory: ReactNode; topInsetPx?: number; highlightStart?: boolean };
   /** Auth-only: a line under the logo, e.g. why sign-in is needed. */
   authNotice?: string | null;
   /**
@@ -111,6 +129,7 @@ type MingleHomeProps = {
     switchedFromLiveConversation: boolean;
   } | void;
   onSttSessionRunningChange?: (isRunning: boolean) => void;
+  onSttListeningChange?: (isListening: boolean) => void;
   onLatestUtteranceChange?: (payload: LatestUtterancePayload, isNewUtterance: boolean) => void;
   onLatestUtterancePreviewChange?: (payload: LatestUtterancePayload | null) => void;
   onConversationStatsChange?: (payload: {
@@ -123,6 +142,9 @@ type MingleHomeProps = {
   onDefaultDisplayLanguageChange?: (defaultDisplayLanguage: string | null) => void;
   onOpenProfile?: (userId: string) => void;
   isBlockedCounterpart?: boolean;
+  /** An open room (public, listed under Explore). */
+  initialIsPublicRoom?: boolean;
+  onOpenOtherRoom?: (conversationId: string, joined?: ConversationChannelSummary) => void;
   initialUnreadMessageCount?: number;
   isMultiMember?: boolean;
 };
@@ -355,18 +377,43 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   const [socialSignInFailed, setSocialSignInFailed] = useState(false);
   // Read after mount so the first paint matches the server render.
   const [lastSignInMethod, setLastSignInMethod] = useState<SignInMethod | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    queueMicrotask(() => {
-      if (!cancelled) setLastSignInMethod(readLastSignInMethod());
-    });
-    return () => {
-      cancelled = true;
-    };
+  const [authPanelMinHeight, setAuthPanelMinHeight] = useState<string | number>(AUTH_GATE_PANEL_STYLE.minHeight);
+  // Before paint, so the buttons never show one layout and then switch to another.
+  useLayoutEffect(() => {
+    setLastSignInMethod(readLastSignInMethod());
+    const bridge = (window as { ReactNativeWebView?: { postMessage?: unknown } }).ReactNativeWebView;
+    setAuthPanelMinHeight(resolveAuthGatePanelMinHeight({
+      isNativeApp: typeof bridge?.postMessage === "function",
+      screenHeight: window.screen?.height ?? 0,
+    }));
   }, []);
   const [signingInProvider, setSigningInProvider] =
     useState<NativeAuthProvider | null>(null);
   const [authPanelStep, setAuthPanelStep] = useState<AuthPanelStep>("provider");
+  // Sign-in by phone number: offered once the server says it can send codes.
+  // null = the server has not answered yet.
+  const [phoneSignInAvailable, setPhoneSignInAvailable] = useState<boolean | null>(null);
+  // false: the server texts Korean (+82) numbers only (no international SMS provider yet).
+  const [phoneSignInWorldwide, setPhoneSignInWorldwide] = useState(false);
+  // Korean sign-in (2026-11-21): the phone number leads; Apple, Google and email open under "other ways".
+  const [otherSignInOpen, setOtherSignInOpen] = useState(false);
+  const [isPhoneSheetOpen, setIsPhoneSheetOpen] = useState(false);
+  const phoneSignInCopy = useMemo(() => resolvePhoneSignInCopy(props.locale), [props.locale]);
+  // Someone who signed in another way before sees every option at once.
+  const isKoreanSignIn = isKoreanUser(props.locale);
+  // A Korean sees the phone button from the first paint, before the server has
+  // answered (2026-11-22: the other buttons showed for a moment, then folded away).
+  // Not Korean and no international SMS (2026-11-23): no phone button at all.
+  const phoneButtonShown = (phoneSignInAvailable === true && (isKoreanSignIn || phoneSignInWorldwide))
+    || (phoneSignInAvailable === null && isKoreanSignIn);
+  const phoneFirstSignIn = phoneButtonShown
+    && isKoreanSignIn
+    && (lastSignInMethod === null || lastSignInMethod === "phone");
+  const phoneSheetCopy = useMemo(() => ({
+    ...resolvePhoneFriendsCopy(props.locale),
+    sheetTitle: phoneSignInCopy.sheetTitle,
+    sheetBody: phoneSignInCopy.sheetBody,
+  }), [phoneSignInCopy, props.locale]);
   const [selectedProvider, setSelectedProvider] =
     useState<AuthProvider | null>(null);
   const [agreedPrivacy, setAgreedPrivacy] = useState(false);
@@ -1228,6 +1275,10 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       handleOpenEmailSheet();
       return;
     }
+    if (selectedProvider === "phone") {
+      setIsPhoneSheetOpen(true);
+      return;
+    }
     handleSocialSignIn(selectedProvider);
   }, [
     handleOpenEmailSheet,
@@ -1363,10 +1414,44 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
     signedOutCallbackUrl,
   ]);
 
+  useEffect(() => {
+    if (status !== "unauthenticated") return;
+    let cancelled = false;
+    void fetch(buildClientApiPath("/phone/sign-in"), { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: { available?: unknown; worldwide?: unknown } | null) => {
+        if (cancelled) return;
+        setPhoneSignInAvailable(body?.available === true);
+        setPhoneSignInWorldwide(body?.worldwide === true);
+      })
+      .catch(() => {
+        if (!cancelled) setPhoneSignInAvailable(false);
+      });
+    return () => { cancelled = true; };
+  }, [status]);
+
+  // Checks the SMS code by signing in with it; a new number makes an account.
+  const confirmPhoneSignIn = useCallback(async (phone: string, code: string): Promise<string | null> => {
+    try {
+      // The device value lets the server sign in the account this phone already has (one account per person).
+      const device = await waitForNativeDeviceIdentity().catch(() => null);
+      const deviceFields = device
+        ? { deviceId: device.deviceId, deviceKind: device.deviceKind, devicePlatform: device.deviceKind === "keychain" ? "ios" : "android" }
+        : {};
+      const result = await signIn("phone-code", { phone, code, callbackUrl, redirect: false, ...deviceFields });
+      if (!result?.ok || result.error) return "wrong_code";
+      saveLastSignInMethod("phone");
+      window.location.assign(typeof result.url === "string" && result.url ? result.url : callbackUrl);
+      return null;
+    } catch {
+      return "generic";
+    }
+  }, [callbackUrl]);
+
   // Keep loading and unauthenticated states within one stable layout.
   // The panel always stays mounted and only its inner content changes to avoid pop-in.
   const authGateVisualState = resolveAuthGateVisualState({
-    requireAuthGate: REQUIRE_AUTH_FOR_TRANSLATOR,
+    requireAuthGate: REQUIRE_AUTH_FOR_TRANSLATOR && !props.trial,
     status,
     isSigningIn,
     isEmailSubmitting,
@@ -1436,9 +1521,22 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
 
         {/* Top HashChat text logo area */}
         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/mingle-icon.png"
+            alt=""
+            width={96}
+            height={96}
+            data-qa="login-brand-icon"
+            className="h-24 w-24 rounded-[1.6rem] shadow-[0_14px_30px_rgba(120,53,15,0.28)]"
+          />
           <span className="text-[2.8rem] font-extrabold leading-[1.08] text-[#2D2A1E]">
             HashChat
           </span>
+          {/* What the app is for, before anything asks for a sign-in. */}
+          <p data-qa="login-brand-tagline" className="max-w-[19rem] break-keep text-[1.05rem] font-bold leading-snug text-[#2D2A1E]">
+            {resolveBrandTagline(props.locale)}
+          </p>
           {/* A failed sign-in shows in red on a white pill so it stands out on the orange background. */}
           {socialSignInFailed || (props.authNotice && props.authNotice === resolveSignInFailedCopy(props.locale)) ? (
             <p
@@ -1447,8 +1545,9 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
             >
               {resolveSignInFailedCopy(props.locale)}
             </p>
-          ) : props.authNotice ? (
-            <p className="text-lg font-bold leading-snug text-[#2D2A1E]">{props.authNotice}</p>
+          ) : props.authNotice && signingInProvider === null && !isSigningIn ? (
+            // Gone once a sign-in is under way (owner, 2026-11-25): the loading line below takes its place.
+            <p className="text-[0.92rem] font-semibold leading-snug text-[#2D2A1E]/75">{props.authNotice}</p>
           ) : null}
           {/* Social sign-in in progress: the buttons below only dim, so say so here. */}
           {signingInProvider !== null ? (
@@ -1467,6 +1566,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
         <section
           aria-busy={isLoading || disabled}
           className={AUTH_GATE_PANEL_CLASSNAME}
+          style={{ ...AUTH_GATE_PANEL_STYLE, minHeight: authPanelMinHeight }}
         >
           {isLoading ? (
             /* Loading state: spinner and a random loading line */
@@ -1489,9 +1589,36 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                   authPanelStep === "terms" ? "-translate-x-1/2" : "translate-x-0"
                 }`}
               >
-                <div className="w-1/2 shrink-0">
+                <div className="w-1/2 shrink-0" style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
                   {/* The "last used" badge sits on a button's top edge; room for it on the first one. */}
                   <div className={`space-y-3 ${lastSignInMethod ? "pt-2.5" : ""}`}>
+                    {phoneButtonShown ? (
+                      <button
+                        type="button"
+                        data-qa="auth-phone-button"
+                        aria-label={phoneSignInCopy.button}
+                        onClick={() => handleProviderSelect("phone")}
+                        disabled={disabled}
+                        className={`relative inline-flex w-full items-center justify-center rounded-2xl bg-[#FBBC32] font-bold text-slate-950 transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${phoneFirstSignIn ? "py-[1.1rem] text-[1.05rem]" : "py-[0.92rem] text-[0.95rem]"}`}
+                      >
+                        <span className="absolute left-5">
+                          <Smartphone className="h-5 w-5" aria-hidden />
+                        </span>
+                        {phoneSignInCopy.button}
+                        {lastSignInMethod === "phone" ? lastUsedBadge : null}
+                      </button>
+                    ) : null}
+                    {phoneFirstSignIn && !otherSignInOpen ? (
+                      <button
+                        type="button"
+                        data-qa="auth-other-ways"
+                        onClick={() => setOtherSignInOpen(true)}
+                        disabled={disabled}
+                        className="inline-flex w-full items-center justify-center py-2 text-[0.92rem] font-semibold text-white/75 underline underline-offset-4 transition active:text-white disabled:opacity-50"
+                      >
+                        {phoneSignInCopy.otherWays}
+                      </button>
+                    ) : (<>
                     <button
                       type="button"
                       aria-label={
@@ -1541,6 +1668,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                       {props.dictionary.profile.loginEmail}
                       {lastSignInMethod === "email" ? lastUsedBadge : null}
                     </button>
+                    </>)}
 
                     {!props.appleOAuthEnabled ? (
                       <p className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-300">
@@ -1621,7 +1749,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                       type="button"
                       onClick={handleAgreeAndStart}
                       disabled={!selectedProvider || !hasAgreedAllRequiredTerms || disabled}
-                      className="mt-2 inline-flex h-11 w-full items-center justify-center rounded-xl bg-white/20 px-3 text-[0.96rem] font-semibold leading-none text-white transition disabled:cursor-not-allowed disabled:bg-white/15 disabled:text-white/45"
+                      className="mt-2 inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#FBBC32] px-3 text-[0.96rem] font-bold leading-none text-slate-950 transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-white/15 disabled:text-white/60 disabled:text-white/45"
                     >
                       {isSigningIn ? (
                         <Loader2 size={18} className="animate-spin" aria-hidden />
@@ -1687,6 +1815,17 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
               />
             </section>
           </div>
+        ) : null}
+        {isPhoneSheetOpen ? (
+          <PhoneVerifySheet
+            copy={phoneSheetCopy}
+            locale={props.locale}
+            sendPath="/phone/sign-in"
+            koreaOnly={!phoneSignInWorldwide}
+            confirmCode={confirmPhoneSignIn}
+            onClose={() => setIsPhoneSheetOpen(false)}
+            onVerified={() => {}}
+          />
         ) : null}
         {isEmailSheetOpen ? (
           <div
@@ -2089,8 +2228,13 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           onDeleteAccount={handleDeleteAccount}
           defaultFeedbackEmail={typeof session?.user?.email === "string" ? session.user.email : ""}
           isAuthActionPending={isDeletingAccount}
-          showMenuButton
-          showAccountActions={status === "authenticated"}
+          showMenuButton={!props.trial}
+          showAccountActions={status === "authenticated" && !props.trial}
+          enableAccountPreferencesSync={!props.trial}
+          headerAccessory={props.trial?.headerAccessory}
+          trialSpeechLength={props.trial?.speechLength}
+          trialTopInsetPx={props.trial?.topInsetPx}
+          trialHighlightStart={props.trial?.highlightStart}
           headerMode={props.headerMode}
           backButtonLabel={props.dictionary.profile.emailBackLabel}
           onBack={props.onBack}
@@ -2116,6 +2260,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           enableNativeBannerBridge={props.enableNativeBannerBridge}
           onStartRecordingRequested={props.onStartRecordingRequested}
           onSttSessionRunningChange={props.onSttSessionRunningChange}
+          onSttListeningChange={props.onSttListeningChange}
           onLatestUtteranceChange={props.onLatestUtteranceChange}
           onLatestUtterancePreviewChange={props.onLatestUtterancePreviewChange}
           onConversationStatsChange={props.onConversationStatsChange}
@@ -2125,6 +2270,8 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           onDefaultDisplayLanguageChange={props.onDefaultDisplayLanguageChange}
           onOpenProfile={props.onOpenProfile}
           isBlockedCounterpart={props.isBlockedCounterpart}
+          initialIsPublicRoom={props.initialIsPublicRoom}
+          onOpenOtherRoom={props.onOpenOtherRoom}
           initialUnreadMessageCount={props.initialUnreadMessageCount}
           isMultiMember={props.isMultiMember}
         />

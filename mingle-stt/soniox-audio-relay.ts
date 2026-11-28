@@ -28,6 +28,7 @@ export class SonioxAudioRelay {
     private lastReceivedAt: number | null = null;
     private lastForwardedAt: number | null = null;
     private receivedChunks = 0;
+    private peakAmplitude = 0;
     private forwardedChunks = 0;
     private forwardedBytes = 0;
     private keepalives = 0;
@@ -50,6 +51,11 @@ export class SonioxAudioRelay {
         this.firstReceivedAt ??= now;
         this.lastReceivedAt = now;
         this.receivedChunks += 1;
+        // Loudest PCM16 sample so far: 0 means the phone sent pure silence (a dead or muted mic).
+        for (let offset = 0; offset + 1 < chunk.length; offset += 2) {
+            const amplitude = Math.abs(chunk.readInt16LE(offset));
+            if (amplitude > this.peakAmplitude) this.peakAmplitude = amplitude;
+        }
         if (this.readyAt !== null) {
             this.forward(chunk);
             return;
@@ -105,6 +111,7 @@ export class SonioxAudioRelay {
             lastAudioReceivedAgeMs: this.lastReceivedAt === null ? null : now - this.lastReceivedAt,
             lastAudioForwardedAgeMs: this.lastForwardedAt === null ? null : now - this.lastForwardedAt,
             receivedChunks: this.receivedChunks,
+            peakAmplitude: this.peakAmplitude,
             forwardedChunks: this.forwardedChunks,
             forwardedBytes: this.forwardedBytes,
             queuedChunks: this.pending.length,

@@ -1,5 +1,7 @@
 "use client";
 
+import { isNativePhotoGalleryAvailable, pickProfilePhotoFromAppGallery } from "@/lib/native-photo-gallery";
+import { profilePhotoGalleryLabels } from "@/i18n/compose-photo-copy";
 import {
   DEFAULT_PROFILE_IMAGE_CROP,
   clampProfileImageCropToImage,
@@ -90,11 +92,8 @@ export default function ProfileImageCropper({
     if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
   }, []);
 
-  const handleFileChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0] ?? null;
-    event.target.value = "";
-    if (!file) return;
-
+  // A photo from the system picker or the app's gallery.
+  const takeFile = useCallback((file: File) => {
     const isSupportedType = ["image/jpeg", "image/png", "image/webp"].includes(file.type.toLowerCase());
     if (!isSupportedType || file.size > MAX_FILE_SIZE_BYTES) {
       setFileError(true);
@@ -111,6 +110,12 @@ export default function ProfileImageCropper({
     setImageError(false);
     setFileError(false);
   }, []);
+
+  const handleFileChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    if (file) takeFile(file);
+  }, [takeFile]);
 
   const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (!previewUrl || imageError) return;
@@ -242,7 +247,18 @@ export default function ProfileImageCropper({
 
       <p className="max-w-[280px] text-center text-[12px] leading-snug text-gray-500">{copy.hint}</p>
 
-      <label className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-[13px] font-semibold text-slate-800 transition active:bg-gray-100">
+      <label
+        className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-[13px] font-semibold text-slate-800 transition active:bg-gray-100"
+        onClick={(event) => {
+          // The app's gallery with its camera tile when the app has one (owner, 2026-11-28).
+          if (!isNativePhotoGalleryAvailable()) return;
+          event.preventDefault();
+          void pickProfilePhotoFromAppGallery(profilePhotoGalleryLabels(locale)).then((picked) => {
+            if (picked === "unavailable") inputRef.current?.click();
+            else if (picked) takeFile(picked);
+          });
+        }}
+      >
         <ImagePlus size={16} aria-hidden="true" />
         <span>{previewUrl ? copy.changePhoto : copy.addPhoto}</span>
         <input

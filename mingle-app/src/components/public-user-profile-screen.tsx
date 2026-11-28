@@ -1,8 +1,16 @@
 "use client";
 
+import NamePronunciationButton from "@/components/name-pronunciation-button";
+import { resolvePeopleSafetyCopy } from "@/i18n/people-safety-copy";
+import { isRecipientBlocksMen } from "@/lib/use-start-direct-conversation";
 import { requestProfileBasics } from "@/lib/profile-basics";
+import { passDmOpenCoins } from "@/lib/dm-open-coins";
+import { parseFirstMessageSetupNeeds, requestFirstMessageSetup } from "@/lib/first-message-setup";
+import { resolveVerificationBadgesCopy } from "@/i18n/verification-badges-copy";
 import ProfileBio from "@/components/profile-bio";
+import { sameBioLanguage } from "@/lib/profile-bio";
 import ProfileGenderAgeBadge from "@/components/profile-gender-age-badge";
+import MemberNumberLine from "@/components/member-number-line";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import { getConversationDictionary } from "@/i18n/conversations";
@@ -22,6 +30,7 @@ import { sanitizeInterestLanguages } from "@/lib/interest-languages";
 import ProfileShareScreen from "@/components/profile-share-screen";
 import SlideSurface from "@/components/slide-surface";
 import CoinGiftSheet from "@/components/coins/coin-gift-sheet";
+import { fillHomeCount, resolveHomeCopy } from "@/i18n/home-copy";
 import HashSeedIcon from "@/components/coins/hash-seed-icon";
 import { getCoinCopy } from "@/i18n/coin-copy";
 import { isCoinBillingActive, useCoinWallet } from "@/lib/coin-wallet-client";
@@ -44,6 +53,9 @@ import {
   ChevronLeft,
   Loader2,
   MessageCircle,
+  MoreHorizontal,
+  ScanFace,
+  Smartphone,
   UserRound,
   UserX,
   X,
@@ -86,6 +98,7 @@ type PublicUserProfile = {
   bio: string | null;
   age?: number;
   gender?: string | null;
+  heightCm?: number;
   nationality: string | null;
   /** 국적 (ISO 3166-1 alpha-2). Absent from older servers. */
   nationalityCountry?: string | null;
@@ -101,6 +114,13 @@ type PublicUserProfile = {
   isOfficial?: boolean;
   /** An account run by HashChat staff; absent means false. */
   isOperator?: boolean;
+  /** Passed the selfie check for the current photo; absent means false. */
+  faceVerified?: boolean;
+  phoneVerified?: boolean;
+  /** The name written for this reader (李伟 → 리웨이), when it differs from the original. */
+  readerName?: string;
+  /** "Member #N" (see @/server/member-number); absent for staff accounts. */
+  memberNumber?: number;
 };
 
 type ReportReason = "spam" | "harassment" | "inappropriate" | "impersonation" | "ai_generated" | "other";
@@ -168,6 +188,7 @@ function ProfileAvatar({
   crop,
   country,
   size = 88,
+  faceVerified = false,
   onClick,
 }: {
   image: string | null;
@@ -175,8 +196,13 @@ function ProfileAvatar({
   crop?: ProfileImageCropInput;
   country: string | null;
   size?: number;
+  /** Passed the selfie check: a check at the top right (owner, 2026-11-25). */
+  faceVerified?: boolean;
   onClick?: () => void;
 }) {
+  // Remember WHICH url failed, so a changed photo is tried again.
+  const [failedImage, setFailedImage] = useState<string | null>(null);
+  const showImage = Boolean(image) && failedImage !== image;
   return (
     <button
       type="button"
@@ -186,13 +212,14 @@ function ProfileAvatar({
       aria-label={label}
     >
       <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-gray-100">
-        {image ? (
+        {showImage && image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={image}
-            alt={label}
+            alt=""
             width={size}
             height={size}
+            onError={() => setFailedImage(image)}
             className="h-full w-full object-cover"
             style={{ transform: buildProfileImageTransform(size, crop) }}
           />
@@ -201,7 +228,44 @@ function ProfileAvatar({
         )}
       </div>
       <ProfileNationalityBadge country={country} size={size} />
+      {faceVerified ? (
+        <span
+          data-qa="profile-avatar-face-verified"
+          className="absolute right-0 top-0 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-emerald-500 text-white shadow"
+          aria-hidden="true"
+        >
+          <Check size={14} strokeWidth={3.2} />
+        </span>
+      ) : null}
     </button>
+  );
+}
+
+/**
+ * The checks this account passed, one chip each with its own icon (owner,
+ * 2026-11-25): the face (selfie check) and the phone number. More can join.
+ */
+function VerificationChips({ faceVerified, phoneVerified, locale }: { faceVerified: boolean; phoneVerified: boolean; locale: string }) {
+  if (!faceVerified && !phoneVerified) return null;
+  const copy = resolveVerificationBadgesCopy(locale);
+  const chips = [
+    faceVerified ? { key: "face", label: copy.face, icon: <ScanFace size={14} strokeWidth={2.3} aria-hidden="true" /> } : null,
+    phoneVerified ? { key: "phone", label: copy.phone, icon: <Smartphone size={14} strokeWidth={2.3} aria-hidden="true" /> } : null,
+  ].filter((chip): chip is { key: string; label: string; icon: React.ReactElement } => chip !== null);
+  return (
+    <div data-qa="profile-verification-chips" className="mt-2 flex flex-wrap gap-1.5">
+      {chips.map((chip) => (
+        <span
+          key={chip.key}
+          data-qa={`profile-verified-${chip.key}`}
+          className="inline-flex items-center gap-1 rounded-full bg-emerald-50 py-1 pl-1.5 pr-2.5 text-[12px] font-semibold text-emerald-700"
+        >
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white">{chip.icon}</span>
+          {chip.label}
+          <Check size={13} strokeWidth={3} aria-hidden="true" />
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -233,6 +297,10 @@ export default function PublicUserProfileScreen({
   const [actionError, setActionError] = useState(false);
   const [isMessagePending, setIsMessagePending] = useState(false);
   const [messageError, setMessageError] = useState(false);
+  /** Set when the server says today's new people are used up: the number allowed per day. */
+  const [dailyLimit, setDailyLimit] = useState<number | null>(null);
+  const [recipientBlocksMen, setRecipientBlocksMen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReason, setReportReason] = useState<ReportReason>("spam");
   const [reportMessage, setReportMessage] = useState("");
@@ -423,11 +491,39 @@ export default function PublicUserProfileScreen({
 
   const requestDirectConversation = useCallback(async (force: boolean) => {
     if (!profile) throw new Error("direct_conversation_failed");
-    const response = await fetch(buildClientApiPath("/conversations/direct"), {
+    const send = (extra: { acceptDmOpenCoins?: number } = {}) => fetch(buildClientApiPath("/conversations/direct"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ targetUserId: profile.id, locale, force }),
+      body: JSON.stringify({ targetUserId: profile.id, locale, force, ...extra }),
     });
+    let response = await send();
+    if (response.status === 403) {
+      // A first room with someone new needs a verified number and a photo with
+      // a face first (server/first-message-gate): ask for them, then send again.
+      // She does not take new rooms from men (server/male-dm-block).
+      if (await isRecipientBlocksMen(response)) {
+        setRecipientBlocksMen(true);
+        throw new Error("recipient_blocks_men");
+      }
+      const refused = await response.clone().json().catch(() => null);
+      const needs = parseFirstMessageSetupNeeds(response.status, refused);
+      if (needs) {
+        if (!(await requestFirstMessageSetup(needs))) throw new Error("first_message_setup");
+        response = await send();
+      }
+    }
+    // A new room with her costs Hash: asked first (see @/lib/dm-open-coins).
+    const paid = await passDmOpenCoins(response, (extra) => send(extra));
+    if (!paid) throw new Error("dm_open_cancelled");
+    response = paid;
+    if (response.status === 429) {
+      // The free daily number of new people is used up (server/daily-new-chat-limit).
+      const limited = await response.json().catch(() => ({})) as { error?: string; limit?: number };
+      if (limited.error === "daily_new_chat_limit") {
+        setDailyLimit(typeof limited.limit === "number" && limited.limit > 0 ? limited.limit : 1);
+        throw new Error("daily_new_chat_limit");
+      }
+    }
     if (!response.ok) throw new Error("direct_conversation_failed");
     const data = await response.json() as {
       conversation?: ConversationChannelSummary;
@@ -456,6 +552,7 @@ export default function PublicUserProfileScreen({
     if (!(await requestProfileBasics())) return;
     setIsMessagePending(true);
     setMessageError(false);
+    setDailyLimit(null);
     try {
       const { conversation, reused } = await requestDirectConversation(false);
       if (reused) {
@@ -463,8 +560,8 @@ export default function PublicUserProfileScreen({
         return;
       }
       await openDirectConversation(conversation);
-    } catch {
-      setMessageError(true);
+    } catch (error) {
+      if (!(error instanceof Error && (error.message === "daily_new_chat_limit" || error.message === "first_message_setup" || error.message === "recipient_blocks_men" || error.message === "dm_open_cancelled"))) setMessageError(true);
     } finally {
       setIsMessagePending(false);
     }
@@ -474,11 +571,12 @@ export default function PublicUserProfileScreen({
     if (!existingConversation || isMessagePending) return;
     setIsMessagePending(true);
     setMessageError(false);
+    setDailyLimit(null);
     try {
       await openDirectConversation(existingConversation);
       setExistingConversation(null);
-    } catch {
-      setMessageError(true);
+    } catch (error) {
+      if (!(error instanceof Error && (error.message === "daily_new_chat_limit" || error.message === "first_message_setup" || error.message === "recipient_blocks_men" || error.message === "dm_open_cancelled"))) setMessageError(true);
     } finally {
       setIsMessagePending(false);
     }
@@ -488,12 +586,13 @@ export default function PublicUserProfileScreen({
     if (isMessagePending) return;
     setIsMessagePending(true);
     setMessageError(false);
+    setDailyLimit(null);
     try {
       const { conversation } = await requestDirectConversation(true);
       await openDirectConversation(conversation);
       setExistingConversation(null);
-    } catch {
-      setMessageError(true);
+    } catch (error) {
+      if (!(error instanceof Error && (error.message === "daily_new_chat_limit" || error.message === "first_message_setup" || error.message === "recipient_blocks_men" || error.message === "dm_open_cancelled"))) setMessageError(true);
     } finally {
       setIsMessagePending(false);
     }
@@ -532,7 +631,10 @@ export default function PublicUserProfileScreen({
     }
   }, [isOwnProfile, profile, reportMessage, reportPending, reportReason]);
 
-  const name = profile?.name?.trim() || copy.userFallback;
+  // Read in the viewer's own script by default (owner, 2026-11-25); the original stays beside it.
+  const originalName = profile?.name?.trim() || "";
+  const name = profile?.readerName?.trim() || originalName || copy.userFallback;
+  const showOriginalName = Boolean(profile?.readerName?.trim() && originalName && profile.readerName.trim() !== originalName);
   const badge = resolveAccountBadge(profile);
   // The name as screen readers hear it: with the badge label.
   const nameLabel = withAccountBadgeLabel(name, badge, locale);
@@ -626,6 +728,7 @@ export default function PublicUserProfileScreen({
                 x: profile.imageCropX,
                 y: profile.imageCropY,
               }}
+              country={nationalityCountry}
               language={languageOption?.code}
               name={name}
               nameBadge={repeatedNameBadge}
@@ -633,7 +736,7 @@ export default function PublicUserProfileScreen({
               bio={bio}
               bioUserId={profile.id}
               locale={locale}
-              languageLabel={dictionary.profile.primaryLanguagesLabel ?? dictionary.profile.nationalityLabel ?? (locale === "ko" ? "주 사용 언어" : "Primary language")}
+              languageLabel={dictionary.profile.primaryLanguagesLabel ?? dictionary.profile.nationalityLabel ?? (locale === "ko" ? "편한 언어" : "Primary language")}
               languageName={languageName}
               closeLabel={dictionary.profile.settingsCloseLabel ?? copy.back}
               onClose={() => setShowProfileImagePreview(false)}
@@ -645,6 +748,7 @@ export default function PublicUserProfileScreen({
                     image={profile.image}
                     label={nameLabel}
                     country={nationalityCountry}
+                    faceVerified={profile.faceVerified === true}
                     crop={{
                       scale: profile.imageCropScale,
                       x: profile.imageCropX,
@@ -668,10 +772,15 @@ export default function PublicUserProfileScreen({
               <div className="mt-4 pl-2">
                 <p className="flex min-w-0 items-center gap-1.5">
                   <span className="truncate text-[15px] font-semibold text-slate-950">{name}</span>
+                  {showOriginalName ? <span data-qa="profile-original-name" className="shrink-0 text-[13px] text-gray-500">{originalName}</span> : null}
+                  {/* The name spelled the way it sounds, in English letters (owner, 2026-11-25). */}
+                  {!isOwnProfile && profile.name ? <NamePronunciationButton userId={userId} name={profile.name} label="Pronunciation" /> : null}
                   <AccountBadge kind={badge} locale={locale} tone="dark" />
-                  <ProfileGenderAgeBadge gender={profile.gender} age={profile.age} locale={locale} />
+                  <ProfileGenderAgeBadge gender={profile.gender} age={profile.age} heightCm={profile.heightCm} locale={locale} />
                   {profile.handle ? <span className="min-w-0 truncate text-[13px] text-gray-500">{formatHandle(profile.handle)}</span> : null}
                 </p>
+                <MemberNumberLine memberNumber={profile.memberNumber} locale={locale} />
+                <VerificationChips faceVerified={profile.faceVerified === true} phoneVerified={profile.phoneVerified === true} locale={locale} />
                 <ProfileLanguageLevels
                   primaryLanguages={primaryLanguages}
                   interestLanguages={sanitizeInterestLanguages(profile.interestLanguages, primaryLanguages)}
@@ -685,9 +794,15 @@ export default function PublicUserProfileScreen({
                     isOwnProfile={false}
                   />
                 ) : null}
-                <ProfileBio userId={profile.id} initialBio={bio} locale={locale} />
+                <ProfileBio
+                  userId={profile.id}
+                  initialBio={bio}
+                  locale={locale}
+                  expectTranslate={Boolean(bio) && Boolean(languageOption) && !sameBioLanguage(languageOption?.code ?? null, locale)}
+                />
               </div>
 
+              {/* Row 1: follow and share. Row 2: message (the main action) and gift. Block and report sit behind "…". */}
               <div className="mt-4 flex gap-2">
                 {!isOwnProfile ? (
                   <button
@@ -695,25 +810,10 @@ export default function PublicUserProfileScreen({
                     onClick={() => void handleToggleFollow()}
                     disabled={isActionPending || profile.isBlocked}
                     className={`flex h-10 min-w-0 flex-1 items-center justify-center rounded-lg border px-2 text-[13px] font-semibold transition disabled:opacity-50 ${
-                      profile.isFollowing ? "border-amber-200 bg-amber-50 text-amber-700" : "bg-amber-500 text-white active:bg-amber-600"
+                      profile.isFollowing ? "border-amber-200 bg-amber-50 text-amber-700" : "border-gray-200 bg-white text-slate-900 active:bg-gray-100"
                     }`}
                   >
                     {isActionPending ? "…" : profile.isFollowing ? copy.following : copy.follow}
-                  </button>
-                ) : null}
-                {!isOwnProfile ? (
-                  <button
-                    type="button"
-                    onClick={() => void handleMessage()}
-                    disabled={isMessagePending || profile.isBlocked}
-                    className="flex h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2 text-[13px] font-semibold text-slate-900 transition active:bg-gray-100 disabled:opacity-50"
-                  >
-                    {isMessagePending ? "…" : (
-                      <>
-                        <MessageCircle size={16} strokeWidth={2} aria-hidden="true" />
-                        {copy.message}
-                      </>
-                    )}
                   </button>
                 ) : null}
                 <button
@@ -723,20 +823,60 @@ export default function PublicUserProfileScreen({
                 >
                   {dictionary.profile.shareProfileShort ?? dictionary.profile.shareProfile}
                 </button>
+                {!isOwnProfile ? (
+                  <button
+                    type="button"
+                    onClick={() => setMoreOpen((value) => !value)}
+                    aria-label={resolveHomeCopy(locale).more}
+                    aria-expanded={moreOpen}
+                    data-qa="profile-more"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-slate-700 transition active:bg-gray-100"
+                  >
+                    <MoreHorizontal size={18} strokeWidth={2.2} aria-hidden="true" />
+                  </button>
+                ) : null}
               </div>
 
-              {!isOwnProfile && coinBillingActive && !profile.isBlocked ? (
-                <button
-                  type="button"
-                  onClick={() => setGiftOpen(true)}
-                  className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 text-[13px] font-semibold text-amber-800 transition active:bg-amber-100"
-                >
-                  <HashSeedIcon size={17} />
-                  {getCoinCopy(locale).gift}
-                </button>
-              ) : null}
               {!isOwnProfile ? (
-                <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    data-qa="profile-message"
+                    onClick={() => void handleMessage()}
+                    disabled={isMessagePending || profile.isBlocked}
+                    className="flex h-12 min-w-0 flex-[2] items-center justify-center gap-1.5 rounded-lg bg-amber-500 px-2 text-[15px] font-bold text-white transition active:bg-amber-600 disabled:opacity-50"
+                  >
+                    {isMessagePending ? "…" : (
+                      <>
+                        <MessageCircle size={18} strokeWidth={2.2} aria-hidden="true" />
+                        {copy.message}
+                      </>
+                    )}
+                  </button>
+                  {coinBillingActive && !profile.isBlocked ? (
+                    <button
+                      type="button"
+                      onClick={() => setGiftOpen(true)}
+                      className="flex h-12 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2 text-[13px] font-semibold text-amber-800 transition active:bg-amber-100"
+                    >
+                      <HashSeedIcon size={17} />
+                      {getCoinCopy(locale).gift}
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+              {recipientBlocksMen ? (
+                <p className="mt-2 text-center text-[13px] leading-relaxed text-slate-700" role="status" data-qa="profile-recipient-blocks-men">
+                  {resolvePeopleSafetyCopy(locale).recipientBlocksMen}
+                </p>
+              ) : null}
+              {dailyLimit !== null ? (
+                <p className="mt-2 text-center text-[13px] leading-relaxed text-slate-700" role="status" data-qa="profile-daily-limit">
+                  {fillHomeCount(resolveHomeCopy(locale).dailyLimit, dailyLimit)}
+                </p>
+              ) : null}
+              {!isOwnProfile && (moreOpen || profile.isBlocked) ? (
+                <div className="mt-2 grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => void handleToggleBlock()}
@@ -779,7 +919,7 @@ export default function PublicUserProfileScreen({
       </div>
 
       {reportOpen ? (
-        <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/35" onClick={() => setReportOpen(false)}>
+        <div className="keyboard-safe fixed inset-0 z-[120] flex items-end justify-center bg-black/35" onClick={() => setReportOpen(false)}>
           <section
             className="w-full rounded-t-[24px] bg-white px-5 pb-[max(env(safe-area-inset-bottom),20px)] pt-5 shadow-2xl"
             role="dialog"

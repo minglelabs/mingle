@@ -1,5 +1,7 @@
 "use client";
 
+import { resolveOpenChatLabel } from '@/i18n/open-chat-label';
+import { clearFirstRunCover } from "@/lib/first-run-cover";
 import { LoadingMessage } from "@/components/loading-message";
 import type { AppLocale } from "@/i18n/config";
 import type { AppDictionary } from "@/i18n/types";
@@ -38,7 +40,7 @@ import {
   persistLanguageOnboardingChoice,
 } from "@/components/LivePhoneDemo/language-onboarding.storage";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Bell, Check, Loader2, LogOut, Mic, PencilLine, Phone, Search, Settings, Share2, Trash2, UserRound, Ticket } from "lucide-react";
+import { ArrowRight, Bell, Check, Globe, Loader2, LogOut, Mic, PencilLine, Phone, Search, Settings, Share2, Trash2, UserRound, Ticket } from "lucide-react";
 import { toast } from "sonner";
 import { requestContactSyncPromptCheck } from "@/lib/native-contacts";
 import { useHasPendingInvite, openInviteTicket } from "@/lib/native-invite";
@@ -88,9 +90,18 @@ import {
   completeFirstSpeak,
   isDiscoveryPromptDue,
   isFirstSpeakPending,
+  markSignedOutHere,
+  shouldGoHomeAfterSignIn,
   markFirstSpeakPending,
 } from "@/lib/first-run";
 import { resolveFirstRunCopy } from "@/i18n/first-run-copy";
+import { readLastSignInMethod } from "@/lib/last-sign-in-method";
+import { resolveSpeakTrialCopy } from "@/i18n/speak-trial-copy";
+import { isSpeakTrialDone, markSpeakTrialDone } from "@/lib/speak-trial";
+import { clearHaveAccountSkip, isHaveAccountSkipPending, markHaveAccountSkip } from "@/lib/onboarding-draft";
+import { applyNativeAccountHint, saveNativeAccountHint } from "@/lib/account-hint";
+import { PENDING_PROFILE_SYNC_EVENT } from "@/components/pending-profile-sync";
+import { useAppAccess } from "@/components/onboarding/invite-gate";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
 import {
   resolveLanguageSelectorOwnSelectedLanguages,
@@ -128,6 +139,8 @@ import {
   CONVERSATION_LIST_SORT_MODES,
   isConversationListSortMode,
   sortConversationsForDisplay,
+  isChatListConversation,
+  isOpenChatConversation,
   type ConversationListSortMode,
   CONVERSATION_ROW_TOUCH_SAFE_STYLE,
   findNativeSttRestoreConversation,
@@ -209,6 +222,7 @@ import {
   replaceSlideSurfaceHistory,
 } from "@/lib/slide-surface-history";
 import { DIRECT_CONVERSATION_NAVIGATION_GUARD_MS } from "@/lib/direct-conversation-navigation";
+import { publishLiveStt, publishVisibleRoom, rememberLiveRoom, setLiveRoomHandlers } from "@/lib/live-room-bubble";
 import {
   REALTIME_FALLBACK_POLL_INTERVAL_MS,
   shouldRunRealtimeFallbackRefresh,
@@ -219,15 +233,22 @@ import type { MingleHomeRef } from "@/components/mingle-home";
 import { resolveAccessibilityCopy } from "@/i18n/accessibility-copy";
 import type { LatestUtterancePayload } from "@/components/LivePhoneDemo/LivePhoneDemo";
 import MingleWordmark from "@/components/mingle-wordmark";
+import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
+import { PUSH_PROMPT_CLOSED_EVENT, holdPushPrompt, requestPushPrompt } from "@/lib/push-prompt";
+import { exploreHref } from "@/lib/home-routes";
 import AppTopHeader from "@/components/app-top-header";
 import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
 import { useUnreadNotifications } from "@/components/notifications/use-unread-notifications";
 import { feedHref } from "@/lib/feed-routes";
 import { requestProfileBasics } from "@/lib/profile-basics";
 import { feedCopy } from "@/i18n/feed-copy";import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
-import { buildNativeAwareTabHref, clearTopLevelTabSwitch, markTopLevelTabSwitch, NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY } from "@/lib/tab-navigation";
+import { buildNativeAwareTabHref, buildNativeAwareTabPath, clearTopLevelTabSwitch, markTopLevelTabSwitch, NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY } from "@/lib/tab-navigation";
 
 const MingleHome = lazy(() => import("@/components/mingle-home"));
+const SpeakTrial = lazy(() => import("@/components/onboarding/speak-trial"));
+const InviteGate = lazy(() => import("@/components/onboarding/invite-gate"));
+const PhoneGate = lazy(() => import("@/components/onboarding/phone-gate"));
+const BannedGate = lazy(() => import("@/components/onboarding/banned-gate"));
 
 const LS_KEY_CONVERSATION_LIST_SORT_MODE = "mingle:conversation-list-sort-mode";
 const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
@@ -331,6 +352,9 @@ interface ConversationItem {
   statusLabel: string;
   avatarSrc: string;
   avatarAlt: string;
+  /** An open chat (anyone can find and join it): marked in the list, next to the private chats. */
+  isOpenChat: boolean;
+  openChatLabel: string;
   // Real counterpart photo(s) for the room, in join order. Empty for solo
   // rooms (no other real member yet), which keep using avatarSrc/avatarAlt
   // (the generated diarization avatar) instead.
@@ -1049,7 +1073,9 @@ function mapConversationSummaryToItem(
     status: conversation.status,
     statusLabel,
     avatarSrc: avatar.src,
-    avatarAlt: title,
+    isOpenChat: isOpenChatConversation(conversation),
+    openChatLabel: resolveOpenChatLabel(locale),
+    avatarAlt: `${title} ${avatar.name} avatar`,
     otherMembers: conversation.otherMembers,
     titleAccountBadge: resolveRoomAccountBadge(conversation.otherMembers),
     titleAccountBadgeLocale: locale,
@@ -1446,13 +1472,24 @@ function ConversationRow({
 
   const rowContent = (hideFromAccessibility: boolean) => (
     <>
-      <div aria-hidden={hideFromAccessibility || undefined}>
+      <div aria-hidden={hideFromAccessibility || undefined} className="relative">
         <ConversationRoomAvatar item={item} />
+        {/* An open chat wears a globe on its picture; a private chat wears nothing. */}
+        {item.isOpenChat ? (
+          <span data-qa="conversation-open-chat-mark" className="absolute -bottom-0.5 -right-0.5 flex h-[22px] w-[22px] items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-indigo-500 text-white ring-2 ring-white">
+            <Globe size={12} strokeWidth={2.6} aria-hidden="true" />
+          </span>
+        ) : null}
       </div>
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
+            {item.isOpenChat ? (
+              <span data-qa="conversation-open-chat-badge" className="inline-flex shrink-0 items-center rounded-full bg-sky-50 px-1.5 py-0.5 text-[10.5px] font-bold leading-none text-sky-700 ring-1 ring-sky-200">
+                {item.openChatLabel}
+              </span>
+            ) : null}
             <span aria-hidden={hideFromAccessibility || undefined} className="truncate text-[15px] font-semibold text-slate-900">
               {item.title}
             </span>
@@ -1773,7 +1810,7 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
       ariaLabel={copy.searchButtonLabel}
       nativeBackPriority={20}
       transitionMode={transitionMode}
-      className="absolute inset-0 z-40 flex h-full min-h-0 w-full flex-col overflow-hidden bg-white"
+      className="keyboard-safe absolute inset-0 z-40 flex h-full min-h-0 w-full flex-col overflow-hidden bg-white"
       style={{ touchAction: "pan-y" }}
       stopPropagation
     >
@@ -1785,8 +1822,7 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
             paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
           }}
         >
-          {/* min-w-0: an input's default width would otherwise push a long "Cancel" (de) off-screen. */}
-          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl bg-gray-100 px-3 py-2">
+          <div className="flex flex-1 items-center gap-2 rounded-xl bg-gray-100 px-3 py-2">
             <Search size={16} className="shrink-0 text-gray-400" />
             <input
               ref={inputRef}
@@ -1794,7 +1830,7 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={copy.searchPlaceholder}
-              className={`min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-gray-400 ${
+              className={`flex-1 bg-transparent text-[15px] outline-none placeholder:text-gray-400 ${
                 caretHidden ? "caret-transparent" : ""
               }`}
               enterKeyHint="search"
@@ -2163,6 +2199,38 @@ export default function ConversationList({
   // length choice. Read from storage after mount, so the server render matches.
   const [firstSpeakPending, setFirstSpeakPending] = useState(false);
   const showFirstSpeakCard = firstSpeakPending && sessionStatus === "authenticated";
+  // A new account's first screen: no ad banner (it showed other apps, a rival translator among them) until the first translation.
+  useNativeBannerSuppression(showFirstSpeakCard);
+  // Signed out on a device that never signed in: speak for ten seconds first,
+  // then the sign-in screen. Read after mount, so the server render matches.
+  const [speakTrialPending, setSpeakTrialPending] = useState(false);
+  const [speakTrialJustDone, setSpeakTrialJustDone] = useState(false);
+  // Counts up when the "I already have an account" check is settled, so the move to Explore runs again.
+  const [haveAccountChecked, setHaveAccountChecked] = useState(0);
+  useEffect(() => {
+    setSpeakTrialPending(!isSpeakTrialDone() && readLastSignInMethod() === null);
+  }, []);
+  // Invite-only (server INVITE_GATE): a signed-in account without an invite
+  // sees the invite gate. Asked again once a pending invite link is accepted.
+  const { access: appAccess, setAccess: setAppAccess } = useAppAccess(sessionStatus === "authenticated" && !inviteOnboarding, locale);
+  // The sign-in screen's code is fetched during the trial, so the end of the
+  // trial opens it at once (it used to show a white spinner for a while).
+  useEffect(() => {
+    if (!speakTrialPending) return;
+    void import("@/components/mingle-home").catch(() => undefined);
+  }, [speakTrialPending]);
+
+  // The trial's code is fetched while the questions are still on screen, so
+  // the last "Continue" opens it at once instead of a white screen with a
+  // spinner (which stayed for good when that one request did not come back).
+  useEffect(() => {
+    if (!speakTrialPending || languageOnboardingPhase !== "selection") return;
+    void import("@/components/onboarding/speak-trial").catch(() => undefined);
+  }, [languageOnboardingPhase, speakTrialPending]);
+  const handleSpeakTrialDone = useCallback(() => {
+    setSpeakTrialPending(false);
+    setSpeakTrialJustDone(true);
+  }, []);
   // Where the user heard of the app, asked once when they leave their first room.
   const [discoveryPromptOpen, setDiscoveryPromptOpen] = useState(false);
   const firstRunCopy = useMemo(() => resolveFirstRunCopy(locale), [locale]);
@@ -2452,7 +2520,7 @@ export default function ConversationList({
   }, [authenticatedUserId, languageOnboardingPhase, sessionStatus]);
 
   const conversationItems = useMemo(
-    () => sortConversationsForDisplay(conversations, conversationSortMode).map((conversation) => (
+    () => sortConversationsForDisplay(conversations.filter(isChatListConversation), conversationSortMode).map((conversation) => (
       mapConversationSummaryToItem(
         conversation,
         locale,
@@ -2496,7 +2564,7 @@ export default function ConversationList({
     }
   }, []);
   const unreadConversationMessageCount = useMemo(
-    () => conversations.reduce(
+    () => conversations.filter(isChatListConversation).reduce(
       (total, conversation) => total + Math.max(0, Math.floor(conversation.unreadMessageCount ?? 0)),
       0,
     ),
@@ -3696,11 +3764,15 @@ export default function ConversationList({
       replaceConversationOverlayUrl(readConversationIdFromLocation(), "initial-route-marker");
     }
 
+    // A reinstall on an iPhone that already had an account here (keychain note):
+    // straight to sign-in, no questions (owner, 2026-11-25).
+    applyNativeAccountHint(() => markLanguageOnboardingConfirmed());
     const nextLanguageOnboardingPhase = shouldAutoOpenLanguageOnboarding(hasConfirmedLanguageOnboarding())
       ? "selection"
       : "ready";
     resolvedLanguageOnboardingPhase = nextLanguageOnboardingPhase;
     setLanguageOnboardingPhase(nextLanguageOnboardingPhase);
+    if (nextLanguageOnboardingPhase === "ready") clearFirstRunCover();
     setFirstSpeakPending(isFirstSpeakPending());
   }, []);
 
@@ -4664,6 +4736,47 @@ export default function ConversationList({
   }, [clearConversationSurfaceHistory, closeConversationOverlay, conversationProfileId, openConversationSummary]);
 
 
+  // From an open room's menu: move straight to another room (one already in
+  // the list, or one just joined, whose summary comes along).
+  const openOtherRoom = useCallback((conversationId: string, joined?: ConversationChannelSummary) => {
+    const target = joined ?? conversationsRef.current.find((conversation) => conversation.id === conversationId);
+    if (target) void startDirectConversationFromProfile(target);
+  }, [startDirectConversationFromProfile]);
+
+  // The live room bubble (components/live-room-bubble.tsx) hides for the room
+  // on screen, shows the room whose speech recognition is running, and asks
+  // this list to open a room or stop that recognition.
+  const activeConversationIdForBubble = activeConversation?.id ?? null;
+  const activeConversationTitleForBubble = activeConversation?.title ?? "";
+  useEffect(() => {
+    publishVisibleRoom(activeConversationIdForBubble);
+    if (activeConversationIdForBubble) rememberLiveRoom(activeConversationIdForBubble, { title: activeConversationTitleForBubble });
+  }, [activeConversationIdForBubble, activeConversationTitleForBubble]);
+  const liveConversationTitle = liveConversationId
+    ? conversations.find((conversation) => conversation.id === liveConversationId)?.title ?? ""
+    : "";
+  useEffect(() => {
+    publishLiveStt(liveConversationId ? { conversationId: liveConversationId, title: liveConversationTitle } : null);
+  }, [liveConversationId, liveConversationTitle]);
+  useEffect(() => {
+    setLiveRoomHandlers({
+      openRoom: (conversationId) => {
+        const target = conversationsRef.current.find((conversation) => conversation.id === conversationId);
+        if (!target) return false;
+        void startDirectConversationFromProfile(target);
+        return true;
+      },
+      stopStt: (conversationId) => {
+        void conversationRoomRefs.current.get(conversationId)?.stopRecording({ forceNativeStop: isNativeAppRuntime() });
+      },
+    });
+    return () => {
+      setLiveRoomHandlers(null);
+      publishVisibleRoom(null);
+      publishLiveStt(null);
+    };
+  }, [startDirectConversationFromProfile]);
+
   const handleCreateConversation = useCallback(async () => {
     if (
       isCreatingConversationRef.current
@@ -5461,6 +5574,8 @@ export default function ConversationList({
 
   const handleLanguageOnboardingConfirm = useCallback(async (
     payload: LanguageOnboardingConfirmPayload | string,
+    // "I already have an account": only the language is kept, nothing else was asked.
+    options: { existingAccount?: boolean } = {},
   ) => {
     const {
       languageCode,
@@ -5544,10 +5659,20 @@ export default function ConversationList({
     // An invitee is taken straight into the inviter's room, and where they
     // heard of the app is already known ("friend"): no "say something" card
     // and no question about it afterwards.
-    if (!discoverySource) {
+    if (!discoverySource && !options.existingAccount) {
       markFirstSpeakPending();
       setFirstSpeakPending(true);
     }
+    if (!options.existingAccount) {
+      // Every question was answered: the account no longer has to be looked at
+      // after sign-in. Signed in already (a new account that had skipped):
+      // the height, the photo and the rest go up now.
+      clearHaveAccountSkip();
+      setHaveAccountChecked((count) => count + 1);
+      if (sessionStatus === "authenticated") window.dispatchEvent(new Event(PENDING_PROFILE_SYNC_EVENT));
+    }
+    // A new device is asked for notifications after its first conversation, with a reason.
+    holdPushPrompt();
     // Signup is finished: a pending invite is accepted now. The contact-sync
     // screen holds back while the first run is pending (set just above).
     requestContactSyncPromptCheck();
@@ -5574,6 +5699,52 @@ export default function ConversationList({
     setLanguageOnboardingPhase("ready");
   }, [locale, sessionStatus]);
 
+  // An account that finished onboarding is signed in here: the iOS shell keeps
+  // a note in the keychain, so a reinstall goes straight to sign-in.
+  useEffect(() => {
+    if (sessionStatus !== "authenticated" || languageOnboardingPhase !== "ready" || isHaveAccountSkipPending()) return;
+    saveNativeAccountHint(readLastSignInMethod());
+  }, [haveAccountChecked, languageOnboardingPhase, sessionStatus]);
+
+  // "I already have an account" on the first screen (owner, 2026-11-25): no
+  // questions and no speak trial, straight to sign-in. The account is looked
+  // at once it signs in (below).
+  const handleHaveAccount = useCallback((language: string) => {
+    markHaveAccountSkip();
+    markSpeakTrialDone();
+    setSpeakTrialPending(false);
+    captureMingleClientEvent("mingle_first_run_step", { step: "have_account" });
+    void handleLanguageOnboardingConfirm(language, { existingAccount: true });
+  }, [handleLanguageOnboardingConfirm]);
+
+  // ...and if the account that signed in is new after all (no gender, no birth
+  // date), the questions open again: nobody gets an account without them.
+  useEffect(() => {
+    if (sessionStatus !== "authenticated" || languageOnboardingPhase !== "ready" || !isHaveAccountSkipPending()) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(buildClientApiPath("/profile"), { cache: "no-store" });
+        if (!response.ok || cancelled) return;
+        const profile = await response.json() as { gender?: string | null; birthDate?: string | null };
+        if (cancelled) return;
+        if (profile.gender || profile.birthDate) {
+          clearHaveAccountSkip();
+          setHaveAccountChecked((count) => count + 1);
+          return;
+        }
+        captureMingleClientEvent("mingle_first_run_step", { step: "have_account_was_new" });
+        resolvedLanguageOnboardingPhase = "selection";
+        setLanguageOnboardingPhase("selection");
+      } catch {
+        // Offline: looked at again on the next launch.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [languageOnboardingPhase, sessionStatus]);
+
   // The first translation in any room ends the first run.
   const handleFirstSpeakCompleted = useCallback(() => {
     if (!completeFirstSpeak()) return;
@@ -5585,6 +5756,42 @@ export default function ConversationList({
     captureMingleClientEvent("mingle_first_run_step", { step: "speak_tapped" });
     void handleCreateConversation();
   }, [handleCreateConversation]);
+
+  // A new account that just signed in here goes to the Explore tab (owner,
+  // 2026-11-25; was Home): the app is for meeting people, and the lounge may
+  // be empty while few are online. The "say something" card is there as well
+  // and comes back here with `firstSpeak=1`.
+  // The mark is cleared by Home once it is on screen (see shouldGoHomeAfterSignIn):
+  // signing in can reload this page or bring it back here after the first move.
+  useEffect(() => {
+    if (sessionStatus === "unauthenticated") {
+      markSignedOutHere();
+      return;
+    }
+    if (sessionStatus !== "authenticated") return;
+    // The speak-trial room can still be closing right after sign-in: wait for the list.
+    if (activeConversation !== null || !shouldGoHomeAfterSignIn()) return;
+    // "I already have an account": stay until the account has been looked at.
+    if (isHaveAccountSkipPending()) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("firstSpeak")) return;
+    captureMingleClientEvent("mingle_first_run_step", { step: "home_after_sign_in" });
+    router.replace(buildNativeAwareTabPath(exploreHref(locale), params, { tabRoot: true }));
+  }, [activeConversation, haveAccountChecked, locale, router, sessionStatus]);
+
+  // Home's "say something" card lands here with `firstSpeak=1`: open the room at once.
+  const firstSpeakFromHomeHandledRef = useRef(false);
+  useEffect(() => {
+    if (firstSpeakFromHomeHandledRef.current) return;
+    if (sessionStatus !== "authenticated" || languageOnboardingPhase !== "ready" || !firstSpeakPending) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("firstSpeak") !== "1") return;
+    firstSpeakFromHomeHandledRef.current = true;
+    params.delete("firstSpeak");
+    const query = params.toString();
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+    handleFirstSpeakRequested();
+  }, [firstSpeakPending, handleFirstSpeakRequested, languageOnboardingPhase, sessionStatus]);
 
   // Back on the list after the first room: ask where they heard of the app.
   // One thing at a time: leaving the first room is when the contact-sync
@@ -5600,6 +5807,16 @@ export default function ConversationList({
     }
     const leftARoom = wasInConversationRef.current;
     wasInConversationRef.current = false;
+    // Back from a room on a new device: say why, then ask for notifications.
+    // The contact-sync screen waits for that sheet to close (one thing at a time).
+    if (leftARoom && requestPushPrompt()) {
+      const afterPushPrompt = () => {
+        window.removeEventListener(PUSH_PROMPT_CLOSED_EVENT, afterPushPrompt);
+        if (isDiscoveryPromptDue()) requestContactSyncPromptCheck();
+      };
+      window.addEventListener(PUSH_PROMPT_CLOSED_EVENT, afterPushPrompt);
+      return;
+    }
     if (!isDiscoveryPromptDue()) return;
     if (leftARoom) {
       requestContactSyncPromptCheck();
@@ -5737,20 +5954,47 @@ export default function ConversationList({
         >
           <Suspense
             fallback={(
-              <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
-                <Loader2 size={24} className="animate-spin" aria-hidden />
+              // The app's own loading screen (wordmark and a saying), not a bare
+              // white spinner, while the trial or sign-in loads (owner, 2026-11-25).
+              <div data-qa="auth-loading-splash" className="flex h-full min-h-0 w-full items-center justify-center bg-[#fcfbf8]">
+                <div className="flex flex-col items-center gap-5">
+                  <MingleWordmark />
+                  <Loader2 size={22} className="animate-spin text-amber-500" aria-hidden />
+                  <LoadingMessage locale={locale} className="min-h-10 max-w-[18rem] px-2 text-center text-[13px] leading-5 text-slate-500" />
+                </div>
               </div>
             )}
           >
-            <MingleHome
-              authOnly
-              dictionary={dictionary}
-              appleOAuthEnabled={appleOAuthEnabled}
-              googleOAuthEnabled={googleOAuthEnabled}
-              locale={locale}
-            />
+            {speakTrialPending ? (
+              <SpeakTrial
+                dictionary={dictionary}
+                locale={locale}
+                appleOAuthEnabled={appleOAuthEnabled}
+                googleOAuthEnabled={googleOAuthEnabled}
+                onDone={handleSpeakTrialDone}
+              />
+            ) : (
+              <MingleHome
+                authOnly
+                dictionary={dictionary}
+                appleOAuthEnabled={appleOAuthEnabled}
+                googleOAuthEnabled={googleOAuthEnabled}
+                locale={locale}
+                authNotice={speakTrialJustDone ? resolveSpeakTrialCopy(locale).signInNotice : null}
+              />
+            )}
           </Suspense>
         </div>
+      ) : null}
+
+      {sessionStatus === "authenticated" && !inviteOnboarding && appAccess && !appAccess.allowed ? (
+        <Suspense fallback={null}>
+          {appAccess.reason === "banned"
+            ? <BannedGate locale={locale} />
+            : appAccess.reason === "needs_phone" || appAccess.reason === "needs_phone_in_korea"
+              ? <PhoneGate locale={locale} onAccess={setAppAccess} inKorea={appAccess.reason === "needs_phone_in_korea"} />
+              : <InviteGate locale={locale} onAccess={setAppAccess} />}
+        </Suspense>
       ) : null}
 
       {isClientReady ? (
@@ -6180,6 +6424,8 @@ export default function ConversationList({
                         }}
                         conversationTitle={conversation.title}
                         isBlockedCounterpart={conversation.isBlockedCounterpart}
+                        initialIsPublicRoom={conversation.isPublic === true}
+                        onOpenOtherRoom={openOtherRoom}
                         initialUnreadMessageCount={entryUnreadMessageCountByConversationId[conversation.id] ?? 0}
                         isMultiMember={conversation.isMultiMember}
                         conversationId={conversation.id}
@@ -6469,6 +6715,7 @@ export default function ConversationList({
           uiLocale={locale}
           invite={inviteOnboarding}
           onConfirm={handleLanguageOnboardingConfirm}
+          onHaveAccount={sessionStatus === "unauthenticated" ? handleHaveAccount : undefined}
         />
       ) : null}
       {discoveryPromptOpen && !languageOnboardingModalOpen ? (

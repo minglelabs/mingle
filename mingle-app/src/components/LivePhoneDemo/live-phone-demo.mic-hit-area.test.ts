@@ -15,7 +15,8 @@ describe('mic button decoration hit area', () => {
       .filter((line) => /absolute inset-0 .*(animate-ping|bg-red-400 transition-transform)/.test(line))
 
     // Voice mode's Start/Stop only: the keyboard mode's mic became the "+" button.
-    expect(decorationLines).toHaveLength(2)
+    // The third is the speak trial's amber pulse on Start (until it is tapped).
+    expect(decorationLines).toHaveLength(3)
     for (const line of decorationLines) {
       expect(line).toContain('pointer-events-none')
     }

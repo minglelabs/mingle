@@ -47,9 +47,9 @@ clip, wrap or run off the screen.
    node mingle-app/scripts/qa-agent-device.mjs crawl --routes "<ko routes>" --locales ko --out <run>/discovery.json --shots <run>/shots
    node mingle-app/scripts/qa-agent-device.mjs crawl --routes "<ko routes>" --states <run>/discovery.json --locales en,ja,...,vi --out <run>/replay.json --shots <run>/shots
    ```
-   Routes: every page under `src/app/[locale]` that the QA account can open — conversations, feed, connect (+ people
+   Routes: every page under `src/app/[locale]` that the QA account can open — home (+ the notice list), conversations, feed, connect (+ people
    search), mypage (+ follows both tabs, posts/archived|trash|hidden, share), notifications, public profiles (one
-   follower-only, one mutual, one you follow), compose, new-group, add-members, account, translator, the post viewer
+   follower-only, one mutual, one you follow), My Page's sign-in methods sheet, compose, new-group, add-members, account, translator, the post viewer
    and post edit for a seeded post. Seed follows, a post and a direct conversation first, so lists are not empty.
    Controls that change data or open native UI (send, delete, block, follow, purchase, camera, share, copy…) are
    never tapped (`isRiskyTarget` in `scripts/qa-crawl.mjs`); the run lists them under `skipped`.

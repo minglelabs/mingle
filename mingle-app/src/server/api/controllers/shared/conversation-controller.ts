@@ -40,6 +40,7 @@ import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 import { mintConversationRealtimeToken, mintConversationLiveWriterToken, notifyConversationMessage } from "@/server/conversation-realtime";
 import { resolveAccountBadge } from "@/lib/account-badge";
 import { prisma } from "@/lib/prisma";
+import { readFirstMessageNeedsForInvitees } from "@/server/first-message-gate";
 
 export const runtime = "nodejs";
 
@@ -527,6 +528,16 @@ export async function postConversationMembersResponse(
     return NextResponse.json({ error: "invalid_invitees" }, { status: 400 });
   }
 
+  // Adding someone new to a room: the same first-message gate as a 1:1 message.
+  try {
+    const needs = await readFirstMessageNeedsForInvitees(resolvedUser.userId, inviteeUserIds.map((id) => id.trim()));
+    if (needs.length > 0) {
+      return NextResponse.json({ error: "first_message_setup", needs }, { status: 403 });
+    }
+  } catch (error) {
+    console.error("[conversation/members] first_message_check_failed", error);
+  }
+
   let conversation;
   try {
     conversation = await inviteMembersToConversationChannel({
@@ -702,6 +713,10 @@ export async function getConversationShareResponse(
     shareEnabled: sharing.shareEnabled,
     sharedAt: sharing.sharedAt?.toISOString() ?? null,
     isPublic: sharing.isPublic === true,
+    // A voice room: the room screen shows the stage (only while it is public).
+    isVoiceRoom: sharing.isPublic === true && sharing.isVoiceRoom === true,
+    // The room of a 1:1 voice talk from a post: the room screen is the call screen.
+    isDuoCall: sharing.isDuoCall === true,
     roomCode: sharing.roomCode,
   });
 }

@@ -57,6 +57,43 @@ describe("/api/profile route", () => {
     });
   });
 
+  describe("gender and birth date are set once, then locked", () => {
+    const patch = (body: Record<string, unknown>) => PATCH(new NextRequest("https://example.com/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }));
+    const saved = { id: "user_123", name: null, image: null, handle: null, bio: null, nationality: null, primaryLanguages: [], defaultConversationLanguages: [], _count: { followerRelations: 0, followingRelations: 0 } };
+
+    it("refuses to change or clear a stored gender or birth date", async () => {
+      mockUserFindUnique.mockResolvedValue({ gender: "male", birthDate: new Date("2000-01-01T00:00:00Z"), defaultDisplayLanguage: null, defaultConversationLanguages: [] });
+      expect((await patch({ gender: "female" })).status).toBe(409);
+      expect((await patch({ gender: null })).status).toBe(409);
+      expect((await patch({ birthDate: "1990-05-05" })).status).toBe(409);
+      expect((await patch({ birthDate: null })).status).toBe(409);
+      expect(mockUserUpdate).not.toHaveBeenCalled();
+    });
+
+    it("lets the same values through (a profile save repeats them) without writing them", async () => {
+      mockUserFindUnique.mockResolvedValue({ gender: "male", birthDate: new Date("2000-01-01T00:00:00Z"), defaultDisplayLanguage: null, defaultConversationLanguages: [] });
+      mockUserUpdate.mockResolvedValue(saved);
+      const response = await patch({ gender: "male", birthDate: "2000-01-01", name: "Kim" });
+      expect(response.status).toBe(200);
+      const data = mockUserUpdate.mock.calls[0]?.[0]?.data ?? {};
+      expect(data).not.toHaveProperty("gender");
+      expect(data).not.toHaveProperty("birthDate");
+    });
+
+    it("fills them when they are still empty", async () => {
+      mockUserFindUnique.mockResolvedValue({ gender: null, birthDate: null, defaultDisplayLanguage: null, defaultConversationLanguages: [] });
+      mockUserUpdate.mockResolvedValue(saved);
+      expect((await patch({ gender: "female", birthDate: "2000-01-01" })).status).toBe(200);
+      const data = mockUserUpdate.mock.calls[0]?.[0]?.data ?? {};
+      expect(data.gender).toBe("female");
+      expect(data.birthDate).toEqual(new Date("2000-01-01T00:00:00.000Z"));
+    });
+  });
+
   it("returns unauthorized for unauthenticated profile reads", async () => {
     mockGetServerSession.mockResolvedValue(null);
 
@@ -107,6 +144,8 @@ describe("/api/profile route", () => {
       defaultConversationLanguages: [],
       location: null,
       birthDate: null,
+      blockMaleDms: false,
+      dormant: false,
       followersCount: 2,
       followingCount: 3,
     });
@@ -138,6 +177,10 @@ describe("/api/profile route", () => {
         locationCountryCode: true,
         isOfficial: true,
         isOperator: true,
+        faceVerifiedAt: true,
+        phoneVerifiedAt: true,
+        heightCm: true,
+        createdAt: true,
         _count: {
           select: {
             followerRelations: {
@@ -218,6 +261,10 @@ describe("/api/profile route", () => {
         locationCountryCode: true,
         isOfficial: true,
         isOperator: true,
+        faceVerifiedAt: true,
+        phoneVerifiedAt: true,
+        heightCm: true,
+        createdAt: true,
         _count: {
           select: {
             followerRelations: {

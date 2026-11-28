@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse, after } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import {
   MAX_STT_LANGUAGE_SELECTION,
   canonicalizeSttLanguageCode,
@@ -15,6 +16,8 @@ import {
 } from "@/lib/birth-date";
 import { isDiscoverySource, type DiscoverySource } from "@/lib/discovery-source";
 import { isProfileGender, type ProfileGender } from "@/lib/profile-gender";
+import { normalizeHeightCm } from "@/lib/profile-height";
+import { normalizeKoreaVisitAnswer } from "@/lib/korea-visit";
 import { defaultNationalityForLanguage, normalizeNationalityCountry } from "@/lib/nationality";
 import {
   isUsagePurpose,
@@ -34,6 +37,7 @@ import {
 } from "@/server/user-profile";
 import { ensureSignupWelcomeOnboarding } from "@/lib/signup-welcome-onboarding";
 import { matchesExpectedAccount } from "@/lib/request-account-guard";
+import { isDormantAccount } from "@/server/dormancy";
 
 import { getPublishedBioText, updateProfileWithBio, runBioVersion } from "@/server/profile-bio";
 
@@ -53,6 +57,9 @@ type LocationPermissionStatus = (typeof LOCATION_PERMISSION_STATUSES)[number];
 
 type PrivateProfileResponse = UserProfile & {
   birthDate?: string | null;
+  /** Only on the account's own profile: men cannot open a new 1:1 room with her. */
+  blockMaleDms?: boolean;
+  dormant?: boolean;
 };
 
 function profileResponse(profile: PrivateProfileResponse): NextResponse {
@@ -229,11 +236,14 @@ export async function GET() {
 
   const privateFields = await prisma.user.findUnique({
     where: { id: userId },
-    select: { birthDate: true },
+    select: { birthDate: true, blockMaleDms: true, dormantAt: true, isOperator: true, isOfficial: true, email: true, phoneE164: true },
   });
   return profileResponse({
     ...profile,
     birthDate: serializePrivateBirthDate(privateFields?.birthDate),
+    blockMaleDms: privateFields?.blockMaleDms === true,
+    // Dormant account (src/server/dormancy.ts): the app shows only the wake-up screen.
+    dormant: privateFields ? isDormantAccount(privateFields) : false,
   });
 }
 
@@ -270,6 +280,9 @@ export async function PATCH(request: NextRequest) {
     defaultDisplayLanguage?: string | null;
     birthDate?: Date | null;
     gender?: ProfileGender | null;
+    heightCm?: number | null;
+    koreaVisit?: Prisma.InputJsonValue | typeof Prisma.DbNull;
+    blockMaleDms?: boolean;
     discoverySource?: DiscoverySource | null;
     usagePurpose?: UsagePurpose | null;
     usagePurposeNote?: string | null;
@@ -419,9 +432,23 @@ export async function PATCH(request: NextRequest) {
     data.defaultConversationLanguages = defaultConversationLanguages.value;
   }
 
+  // Gender and birth date are set once and then locked (owner decision
+  // 2026-11-19): a request may fill an empty one, or repeat the stored value,
+  // but never change or clear it.
+  // Height too (owner, 2026-11-25).
+  const touchesLockedFields = Object.prototype.hasOwnProperty.call(body, "birthDate")
+    || Object.prototype.hasOwnProperty.call(body, "gender")
+    || Object.prototype.hasOwnProperty.call(body, "heightCm");
+  const lockedFields = touchesLockedFields
+    ? await prisma.user.findUnique({ where: { id: userId }, select: { gender: true, birthDate: true, heightCm: true } })
+    : null;
+
   if (Object.prototype.hasOwnProperty.call(body, "birthDate")) {
+    const storedBirthDate = lockedFields?.birthDate ?? null;
     if (body.birthDate === null) {
-      data.birthDate = null;
+      if (storedBirthDate) {
+        return NextResponse.json({ error: "birth_date_locked" }, { status: 409 });
+      }
     } else {
       const birthDate = parseBirthDate(body.birthDate);
       if (!birthDate) {
@@ -432,20 +459,71 @@ export async function PATCH(request: NextRequest) {
         month: birthDate.getUTCMonth() + 1,
         day: birthDate.getUTCDate(),
       };
-      if (!isOldEnoughForSignup(birthDateParts)) {
-        return NextResponse.json({ error: "minimum_age_required" }, { status: 400 });
+      if (storedBirthDate) {
+        if (storedBirthDate.getTime() !== birthDate.getTime()) {
+          return NextResponse.json({ error: "birth_date_locked" }, { status: 409 });
+        }
+      } else {
+        if (!isOldEnoughForSignup(birthDateParts)) {
+          return NextResponse.json({ error: "minimum_age_required" }, { status: 400 });
+        }
+        data.birthDate = birthDate;
       }
-      data.birthDate = birthDate;
     }
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "gender")) {
+    const storedGender = lockedFields?.gender ?? null;
     if (body.gender === null) {
-      data.gender = null;
+      if (storedGender) {
+        return NextResponse.json({ error: "gender_locked" }, { status: 409 });
+      }
     } else if (!isProfileGender(body.gender)) {
       return NextResponse.json({ error: "invalid_gender" }, { status: 400 });
-    } else {
+    } else if (storedGender && storedGender !== body.gender) {
+      return NextResponse.json({ error: "gender_locked" }, { status: 409 });
+    } else if (!storedGender) {
       data.gender = body.gender;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "heightCm")) {
+    // In cm. Set once, then locked like the birth date (owner, 2026-11-25):
+    // an empty one may be filled, the stored one repeated, never changed or cleared.
+    const storedHeightCm = lockedFields?.heightCm ?? null;
+    if (body.heightCm === null) {
+      if (storedHeightCm !== null) {
+        return NextResponse.json({ error: "height_locked" }, { status: 409 });
+      }
+    } else {
+      const heightCm = normalizeHeightCm(body.heightCm);
+      if (heightCm === null) {
+        return NextResponse.json({ error: "invalid_height" }, { status: 400 });
+      }
+      if (storedHeightCm !== null && storedHeightCm !== heightCm) {
+        return NextResponse.json({ error: "height_locked" }, { status: 409 });
+      }
+      if (storedHeightCm === null) data.heightCm = heightCm;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "blockMaleDms")) {
+    if (typeof body.blockMaleDms !== "boolean") {
+      return NextResponse.json({ error: "invalid_block_male_dms" }, { status: 400 });
+    }
+    data.blockMaleDms = body.blockMaleDms;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "koreaVisit")) {
+    // The Korea trip from sign-up (dates, undecided, was there): stored as answered.
+    if (body.koreaVisit === null) {
+      data.koreaVisit = Prisma.DbNull;
+    } else {
+      const koreaVisit = normalizeKoreaVisitAnswer(body.koreaVisit);
+      if (!koreaVisit) {
+        return NextResponse.json({ error: "invalid_korea_visit" }, { status: 400 });
+      }
+      data.koreaVisit = koreaVisit;
     }
   }
 
@@ -551,7 +629,7 @@ export async function PATCH(request: NextRequest) {
     if (versionId) after(() => runBioVersion(versionId));
     const privateFields = await prisma.user.findUnique({
       where: { id: userId },
-      select: { birthDate: true },
+      select: { birthDate: true, blockMaleDms: true },
     });
 
     if (shouldRefreshWelcomeMessage) {
@@ -570,6 +648,7 @@ export async function PATCH(request: NextRequest) {
       bio: await getPublishedBioText(userId, updated.bio),
       bioDraft: updated.bio,
       birthDate: serializePrivateBirthDate(privateFields?.birthDate),
+      blockMaleDms: privateFields?.blockMaleDms === true,
     });
   } catch (error) {
     if (isHandleUniqueViolation(error)) {

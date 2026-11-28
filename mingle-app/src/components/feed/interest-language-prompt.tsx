@@ -6,12 +6,15 @@ import { resolveInterestLanguageCopy } from "@/i18n/interest-language-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
 import type { InterestLanguage } from "@/lib/interest-languages";
 import { canonicalizeSttLanguageCode } from "@/lib/stt-languages";
+import { isFirstSpeakPending } from "@/lib/first-run";
+import { readPendingInterestLanguages } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
 import {
   INTEREST_PROMPT_DELAY_MS,
   interestPromptStorageKey,
   parseInterestPromptRecord,
   recordInterestPromptShown,
   shouldShowInterestPrompt,
+  type InterestPromptRecord,
 } from "./interest-language-prompt.logic";
 
 function readRecord(userId: string) {
@@ -19,6 +22,14 @@ function readRecord(userId: string) {
     return parseInterestPromptRecord(window.localStorage.getItem(interestPromptStorageKey(userId)));
   } catch {
     return parseInterestPromptRecord(null);
+  }
+}
+
+function writeRecord(userId: string, record: InterestPromptRecord) {
+  try {
+    window.localStorage.setItem(interestPromptStorageKey(userId), JSON.stringify(record));
+  } catch {
+    // Not persisted: at worst this user is asked once more.
   }
 }
 
@@ -31,8 +42,12 @@ export default function InterestLanguagePrompt({ viewerId, locale }: { viewerId:
   const [initialLanguage, setInitialLanguage] = useState<string | null | undefined>(undefined);
 
   useEffect(() => {
-    if (!viewerId || !shouldShowInterestPrompt(readRecord(viewerId), Date.now())) return;
+    if (!viewerId) return;
     const controller = new AbortController();
+    // Picked in the first-run onboarding before there was an account:
+    // PendingProfileSync saves it, so it is never asked again here.
+    if (readPendingInterestLanguages().length > 0) return;
+    if (!shouldShowInterestPrompt(readRecord(viewerId), Date.now(), { firstSpeakPending: isFirstSpeakPending() })) return;
     const timer = window.setTimeout(async () => {
       try {
         const response = await fetch(buildClientApiPath("/profile"), { cache: "no-store", signal: controller.signal });
@@ -41,11 +56,7 @@ export default function InterestLanguagePrompt({ viewerId, locale }: { viewerId:
         const spoken = Array.isArray(profile.primaryLanguages) ? profile.primaryLanguages.filter((code): code is string => typeof code === "string") : [];
         if (Array.isArray(profile.interestLanguages) && profile.interestLanguages.length > 0) return;
         if (document.visibilityState === "hidden") return;
-        try {
-          window.localStorage.setItem(interestPromptStorageKey(viewerId), JSON.stringify(recordInterestPromptShown(readRecord(viewerId), Date.now())));
-        } catch {
-          // Not persisted: this user may be asked once more.
-        }
+        writeRecord(viewerId, recordInterestPromptShown(readRecord(viewerId), Date.now()));
         // Older profiles kept the language they want to talk in as a second
         // primary language or a default conversation language; start with it
         // checked so the user only picks a level.

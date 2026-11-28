@@ -197,6 +197,25 @@ export function compareConversationRecency(a: ConversationChannelSummary, b: Con
   return rightTimestamp - leftTimestamp;
 }
 
+/**
+ * Open rooms (public rooms) live under Explore, in "Rooms you are in"; the chat
+ * list shows chat rooms only. The room stays in the loaded list, so it still
+ * opens from Explore or a notification.
+ */
+export function isChatListConversation(conversation: Pick<ConversationChannelSummary, "isPublic" | "isVoiceRoom" | "isDuoCall">): boolean {
+  // Open chats are listed with the private chats (owner, 2026-11-26), marked
+  // as open; a voice room lives on the voice-room tab. The hidden room of a
+  // 1:1 voice talk from a post is never a row, also while the app holds it
+  // (it was loaded by id to open the call screen).
+  if (conversation.isDuoCall === true) return false;
+  return !(conversation.isPublic === true && conversation.isVoiceRoom === true);
+}
+
+/** An open chat: a chat room anyone can find and join (public, and not a voice room). */
+export function isOpenChatConversation(conversation: Pick<ConversationChannelSummary, "isPublic" | "isVoiceRoom">): boolean {
+  return conversation.isPublic === true && conversation.isVoiceRoom !== true;
+}
+
 export type ConversationListSortMode = "recent" | "unreadFirst";
 
 export const CONVERSATION_LIST_SORT_MODES: readonly ConversationListSortMode[] = ["recent", "unreadFirst"];

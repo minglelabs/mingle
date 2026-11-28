@@ -9,6 +9,8 @@ export type ProfileBioSnapshot = {
   sourceLanguage: string | null
   language: string
   translation: string | null
+  /** Every language this version is already translated into (for the language flags). */
+  translatedLanguages?: string[]
   status: 'idle' | 'running' | 'succeeded' | 'failed'
   detecting: boolean
   updating: boolean

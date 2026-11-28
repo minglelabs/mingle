@@ -516,7 +516,7 @@ export default function LanguageSelector({
       onClose={requestClose}
       ariaLabel={copy.languageSelectorTitle}
       nativeBackPriority={40}
-      className="fixed inset-0 z-[140] flex min-h-0 w-full flex-col bg-[rgba(248,245,239,0.94)] backdrop-blur-sm"
+      className="keyboard-safe fixed inset-0 z-[140] flex min-h-0 w-full flex-col bg-[rgba(248,245,239,0.94)] backdrop-blur-sm"
       style={{ touchAction: "pan-y" }}
       stopPropagation
     >

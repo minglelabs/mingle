@@ -19,6 +19,7 @@ import { visibleAuthorWhere } from './block-visibility'
  * 4. Author hidden by an operator, or mutual block (viewer blocks author OR
  *    author blocks viewer) — see visibleAuthorWhere
  * 5. Viewer explicitly hid the post (PostHide)
+ * 6. An hour post whose hour is over (`expiresAt`, see @/lib/post-category)
  *
  * `viewerId` is null for a signed-out viewer of the public feed: no blocks and
  * no hides apply, every other rule does.
@@ -31,7 +32,16 @@ export function visiblePostWhere(viewerId: string | null): Prisma.PostWhereInput
     author: visibleAuthorWhere(viewerId),
     // Exclude posts the viewer explicitly hid
     ...(viewerId ? { hides: { none: { userId: viewerId } } } : {}),
+    AND: [postNotExpiredWhere()],
   }
+}
+
+/** A post with no end, or whose end has not come yet ("1 hour" posts). */
+export function postNotExpiredWhere(now?: Date): Prisma.PostWhereInput {
+  // To the minute when no moment is given: the same condition for every query
+  // of that minute (an hour post leaves the lists within a minute of its hour).
+  const moment = now ?? new Date(Math.floor(Date.now() / 60_000) * 60_000)
+  return { OR: [{ expiresAt: null }, { expiresAt: { gt: moment } }] }
 }
 
 /**

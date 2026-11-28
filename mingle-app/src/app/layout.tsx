@@ -9,6 +9,14 @@ import AppLocalePreferenceSync from "@/components/app-locale-preference-sync";
 import CoinHost from "@/components/coins/coin-host";
 import ContactSyncHost from "@/components/contacts/contact-sync-host";
 import ProfileBasicsGate from "@/components/profile-basics-gate";
+import PendingProfileSync from "@/components/pending-profile-sync";
+import DormantAccountGate from "@/components/dormant-account-gate";
+import PostCallHost from "@/components/post-call/post-call-host";
+import { FIRST_RUN_COVER_SCRIPT } from "@/lib/first-run-cover";
+import FirstMessageGate from "@/components/first-message-gate";
+import DmOpenCoinsGate from "@/components/dm-open-coins-gate";
+import KeyboardInsetVar from "@/components/keyboard-inset-var";
+import PushPermissionPrompt from "@/components/push-permission-prompt";
 import LastSignInMethodRecorder from "@/components/last-sign-in-method-recorder";
 import { AuthSessionProvider } from "@/components/auth-session-provider";
 import MobileCanvasShell from "@/components/mobile-canvas-shell";
@@ -113,6 +121,10 @@ export default async function RootLayout({
           dangerouslySetInnerHTML={{ __html: MOBILE_CANVAS_BOOTSTRAP_SCRIPT }}
         />
         <script
+          id="mingle-first-run-cover"
+          dangerouslySetInnerHTML={{ __html: FIRST_RUN_COVER_SCRIPT }}
+        />
+        <script
           id="mingle-script-load-recovery"
           dangerouslySetInnerHTML={{ __html: SCRIPT_LOAD_RECOVERY_SCRIPT }}
         />
@@ -133,6 +145,13 @@ export default async function RootLayout({
                 <CoinHost />
                 <ContactSyncHost />
                 <ProfileBasicsGate />
+                <PendingProfileSync />
+                <DormantAccountGate />
+                <PostCallHost />
+                <FirstMessageGate />
+                <DmOpenCoinsGate />
+                <KeyboardInsetVar />
+                <PushPermissionPrompt />
                 <LastSignInMethodRecorder />
                 <NativePushTapReceiver />
                 <NativeShareInboxReceiver />

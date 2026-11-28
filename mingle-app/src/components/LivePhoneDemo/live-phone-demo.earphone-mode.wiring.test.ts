@@ -157,12 +157,12 @@ describe('earphone mode wiring', () => {
   it('captures device audio only as a per-session pick made in the notice', () => {
     // Offered only where supported: shell capability + the server switch.
     const notice = between(liveDemoSource, '<EarphoneModeNoticeContent', '/>')
-    expect(notice).toContain('captureSource={nativeDeviceAudioSupported && !speakerModeOnSpeaker ? sttCaptureSourcePick : undefined}')
+    expect(notice).toContain('captureSource={nativeDeviceAudioSupported && !speakerModeOnSpeaker && !trialSpeechLength ? sttCaptureSourcePick : undefined}')
     expect(notice).toContain('onSelectCaptureSource={setSttCaptureSourcePick}')
     expect(notice).toContain('deviceAudioViaBroadcast={isLikelyIOSPlatform()}')
     // What the session captures: shell support + earphone mode on + the pick.
     const effective = between(liveDemoSource, 'const sttCaptureSource = resolveEffectiveSttCaptureSource({', '})')
-    expect(effective).toContain('supported: nativeDeviceAudioSupported && !speakerModeOnSpeaker && !voiceTalkState.joined,')
+    expect(effective).toContain('supported: nativeDeviceAudioSupported && !speakerModeOnSpeaker && !voiceTalkState.joined && !trialSpeechLength,')
     expect(effective).toContain('earphoneModeEnabled,')
     expect(effective).toContain('pick: sttCaptureSourcePick,')
     expect(liveDemoSource).toContain('captureSource: sttCaptureSource,')

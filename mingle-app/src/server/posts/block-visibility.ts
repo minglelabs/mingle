@@ -30,13 +30,33 @@ export function notMutuallyBlockedWhere(viewerId: string | null): Prisma.UserWhe
 }
 
 /**
+ * "This account is shown in the app", in one place. An account is hidden for
+ * one of these reasons, each with its own mark, set and cleared on its own:
+ *
+ * - `moderationHiddenAt`: hidden by staff, either from a report
+ *   (src/server/reports/moderation-service.ts) or by 내리고 검토로 on an
+ *   operator account (src/server/operators/account-takedown.ts, which keeps
+ *   its own list of the accounts it hid).
+ * - `dormantAt`: a dormant account (src/server/dormancy.ts). Waking it clears
+ *   only this mark, so an account staff hid stays hidden.
+ *
+ * Raw SQL that lists accounts repeats the same two columns
+ * (`moderation_hidden_at IS NULL AND dormant_at IS NULL`): post search,
+ * people search and the explore tab.
+ */
+export function accountShownInAppWhere(): { moderationHiddenAt: null; dormantAt: null } {
+  return { moderationHiddenAt: null, dormantAt: null }
+}
+
+/**
  * Condition on the CONTENT AUTHOR for anything shown to someone else: the
- * author is not hidden by an operator and no block exists between the two.
- * Posts, comments, profile grids and search all compose this one rule.
+ * author's account is shown in the app (not hidden by staff, not dormant)
+ * and no block exists between the two. Posts, comments, profile grids and
+ * search all compose this one rule.
  */
 export function visibleAuthorWhere(viewerId: string | null): Prisma.UserWhereInput {
   return {
-    moderationHiddenAt: null,
+    ...accountShownInAppWhere(),
     ...notMutuallyBlockedWhere(viewerId),
   }
 }

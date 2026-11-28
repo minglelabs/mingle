@@ -38,13 +38,16 @@ export function ChatActionPlusButton({
   label: string
   sizePx: number
   onToggle: () => void
-  variant?: 'round' | 'plain'
+  /** 'glass': on a dark photo (the call screen of a 1:1 voice talk). */
+  variant?: 'round' | 'plain' | 'glass'
   iconSizePx?: number
 }) {
   const plain = variant === 'plain'
   const tone = plain
     ? (open ? 'text-gray-800' : 'text-gray-500 hover:text-gray-700')
-    : `rounded-full ${open ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`
+    : variant === 'glass'
+      ? `rounded-full backdrop-blur-md ${open ? 'bg-white text-slate-900' : 'bg-white/25 text-white'}`
+      : `rounded-full ${open ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`
   return (
     <button
       type="button"

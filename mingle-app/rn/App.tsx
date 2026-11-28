@@ -23,6 +23,8 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import {
   addNativeSttListener,
   getNativeSttMicrophonePermissionStatus,
+  requestNativeSttMicrophonePermission,
+  isNativeMicPermissionRequestAvailable,
   getNativeSttStatus,
   isNativeDeviceAudioCaptureAvailable,
   isNativeEarphoneMicrophoneChoiceAvailable,
@@ -98,6 +100,7 @@ import {
 } from './src/nativeAuth';
 import { validateRnApiNamespace } from './src/apiNamespace';
 import {
+  buildNativeAccountHintScript,
   buildNativeQaBridgeBootstrapScript,
   WEBVIEW_NAVIGATION_BRIDGE_SCRIPT,
 } from './src/nativeNavigationBridge';
@@ -119,7 +122,7 @@ import {
   resolveVersionPolicyLocale,
   resolveWebLocaleSegment,
 } from './src/i18n';
-import { pickLoadingMessage } from '../src/i18n/loading-messages';
+import { pickLoadingMessage, resolveBrandTagline } from '../src/i18n/loading-messages';
 import {
   createCheckingNativeAppUpdateSnapshot,
   createUnknownNativeAppUpdateSnapshot,
@@ -163,6 +166,7 @@ import {
 import NativeQrScanner, {
   type NativeQrScannerRequest,
 } from './src/nativeQrScanner';
+import PhotoGalleryModal, { type PhotoGalleryAnswer, type PhotoGalleryLabels, type PhotoGalleryRequest } from './src/photoGallery/PhotoGalleryModal';
 import {
   buildNativeProfileLinkEventScript,
   parseNativeProfileLink,
@@ -208,6 +212,11 @@ type NativeRuntimeConfig = {
   clientBuild?: string;
   // app_store | testflight | play_store | local | other, detected natively.
   installSource?: string;
+  // One account per person: the keychain id (iOS) or ANDROID_ID, see src/nativeCapabilities.ts.
+  deviceId?: string;
+  deviceKind?: string;
+  // iOS: the keychain note that this phone already has an account (survives deleting the app).
+  accountHint?: string;
   qaBridgeEnabled?: string | boolean;
   deviceLocaleTag?: string;
   devicePreferredLanguages?: string[];
@@ -227,6 +236,7 @@ type NativeRuntimeConfig = {
   launchedFromExternalIntent?: string | boolean;
 };
 type NativeConversationRestoreStorageModule = {
+  setAccountHint?: (hint: string) => void;
   rememberConversationRestoreUrl?: (
     url: string,
     conversationId: string,
@@ -248,6 +258,7 @@ type NativePendingProfileLink = {
 type NativeQrImageModule = {
   savePng?: (dataUrl: string, fileName: string) => Promise<unknown>;
   saveImage?: (dataUrl: string, fileName: string) => Promise<unknown>;
+  detectFaces?: (dataUrl: string) => Promise<unknown>;
 };
 type NativePushRegistrationInfo = {
   token?: unknown;
@@ -671,6 +682,9 @@ const NATIVE_QR_SAVE_EVENT = 'mingle:native-qr-save';
 const NATIVE_IMAGE_SAVE_EVENT = 'mingle:native-image-save';
 // Chat photos are at most 2048px JPEG/PNG/WebP; the data URL stays well under this.
 const NATIVE_IMAGE_SAVE_MAX_CHARS = 30_000_000;
+const NATIVE_FACE_CHECK_EVENT = 'mingle:native-face-check';
+/** The page sends a small copy (about 720 px), so a few MB of base64 is plenty. */
+const NATIVE_FACE_CHECK_MAX_CHARS = 8_000_000;
 const NATIVE_LOCATION_EVENT = 'mingle:native-location';
 const NATIVE_LOCATION_QUEUE_LIMIT = 8;
 const NATIVE_QR_SCANNER_QUEUE_LIMIT = 8;
@@ -908,6 +922,11 @@ type NativeLocationCommand = {
   };
 };
 
+// The first-run "HashChat is spoken" screen asks for the microphone alone.
+// Answered on the STT channel as { type: 'permission', requestId }.
+type NativeMicPermissionCommand = { type: 'native_mic_permission_request'; payload?: { requestId?: string } };
+type NativeAccountHintCommand = { type: 'native_account_hint_save'; payload?: { hint?: string } };
+
 // Contact sync (see src/nativeContacts.ts).
 type NativeContactsCommand =
   | { type: 'native_contacts_check' | 'native_contacts_request'; payload?: { requestId?: string } }
@@ -983,6 +1002,24 @@ type NativeImageSaveCommand = {
     probe?: boolean;
     dataUrl?: string;
     fileName?: string;
+  };
+};
+
+// The write screen's own gallery (src/photoGallery, web: src/lib/native-photo-gallery.ts).
+type NativePhotoGalleryOpenCommand = {
+  type: 'native_photo_gallery_open';
+  payload?: {
+    requestId?: string;
+    max?: number;
+    labels?: Partial<PhotoGalleryLabels>;
+  };
+};
+
+type NativeFaceCheckCommand = {
+  type: 'native_face_check';
+  payload?: {
+    requestId?: string;
+    dataUrl?: string;
   };
 };
 
@@ -1086,6 +1123,8 @@ type WebViewCommand =
   | NativeAudioRouteRequestCommand
   | NativeOpenAppSettingsCommand
   | NativeLocationCommand
+  | NativeMicPermissionCommand
+  | NativeAccountHintCommand
   | NativeContactsCommand
   | NativeAuthStartCommand
   | NativeAuthAckCommand
@@ -1093,6 +1132,8 @@ type WebViewCommand =
   | NativeQrScannerOpenCommand
   | NativeQrSaveCommand
   | NativeImageSaveCommand
+  | NativeFaceCheckCommand
+  | NativePhotoGalleryOpenCommand
   | NativePushRegisterCommand
   | NativeNavigationStateCommand
   | NativeBackAtTabRootCommand
@@ -1125,7 +1166,7 @@ type NativeSttEvent =
     }
   | { type: 'message'; raw: string; conversationId?: string; sessionId?: string; queueId?: string }
   | { type: 'error'; message: string; code?: string; platform?: string; conversationId?: string; sessionId?: string }
-  | { type: 'permission'; permission: string; platform?: string }
+  | { type: 'permission'; permission: string; platform?: string; requestId?: string }
   | NativeShellCapabilities
   | { type: 'close'; reason: string; conversationId?: string; sessionId?: string };
 
@@ -1295,6 +1336,9 @@ type NativeQrSaveEvent =
   | { type: 'error'; message: string };
 type NativeImageSaveEvent =
   | { type: 'ready' | 'success'; requestId: string }
+  | { type: 'error'; requestId: string; message: string };
+type NativeFaceCheckEvent =
+  | { type: 'result'; requestId: string; faces: number; largestFaceWidth: number }
   | { type: 'error'; requestId: string; message: string };
 type RecommendUpdatePrompt = {
   title: string;
@@ -2632,7 +2676,8 @@ function AppInner(): React.JSX.Element {
     lastWebViewUrlRef.current = webUrl;
   }, [webUrl]);
   const nativeQaBridgeBootstrapScript = useMemo(
-    () => buildNativeQaBridgeBootstrapScript(RUNTIME_QA_BRIDGE_ENABLED),
+    () => buildNativeQaBridgeBootstrapScript(RUNTIME_QA_BRIDGE_ENABLED)
+      + buildNativeAccountHintScript(NATIVE_RUNTIME_CONFIG.accountHint),
     [],
   );
   const webViewSource = useMemo(() => {
@@ -2686,9 +2731,15 @@ function AppInner(): React.JSX.Element {
   // The random line under the splash logo: a new one each time the splash
   // comes up, the same one while it (and the fade that follows it) is showing.
   const isStartupSplashShowing = startupSplashVisible || lastScreenSnapshotVisible;
+  // A device with no screen to restore (a first launch, or signed out) gets the
+  // brand line; a feature tip means nothing to someone who has not used the app.
+  const [startupSplashIsFirstLook] = useState(() => !initialRestoreUrlRef.current);
   const startupSplashMessage = useMemo(
-    () => (isStartupSplashShowing ? pickLoadingMessage(webLocale) : null),
-    [isStartupSplashShowing, webLocale],
+    () => {
+      if (!isStartupSplashShowing) return null;
+      return startupSplashIsFirstLook ? { text: resolveBrandTagline(webLocale), source: null } : pickLoadingMessage(webLocale);
+    },
+    [isStartupSplashShowing, startupSplashIsFirstLook, webLocale],
   );
   const lastScreenSnapshotHidingRef = useRef(false);
   const hideLastScreenSnapshot = useCallback((animated = true) => {
@@ -2855,6 +2906,7 @@ function AppInner(): React.JSX.Element {
   const [isEdgeSwipeSuppressedByWeb, setIsEdgeSwipeSuppressedByWeb] = useState(false);
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
   const [qrScannerRequest, setQrScannerRequest] = useState<NativeQrScannerRequest | null>(null);
+  const [photoGalleryRequest, setPhotoGalleryRequest] = useState<PhotoGalleryRequest | null>(null);
   const canRenderNativeBanner = versionGate.status === 'ready';
   const shouldHideNativeBanners = useMemo(
     () => shouldHideNativeBannersForPathname(currentWebPathname),
@@ -3452,6 +3504,72 @@ function AppInner(): React.JSX.Element {
     }
   }, [emitImageSaveToWeb]);
 
+  const emitFaceCheckToWeb = useCallback((payload: NativeFaceCheckEvent) => {
+    if (!isPageReadyRef.current || !webViewRef.current) return;
+    const script = `window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_FACE_CHECK_EVENT)}, { detail: ${JSON.stringify(payload)} })); true;`;
+    webViewRef.current.injectJavaScript(script);
+  }, []);
+
+  // The write screen's own gallery: opens over the page, answers with the photos picked.
+  const handleNativePhotoGalleryOpen = useCallback((payload?: NativePhotoGalleryOpenCommand['payload']) => {
+    const requestId = typeof payload?.requestId === 'string' ? payload.requestId.trim().slice(0, 64) : '';
+    if (!requestId) return;
+    const max = typeof payload?.max === 'number' && Number.isFinite(payload.max) ? Math.min(10, Math.max(1, Math.round(payload.max))) : 10;
+    const text = (value: unknown, fallback: string) => (typeof value === 'string' && value.trim() ? value.trim().slice(0, 120) : fallback);
+    const labels = payload?.labels ?? {};
+    setPhotoGalleryRequest({
+      requestId,
+      max,
+      labels: {
+        title: text(labels.title, 'Photos'),
+        next: text(labels.next, 'Next'),
+        close: text(labels.close, 'Close'),
+        limited: text(labels.limited, 'Allow more photos'),
+        denied: text(labels.denied, 'Allow access to your photos to pick them here.'),
+        openSettings: text(labels.openSettings, 'Open Settings'),
+        skip: text(labels.skip, 'Text only'),
+        recent: text(labels.recent, 'Recents'),
+        albums: text(labels.albums, 'Albums'),
+        camera: text(labels.camera, 'Camera'),
+        cameraDenied: text(labels.cameraDenied, 'Allow camera access to take a photo.'),
+      },
+    });
+  }, []);
+
+  const handlePhotoGalleryAnswer = useCallback((answer: PhotoGalleryAnswer) => {
+    setPhotoGalleryRequest(null);
+    if (!webViewRef.current) return;
+    const script = `window.dispatchEvent(new CustomEvent('mingle:native-photos', { detail: ${JSON.stringify(answer)} })); true;`;
+    webViewRef.current.injectJavaScript(script);
+  }, []);
+
+  // The first-message gate: looks for a face in a profile photo on the phone; the photo never leaves it.
+  const handleNativeFaceCheck = useCallback(async (payload?: NativeFaceCheckCommand['payload']) => {
+    const requestId = typeof payload?.requestId === 'string' ? payload.requestId.trim().slice(0, 64) : '';
+    const dataUrl = typeof payload?.dataUrl === 'string' ? payload.dataUrl.trim() : '';
+    if (!requestId) return;
+    const nativeImageModule = (NativeModules as { NativeQrImageModule?: NativeQrImageModule }).NativeQrImageModule;
+    if (!/^data:image\/(jpeg|png|webp);base64,/i.test(dataUrl) || dataUrl.length > NATIVE_FACE_CHECK_MAX_CHARS) {
+      emitFaceCheckToWeb({ type: 'error', requestId, message: 'native_face_invalid' });
+      return;
+    }
+    if (!nativeImageModule || typeof nativeImageModule.detectFaces !== 'function') {
+      emitFaceCheckToWeb({ type: 'error', requestId, message: 'native_face_check_unavailable' });
+      return;
+    }
+    try {
+      const raw = await nativeImageModule.detectFaces(dataUrl) as { faces?: unknown; largestFaceWidth?: unknown } | null;
+      const faces = typeof raw?.faces === 'number' && Number.isFinite(raw.faces) ? Math.max(0, Math.round(raw.faces)) : 0;
+      const largestFaceWidth = typeof raw?.largestFaceWidth === 'number' && Number.isFinite(raw.largestFaceWidth)
+        ? Math.min(1, Math.max(0, raw.largestFaceWidth))
+        : 0;
+      emitFaceCheckToWeb({ type: 'result', requestId, faces, largestFaceWidth });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      emitFaceCheckToWeb({ type: 'error', requestId, message: message || 'native_face_check_failed' });
+    }
+  }, [emitFaceCheckToWeb]);
+
   const emitPushRegistrationToWeb = useCallback((payload: NativePushRegistrationInfo) => {
     const normalizedPayload: NativePushRegistrationInfo = {
       ...payload,
@@ -3860,6 +3978,21 @@ function AppInner(): React.JSX.Element {
       }
     }
   }, [emitToWeb, nativeAvailable]);
+
+  const handleNativeMicPermissionRequest = useCallback(async (requestId?: string) => {
+    let payload: { permission: string; platform?: string };
+    try {
+      payload = await requestNativeSttMicrophonePermission();
+    } catch {
+      payload = { permission: 'unavailable', platform: Platform.OS };
+    }
+    emitToWeb({
+      type: 'permission',
+      permission: payload.permission,
+      platform: payload.platform || Platform.OS,
+      ...(requestId ? { requestId } : {}),
+    });
+  }, [emitToWeb]);
 
   useEffect(() => {
     if (Platform.OS !== 'ios' || !nativeAvailable) return;
@@ -4587,6 +4720,16 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (parsed.type === 'native_face_check') {
+      void handleNativeFaceCheck(parsed.payload);
+      return;
+    }
+
+    if (parsed.type === 'native_photo_gallery_open') {
+      handleNativePhotoGalleryOpen(parsed.payload);
+      return;
+    }
+
     if (
       parsed.type === 'native_pip_start'
       || parsed.type === 'native_pip_update'
@@ -4632,6 +4775,17 @@ function AppInner(): React.JSX.Element {
 
     if (parsed.type === 'native_location_request') {
       void handleNativeLocationRequest(parsed.payload?.requestId);
+      return;
+    }
+
+    if (parsed.type === 'native_account_hint_save') {
+      const hint = typeof parsed.payload?.hint === 'string' ? parsed.payload.hint : '';
+      if (hint) NATIVE_CONVERSATION_RESTORE_STORAGE.setAccountHint?.(hint);
+      return;
+    }
+
+    if (parsed.type === 'native_mic_permission_request') {
+      void handleNativeMicPermissionRequest(parsed.payload?.requestId);
       return;
     }
 
@@ -5084,6 +5238,7 @@ function AppInner(): React.JSX.Element {
   }, [
     clearAuthDispatchRetryTimer,
     emitQaAudioInjectionToWeb,
+    handleNativeMicPermissionRequest,
     emitTtsToWeb,
     handleDebugWebViewRemount,
     hideLastScreenSnapshot,
@@ -5095,6 +5250,8 @@ function AppInner(): React.JSX.Element {
     handleNativeLocationRequest,
     handleNativeQrSave,
     handleNativeImageSave,
+    handleNativeFaceCheck,
+    handleNativePhotoGalleryOpen,
     handleNativeStart,
     handleNativeStop,
     handleNativeStatusRequest,
@@ -5526,7 +5683,12 @@ function AppInner(): React.JSX.Element {
       nativeTts: isNativeTtsAvailable(),
       ttsStream: isNativeTtsStreamAvailable(),
       contacts: isNativeContactsAvailable(),
+      faceCheck: typeof (NativeModules as { NativeQrImageModule?: NativeQrImageModule }).NativeQrImageModule?.detectFaces === 'function',
+      photoGallery: true,
       earphoneMicrophoneChoice: nativeEarphoneMicrophoneChoiceAvailable,
+      micPermissionRequest: isNativeMicPermissionRequestAvailable(),
+      deviceId: NATIVE_RUNTIME_CONFIG.deviceId,
+      deviceKind: NATIVE_RUNTIME_CONFIG.deviceKind,
     }));
     // Earphone mode (contract A.2a): the latest route follows the capabilities
     // message on every load end.
@@ -5724,6 +5886,9 @@ function AppInner(): React.JSX.Element {
             cacheMode={Platform.OS === 'android' && shouldUseAggressiveWebViewCacheBypass ? 'LOAD_NO_CACHE' : 'LOAD_DEFAULT'}
             allowsInlineMediaPlayback
             mediaPlaybackRequiresUserAction={false}
+            // The selfie check opens the front camera from the page; the app's own
+            // camera permission is still asked by the system the first time.
+            mediaCapturePermissionGrantType="grantIfSameHostElsePrompt"
             keyboardDisplayRequiresUserAction={false}
             setSupportMultipleWindows={false}
             scrollEnabled={Platform.OS !== 'ios' || !shouldDisableIosScroll}
@@ -5926,6 +6091,7 @@ function AppInner(): React.JSX.Element {
           onRead={handleNativeQrRead}
         />
       ) : null}
+      <PhotoGalleryModal request={photoGalleryRequest} onAnswer={handlePhotoGalleryAnswer} />
     </View>
   );
 }

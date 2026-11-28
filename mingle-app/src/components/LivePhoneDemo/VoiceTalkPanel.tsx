@@ -19,11 +19,20 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
-import { ChevronUp, Headphones, Languages, Mic, MicOff, PhoneOff, Phone, Plus, Volume2, VolumeX } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronUp, Hand, Headphones, Languages, Mic, MicOff, PhoneOff, Phone, Plus, Volume2, VolumeX } from 'lucide-react'
 import LanguageFlag from '@/components/language-flag'
 import VoiceTalkParticipantStrip, { sameVoiceTalkParticipants, type VoiceTalkParticipantChip } from './VoiceTalkParticipantStrip'
 import { buildClientApiPath, clientApiNamespace, namespaceSupportsVoiceTalk } from '@/lib/api-contract'
 import { useRoomPresence } from '@/lib/room-presence'
+import { rememberLiveRoom } from '@/lib/live-room-bubble'
+import { voiceStageCopy } from '@/i18n/voice-stage-copy'
+import { voiceRoomCopy } from '@/i18n/voice-room-copy'
+import VoiceRoomStage from './VoiceRoomStage'
+import DuoCallStage, { type DuoCallPhase } from './DuoCallStage'
+import { usePostCallRoom } from './use-post-call-room'
+import { resolvePostCallCopy } from '@/i18n/post-call-copy'
+import { isPostCallOver, postCallInterpretsByDefault } from '@/lib/post-call'
+import { resolveVoiceStage, voiceStageTransition, type VoiceStageRole } from './voice-talk-stage'
 import { useNativeBannerSuppression } from '@/lib/use-native-banner-suppression'
 import { VOICE_TALK_MAX_SEATS, voiceTalkCopy } from '@/i18n/voice-talk-copy'
 import { readDeclinedInvite, writeDeclinedInvite } from '@/lib/declined-invites'
@@ -35,9 +44,10 @@ const INTERPRET_WALLET_POLL_MS = 15_000
 export const NATIVE_VOICE_EVENT = 'mingle:native-voice'
 const MAX_SEATS = VOICE_TALK_MAX_SEATS
 
-type CallParticipant = { userId: string; name: string | null; image: string | null; speechLanguage?: string | null }
+// `role` and `handRaised` come with an open room's call (it has a stage).
+type CallParticipant = { userId: string; name: string | null; image: string | null; speechLanguage?: string | null; role?: string; handRaised?: boolean }
 // `startedBy` comes from servers that send it.
-type StatusCall = { id: string; participants: CallParticipant[]; maxParticipants: number; startedBy?: { userId: string; name: string | null } | null } | null
+type StatusCall = { id: string; participants: CallParticipant[]; maxParticipants: number; startedBy?: { userId: string; name: string | null } | null; stage?: { hostUserId: string } | null } | null
 // `lang` and `micOn` come from app builds that share them; older builds send neither.
 // `interpretOff` is false only for a member who turned interpretation on.
 type RoomMember = { identity: string; userId: string; name: string; isLocal: boolean; isSpeaking: boolean; lang?: string; micOn?: boolean; interpretOff?: boolean }
@@ -147,6 +157,8 @@ function initial(name: string | null | undefined): string {
 
 /** Joins the room's call, starting it when none is live (one call per room, kept by the server). */
 export function joinVoiceTalk(input: { conversationId: string; title?: string; lang: string }) {
+  // The live room bubble names the room, and "undo" after leaving from it joins again in this language.
+  rememberLiveRoom(input.conversationId, { title: input.title, lang: input.lang })
   post({
     type: 'native_voice_open',
     payload: { conversationId: input.conversationId, title: input.title, lang: input.lang, interpret: false },
@@ -244,6 +256,20 @@ export type VoiceTalkPanelProps = {
   onOpenProfile?: (userId: string) => void
   /** This viewer's account id: always counted as having the room open. */
   viewerUserId?: string | null
+  /**
+   * 'room': the voice room screen of an open room (owner, 2026-11-25): the
+   * stage is always there under the top bar (VoiceRoomStage), in the call or
+   * not. 'panel' (default): the strip of a chat room's call, shown only
+   * while this phone is in it. 'duo': the call screen of a 1:1 voice talk
+   * from a post (owner, 2026-11-25; DuoCallStage, src/server/post-calls.ts).
+   */
+  variant?: 'panel' | 'room' | 'duo'
+  /** 'room' and 'duo': the stage's height in px (0 when gone), so the chat starts below it. */
+  onHeightChange?: (heightPx: number) => void
+  /** 'duo' only: the call is over (or was hung up here): the screen closes. */
+  onDuoCallClose?: () => void
+  /** 'duo' only: this viewer is speaking into the call (their face in the bottom bar ripples). */
+  onLocalSpeakingChange?: (speaking: boolean) => void
 }
 
 export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
@@ -254,6 +280,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   const listenOn = props.listenOn !== false
   const viewerUserId = props.viewerUserId ?? null
   const copy = voiceTalkCopy(props.uiLocale)
+  const duoVariant = props.variant === 'duo'
   const coinWallet = useCoinWallet().wallet
   // Interpretation is paid. While it is on the wallet is read more often than
   // the app's usual minute, and when the Hash run out the switch goes off and
@@ -442,7 +469,8 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   // cover it, and a card low on the screen would sit half under it. It is
   // hidden while any of the three (start/join, leave, incoming call) is up.
   const dialogOpen = startPrompt || confirmLeave || incomingOffered
-  useNativeBannerSuppression(dialogOpen)
+  // The call screen of a 1:1 voice talk is the whole screen: no banner over it.
+  useNativeBannerSuppression(dialogOpen || duoVariant)
 
   // Decline the call that just started: it is not offered again by itself.
   const decline = useCallback(() => {
@@ -493,6 +521,64 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     return people.slice(0, MAX_SEATS)
   }, [call, joined, listenOnly, myLang, room])
 
+  // An open room's call has a stage: speakers on it, listeners below.
+  const stageCopy = voiceStageCopy(props.uiLocale)
+  const stage = useMemo(() => resolveVoiceStage(call, viewerUserId), [call, viewerUserId])
+  const stageSeats = useMemo(
+    () => (stage.enabled ? seats.filter((seat) => !stage.listenerIds.has(seat.userId)) : seats),
+    [seats, stage],
+  )
+  const [stageNote, setStageNote] = useState<string | null>(null)
+  useEffect(() => {
+    if (!stageNote) return
+    const timer = window.setTimeout(() => setStageNote(null), 4000)
+    return () => window.clearTimeout(timer)
+  }, [stageNote])
+  const [stageBusy, setStageBusy] = useState(false)
+  const stageAct = useCallback(async (action: 'raise' | 'lower' | 'invite' | 'remove' | 'step_down', userId?: string) => {
+    if (stageBusy) return
+    setStageBusy(true)
+    try {
+      const response = await fetch(buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/voice/stage`), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action, ...(userId ? { userId } : {}) }),
+      })
+      const body = await response.json().catch(() => null) as { call?: StatusCall; error?: string } | null
+      if (response.ok && body?.call) setCall(body.call)
+      else setStageNote(body?.error === 'stage_full' ? stageCopy.stageFull : stageCopy.failed)
+    } catch {
+      setStageNote(stageCopy.failed)
+    }
+    setStageBusy(false)
+  }, [conversationId, stageBusy, stageCopy.failed, stageCopy.stageFull])
+
+  // Put on the stage: the app joined with a listener's pass, so it joins
+  // again for one that may send its voice. Taken off it: the mic goes off.
+  const lastStageRoleRef = useRef<VoiceStageRole | null>(null)
+  const stageRole = joined ? stage.myRole : null
+  useEffect(() => {
+    const change = voiceStageTransition(lastStageRoleRef.current, stageRole)
+    lastStageRoleRef.current = stageRole
+    if (change === 'promoted') {
+      post({ type: 'native_voice_close' })
+      // Not cleared when this effect runs again: closing the call changes the
+      // role to "not in it", and the rejoin must still happen.
+      if (stageRejoinTimerRef.current !== null) window.clearTimeout(stageRejoinTimerRef.current)
+      stageRejoinTimerRef.current = window.setTimeout(() => {
+        stageRejoinTimerRef.current = null
+        setStageNote(stageCopy.onStageNow)
+        onListenOnlyChange?.(false)
+        joinVoiceTalk({ conversationId, title: conversationTitle, lang: myLangRef.current })
+      }, 700)
+    }
+    if (change === 'demoted') onListenOnlyChange?.(true)
+  }, [conversationId, conversationTitle, onListenOnlyChange, stageCopy.onStageNow, stageRole])
+  const stageRejoinTimerRef = useRef<number | null>(null)
+  useEffect(() => () => {
+    if (stageRejoinTimerRef.current !== null) window.clearTimeout(stageRejoinTimerRef.current)
+  }, [])
+
   // The same people, small, for the join dialog and the room's call message.
   const participantChips = useMemo<VoiceTalkParticipantChip[]>(
     () => (live ? seats.map((seat) => ({ userId: seat.userId, name: seat.name, image: seat.image, lang: seat.lang })) : []),
@@ -508,7 +594,8 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   // Room members who are not in the call, shown small under the seats.
   const presence = useRoomPresence(conversationId)
   const [roomMembers, setRoomMembers] = useState<RoomMemberSummary[]>([])
-  const panelShown = joined || !!error
+  const roomVariant = props.variant === 'room'
+  const panelShown = joined || !!error || roomVariant
   useEffect(() => {
     if (!panelShown || !conversationId) return
     let cancelled = false
@@ -522,6 +609,24 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     () => resolveVoiceTalkBystanders({ members: roomMembers, seatUserIds: seats.map((seat) => seat.userId), presence, viewerUserId }),
     [presence, roomMembers, seats, viewerUserId],
   )
+
+  // The voice room's stage tells the room how tall it is: the chat starts below it.
+  const roomStageRef = useRef<HTMLDivElement | null>(null)
+  const onHeightChangeRef = useRef(props.onHeightChange)
+  useEffect(() => { onHeightChangeRef.current = props.onHeightChange }, [props.onHeightChange])
+  useEffect(() => {
+    if (!roomVariant) return
+    const element = roomStageRef.current
+    if (!element) return
+    const report = () => onHeightChangeRef.current?.(Math.round(element.getBoundingClientRect().height))
+    report()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(report)
+    observer?.observe(element)
+    return () => {
+      observer?.disconnect()
+      onHeightChangeRef.current?.(0)
+    }
+  }, [roomVariant])
 
   const onDragEnd = useCallback((_: unknown, info: PanInfo) => {
     if (info.offset.y < -24 || info.velocity.y < -300) setFolded(true)
@@ -657,20 +762,287 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     </div>
   ) : null
 
+  // ---- 1:1 voice talk from a post (variant 'duo'; src/server/post-calls.ts) ----
+  // The hidden room was made for one call. This screen reads that call: it
+  // rings (the caller waits, the author answers), both phones join when it is
+  // answered, and the screen closes when it is over.
+  const postCall = usePostCallRoom(conversationId, duoVariant)
+  const postCallAct = postCall.act
+  const duoCall = postCall.call
+  const duoCopy = resolvePostCallCopy(props.uiLocale)
+  const duoStatus = duoCall?.status ?? null
+  const duoCallId = duoCall?.id ?? null
+  const duoPeerName = duoCall?.peer.name ?? ''
+  const duoPeerUserId = duoCall?.peer.userId ?? null
+  const onDuoCallCloseRef = useRef(props.onDuoCallClose)
+  useEffect(() => { onDuoCallCloseRef.current = props.onDuoCallClose }, [props.onDuoCallClose])
+  const leaveRef = useRef(leave)
+  useEffect(() => { leaveRef.current = leave }, [leave])
+
+  // Answered: this phone joins the call, once.
+  const duoJoinedCallRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!duoVariant || duoStatus !== 'accepted' || !duoCallId || duoJoinedCallRef.current === duoCallId) return
+    duoJoinedCallRef.current = duoCallId
+    if (phaseRef.current === 'connecting' || phaseRef.current === 'connected') return
+    joinVoiceTalk({ conversationId, title: duoPeerName || conversationTitle, lang: myLangRef.current })
+  }, [conversationId, conversationTitle, duoCallId, duoPeerName, duoStatus, duoVariant])
+
+  // Over (or a room whose call is gone): out of the call, say so briefly, close.
+  const duoOver = duoVariant && postCall.loaded && (duoStatus === null || isPostCallOver(duoStatus))
+  const duoSelfEndedRef = useRef(false)
+  useEffect(() => {
+    if (!duoOver) return
+    if (phaseRef.current === 'connecting' || phaseRef.current === 'connected') leaveRef.current()
+    const timer = window.setTimeout(() => onDuoCallCloseRef.current?.(), duoSelfEndedRef.current ? 150 : 1800)
+    return () => window.clearTimeout(timer)
+  }, [duoOver])
+
+  // Leaving the call screen (back button, back swipe, Android back) hangs up:
+  // a 1:1 call left running behind the tabs would keep this phone in a call
+  // the other person may already have left, with nothing on screen to end it.
+  // (Found on a phone, 2026-11-26.) Deferred a moment so a remount in place,
+  // as React's development double-mount does, is not taken for leaving.
+  const duoScreenMountedRef = useRef(false)
+  const duoLiveCallRef = useRef<string | null>(null)
+  useEffect(() => {
+    duoLiveCallRef.current = duoCallId && duoStatus !== null && !isPostCallOver(duoStatus) ? duoCallId : null
+  }, [duoCallId, duoStatus])
+  useEffect(() => {
+    if (!duoVariant) return
+    duoScreenMountedRef.current = true
+    return () => {
+      duoScreenMountedRef.current = false
+      window.setTimeout(() => {
+        if (duoScreenMountedRef.current) return
+        const callId = duoLiveCallRef.current
+        if (!callId) return
+        duoLiveCallRef.current = null
+        post({ type: 'native_voice_close' })
+        void fetch(buildClientApiPath(`/post-calls/${encodeURIComponent(callId)}`), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ action: 'hangup' }),
+          keepalive: true,
+        }).catch(() => undefined)
+      }, 400)
+    }
+  }, [duoVariant])
+
+  const duoHangUp = useCallback(() => {
+    duoSelfEndedRef.current = true
+    if (phaseRef.current === 'connecting' || phaseRef.current === 'connected') leave()
+    void postCallAct('hangup').then((next) => {
+      // The server could not be told: the screen still closes; the call ends by itself.
+      if (!next) onDuoCallCloseRef.current?.()
+    })
+  }, [leave, postCallAct])
+
+  const duoPeerSeat = duoPeerUserId ? seats.find((seat) => seat.userId === duoPeerUserId) ?? null : null
+  const duoPeerInCall = joined && !!room && !!duoPeerSeat
+  // Interpretation starts on by itself only when the two speak different
+  // languages (owner, 2026-11-25), once per call: what the viewer switches
+  // afterwards stays, also when they come back to this screen.
+  const duoPeerLang = duoPeerSeat?.lang || duoCall?.peer.language || ''
+  const walletExhausted = isCoinBillingActive(coinWallet) && coinWallet?.exhausted === true
+  useEffect(() => {
+    if (!duoVariant || !connected || !duoCallId || !duoPeerInCall) return
+    const key = `mingle.post-call.defaults:${duoCallId}`
+    try {
+      if (window.sessionStorage.getItem(key)) return
+      window.sessionStorage.setItem(key, '1')
+    } catch {
+      return
+    }
+    if (!postCallInterpretsByDefault(myLangRef.current, duoPeerLang)) return
+    // Interpretation is paid: with no Hash it stays off, without the sheet.
+    if (interpretOnRef.current || walletExhausted) return
+    onInterpretChange?.(true)
+  }, [connected, duoCallId, duoPeerInCall, duoPeerLang, duoVariant, onInterpretChange, walletExhausted])
+
+  const localSpeaking = duoVariant && joined && seats.some((seat) => seat.isLocal && seat.isSpeaking)
+  const onLocalSpeakingChange = props.onLocalSpeakingChange
+  useEffect(() => {
+    onLocalSpeakingChange?.(localSpeaking)
+  }, [localSpeaking, onLocalSpeakingChange])
+
+  const duoPhase: DuoCallPhase = !duoCall
+    ? (duoOver ? 'over' : 'connecting')
+    : duoOver
+      ? 'over'
+      : duoStatus === 'ringing'
+        ? (duoCall.role === 'author' ? 'ringing_in' : 'ringing_out')
+        : connected && duoPeerInCall ? 'talking' : 'connecting'
+
+  // The room's messages start under the face and the buttons.
+  const duoAnchorRef = useRef<HTMLDivElement | null>(null)
+  const duoBlockRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!duoVariant) return
+    const block = duoBlockRef.current
+    const anchor = duoAnchorRef.current
+    if (!block || !anchor) return
+    const report = () => onHeightChangeRef.current?.(Math.max(0, Math.round(block.getBoundingClientRect().bottom - anchor.getBoundingClientRect().top)))
+    report()
+    // The block slides up when interpretation goes on: measured again once it has.
+    const settled = window.setTimeout(report, 360)
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(report)
+    observer?.observe(block)
+    window.addEventListener('resize', report)
+    return () => {
+      window.clearTimeout(settled)
+      observer?.disconnect()
+      window.removeEventListener('resize', report)
+      onHeightChangeRef.current?.(0)
+    }
+  }, [duoPhase, duoVariant, interpretOn])
+
+  if (duoVariant) {
+    return (
+      <>
+        <div ref={duoAnchorRef} aria-hidden="true" className="pointer-events-none absolute inset-x-0 h-0" style={{ top: props.topOffset }} />
+        <DuoCallStage
+          locale={props.uiLocale}
+          labels={{
+            waiting: duoCopy.waiting,
+            incoming: duoCopy.incoming,
+            accept: duoCopy.accept,
+            decline: duoCopy.decline,
+            cancel: duoCopy.cancel,
+            hangUp: duoCopy.hangUp,
+            connecting: duoCopy.connecting,
+            translate: duoCopy.translate,
+            readAloud: duoCopy.readAloud,
+            mic: duoCopy.mic,
+            micMuted: copy.micMuted,
+          }}
+          peer={duoCall?.peer ?? null}
+          phase={duoPhase}
+          secondsLeft={postCall.secondsLeft}
+          overText={duoStatus === 'ended' || duoStatus === null ? duoCopy.ended : duoCopy.notConnected}
+          note={error}
+          peerSpeaking={duoPeerSeat?.isSpeaking === true}
+          peerMicOn={duoPeerSeat ? duoPeerSeat.micOn : true}
+          micOn={!listenOnly}
+          interpretOn={interpretOn}
+          listenOn={listenOn}
+          earphonesConnected={props.earphonesConnected === true}
+          busy={postCall.busy}
+          onAccept={() => void postCallAct('accept')}
+          onHangUp={duoHangUp}
+          onToggleMic={() => onListenOnlyChange?.(!listenOnly)}
+          onToggleInterpret={() => {
+            // No Hash: the switch stays off and the "out of Hash" sheet opens.
+            if (!interpretOn && !ensureCoinsForPaidFeature()) return
+            onInterpretChange?.(!interpretOn)
+          }}
+          onToggleListen={() => {
+            // Reading aloud is part of interpreting: off, it turns both on.
+            if (!interpretOn) {
+              if (!ensureCoinsForPaidFeature()) return
+              onInterpretChange?.(true)
+              if (!listenOn) onListenChange?.(true)
+              return
+            }
+            onListenChange?.(!listenOn)
+          }}
+          onOpenProfile={onOpenProfile}
+          compact={interpretOn}
+          blockRef={duoBlockRef}
+        />
+      </>
+    )
+  }
+
+  // The voice room screen: the stage is the room, whether or not this phone
+  // is in the call. Coming in is the stage's own button (no "join?" card).
+  if (roomVariant) {
+    const roomCopy = voiceRoomCopy(props.uiLocale)
+    const onStage = stage.enabled ? stageSeats.length : seats.length
+    return (
+      <>
+        {leaveDialog}
+        {startDialog}
+        <div ref={roomStageRef} className="pointer-events-none absolute inset-x-0 z-30" style={{ top: props.topOffset }}>
+          <VoiceRoomStage
+            labels={{
+              status: phase === 'connecting' ? copy.connecting : (live || joined ? copy.live(onStage) : copy.idle),
+              join: roomCopy.join,
+              host: roomCopy.host,
+              me: copy.me,
+              emptySeat: roomCopy.emptySeat,
+              micMuted: copy.micMuted,
+              mic: roomCopy.mic,
+              hand: roomCopy.hand,
+              lowerHand: stageCopy.lowerHand,
+              interpret: roomCopy.interpret,
+              listen: roomCopy.listen,
+              leave: roomCopy.leave,
+              audience: roomCopy.audience(stage.listeners.length + bystanders.length),
+              quiet: roomCopy.quiet,
+              toStage: stageCopy.toStage,
+              offStage: stageCopy.offStage,
+              stepDown: stageCopy.stepDown,
+              fold: copy.fold,
+              open: copy.open,
+            }}
+            seats={stageSeats}
+            seatCount={MAX_SEATS}
+            hostUserId={call?.stage?.hostUserId ?? null}
+            viewerUserId={viewerUserId}
+            listeners={stage.listeners}
+            bystanders={bystanders}
+            joined={joined}
+            connecting={phase === 'connecting'}
+            stageEnabled={stage.enabled}
+            isHost={stage.isHost}
+            myRole={joined ? stage.myRole : null}
+            myHandRaised={stage.myHandRaised}
+            micOn={!listenOnly}
+            interpretOn={interpretOn}
+            listenOn={listenOn}
+            earphonesConnected={props.earphonesConnected === true}
+            busy={stageBusy}
+            folded={folded}
+            error={error}
+            note={stageNote}
+            onJoin={join}
+            onLeave={leave}
+            onToggleMic={() => onListenOnlyChange?.(!listenOnly)}
+            onToggleHand={() => void stageAct(stage.myHandRaised ? 'lower' : 'raise')}
+            onToggleInterpret={() => {
+              // No Hash: the switch stays off and the "out of Hash" sheet opens.
+              if (!interpretOn && !ensureCoinsForPaidFeature()) return
+              onInterpretChange?.(!interpretOn)
+            }}
+            onToggleListen={() => onListenChange?.(!listenOn)}
+            onInvite={(userId) => void stageAct('invite', userId)}
+            onRemove={(userId) => void stageAct('remove', userId)}
+            onStepDown={() => void stageAct('step_down')}
+            onOpenProfile={onOpenProfile}
+            onToggleFold={() => setFolded((value) => !value)}
+          />
+        </div>
+      </>
+    )
+  }
+
   // The panel is the call this phone is in. Before joining there is nothing
   // to show under the top bar: starting and joining are the dialogs above.
   if (!joined && !error) {
     return <>{startDialog}{incomingCard}</>
   }
 
-  const count = joined && room ? room.members.length : call?.participants.length ?? 0
+  // With a stage the count is the people on it (the seats); listeners are listed below.
+  const count = stage.enabled ? stageSeats.length : joined && room ? room.members.length : call?.participants.length ?? 0
 
   return (
     <>
     {leaveDialog}
     {startDialog}
     {incomingCard}
-    <div className="pointer-events-none absolute inset-x-0 z-30 px-2" style={{ top: props.topOffset }}>
+    {/* Flat across the top (owner, 2026-11-25): a strip flush under the top bar, edge to edge, not a floating card. */}
+    <div className="pointer-events-none absolute inset-x-0 z-30" style={{ top: props.topOffset }}>
       <motion.div
         layout
         drag="y"
@@ -678,7 +1050,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
         dragElastic={0.18}
         onDragEnd={onDragEnd}
         transition={{ type: 'spring', stiffness: 420, damping: 36 }}
-        className="pointer-events-auto mt-1 overflow-hidden rounded-2xl border border-gray-100 bg-white/95 shadow-[0_10px_28px_rgba(15,23,42,0.12)] backdrop-blur-sm"
+        className="pointer-events-auto overflow-hidden border-b border-gray-100 bg-white"
         data-qa="voice-talk-panel"
       >
         {/* Top row: always visible; the folded state is only this row, and a
@@ -702,7 +1074,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
           ) : null}
           {folded ? (
             <div className="flex -space-x-2">
-              {seats.slice(0, 4).map((s) => (
+              {stageSeats.slice(0, 4).map((s) => (
                 <span key={s.key} className={`inline-flex h-6 w-6 items-center justify-center overflow-hidden rounded-full border-2 bg-amber-100 text-[0.65rem] font-bold text-amber-800 ${s.isSpeaking ? 'border-slate-400' : 'border-white'}`}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   {s.image ? <img src={s.image} alt="" className="h-full w-full object-cover" /> : initial(s.name)}
@@ -738,19 +1110,105 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
                   room: a 1:1 call is two faces, not two faces and six blanks.
                   The top row already says how many fit. */}
               <div className="flex flex-wrap justify-center gap-x-2 gap-y-2.5 px-3 pb-2 pt-1">
-                {visibleVoiceTalkSeats(seats, MAX_SEATS).map((s, i) => (
-                  <div key={s?.key ?? `empty-${i}`} className="w-[calc(25%-6px)]">
+                {visibleVoiceTalkSeats(stageSeats, MAX_SEATS).map((s, i) => (
+                  <div key={s?.key ?? `empty-${i}`} className="relative w-[calc(25%-6px)]">
                     <VoiceTalkSeatView
                       seat={s}
                       label={s ? (s.isLocal ? copy.me : s.name) : copy.empty}
                       mutedLabel={copy.micMuted}
                       onOpenProfile={onOpenProfile}
                     />
+                    {/* The host takes a speaker off the stage. */}
+                    {stage.enabled && stage.isHost && s && s.userId !== viewerUserId ? (
+                      <button
+                        type="button"
+                        data-qa="voice-stage-remove"
+                        aria-label={stageCopy.offStage}
+                        title={stageCopy.offStage}
+                        disabled={stageBusy}
+                        onClick={() => void stageAct('remove', s.userId)}
+                        className="absolute right-0 top-0 inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white shadow disabled:opacity-50"
+                      >
+                        <ArrowDown size={12} strokeWidth={2.6} />
+                      </button>
+                    ) : null}
                   </div>
                 ))}
               </div>
 
               {error ? <p className="px-3 pb-2 text-[0.8rem] text-rose-600">{error}</p> : null}
+              {stageNote ? <p data-qa="voice-stage-note" role="status" className="px-3 pb-2 text-center text-[0.8rem] text-emerald-700">{stageNote}</p> : null}
+              {/* Someone the host put on the stage can step off it themselves. */}
+              {stage.enabled && joined && stage.myRole === 'speaker' && !stage.isHost ? (
+                <div className="flex justify-center px-3 pb-2">
+                  <button
+                    type="button"
+                    data-qa="voice-stage-step-down"
+                    disabled={stageBusy}
+                    onClick={() => void stageAct('step_down')}
+                    className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-[0.78rem] font-semibold text-gray-700 active:bg-gray-200 disabled:opacity-50"
+                  >
+                    <ArrowDown size={13} strokeWidth={2.4} />
+                    {stageCopy.stepDown}
+                  </button>
+                </div>
+              ) : null}
+
+              {stage.enabled && stage.listeners.length > 0 ? (
+                // The people who only listen. A raised hand shows on the face; the
+                // host's tap puts that person on the stage.
+                <div data-qa="voice-stage-listeners" className="border-t border-gray-100 px-3 pb-2 pt-2">
+                  <p className="pb-1.5 text-[0.72rem] font-semibold text-gray-500">{stageCopy.listeners} {stage.listeners.length}</p>
+                  <div className="flex flex-wrap gap-x-2.5 gap-y-2">
+                    {stage.listeners.map((listener) => {
+                      const face = (
+                        <span className="relative inline-flex h-9 w-9 items-center justify-center overflow-visible">
+                          <span className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-amber-100 text-[0.75rem] font-bold text-amber-800">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            {listener.image ? <img src={listener.image} alt="" className="h-full w-full object-cover" /> : initial(listener.name)}
+                          </span>
+                          {listener.handRaised ? (
+                            <span data-qa="voice-stage-hand" aria-label={stageCopy.raiseHand} className="absolute -right-1 -top-1 inline-flex h-4.5 w-4.5 items-center justify-center rounded-full bg-amber-400 p-0.5 text-white shadow">
+                              <Hand size={11} strokeWidth={2.6} />
+                            </span>
+                          ) : null}
+                          {stage.isHost ? (
+                            <span aria-hidden="true" className="absolute -bottom-1 -right-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-white shadow">
+                              <ArrowUp size={10} strokeWidth={2.8} />
+                            </span>
+                          ) : null}
+                        </span>
+                      )
+                      return stage.isHost ? (
+                        <button
+                          key={listener.userId}
+                          type="button"
+                          data-qa="voice-stage-invite"
+                          aria-label={`${stageCopy.toStage}: ${listener.name || ''}`}
+                          title={stageCopy.toStage}
+                          disabled={stageBusy}
+                          onClick={() => void stageAct('invite', listener.userId)}
+                          className="disabled:opacity-50"
+                        >
+                          {face}
+                        </button>
+                      ) : (
+                        <button
+                          key={listener.userId}
+                          type="button"
+                          data-qa="voice-stage-listener"
+                          aria-label={listener.name || stageCopy.listeners}
+                          onClick={() => {
+                            if (listener.userId !== viewerUserId) onOpenProfile?.(listener.userId)
+                          }}
+                        >
+                          {face}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : null}
 
               {bystanders.length > 0 ? (
                 // Everyone in the room who is not in the call: a small plain
@@ -777,7 +1235,23 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
                 // Four round buttons, icons only (color says on or off), with
                 // room between them so a thumb does not hit the neighbor.
                 <div className="flex items-center justify-center gap-4 border-t border-gray-100 px-3 py-3">
-                  {/* The voice this phone sends into the call. */}
+                  {/* A listener asks for the stage here; a speaker has the mic button. */}
+                  {stage.enabled && stage.myRole === 'listener' ? (
+                    <button
+                      type="button"
+                      data-qa="voice-stage-raise-hand"
+                      aria-pressed={stage.myHandRaised}
+                      aria-label={stage.myHandRaised ? stageCopy.lowerHand : stageCopy.raiseHand}
+                      title={stage.myHandRaised ? stageCopy.lowerHand : stageCopy.raiseHand}
+                      disabled={stageBusy}
+                      onClick={() => void stageAct(stage.myHandRaised ? 'lower' : 'raise')}
+                      className={`inline-flex h-12 w-16 items-center justify-center rounded-full transition-colors disabled:opacity-50 ${
+                        stage.myHandRaised ? 'bg-amber-400 text-white shadow-sm active:bg-amber-500' : 'bg-gray-100 text-gray-500 active:bg-gray-200'
+                      }`}
+                    >
+                      <Hand size={22} />
+                    </button>
+                  ) : (
                   <button
                     type="button"
                     data-qa="voice-talk-mic-toggle"
@@ -791,6 +1265,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
                   >
                     {listenOnly ? <MicOff size={22} /> : <Mic size={22} />}
                   </button>
+                  )}
                   {/* Interpretation: captions of what the others say. */}
                   <button
                     type="button"

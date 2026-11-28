@@ -7,6 +7,7 @@ import {
   markFirstSpeakPending,
   isDocumentLoadedOnFeed,
   shouldOpenConversationsInsteadOfFeed,
+  speakTrialNeedsSessionCheck,
 } from '@/lib/first-run'
 
 function memoryStorage() {
@@ -56,8 +57,9 @@ describe('shouldOpenConversationsInsteadOfFeed', () => {
     expect(shouldOpenConversationsInsteadOfFeed(base)).toBe(true)
   })
 
-  it('keeps sending it there until the first translation', () => {
-    expect(shouldOpenConversationsInsteadOfFeed({ ...base, onboardingConfirmed: true, firstSpeakPending: true })).toBe(true)
+  // 2026-11-20: a signed-in new account starts on Home (people first); the "say something" card is there too.
+  it('opens Home for a signed-in new account that has not spoken yet', () => {
+    expect(shouldOpenConversationsInsteadOfFeed({ ...base, onboardingConfirmed: true, firstSpeakPending: true })).toBe(false)
   })
 
   it('leaves the feed as home once the first run is over, and for existing users', () => {
@@ -70,6 +72,16 @@ describe('shouldOpenConversationsInsteadOfFeed', () => {
 
   it('leaves the web feed alone', () => {
     expect(shouldOpenConversationsInsteadOfFeed({ ...base, isNativeApp: false })).toBe(false)
+  })
+
+  it('sends a signed-out device that owes the speak trial to the conversation list, even after it picked a language', () => {
+    expect(shouldOpenConversationsInsteadOfFeed({ ...base, onboardingConfirmed: true, speakTrialDue: true })).toBe(true)
+    expect(shouldOpenConversationsInsteadOfFeed({ ...base, onboardingConfirmed: true, speakTrialDue: false })).toBe(false)
+  })
+
+  it('does not move a post launch or the web for the speak trial either', () => {
+    expect(shouldOpenConversationsInsteadOfFeed({ ...base, onboardingConfirmed: true, speakTrialDue: true, hasPostTarget: true })).toBe(false)
+    expect(shouldOpenConversationsInsteadOfFeed({ ...base, onboardingConfirmed: true, speakTrialDue: true, isNativeApp: false })).toBe(false)
   })
 
   it('never moves the Home tab or a back step during the first run', () => {
@@ -87,5 +99,40 @@ describe('isDocumentLoadedOnFeed', () => {
   it('falls back to the current path without a navigation entry', () => {
     expect(isDocumentLoadedOnFeed(null, '/ko/feed')).toBe(true)
     expect(isDocumentLoadedOnFeed(null, '/ko/posts/1')).toBe(false)
+  })
+})
+
+describe('speakTrialNeedsSessionCheck', () => {
+  it('asks for the session only on a device that never signed in and has not done the trial', () => {
+    expect(speakTrialNeedsSessionCheck({ speakTrialDone: false, hasSignedInBefore: false })).toBe(true)
+    expect(speakTrialNeedsSessionCheck({ speakTrialDone: true, hasSignedInBefore: false })).toBe(false)
+    expect(speakTrialNeedsSessionCheck({ speakTrialDone: false, hasSignedInBefore: true })).toBe(false)
+  })
+})
+
+describe('going Home after the first sign-in', () => {
+  function memoryStorage() {
+    const map = new Map<string, string>()
+    return {
+      getItem: (key: string) => map.get(key) ?? null,
+      setItem: (key: string, value: string) => void map.set(key, value),
+      removeItem: (key: string) => void map.delete(key),
+    }
+  }
+
+  it('moves a first-run device that signed out on the sign-in screen within ten minutes, until Home clears the mark', async () => {
+    const { SIGNED_OUT_HERE_TTL_MS, clearSignedOutHere, markSignedOutHere, shouldGoHomeAfterSignIn } = await import('./first-run')
+    const storage = memoryStorage()
+    expect(shouldGoHomeAfterSignIn(1_000, storage)).toBe(false)
+    markSignedOutHere(1_000, storage)
+    // Not a first-run device (an existing user signing in again): stays on Chats.
+    expect(shouldGoHomeAfterSignIn(2_000, storage)).toBe(false)
+    markFirstSpeakPending(storage)
+    expect(shouldGoHomeAfterSignIn(2_000, storage)).toBe(true)
+    // Still true after a reload brings the page back to Chats.
+    expect(shouldGoHomeAfterSignIn(3_000, storage)).toBe(true)
+    expect(shouldGoHomeAfterSignIn(1_000 + SIGNED_OUT_HERE_TTL_MS + 1, storage)).toBe(false)
+    clearSignedOutHere(storage)
+    expect(shouldGoHomeAfterSignIn(3_000, storage)).toBe(false)
   })
 })

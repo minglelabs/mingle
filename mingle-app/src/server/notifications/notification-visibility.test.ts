@@ -8,7 +8,7 @@ describe('visibleNotificationWhere', () => {
     const [actorRule, postRule] = where.AND as Array<{ OR: unknown[] }>
     // Team notifications pass without an actor; every other row needs an unblocked one.
     expect(actorRule.OR).toEqual([
-      { actorId: null, type: { in: ['feedback_reply', 'report_reply', 'report_status', 'post_removed'] } },
+      { actorId: null, type: { in: ['feedback_reply', 'report_reply', 'report_status', 'sign_in_attached', 'post_removed'] } },
       { actor: expect.any(Object) },
     ])
     expect(postRule.OR).toEqual([

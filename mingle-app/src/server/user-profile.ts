@@ -1,5 +1,6 @@
 import { getPublishedBioText } from "./profile-bio";
 import { prisma } from "@/lib/prisma";
+import { getMemberNumber } from "@/server/member-number";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 import { zipInterestLanguages, type InterestLanguage } from "@/lib/interest-languages";
 import { identityBadgeFlags } from "@/server/identity/user-identity-select";
@@ -41,6 +42,10 @@ export const userProfileSelect = {
   // profile to other people, so an operator account must stay labeled.
   isOfficial: true,
   isOperator: true,
+  faceVerifiedAt: true,
+  phoneVerifiedAt: true,
+  heightCm: true,
+  createdAt: true,
   _count: {
     select: {
       followerRelations: {
@@ -82,6 +87,9 @@ type SelectedUserProfile = {
   /** Optional so hand-built rows (tests, older selects) still type-check. */
   isOfficial?: boolean | null;
   isOperator?: boolean | null;
+  faceVerifiedAt?: Date | null;
+  phoneVerifiedAt?: Date | null;
+  heightCm?: number | null;
   _count: {
     followerRelations: number;
     followingRelations: number;
@@ -115,6 +123,14 @@ export type UserProfile = {
   followingCount: number;
   /** The HashChat team's official account; present (true) only then. */
   isOfficial?: boolean;
+  /** Passed the selfie check for the current photo; present (true) only then. */
+  faceVerified?: boolean;
+  /** Has a verified phone number (never the number); present (true) only then. */
+  phoneVerified?: boolean;
+  /** Height in cm, as the user typed it; present only when set. */
+  heightCm?: number;
+  /** "Member #N": the order the account joined in (see @/server/member-number); absent for staff accounts. */
+  memberNumber?: number;
 };
 
 export function calculateProfileAge(
@@ -173,6 +189,9 @@ export function serializeUserProfile(profile: SelectedUserProfile, now: Date = n
     locationCountryCode,
     isOfficial,
     isOperator,
+    faceVerifiedAt,
+    phoneVerifiedAt,
+    heightCm,
   } = profile;
   const location = typeof locationLatitude === "number"
     && Number.isFinite(locationLatitude)
@@ -216,6 +235,9 @@ export function serializeUserProfile(profile: SelectedUserProfile, now: Date = n
     followersCount: _count.followerRelations,
     followingCount: _count.followingRelations,
     ...identityBadgeFlags({ isOfficial }),
+    ...(faceVerifiedAt ? { faceVerified: true } : {}),
+    ...(phoneVerifiedAt ? { phoneVerified: true } : {}),
+    ...(typeof heightCm === "number" ? { heightCm } : {}),
   };
 }
 
@@ -228,5 +250,10 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     select: userProfileSelect,
   });
 
-  return profile ? { ...serializeUserProfile(profile), bio: await getPublishedBioText(userId, profile.bio), bioDraft: profile.bio } : null;
+  if (!profile) return null;
+  const [bio, memberNumber] = await Promise.all([
+    getPublishedBioText(userId, profile.bio),
+    getMemberNumber(profile),
+  ]);
+  return { ...serializeUserProfile(profile), bio, bioDraft: profile.bio, ...(memberNumber ? { memberNumber } : {}) };
 }

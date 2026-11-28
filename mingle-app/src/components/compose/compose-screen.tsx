@@ -1,5 +1,11 @@
 'use client'
 
+import ComposeCallCard, { useOwnCallFacts } from '@/components/compose/compose-call-card'
+import PostCallInvite from '@/components/feed/post-call-invite'
+import PostCategoryStrip from '@/components/feed/post-category-strip'
+import ComposeCategoryPicker, { ComposeCategoryStep } from '@/components/compose/compose-category-picker'
+import { POST_CALL_LISTEN_EVENT } from '@/lib/post-call'
+import { EMPTY_POST_INTRO_EXTRAS, POST_HOUR_MS, postIntroProblem, sanitizePostCallTitle, type PostCategory, type PostHobby, type PostIntroExtras } from '@/lib/post-category'
 import { requestProfileBasics } from '@/lib/profile-basics'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -16,7 +22,7 @@ import {
   ComposeHeader,
   ComposeHeaderTextButton,
   ComposePrimaryButton,
-  useKeyboardInset,
+  useKeyboardCover,
 } from './compose-chrome'
 import ComposeEditor, { MAX_POST_PHOTOS } from './compose-editor'
 import { composeGapCopy } from './compose-gap-copy'
@@ -24,6 +30,7 @@ import { postPreviewText } from './draft-preview'
 import {
   appendDraftPage,
   canPublish,
+  MAX_POST_LENGTH,
   draftImageField,
   draftImagePath,
   generateClientPostId,
@@ -33,7 +40,11 @@ import {
 import { createDraftAutosaver, type DraftAutosaver, type DraftSaveState } from './draft-autosave'
 import { isPublishRunning, startPublish } from './publish-store'
 import { feedEvents, trackFeedEvent } from '@/lib/feed-analytics'
-import type { PreparedImage } from './compose-image'
+import { prepareComposeImage, type PreparedImage } from './compose-image'
+import { isNativePhotoGalleryAvailable, openNativePhotoGallery } from '@/lib/native-photo-gallery'
+import { resolveComposePhotoCopy } from '@/i18n/compose-photo-copy'
+import { resolvePostCategoryCopy } from '@/i18n/post-category-copy'
+import { resolveComposeCategoryStepCopy } from '@/i18n/compose-category-step-copy'
 
 const AUTOSAVE_DEBOUNCE_MS = 1200
 
@@ -138,6 +149,17 @@ export default function ComposeScreen({
   const [loadError, setLoadError] = useState(false)
 
   const clientPostId = useRef(generateClientPostId())
+  // The post's kind (see @/lib/post-category); a new post starts as an ordinary one.
+  const [category, setCategory] = useState<PostCategory>('free')
+  // A new post asks for its kind on the write screen (after the app's gallery);
+  // the write form unfolds under it once one is tapped (owner, 2026-11-27).
+  // A draft goes straight to writing.
+  const [categoryChosen, setCategoryChosen] = useState(Boolean(initialDraftId))
+  const [hobbies, setHobbies] = useState<PostHobby[]>([])
+  const [introExtras, setIntroExtras] = useState<PostIntroExtras>(EMPTY_POST_INTRO_EXTRAS)
+  // A voice talk post's own title; empty: the default invitation.
+  const [callTitle, setCallTitle] = useState('')
+  const callFacts = useOwnCallFacts(category === 'call')
   const objectUrl = useRef<string | null>(null)
   // Latest image, read at save time so a debounced autosave (or an upload that
   // finishes later) never persists a stale image field.
@@ -188,6 +210,11 @@ export default function ComposeScreen({
         setPreviewOpen(false)
         return true
       }
+      // Nothing written yet: back to the choice of kind.
+      if (mode === 'editor' && categoryChosen && !initialDraftId && !latest.current.text && imageRef.current.kind === 'none') {
+        setCategoryChosen(false)
+        return true
+      }
       if (mode === 'drafts') {
         setMode('editor')
         return true
@@ -197,14 +224,39 @@ export default function ComposeScreen({
     return () => {
       backHandlerRef.current = null
     }
-  }, [backHandlerRef, previewOpen, mode])
-  const keyboardInset = useKeyboardInset()
+  }, [backHandlerRef, previewOpen, mode, categoryChosen, initialDraftId])
+  const editorBoxRef = useRef<HTMLDivElement | null>(null)
+  const keyboardInset = useKeyboardCover(editorBoxRef)
 
   // A new post gets its random background once, on the client (a draft
   // restores its own below).
   useEffect(() => {
     if (!initialDraftId) setBackgroundKey((current) => current ?? randomBackgroundKey())
   }, [initialDraftId])
+
+  // A new post opens on the app's gallery, Instagram-style (owner, 2026-11-27);
+  // its "next" or "text only" comes back to the choice of kind. Browsers and
+  // apps without it start on the choice of kind.
+  const openGalleryFirstRef = useRef<() => void>(() => undefined)
+  useEffect(() => {
+    openGalleryFirstRef.current = () => { requestNativePhotos({ first: true }) }
+  })
+  const galleryOpenedFirstRef = useRef(false)
+  useEffect(() => {
+    if (!isSignedIn || initialDraftId || galleryOpenedFirstRef.current || !isNativePhotoGalleryAvailable()) return
+    galleryOpenedFirstRef.current = true
+    openGalleryFirstRef.current()
+  }, [initialDraftId, isSignedIn])
+
+  function pickCategory(next: PostCategory) {
+    setCategory(next)
+    setCategoryChosen(true)
+    // Then the writing, and only the writing: the caption box, focused. Not for a
+    // self-introduction (its choices come first) or a voice talk post (its card
+    // comes first): the keyboard would hide them (owner, 2026-11-27).
+    if (next === 'intro' || next === 'call') return
+    window.setTimeout(() => document.getElementById('compose-body')?.focus({ preventScroll: true }), 80)
+  }
 
   // Analytics: compose entry, once per screen mount for a signed-in author.
   const composeOpenedRef = useRef(false)
@@ -322,6 +374,8 @@ export default function ComposeScreen({
     uploadSeq.current += 1
     setImage({ kind: 'none' })
     clearExtras()
+    setCategory('free')
+    setCategoryChosen(false)
     setMode('editor')
   }
 
@@ -335,6 +389,7 @@ export default function ComposeScreen({
     setImage(draftImage(draft))
     clearExtras()
     clientPostId.current = generateClientPostId()
+    setCategoryChosen(true)
     setMode('editor')
   }
 
@@ -453,6 +508,48 @@ export default function ComposeScreen({
     }
   }
 
+  // The app's own gallery, when the app has one (see @/lib/native-photo-gallery);
+  // false lets the editor open the system photo picker instead. `first`: the
+  // gallery opened by itself with the write screen (owner, 2026-11-27, as
+  // Instagram): closing it leaves the post, "text only" goes on to writing.
+  function requestNativePhotos(options: { first?: boolean } = {}): boolean {
+    if (!isNativePhotoGalleryAvailable()) return false
+    const room = MAX_POST_PHOTOS - photos.length
+    if (room <= 0) return true
+    const galleryCopy = resolveComposePhotoCopy(locale)
+    void openNativePhotoGallery(room, {
+      title: galleryCopy.pickTitle,
+      next: galleryCopy.galleryNext,
+      close: galleryCopy.galleryClose,
+      limited: galleryCopy.galleryLimited,
+      denied: galleryCopy.galleryDenied,
+      openSettings: galleryCopy.galleryOpenSettings,
+      skip: galleryCopy.galleryTextOnly,
+      recent: galleryCopy.galleryRecent,
+      albums: galleryCopy.galleryAlbums,
+      camera: galleryCopy.galleryCamera,
+      cameraDenied: galleryCopy.galleryCameraDenied,
+    }).then(async ({ outcome, files }) => {
+      if (outcome === 'cancelled' && options.first) {
+        leave()
+        return
+      }
+      // "Text only": on to the choice of kind (or the writing, when the kind is picked).
+      if (outcome === 'skipped') return
+      if (!files) return
+      const prepared: PreparedImage[] = []
+      for (const file of files.slice(0, room)) {
+        try {
+          prepared.push(await prepareComposeImage(file))
+        } catch {
+          // One unreadable photo does not stop the rest.
+        }
+      }
+      if (prepared.length) handleAddPhotos(prepared)
+    })
+    return true
+  }
+
   function handleRemovePhoto(index: number) {
     if (index > 0) {
       setExtras((prev) => {
@@ -494,7 +591,29 @@ export default function ComposeScreen({
     width: photo.kind === 'local' ? photo.prepared.originalWidth : photo.width,
     height: photo.kind === 'local' ? photo.prepared.originalHeight : photo.height,
   }))
-  const publishable = canPublish({ sourceText: text, hasImage })
+  // A self-introduction needs a hobby and some text before it can be posted.
+  const introProblem = category === 'intro' ? postIntroProblem({ text, hobbies }) : null
+  // A voice talk post may go up with its title alone (owner, 2026-11-28): no text or photo needed.
+  const hasContent = canPublish({ sourceText: text, hasImage }) || (category === 'call' && text.length <= MAX_POST_LENGTH)
+  const publishable = hasContent && !introProblem
+  const photoCopy = resolveComposePhotoCopy(locale)
+  const categoryCopy = resolvePostCategoryCopy(locale)
+  const stepCopy = resolveComposeCategoryStepCopy(locale)
+  // Before the kind is confirmed, the same bottom button posts at once when there
+  // is something to post (an ordinary post by default: photos, then one tap), and
+  // otherwise goes on to the writing (owner, 2026-11-27).
+  const continueFirst = !categoryChosen && !publishable
+  const blockedReason = publishable || continueFirst
+    ? null
+    : text.length > MAX_POST_LENGTH
+      ? photoCopy.textTooLong
+      : !hasContent
+        ? photoCopy.needContent
+        : introProblem === 'hobbies'
+          ? categoryCopy.needHobby
+          : introProblem === 'text'
+            ? categoryCopy.needText
+            : null
 
   async function handlePublish() {
     if (!publishable || publishing.current) return
@@ -529,6 +648,10 @@ export default function ComposeScreen({
           ? { objectKey: photo.objectKey, file: null, width: photo.width, height: photo.height }
           : { objectKey: null, file: photo.prepared.file, width: photo.prepared.originalWidth, height: photo.prepared.originalHeight }),
         draftId,
+        category,
+        hobbies: category === 'intro' ? hobbies : undefined,
+        introExtras: category === 'intro' ? introExtras : undefined,
+        callTitle: category === 'call' ? sanitizePostCallTitle(callTitle) : undefined,
       })
       if (!accepted) {
         // Another publish started in between: same handling as above.
@@ -539,6 +662,8 @@ export default function ComposeScreen({
       }
       // The post now belongs to the publish job; no more draft writes for it.
       saver().close()
+      // A call post: the app starts listening for calls at once (IncomingPostCallGate).
+      if (category === 'call') window.dispatchEvent(new Event(POST_CALL_LISTEN_EVENT))
       // Return to the feed; the PublishStatusBanner shows progress there.
       if (onPublished) onPublished()
       // Replace: back from the feed must not reopen the composer.
@@ -682,6 +807,8 @@ export default function ComposeScreen({
     <div
       className="flex h-full flex-col bg-card text-card-foreground"
       // Keep the bottom bar above the on-screen keyboard.
+      ref={editorBoxRef}
+      // Keep the content, the bottom bar included, above the on-screen keyboard.
       style={{ paddingBottom: keyboardInset }}
     >
       <ComposeHeader
@@ -719,6 +846,43 @@ export default function ComposeScreen({
           </p>
         ) : null}
 
+        {initialDraftId ? null : (
+          <ComposeCategoryStep
+            locale={locale}
+            selected={category}
+            open={!categoryChosen}
+            onPick={pickCategory}
+            onReopen={() => setCategoryChosen(false)}
+          />
+        )}
+        {!categoryChosen && photos.length > 0 ? (
+          // The photos picked in the gallery, so the button below plainly posts them.
+          <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 pb-2 pt-1" data-qa="compose-step-photos">
+            {photos.map((photo) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={photo.id} src={photo.url} alt="" className="h-16 w-16 shrink-0 rounded-xl object-cover" draggable={false} />
+            ))}
+          </div>
+        ) : null}
+        {categoryChosen ? (
+        <>
+        {/* The write form unfolds under the kind picked: the caption, then the photos (each removable, more addable). */}
+        <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:duration-300">
+        {/* A voice talk post: who takes the calls and the invitation, before the text. */}
+        {category === 'call' ? <ComposeCallCard locale={locale} headline={stepCopy.callHeadline} title={callTitle} onTitleChange={setCallTitle} author={author} facts={callFacts} /> : null}
+        {/* A self-introduction: its choices (hobbies and more) first, the text after. */}
+        {/* What goes with the kind picked (a self-introduction's hobbies and more). */}
+        <ComposeCategoryPicker
+          locale={locale}
+          category={category}
+          onCategoryChange={setCategory}
+          hobbies={hobbies}
+          introExtras={introExtras}
+          onIntroExtrasChange={setIntroExtras}
+          onHobbiesChange={setHobbies}
+          problem={introProblem}
+          compact
+        />
         <ComposeEditor
           locale={locale}
           sourceText={text}
@@ -731,27 +895,75 @@ export default function ComposeScreen({
           onAddPhotos={handleAddPhotos}
           onRemovePhoto={handleRemovePhoto}
           author={author}
-          autoFocus={!initialDraftId}
-          // In the panel, focus once it has slid in (SlideSurface: 320ms).
-          autoFocusDelayMs={embedded ? 360 : 0}
+          autoFocus={false}
+          // The preview shows the kind as viewers will: a call post's title and its call button.
+          previewControl={category === 'call' || category === 'hour'
+            ? <PostCategoryStrip category={category} expiresAt={new Date(Date.now() + POST_HOUR_MS - 1000).toISOString()} locale={locale} withButton={false} />
+            : undefined}
+          previewHeader={category === 'call' ? (
+            <PostCallInvite
+              postId=""
+              locale={locale}
+              title={sanitizePostCallTitle(callTitle)}
+              author={{
+                ...author,
+                nationality: callFacts?.nationality ?? null,
+                languages: callFacts ? { primary: callFacts.primary, interest: callFacts.interest } : undefined,
+              }}
+              demo
+            />
+          ) : undefined}
+          toolsNote={category === 'hour' ? <HourDeletesAt locale={locale} template={stepCopy.hourDeletesAt} /> : undefined}
+          onRequestPhotos={requestNativePhotos}
           previewOpen={previewOpen}
           onPreviewOpenChange={setPreviewOpen}
         />
+
+        </div>
+        </>
+        ) : null}
       </div>
 
+      {/* Always here, in the easiest place to tap: above the keyboard, else at the bottom. */}
       <div
-        className="flex shrink-0 items-center justify-between gap-3 border-t border-foreground/10 px-4 pt-2.5"
+        className="shrink-0 border-t border-foreground/10 px-4 pt-2"
         style={{
           paddingBottom: keyboardInset > 0 ? '10px' : 'max(env(safe-area-inset-bottom, 0px), 10px)',
         }}
       >
-        <span className="min-w-0 flex-1 truncate text-[13px] text-foreground/45" role="status" aria-live="polite">
-          {saveStatus}
-        </span>
-        <ComposePrimaryButton onClick={() => void handlePublish()} disabled={!publishable}>
-          {copy.publish}
-        </ComposePrimaryButton>
+        {/* Why the button is not ready yet, else how the draft is doing. */}
+        <p
+          className={`mb-2 min-h-[18px] truncate text-center text-[13px] ${blockedReason ? 'font-semibold text-amber-700' : 'text-foreground/45'}`}
+          role="status"
+          aria-live="polite"
+          data-qa="compose-publish-reason"
+        >
+          {blockedReason ?? saveStatus}
+        </p>
+        <button
+          type="button"
+          data-qa="compose-publish"
+          onClick={() => (continueFirst ? pickCategory(category) : void handlePublish())}
+          disabled={!publishable && !continueFirst}
+          className="flex h-12 w-full items-center justify-center rounded-2xl bg-primary text-[16px] font-bold text-primary-foreground transition active:scale-[0.99] disabled:bg-foreground/10 disabled:text-foreground/35"
+        >
+          {continueFirst ? stepCopy.continue : copy.publish}
+        </button>
       </div>
     </div>
   )
+}
+
+/**
+ * An hour post being written: when it would be deleted if posted this second
+ * (owner, 2026-11-27), ticking every second, e.g. "…13:14:29에 삭제돼요".
+ */
+function HourDeletesAt({ locale, template }: { locale: string; template: string }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+  const time = new Date(now + POST_HOUR_MS).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+  return <span data-qa="compose-hour-deletes-at" className="tabular-nums">{template.replace('{time}', time)}</span>
 }

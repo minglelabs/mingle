@@ -30,24 +30,36 @@ export function resolveConversationListNativeBannerZone(params: {
 // Banner visibility policy
 //
 // The native AdMob banner is an allow-list, not a deny-list: it may only be
-// visible on the conversation list and inside a chat room. Everything else —
+// visible on the conversation list, inside a chat room, and under the top bar
+// of the voice-room and explore tabs (owner, 2026-11-25). Everything else —
 // every other route, and every overlay/modal layered over those two screens —
 // is banner-free by default, so a new screen needs no banner code at all.
 //
 // All `native_set_banner_zone` traffic goes through this module. The zone sent
 // to the native shell is the intersection of three gates:
-//   1. route:        the current page must be `/{locale}/conversations`;
-//   2. surface:      the list / room asked for 'list' / 'conversation'
+//   1. route:        the current page must be `/{locale}/conversations`, or
+//                    one of the banner tabs (`/{locale}/voice`, `/explore`);
+//   2. surface:      the list / room / tab asked for 'list' / 'conversation'
 //                    (`requestNativeBannerZone`);
 //   3. suppression:  no overlay currently holds `suppressNativeBanner()`.
 // Call sites never decide what to restore when an overlay closes: releasing the
 // suppression re-syncs the zone the surface last requested.
 // ---------------------------------------------------------------------------
 
-/** Only `/{locale}/conversations` hosts the list and the chat room overlay. Sub-routes such as `/conversations/new-group` are separate screens. */
+/** Tabs that pin the banner under their top bar (`useTabNativeBanner`), besides the conversation list. */
+export const NATIVE_BANNER_TAB_ROUTES: readonly string[] = ['voice', 'explore']
+
+/** A banner tab: `/{locale}/voice` or `/{locale}/explore`, not their sub-routes. */
+export function isNativeBannerTabPathname(pathname: string): boolean {
+  const segments = pathname.split('/').filter(Boolean)
+  return segments.length === 2 && NATIVE_BANNER_TAB_ROUTES.includes(segments[1])
+}
+
+/** `/{locale}/conversations` hosts the list and the chat room overlay; the banner tabs show it under their top bar. Sub-routes such as `/conversations/new-group` are separate screens. */
 export function isNativeBannerAllowedPathname(pathname: string): boolean {
   const segments = pathname.split('/').filter(Boolean)
-  return segments.length === 2 && segments[1] === 'conversations'
+  if (segments.length !== 2) return false
+  return segments[1] === 'conversations' || NATIVE_BANNER_TAB_ROUTES.includes(segments[1])
 }
 
 export function resolveEffectiveNativeBannerZone(params: {
@@ -126,6 +138,21 @@ function scheduleHiddenReassert(): void {
   }, delayMs))
 }
 
+// App builds up to 2.5.x hide the banner by themselves when the page moves to
+// any route but /conversations, and that can land after a banner tab asked for
+// it. On a banner tab the zone is therefore sent again a few times while it
+// still holds (the same timers as above: one schedule at a time).
+function scheduleTabBannerReassert(zone: NativeBannerZone): void {
+  if (typeof window === 'undefined') return
+  const bridgeWindow = window as NativeBannerZoneBridgeWindow
+  if (typeof bridgeWindow.ReactNativeWebView?.postMessage !== 'function') return
+
+  hiddenReassertTimers = NATIVE_BANNER_HIDDEN_REASSERT_DELAYS_MS.map((delayMs) => setTimeout(() => {
+    if (resolveCurrentNativeBannerZone() !== zone) return
+    postNativeBannerZoneCommand(zone)
+  }, delayMs))
+}
+
 /**
  * Re-posts the effective zone. Every call posts (no de-duplication) because the
  * native shell can move its own zone on navigation, so the web side must be
@@ -136,6 +163,7 @@ export function syncNativeBannerZone(): void {
   postNativeBannerZoneCommand(zone)
   clearHiddenReassertTimers()
   if (zone === 'hidden') scheduleHiddenReassert()
+  else if (typeof window !== 'undefined' && isNativeBannerTabPathname(window.location.pathname)) scheduleTabBannerReassert(zone)
 }
 
 /**

@@ -57,7 +57,7 @@ export async function generateMetadata({ params }: InviteTicketPageProps) {
   }
   const title = name ? `${name} invited you to HashChat` : "HashChat invite ticket";
   const description = name
-    ? `Talk with ${name}, each in your own language. HashChat (formerly Mingle) interprets as you talk.`
+    ? `Talk with ${name} on HashChat. Make friends across languages: chats and voice talks are interpreted live.`
     : "You're invited to talk on HashChat, each in your own language.";
   return { title, description, robots: { index: false }, ...shareLinkPreview(title, description) };
 }

@@ -5,7 +5,7 @@ import { generatePreviewText } from "@/lib/post-preview-text";
 import { resolveViewColors } from "@/components/feed/feed-post-view";
 import FeedPostView from "@/components/feed/feed-post-view";
 import { imageAspectRatio } from "@/components/feed/feed-card-format";
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 
 /**
  * CONTRACT STUB body — the props are frozen; only the body is implemented here.
@@ -22,11 +22,15 @@ export type FeedPostPreviewProps = {
   /** Every photo in order when there are several; the first is `image`. */
   images?: FeedPostImageDto[];
   author: { name: string | null; handle: string; imageUrl: string | null };
+  /** Under the text, as on the card (the kind of post: a call post's title and button). */
+  controlSlot?: ReactNode;
+  /** Above the author row, as on the card (a call post's invitation). */
+  headerSlot?: ReactNode;
 };
 
 const PREVIEW_CARD_HEIGHT = "100dvh";
 
-export default function FeedPostPreview({ text, backgroundKey, image, images, author }: FeedPostPreviewProps) {
+export default function FeedPostPreview({ text, backgroundKey, image, images, author, controlSlot, headerSlot }: FeedPostPreviewProps) {
   const preview = useMemo(() => generatePreviewText(text), [text]);
   const colors = useMemo(() => resolveViewColors(backgroundKey, Boolean(image)), [backgroundKey, image]);
   const displayName = author.name?.trim() || `@${author.handle}`;
@@ -43,7 +47,10 @@ export default function FeedPostPreview({ text, backgroundKey, image, images, au
       previewText={preview.text}
       expanded={false}
       ariaLabel={`${displayName}: ${preview.text}`}
+      controlSlot={controlSlot}
       authorSlot={
+        <>
+        {headerSlot}
         <div className="mb-3 flex items-center gap-3">
           {author.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -68,6 +75,7 @@ export default function FeedPostPreview({ text, backgroundKey, image, images, au
             {displayName}
           </span>
         </div>
+        </>
       }
     />
   );

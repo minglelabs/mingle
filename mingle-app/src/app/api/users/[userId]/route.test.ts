@@ -27,6 +27,17 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 vi.mock("@/server/profile-bio", () => ({ getPublishedBioText: async (_id: string, bio: string | null) => bio }));
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  // Background work after the response (bio translations, names) is not run here.
+  after: () => undefined,
+}));
+vi.mock("@/server/name-transliteration", () => ({
+  nameLanguageOf: () => null,
+  readNameTransliterations: async () => new Map(),
+  fillNameTransliterations: async () => 0,
+}));
+
 
 import { GET } from "@/app/api/users/[userId]/route";
 
@@ -204,6 +215,8 @@ describe("/api/users/[userId] route", () => {
 
     expect(response.status).toBe(200);
     expect(mockUserFindUnique).toHaveBeenNthCalledWith(1, expect.objectContaining({ where: { id: "user_456", isActive: true } }));
-    expect(mockUserFindUnique).toHaveBeenCalledTimes(1);
+    // The second read is the viewer's own languages (the name written for them).
+    expect(mockUserFindUnique).toHaveBeenNthCalledWith(2, expect.objectContaining({ where: { id: "viewer_123" } }));
+    expect(mockUserFindUnique).toHaveBeenCalledTimes(2);
   });
 });

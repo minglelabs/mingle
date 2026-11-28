@@ -16,13 +16,16 @@ import { REPORT_REASONS, MAX_REPORT_MESSAGE_LENGTH, type ReportReason } from "@/
 export type ReportTarget =
   | { type: "post"; postId: string; authorId: string }
   | { type: "comment"; commentId: string; authorId: string }
-  | { type: "user"; userId: string };
+  | { type: "user"; userId: string }
+  | { type: "room"; conversationId: string };
 
 export type ReportSheetProps = {
   open: boolean;
   target: ReportTarget;
   locale: string;
   onClose: () => void;
+  /** Above a screen that sits over the tabs (the 1:1 voice talk screen). */
+  zIndex?: number;
 };
 
 type Phase = "form" | "submitting" | "submitted" | "already" | "error";
@@ -35,10 +38,12 @@ function endpointFor(target: ReportTarget): `/${string}` {
       return `/comments/${encodeURIComponent(target.commentId)}/report`;
     case "user":
       return `/users/${encodeURIComponent(target.userId)}/report`;
+    case "room":
+      return `/conversations/${encodeURIComponent(target.conversationId)}/report`;
   }
 }
 
-export default function ReportSheet({ open, target, locale, onClose }: ReportSheetProps) {
+export default function ReportSheet({ open, target, locale, onClose, zIndex }: ReportSheetProps) {
   const copy = useMemo(() => reportCopy(locale), [locale]);
   const [reason, setReason] = useState<ReportReason>("spam");
   const [note, setNote] = useState("");
@@ -66,6 +71,7 @@ export default function ReportSheet({ open, target, locale, onClose }: ReportShe
       case "post": return copy.reportTitlePost;
       case "comment": return copy.reportTitleComment;
       case "user": return copy.reportTitleUser;
+      case "room": return copy.reportTitleRoom;
     }
   }, [copy, target.type]);
 
@@ -92,7 +98,8 @@ export default function ReportSheet({ open, target, locale, onClose }: ReportShe
 
   return (
     <div
-      className="fixed inset-0 z-[130] flex items-end justify-center bg-black/40"
+      className="keyboard-safe fixed inset-0 z-[130] flex items-end justify-center bg-black/40"
+      style={zIndex ? { zIndex } : undefined}
       onClick={onClose}
     >
       <section

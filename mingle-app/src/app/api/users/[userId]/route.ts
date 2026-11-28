@@ -1,4 +1,6 @@
-import { type NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse, after } from "next/server";
+import { resolveBioDisplayLanguage } from "@/lib/profile-bio";
+import { fillNameTransliterations, nameLanguageOf, readNameTransliterations } from "@/server/name-transliteration";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { getPublishedBioText } from "@/server/profile-bio";
@@ -10,6 +12,7 @@ import { USER_IDENTITY_SELECT, identityBadgeFlags } from "@/server/identity/user
 import { calculateProfileAge } from "@/server/user-profile";
 import { normalizeProfileGender } from "@/lib/profile-gender";
 import { resolveNationalityCountry } from "@/lib/nationality";
+import { getMemberNumber } from "@/server/member-number";
 
 export const runtime = "nodejs";
 
@@ -49,6 +52,10 @@ const userProfileSelect = {
   locationCity: true,
   locationCountry: true,
   locationCountryCode: true,
+  faceVerifiedAt: true,
+  phoneVerifiedAt: true,
+  heightCm: true,
+  createdAt: true,
   _count: {
     select: {
       followerRelations: {
@@ -65,7 +72,7 @@ const userProfileSelect = {
   },
 } as const;
 
-export async function GET(_request: NextRequest, { params }: UserProfileRouteProps) {
+export async function GET(request: NextRequest, { params }: UserProfileRouteProps) {
   const viewerId = getSessionUserId(await getServerSession(getAuthOptions()));
   if (!viewerId) {
     return responseJson({ error: "unauthorized" }, { status: 401 });
@@ -127,17 +134,38 @@ export async function GET(_request: NextRequest, { params }: UserProfileRoutePro
     user.primaryLanguages,
     user.nationality ? [user.nationality] : [],
   );
+  // The name written for the reader (owner, 2026-11-25): 李伟 → 리웨이 for a Korean reader.
+  const reader = await prisma.user.findUnique({
+    where: { id: viewerId },
+    select: { defaultDisplayLanguage: true, primaryLanguages: true, defaultConversationLanguages: true },
+  });
+  const nameLanguage = nameLanguageOf(resolveBioDisplayLanguage(
+    reader?.defaultDisplayLanguage,
+    reader?.primaryLanguages ?? [],
+    reader?.defaultConversationLanguages ?? [],
+    request.nextUrl.searchParams.get("locale") ?? "en",
+  ));
+  const [bio, memberNumber, readerNames] = await Promise.all([
+    getPublishedBioText(user.id, user.bio),
+    getMemberNumber(user),
+    nameLanguage ? readNameTransliterations([user], nameLanguage) : Promise.resolve(new Map<string, string>()),
+  ]);
+  const readerName = readerNames.get(user.id) ?? null;
+  if (nameLanguage && !readerName) {
+    after(() => fillNameTransliterations([user], nameLanguage).catch(() => 0));
+  }
   return responseJson({
     id: user.id,
     handle: user.handle,
     name: user.name,
+    ...(readerName ? { readerName } : {}),
     image: user.image,
     imageCropScale: user.imageCropScale,
     imageCropX: user.imageCropX,
     imageCropY: user.imageCropY,
     age: calculateProfileAge(user.birthDate),
     ...(normalizeProfileGender(user.gender) ? { gender: normalizeProfileGender(user.gender) } : {}),
-    bio: await getPublishedBioText(user.id, user.bio),
+    bio,
     nationality: user.nationality,
     nationalityCountry: resolveNationalityCountry(user.nationalityCountry, primaryLanguages),
     primaryLanguages,
@@ -161,5 +189,12 @@ export async function GET(_request: NextRequest, { params }: UserProfileRoutePro
     isBlocked: block?.blockerId === viewerId,
     // Badge flags (official / operator) only when true; absent means false.
     ...identityBadgeFlags(user),
+    // Passed the selfie check for the current photo.
+    ...(user.faceVerifiedAt ? { faceVerified: true } : {}),
+    // A verified number (never the number itself), shown as a chip.
+    ...(user.phoneVerifiedAt ? { phoneVerified: true } : {}),
+    ...(typeof user.heightCm === "number" ? { heightCm: user.heightCm } : {}),
+    // "Member #N" (the order the account joined in); staff accounts have none.
+    ...(memberNumber ? { memberNumber } : {}),
   });
 }

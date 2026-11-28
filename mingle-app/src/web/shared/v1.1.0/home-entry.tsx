@@ -1,5 +1,6 @@
-import { buildPathWithSearchParams } from "@/lib/build-path-with-search-params";
 import { feedHref } from "@/lib/feed-routes";
+import { buildPathWithSearchParams } from "@/lib/build-path-with-search-params";
+import { homeHref } from "@/lib/home-routes";
 import { conversationsHref, requestNamespaceSupportsPostingFeed } from "@/lib/posting-feed-guard";
 import { redirect } from "next/navigation";
 
@@ -27,5 +28,7 @@ export default function V110HomeEntry({ locale, searchParams }: V110HomeEntryPro
     redirect(buildPathWithSearchParams(conversationsHref(locale), searchParams));
   }
 
-  redirect(buildPathWithSearchParams(feedHref(locale), searchParams));
+  // A post link opens the feed; anything else the home tab (voice rooms, 2026-11-24).
+  const target = searchParams.postId || searchParams.commentId ? feedHref(locale) : homeHref(locale);
+  redirect(buildPathWithSearchParams(target, searchParams));
 }

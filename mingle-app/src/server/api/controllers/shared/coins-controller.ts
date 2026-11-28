@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { settleDmOpenCharges } from '@/server/dm-open-charge'
 import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
 import { COIN_INSUFFICIENT_ERROR } from '@/lib/coin-units'
@@ -69,6 +70,10 @@ export async function readCoinWallet(request?: NextRequest) {
   if (!userId) return json({ error: 'unauthorized' }, 401)
   // Off = nothing is recorded: no wallet row, no daily refill, no STT billing identity.
   if (resolveCoinBillingMode() === 'off') return json({ ...disabledCoinWallet(), sttBillingToken: null })
+  // Rooms that went unanswered give their Hash back first (see @/server/dm-open-charge).
+  await settleDmOpenCharges(userId).catch((error) => {
+    console.warn('[dm-open-charge] settle_failed', error instanceof Error ? error.name : 'unknown')
+  })
   const [wallet, rates, user] = await Promise.all([
     getCoinWallet(userId),
     loadCoinPricingRates(),

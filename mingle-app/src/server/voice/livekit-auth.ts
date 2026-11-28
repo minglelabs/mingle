@@ -65,6 +65,8 @@ export type VoiceJoinTokenInput = {
   identity: string;
   name: string;
   attributes: Record<string, string>;
+  /** false for a listener in an open room's call: they hear it but cannot send their voice. */
+  canPublish?: boolean;
   ttlSec?: number;
   nowSec?: number;
 };
@@ -84,7 +86,7 @@ export function mintVoiceJoinToken(input: VoiceJoinTokenInput): string {
       video: {
         room: input.room,
         roomJoin: true,
-        canPublish: true,
+        canPublish: input.canPublish !== false,
         canSubscribe: true,
         canPublishData: true,
         canUpdateOwnMetadata: true,
@@ -121,6 +123,39 @@ export async function listRoomIdentities(
     return (body.participants ?? []).map((p) => p.identity || "").filter(Boolean);
   } catch {
     return null;
+  }
+}
+
+// Lets someone in a room send their voice or not (RoomService.UpdateParticipant
+// over Twirp). Taking the right away also stops the voice they are sending.
+// false = could not be done (they may have left; their next join gets the
+// right from its token anyway).
+export async function setRoomParticipantCanPublish(
+  config: LiveKitConfig,
+  input: { room: string; identity: string; canPublish: boolean },
+  fetchImpl: typeof fetch = fetch,
+  timeoutMs = 2500,
+): Promise<boolean> {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const token = signHs256(
+    { iss: config.apiKey, sub: "mingle-app", nbf: nowSec, exp: nowSec + 60, video: { room: input.room, roomAdmin: true } },
+    config.apiSecret,
+  );
+  const base = config.url.replace(/^ws(s?):\/\//i, "http$1://").replace(/\/+$/, "");
+  try {
+    const response = await fetchImpl(`${base}/twirp/livekit.RoomService/UpdateParticipant`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        room: input.room,
+        identity: input.identity,
+        permission: { can_subscribe: true, can_publish: input.canPublish, can_publish_data: true, can_update_metadata: true },
+      }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    return response.ok;
+  } catch {
+    return false;
   }
 }
 

@@ -6,6 +6,8 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
+	<key>CFBundleAllowMixedLocalizations</key>
+	<true/>
 	<key>CFBundleDisplayName</key>
 	<string>HashChat</string>
 	<key>CFBundleExecutable</key>
@@ -49,17 +51,17 @@
 		<true/>
 	</dict>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>HashChat uses your microphone for real-time speech translation.</string>
+	<string>HashChat uses your microphone to interpret your voice talks with friends in real time.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>HashChat uses your local network to connect voice talk calls.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>HashChat uses your camera to scan profile QR codes.</string>
+	<string>HashChat uses your camera to take photos for your posts and profile, to scan profile QR codes and, if you choose, to check your selfie for a verified badge.</string>
 	<key>NSContactsUsageDescription</key>
 	<string>HashChat reads your contacts only on this device, so you can pick friends to invite by text message.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>HashChat uses your location only when you choose to add or update your profile location.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>HashChat lets you choose photos to send in conversations.</string>
+	<string>HashChat shows your photos so you can pick ones to post or send in conversations.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>HashChat saves QR codes and chat photos to your Photos.</string>
 	<key>MingleWebAppBaseURL</key>

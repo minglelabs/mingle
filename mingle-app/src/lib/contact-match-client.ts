@@ -11,6 +11,8 @@ export type MatchedContactUser = {
   handle: string
   image: string | null
   isFollowing: boolean
+  /** The two do not see each other on the explore tab (hiding from contacts). */
+  hidden: boolean
 }
 
 export type MatchedContact = { contact: NativeContact; user: MatchedContactUser }
@@ -49,7 +51,7 @@ export async function matchContactsOnServer(contacts: readonly NativeContact[], 
       seenUsers.add(match.userId)
       matches.push({
         contact,
-        user: { userId: match.userId, name: match.name, handle: match.handle, image: match.image, isFollowing: match.isFollowing },
+        user: { userId: match.userId, name: match.name, handle: match.handle, image: match.image, isFollowing: match.isFollowing, hidden: match.hidden === true },
       })
     }
   }

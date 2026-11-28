@@ -29,6 +29,9 @@ RCT_EXTERN_METHOD(getRuntimeConfig:(RCTPromiseResolveBlock)resolve
 RCT_EXTERN_METHOD(getMicrophonePermissionStatus:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(requestMicrophonePermission:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 RCT_EXTERN_METHOD(qaInjectAudio:(NSDictionary *)options
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
@@ -65,6 +68,8 @@ RCT_EXTERN_METHOD(clearLastScreenSnapshot:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
 RCT_EXTERN_METHOD(recordHistoryDebug:(NSString *)payload)
+
+RCT_EXTERN_METHOD(setAccountHint:(NSString *)hint)
 
 RCT_EXTERN_METHOD(checkLocationPermission:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)

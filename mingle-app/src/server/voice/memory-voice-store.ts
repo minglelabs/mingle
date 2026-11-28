@@ -10,6 +10,8 @@ type ParticipantRow = {
   speechLanguage: string | null;
   joinedAt: Date;
   leftAt: Date | null;
+  role?: string;
+  handRaisedAt?: Date | null;
 };
 
 export type MemoryVoiceStore = VoiceStore & {
@@ -64,6 +66,8 @@ export function createMemoryVoiceStore(): MemoryVoiceStore {
           interpretOn: row.interpretOn,
           speechLanguage: row.speechLanguage,
           joinedAt: row.joinedAt,
+          role: row.role ?? "speaker",
+          handRaisedAt: row.handRaisedAt ?? null,
         }));
     },
     async upsertActiveParticipant(input) {
@@ -72,9 +76,21 @@ export function createMemoryVoiceStore(): MemoryVoiceStore {
         existing.leftAt = null;
         existing.interpretOn = input.interpretOn;
         existing.speechLanguage = input.speechLanguage;
+        existing.handRaisedAt = null;
+        if (input.role) existing.role = input.role;
         return;
       }
       memory.participants.push({ ...input, joinedAt: new Date(), leftAt: null });
+    },
+    async findParticipant(callId, userId) {
+      const row = memory.participants.find((entry) => entry.callId === callId && entry.userId === userId);
+      return row ? { role: row.role ?? "speaker", active: row.leftAt === null } : null;
+    },
+    async updateParticipantStage(input) {
+      const row = memory.participants.find((entry) => entry.callId === input.callId && entry.userId === input.userId && entry.leftAt === null);
+      if (!row) return;
+      if (input.role) row.role = input.role;
+      if (input.handRaisedAt !== undefined) row.handRaisedAt = input.handRaisedAt;
     },
     async markParticipantLeft(input) {
       for (const row of memory.participants) {

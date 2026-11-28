@@ -29,7 +29,7 @@ const REPORT_REASON_SET = new Set<string>(REPORT_REASONS)
 /** Free-text note is optional for every reason (including "other"). */
 export const MAX_REPORT_MESSAGE_LENGTH = 500
 
-export type ReportTargetType = 'user' | 'post' | 'comment'
+export type ReportTargetType = 'user' | 'post' | 'comment' | 'room'
 
 /**
  * The value stored in `UserReport.targetKey`. It is what the
@@ -76,6 +76,8 @@ export type CreateReportInput = {
   targetPostId?: string | null
   /** Comment id for a comment report; null otherwise. */
   targetCommentId?: string | null
+  /** Room id for an open-room report (kept in `targetKey` only); `reportedUserId` is the host. */
+  targetRoomId?: string | null
   reason: ReportReason
   message: string | null
 }
@@ -129,7 +131,9 @@ export async function createReport(
       ? input.targetPostId
       : input.targetType === 'comment'
         ? input.targetCommentId
-        : input.reportedUserId
+        : input.targetType === 'room'
+          ? input.targetRoomId
+          : input.reportedUserId
   const targetKey = buildReportTargetKey(input.targetType, String(targetId ?? ''))
 
   try {

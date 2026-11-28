@@ -1,0 +1,57 @@
+import { readRequestCountry } from '@/server/request-country'
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { getAuthOptions } from '@/lib/auth-options'
+import { enterInviteCode, readAppAccess } from '@/server/app-access'
+import { readDeviceHeader, touchDevice } from '@/server/identity/links'
+import { ReferralError, type ReferralRedeemError } from '@/server/referral'
+
+const NO_STORE_HEADERS = { 'Cache-Control': 'private, no-store' }
+
+const CODE_ERROR_STATUS: Record<ReferralRedeemError, number> = {
+  invalid_code: 400,
+  not_found: 404,
+  own_code: 400,
+  already_redeemed: 409,
+  not_allowed: 403,
+}
+
+function json(body: unknown, status = 200) {
+  return NextResponse.json(body, { status, headers: NO_STORE_HEADERS })
+}
+
+async function readSessionUserId(): Promise<string> {
+  const session = await getServerSession(getAuthOptions()) as { user?: { id?: unknown } } | null
+  return typeof session?.user?.id === 'string' ? session.user.id.trim() : ''
+}
+
+function readLocale(raw: unknown): string | null {
+  return typeof raw === 'string' && raw.trim() ? raw.trim().slice(0, 16) : null
+}
+
+/** GET /account/access?locale=ko — whether this account may use the app or needs an invite first. */
+export async function getAppAccess(request?: NextRequest) {
+  const userId = await readSessionUserId()
+  if (!userId) return json({ error: 'unauthorized' }, 401)
+  // The app asks this every time it opens: the place where an account is noted on its device.
+  const device = request ? await touchDevice(userId, readDeviceHeader(request.headers)) : null
+  // "korean": the first screen's "Are you Korean?" answer (1 / 0), when the device has one.
+  const rawKorean = request?.nextUrl.searchParams.get('korean')
+  const korean = rawKorean === '1' ? true : rawKorean === '0' ? false : null
+  // Where the request comes from: in Korea, "no Korean number" does not skip the number.
+  const inKorea = request ? readRequestCountry(request.headers) === 'KR' : null
+  return json(await readAppAccess(userId, readLocale(request?.nextUrl.searchParams.get('locale')), { deviceBlocked: Boolean(device?.blocked), korean, inKorea }))
+}
+
+/** POST /account/access { code } — enters an invite code at the gate. */
+export async function postAppAccessCode(request: NextRequest) {
+  const userId = await readSessionUserId()
+  if (!userId) return json({ error: 'unauthorized' }, 401)
+  const body = await request.json().catch(() => ({})) as { code?: unknown; locale?: unknown }
+  try {
+    return json(await enterInviteCode(userId, body.code, readLocale(body.locale)))
+  } catch (error) {
+    if (error instanceof ReferralError) return json({ error: error.code }, CODE_ERROR_STATUS[error.code])
+    throw error
+  }
+}

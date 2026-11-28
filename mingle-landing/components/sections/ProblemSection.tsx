@@ -8,8 +8,8 @@ import { fadeInUp } from '@/components/sections/shared'
 function BeforeAfter() {
   const { t } = useTranslation()
 
-  const problemIcons = ['⏳', '❓', '👋', '🔄']
-  const solutionIcons = ['⚡', '🎯', '💬', '🌐']
+  const problemIcons = ['😶', '😟', '💤', '🧭']
+  const solutionIcons = ['🗣️', '🛡️', '🎮', '📍']
   
   const problems = (t('beforeAfter.problems', { returnObjects: true }) as string[]).map((text, i) => ({
     icon: problemIcons[i],

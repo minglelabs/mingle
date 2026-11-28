@@ -12,4 +12,8 @@ RCT_EXTERN_METHOD(saveImage:(NSString *)dataUrl
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(detectFaces:(NSString *)dataUrl
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 @end

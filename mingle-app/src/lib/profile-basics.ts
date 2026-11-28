@@ -11,7 +11,7 @@
  * root layout. With no gate mounted (a screen outside the app shell) the
  * action is never blocked.
  */
-export type ProfileBasicsField = 'gender' | 'birth-date'
+export type ProfileBasicsField = 'gender' | 'birth-date' | 'height'
 
 type ProfileBasicsHandler = () => Promise<boolean>
 
@@ -32,10 +32,15 @@ export function requestProfileBasics(): Promise<boolean> {
 export function resolveMissingProfileBasics(profile: {
   gender?: unknown
   birthDate?: unknown
+  heightCm?: unknown
 } | null): ProfileBasicsField[] {
   if (!profile) return []
   const missing: ProfileBasicsField[] = []
-  if (typeof profile.gender !== 'string' || !profile.gender) missing.push('gender')
+  const hasGender = typeof profile.gender === 'string' && Boolean(profile.gender)
+  if (!hasGender) missing.push('gender')
   if (typeof profile.birthDate !== 'string' || !profile.birthDate) missing.push('birth-date')
+  // Height is asked of men only (owner decision 2026-11-19). With no gender
+  // yet the step is listed and the screens skip it unless "male" is picked.
+  if (typeof profile.heightCm !== 'number' && (!hasGender || profile.gender === 'male')) missing.push('height')
   return missing
 }

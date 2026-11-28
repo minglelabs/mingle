@@ -87,7 +87,9 @@ describe('voice talk panel', () => {
     expect(panelSource).toContain('if (leaveSignal && joined) setConfirmLeave(true)')
     expect(copySource).toContain("leaveTitle: '보이스톡에서 나가시겠습니까?'")
     expect(panelSource).toContain('data-qa="voice-talk-leave-confirm-button"')
-    expect(panelSource.split("post({ type: 'native_voice_close' })").length - 1).toBe(1)
+    // Three times: the leave button, the reconnect when the host puts a listener on the
+    // stage, and leaving the call screen of a 1:1 voice talk (which hangs up).
+    expect(panelSource.split("post({ type: 'native_voice_close' })").length - 1).toBe(3)
   })
 
   it('has a mic switch for listening only, in both languages', () => {
@@ -105,9 +107,11 @@ describe('voice talk panel', () => {
   })
 
   it('shows four round icon buttons with room between them: mic, interpret, read-aloud, leave', () => {
-    const row = panelSource.slice(panelSource.indexOf('data-qa="voice-talk-mic-toggle"') - 400, panelSource.indexOf('data-qa="voice-talk-leave"') + 900)
+    // The row starts at the raise-hand button, which a listener in an open room's call has in the mic's place.
+    const row = panelSource.slice(panelSource.indexOf('data-qa="voice-stage-raise-hand"') - 600, panelSource.indexOf('data-qa="voice-talk-leave"') + 900)
     expect(row).toContain('gap-4')
-    expect(row.split('h-12 w-16').length - 1).toBe(4)
+    expect(row.split('h-12 w-16').length - 1).toBe(5)
+    expect(row).toContain("{stage.enabled && stage.myRole === 'listener' ? (")
     expect(row).not.toContain('{copy.micOnState}</span>')
     expect(row).toContain('aria-label={listenOnly ? copy.micOffState : copy.micOnState}')
   })
@@ -218,9 +222,9 @@ describe('room members not in the call', () => {
 describe('voice talk dialogs and the ad banner', () => {
   it('hides the native banner while the start/join dialog, the leave dialog or the incoming card is up', () => {
     expect(panelSource).toContain('const dialogOpen = startPrompt || confirmLeave || incomingOffered')
-    expect(panelSource).toContain('useNativeBannerSuppression(dialogOpen)')
+    expect(panelSource).toContain('useNativeBannerSuppression(dialogOpen || duoVariant)')
     // Before the early return, so it also holds while the panel itself is not shown.
-    expect(panelSource.indexOf('useNativeBannerSuppression(dialogOpen)')).toBeLessThan(panelSource.indexOf('if (!joined && !error) {'))
+    expect(panelSource.indexOf('useNativeBannerSuppression(dialogOpen || duoVariant)')).toBeLessThan(panelSource.indexOf('if (!joined && !error) {'))
   })
 })
 

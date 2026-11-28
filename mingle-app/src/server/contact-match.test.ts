@@ -4,12 +4,15 @@ const mocks = vi.hoisted(() => ({
   userFindUnique: vi.fn(),
   userFindMany: vi.fn(),
   followFindMany: vi.fn(),
+  avoidCreateMany: vi.fn(),
+  avoidFindMany: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     user: { findUnique: mocks.userFindUnique, findMany: mocks.userFindMany },
     userFollow: { findMany: mocks.followFindMany },
+    contactAvoid: { createMany: mocks.avoidCreateMany, findMany: mocks.avoidFindMany },
   },
 }))
 
@@ -22,6 +25,8 @@ beforeEach(() => {
   mocks.userFindUnique.mockResolvedValue({ phoneVerifiedAt: new Date(), phoneHash: h('f') })
   mocks.userFindMany.mockResolvedValue([])
   mocks.followFindMany.mockResolvedValue([])
+  mocks.avoidCreateMany.mockResolvedValue({ count: 0 })
+  mocks.avoidFindMany.mockResolvedValue([])
 })
 
 describe('matchContactHashes', () => {
@@ -31,10 +36,17 @@ describe('matchContactHashes', () => {
       { id: 'u2', name: 'Minji', handle: 'minji', image: 'https://img/2', phoneHash: h('b') },
     ])
     mocks.followFindMany.mockResolvedValue([{ followingId: 'u2' }])
+    // The account hides from Yuki; Minji was let through.
+    mocks.avoidFindMany.mockResolvedValue([{ contactHash: h('a') }])
     await expect(matchContactHashes('me', [h('a'), h('B'), h('c'), 'junk'])).resolves.toEqual([
-      { hash: h('a'), userId: 'u1', name: 'Yuki', handle: 'yuki', image: null, isFollowing: false },
-      { hash: h('b'), userId: 'u2', name: 'Minji', handle: 'minji', image: 'https://img/2', isFollowing: true },
+      { hash: h('a'), userId: 'u1', name: 'Yuki', handle: 'yuki', image: null, isFollowing: false, hidden: true },
+      { hash: h('b'), userId: 'u2', name: 'Minji', handle: 'minji', image: 'https://img/2', isFollowing: true, hidden: false },
     ])
+    // Every number of the sync is kept as its hash, for hiding from those people on Explore.
+    expect(mocks.avoidCreateMany).toHaveBeenCalledWith({
+      data: [h('a'), h('b'), h('c')].map((contactHash) => ({ ownerId: 'me', contactHash })),
+      skipDuplicates: true,
+    })
     const where = mocks.userFindMany.mock.calls[0][0].where
     expect(where.phoneHash).toEqual({ in: [h('a'), h('b'), h('c')] })
     expect(where).toMatchObject({ isActive: true, isDeleted: false, isOperator: false, id: { not: 'me' } })

@@ -75,7 +75,7 @@ export async function generateMetadata({ params }: ProfileLinkPageProps) {
   }
   const title = name ? `${name} on HashChat` : "Open profile in HashChat";
   const description = name
-    ? `Talk with ${name} on HashChat, each in your own language. HashChat (formerly Mingle) interprets as you talk.`
-    : "Open a shared HashChat profile. HashChat (formerly Mingle) interprets as you talk.";
+    ? `Talk with ${name} on HashChat. Make friends across languages: chats and voice talks are interpreted live.`
+    : "Open a shared HashChat profile. Make friends across languages: chats and voice talks are interpreted live.";
   return { title, description, ...shareLinkPreview(title, description) };
 }

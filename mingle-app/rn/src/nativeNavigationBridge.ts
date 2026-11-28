@@ -56,6 +56,21 @@ export function resolveNextNativeNavigationHistoryIndex(
     : currentHistoryIndex;
 }
 
+// The page reads it before its first screen (src/lib/account-hint.ts in the web app).
+export const NATIVE_ACCOUNT_HINT_WINDOW_KEY = '__MINGLE_NATIVE_ACCOUNT_HINT';
+
+/** Hands the keychain's "this phone has an account" note to the page before any of its code runs. */
+export function buildNativeAccountHintScript(hint: string | null | undefined): string {
+  const value = typeof hint === 'string' ? hint.trim() : '';
+  if (!value || value.length > 256) return '';
+  return `
+  (function () {
+    try { window['${NATIVE_ACCOUNT_HINT_WINDOW_KEY}'] = ${JSON.stringify(value)}; } catch (error) {}
+  })();
+  true;
+`;
+}
+
 export function buildNativeQaBridgeBootstrapScript(enabled: boolean): string {
   const serializedEnabled = enabled ? "true" : "false";
 

@@ -1,11 +1,15 @@
 "use client";
 
+import AdBannerPositionSetting from "@/components/account/ad-banner-position-setting";
+import { checkPhotoForFace } from "@/lib/native-face-check";
 import BottomTabBar, { buildNativeAwareTabPath } from "@/components/bottom-tab-bar";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import ProfileImageCropper, {
   type ProfileImageCropperChange,
 } from "@/components/profile-image-cropper";
 import ProfileImagePreview from "@/components/profile-image-preview";
+import SignInMethodsSheet from "@/components/account/sign-in-methods-sheet";
+import { resolveSignInMethodsCopy } from "@/i18n/sign-in-methods-copy";
 import {
   clearMyPageProfileCache,
   createEmptyMyPageProfile,
@@ -38,6 +42,7 @@ import ProfileNationalityBadge from "@/components/profile-nationality-badge";
 import { resolveProfileNationalityCopy } from "@/i18n/profile-nationality-copy";
 import { normalizeNationalityCountry, resolveNationalityCountry } from "@/lib/nationality";
 import ProfileGenderAgeBadge from "@/components/profile-gender-age-badge";
+import MemberNumberLine from "@/components/member-number-line";
 import { resolveProfileGenderCopy } from "@/i18n/profile-gender-copy";
 import { normalizeProfileGender, type ProfileGender } from "@/lib/profile-gender";
 import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
@@ -79,8 +84,6 @@ import {
 } from "@/lib/profile-image-crop";
 import {
   MAX_STT_LANGUAGE_SELECTION,
-  STT_LANGUAGE_OPTIONS,
-  canonicalizeSttLanguageCode,
   deriveDefaultConversationLanguages,
   getSttLanguageDisplayName,
   sanitizeSttLanguageSelection,
@@ -115,8 +118,21 @@ import { getCoinCopy } from "@/i18n/coin-copy";
 import { isCoinBillingActive, openCoinStore, useCoinWallet } from "@/lib/coin-wallet-client";
 import { resolveContactSyncCopy } from "@/i18n/contact-sync-copy";
 import { openContactSync } from "@/lib/native-contacts";
+import PhoneVerifySheet from "@/components/contacts/phone-verify-sheet";
+import { resolveVerificationBadgesCopy } from "@/i18n/verification-badges-copy";
+import { resolvePeopleSafetyCopy } from "@/i18n/people-safety-copy";
+import ProfileVisitorsSection from "@/components/profile-visitors-section";
+import { resolvePhoneFriendsCopy } from "@/i18n/phone-friends-copy";
+import { resolvePhoneGateCopy } from "@/i18n/phone-gate-copy";
 import StaffAdminEntry from "@/components/staff-admin-entry";
-import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, Contact, EyeOff, Headphones, Languages, Loader2, LogOut, Menu, MessageCircle, Plus, Siren, SquarePen, Ticket, Trash2, UserRound, UserRoundX, X } from "lucide-react";
+import { Archive, BarChart3, Bell, Check, ScanFace, Smartphone, ChevronLeft, ChevronRight, Contact, EyeOff, Headphones, Languages, Loader2, LogOut, Menu, MessageCircle, Plus, Siren, SquarePen, Ticket, Trash2, UserRound, UserRoundX, X } from "lucide-react";
+import { resolveSelfieVerifyCopy } from "@/i18n/selfie-verify-copy";
+import { resolveProfileLockedNote } from "@/i18n/profile-locked-copy";
+import { resolveProfileHeightCopy } from "@/i18n/profile-height-copy";
+import { DEFAULT_HEIGHT_CM, normalizeHeightCm } from "@/lib/profile-height";
+import ProfileHeightWheel, { NO_HEIGHT } from "@/components/profile-height-wheel";
+import dynamic from "next/dynamic";
+const SelfieVerifyScreen = dynamic(() => import("@/components/selfie-verify-screen"), { ssr: false });
 import { myPostsHref } from "@/lib/feed-routes";
 import ComposeOverlay from "@/components/compose/compose-overlay";
 import { feedCopy } from "@/i18n/feed-copy";
@@ -147,6 +163,7 @@ type ProfileDraft = {
   primaryLanguages: SttLanguageCode[];
   birthDate: BirthDateParts | null;
   gender: ProfileGender | null;
+  heightCm: number | null;
 };
 
 const NO_INTEREST_LANGUAGES: readonly InterestLanguage[] = [];
@@ -297,17 +314,6 @@ function isNativeAppRuntimeSignalPresent(): boolean {
     || isNativeUiBridgeEnabledFromSearch(window.location.search || "");
 }
 
-const LANGUAGE_OPTIONS: ReadonlyArray<{ locale: SttLanguageCode; label: string; flag: string }> =
-  STT_LANGUAGE_OPTIONS.map(({ code, englishName, flag }) => ({
-    locale: code,
-    label: englishName,
-    flag,
-  }));
-
-function getNationalityOption(value: string | null | undefined) {
-  const normalized = typeof value === "string" ? canonicalizeSttLanguageCode(value) : "";
-  return LANGUAGE_OPTIONS.find((option) => option.locale === normalized) ?? null;
-}
 
 function ProfileAvatar({
   alt,
@@ -400,6 +406,28 @@ function ProfileSettingsPanel({
   open: boolean;
   sessionStatus: SessionStatus;
 }) {
+  // 전화번호 인증 from the menu (owner, 2026-11-25): the number on the account,
+  // read when the menu opens; the sheet offers +82 only until worldwide SMS exists.
+  const [phoneState, setPhoneState] = useState<{ phoneE164: string | null; available: boolean; worldwide: boolean } | null>(null);
+  const [phoneSheetOpen, setPhoneSheetOpen] = useState(false);
+  useEffect(() => {
+    if (!open || sessionStatus !== "authenticated") return;
+    let cancelled = false;
+    void Promise.all([
+      fetch(buildClientApiPath("/phone"), { cache: "no-store" }).then((response) => (response.ok ? response.json() : null)).catch(() => null),
+      fetch(buildClientApiPath("/phone/sign-in"), { cache: "no-store" }).then((response) => (response.ok ? response.json() : null)).catch(() => null),
+    ]).then(([phone, signIn]) => {
+      if (cancelled || !phone) return;
+      setPhoneState({
+        phoneE164: typeof phone.phoneE164 === "string" ? phone.phoneE164 : null,
+        available: phone.available !== false,
+        worldwide: signIn?.worldwide === true,
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, sessionStatus]);
   const coinWalletState = useCoinWallet().wallet;
   const coinBillingActive = isCoinBillingActive(coinWalletState);
   const coinWallet = coinWalletState ?? { balance: 0 };
@@ -434,6 +462,10 @@ function ProfileSettingsPanel({
   const [inAppNotificationsEnabled, setInAppNotificationsEnabled] = useState<boolean | null>(null);
   const [isSavingNotificationsPreference, setIsSavingNotificationsPreference] = useState(false);
   const [isAccountActionModalOpen, setIsAccountActionModalOpen] = useState(false);
+  const [isSignInMethodsOpen, setIsSignInMethodsOpen] = useState(false);
+  // Sign out sits at the end of a long menu next to other actions, so it asks first.
+  // Drawn in the page: window.confirm shows nothing in the app's WebView.
+  const [isSignOutConfirmOpen, setIsSignOutConfirmOpen] = useState(false);
   const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
   const [isWithdrawConfirmModalOpen, setIsWithdrawConfirmModalOpen] = useState(false);
   const [isDeactivating, setIsDeactivating] = useState(false);
@@ -463,17 +495,17 @@ function ProfileSettingsPanel({
     defaultLanguagesSaveError: managementCopy.defaultLanguagesSaveError,
     primaryLanguages: dictionary.profile.primaryLanguagesLabel
       ?? dictionary.profile.nationalityLabel
-      ?? (locale === "ko" ? "주 사용 언어" : "Primary languages"),
+      ?? (locale === "ko" ? "편한 언어" : "Primary languages"),
     primaryLanguagesTitle: dictionary.profile.primaryLanguagesTitle
       ?? dictionary.profile.primaryLanguagesLabel
       ?? dictionary.profile.nationalityLabel
-      ?? (locale === "ko" ? "주 사용 언어" : "Primary languages"),
+      ?? (locale === "ko" ? "편한 언어" : "Primary languages"),
     primaryLanguagesDescription: dictionary.profile.primaryLanguagesDescription
       ?? (locale === "ko"
-        ? "프로필에 표시할 주 사용 언어를 원하는 순서대로 최대 5개 선택하세요."
+        ? "프로필에 표시할 편한 언어를 원하는 순서대로 최대 5개 선택하세요."
         : "Choose up to five primary languages in the order they should appear on your profile."),
     primaryLanguagesSaveError: dictionary.profile.primaryLanguagesSaveError
-      ?? (locale === "ko" ? "주 사용 언어를 저장하지 못했습니다." : "Could not save your primary languages."),
+      ?? (locale === "ko" ? "편한 언어를 저장하지 못했습니다." : "Could not save your primary languages."),
     usage: managementCopy.usage,
     noBlocked: dictionary.profile.noBlockedUsers ?? (locale === "ko" ? "차단한 사용자가 없습니다." : "You have not blocked anyone."),
     noReports: dictionary.profile.noReports ?? (locale === "ko" ? "신고 내역이 없습니다." : "You have not submitted any reports."),
@@ -896,7 +928,7 @@ function ProfileSettingsPanel({
       open={open}
       onClose={onClose}
       ariaLabel={copy.title}
-      className="fixed inset-0 z-[90] flex min-h-0 w-full flex-col bg-white text-slate-950"
+      className="keyboard-safe fixed inset-0 z-[90] flex min-h-0 w-full flex-col bg-white text-slate-950"
       style={{ touchAction: "pan-y" }}
     >
           <header
@@ -1104,6 +1136,14 @@ function ProfileSettingsPanel({
               </div>
             </div>
             {isNativeAppRuntime ? (
+              // Moved here from the room menu: where the ad banner sits in a chat room.
+              <AdBannerPositionSetting
+                label={dictionary.demo.adBannerPositionLabel}
+                topLabel={dictionary.demo.adBannerPositionTopLabel}
+                bottomLabel={dictionary.demo.adBannerPositionBottomLabel}
+              />
+            ) : null}
+            {isNativeAppRuntime ? (
               <div className="mt-4 px-0">
                 <NativeAppUpdateCard
                   {...nativeAppUpdateCardContent}
@@ -1111,11 +1151,66 @@ function ProfileSettingsPanel({
                 />
               </div>
             ) : null}
+            {phoneState?.available ? (
+              <button
+                type="button"
+                data-qa="open-phone-verify"
+                onClick={() => setPhoneSheetOpen(true)}
+                className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[14px] font-semibold text-slate-700 transition active:bg-gray-50"
+              >
+                <Smartphone size={17} strokeWidth={2.1} aria-hidden="true" />
+                {resolvePhoneGateCopy(locale).start}
+                {phoneState.phoneE164 ? (
+                  <span className="flex items-center gap-0.5 text-[13px] font-semibold text-emerald-600">
+                    <Check size={14} strokeWidth={3} aria-hidden="true" />
+                    {phoneState.phoneE164.replace(/\d(?=\d{4})/g, "•")}
+                  </span>
+                ) : null}
+              </button>
+            ) : null}
+            {phoneSheetOpen ? (
+              <PhoneVerifySheet
+                copy={resolvePhoneFriendsCopy(locale)}
+                locale={locale}
+                koreaOnly={!phoneState?.worldwide}
+                onClose={() => setPhoneSheetOpen(false)}
+                onVerified={(phoneE164) => {
+                  setPhoneSheetOpen(false);
+                  setPhoneState((current) => (current ? { ...current, phoneE164 } : current));
+                }}
+              />
+            ) : null}
             <button
               type="button"
-              onClick={onSignOut}
+              data-qa="open-sign-in-methods"
+              onClick={() => setIsSignInMethodsOpen(true)}
               disabled={sessionStatus !== "authenticated"}
-              className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[14px] font-semibold text-slate-700 transition active:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-3 flex w-full items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-3 text-[14px] font-semibold text-slate-700 transition active:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {resolveSignInMethodsCopy(locale).title}
+            </button>
+            {isSignInMethodsOpen ? <SignInMethodsSheet locale={locale} onClose={() => setIsSignInMethodsOpen(false)} /> : null}
+            {isSignOutConfirmOpen ? (
+              <div className="keyboard-safe fixed inset-0 z-[150] flex items-center justify-center px-8" role="alertdialog" aria-modal="true" aria-label={resolveSignInMethodsCopy(locale).signOutConfirm} data-qa="sign-out-confirm">
+                <button type="button" className="absolute inset-0 bg-black/45" aria-label={resolveSignInMethodsCopy(locale).close} onClick={() => setIsSignOutConfirmOpen(false)} />
+                <div className="relative w-full max-w-[320px] rounded-2xl bg-white p-5 text-center shadow-xl">
+                  <p className="text-[15px] font-semibold text-slate-900">{resolveSignInMethodsCopy(locale).signOutConfirm}</p>
+                  <div className="mt-4 flex gap-2">
+                    <button type="button" onClick={() => setIsSignOutConfirmOpen(false)} className="flex h-11 flex-1 items-center justify-center rounded-xl border border-gray-200 bg-white text-[14px] font-semibold text-slate-700 active:bg-gray-100">
+                      {resolveSignInMethodsCopy(locale).close}
+                    </button>
+                    <button type="button" data-qa="sign-out-confirm-yes" onClick={() => { setIsSignOutConfirmOpen(false); onSignOut(); }} className="flex h-11 flex-1 items-center justify-center rounded-xl bg-slate-950 text-[14px] font-semibold text-white active:bg-slate-800">
+                      {copy.logout}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setIsSignOutConfirmOpen(true)}
+              disabled={sessionStatus !== "authenticated"}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[14px] font-semibold text-slate-700 transition active:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <LogOut size={17} strokeWidth={2.1} aria-hidden="true" />
               {copy.logout}
@@ -1142,7 +1237,7 @@ function ProfileSettingsPanel({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.16, ease: "easeOut" }}
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-5"
+          className="keyboard-safe fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-5"
           onClick={() => setIsAccountActionModalOpen(false)}
         >
           <motion.div
@@ -1190,7 +1285,7 @@ function ProfileSettingsPanel({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.16, ease: "easeOut" }}
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-5"
+          className="keyboard-safe fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-5"
           onClick={() => {
             if (isWithdrawing) return;
             setIsWithdrawConfirmModalOpen(false);
@@ -1244,7 +1339,7 @@ function ProfileSettingsPanel({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.16, ease: "easeOut" }}
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-5"
+          className="keyboard-safe fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-5"
           onClick={() => {
             if (isDeactivating) return;
             setIsDeactivateModalOpen(false);
@@ -1297,7 +1392,7 @@ function ProfileSettingsPanel({
         onClose={closeManagementPage}
         ariaLabel={managementPageTitle}
         nativeBackPriority={30}
-        className="fixed inset-0 z-[100] flex min-h-0 w-full flex-col bg-white text-slate-950"
+        className="keyboard-safe fixed inset-0 z-[100] flex min-h-0 w-full flex-col bg-white text-slate-950"
         style={{ touchAction: "pan-y" }}
       >
           <header
@@ -1549,6 +1644,7 @@ function ProfileEditPanel({
   initialNationalityCountry,
   initialBirthDate,
   initialGender,
+  initialHeightCm,
   onClose,
   onSave,
   open,
@@ -1564,6 +1660,7 @@ function ProfileEditPanel({
   initialNationalityCountry: string | null;
   initialBirthDate?: BirthDateParts | null;
   initialGender?: ProfileGender | null;
+  initialHeightCm?: number | null;
   onClose: () => void;
   onSave: (draft: ProfileDraft) => Promise<ProfileSaveResult>;
   open: boolean;
@@ -1578,6 +1675,11 @@ function ProfileEditPanel({
   const [birthDate, setBirthDate] = useState<BirthDateParts>(initialBirthDate ?? DEFAULT_PROFILE_EDIT_BIRTH_DATE);
   const [hasBirthDate, setHasBirthDate] = useState(Boolean(initialBirthDate));
   const [gender, setGender] = useState<ProfileGender | null>(initialGender ?? null);
+  const [heightValue, setHeightValue] = useState<number>(normalizeHeightCm(initialHeightCm) ?? NO_HEIGHT);
+  const heightCopy = useMemo(() => resolveProfileHeightCopy(locale), [locale]);
+  // Men always have one on the wheel (it starts at the default); anyone else may pick "—" (none).
+  const heightCm = gender === "male" ? normalizeHeightCm(heightValue) ?? DEFAULT_HEIGHT_CM : normalizeHeightCm(heightValue);
+  const isHeightValid = gender !== "male" || heightCm !== null;
   const [nationalityCountry, setNationalityCountry] = useState<string | null>(initialNationalityCountry);
   const [imageDraft, setImageDraft] = useState<ProfileImageCropperChange>({
     file: null,
@@ -1602,7 +1704,7 @@ function ProfileEditPanel({
       ?? "Primary languages",
     primaryLanguagesDescription: dictionary.profile.primaryLanguagesDescription
       ?? (locale === "ko"
-        ? "프로필에 표시할 주 사용 언어를 원하는 순서대로 최대 5개 선택하세요."
+        ? "프로필에 표시할 편한 언어를 원하는 순서대로 최대 5개 선택하세요."
         : "Choose up to five primary languages in the order they should appear on your profile."),
     saveAction: dictionary.profile.saveAction ?? "Save",
     cancelAction: dictionary.profile.cancelAction ?? "Cancel",
@@ -1636,13 +1738,14 @@ function ProfileEditPanel({
     setBirthDate(initialBirthDate ?? DEFAULT_PROFILE_EDIT_BIRTH_DATE);
     setHasBirthDate(Boolean(initialBirthDate));
     setGender(initialGender ?? null);
+    setHeightValue(normalizeHeightCm(initialHeightCm) ?? NO_HEIGHT);
     setNationalityCountry(initialNationalityCountry);
     setImageDraft({
       file: null,
       crop: normalizedInitialImageCrop,
     });
     setSaveError(null);
-  }, [initialBirthDate, initialBio, initialGender, initialHandle, initialName, initialNationalityCountry, initialPrimaryLanguages, normalizedInitialImageCrop, open]);
+  }, [initialBirthDate, initialBio, initialGender, initialHeightCm, initialHandle, initialName, initialNationalityCountry, initialPrimaryLanguages, normalizedInitialImageCrop, open]);
 
   const handleSave = useCallback(async () => {
     if (isSaving) return;
@@ -1662,6 +1765,7 @@ function ProfileEditPanel({
         primaryLanguages,
         birthDate: hasBirthDate ? birthDate : null,
         gender,
+        heightCm,
       });
       if (saved === "saved") {
         if (editOpenRef.current && epoch === saveEpoch.current) onClose();
@@ -1673,14 +1777,14 @@ function ProfileEditPanel({
     } finally {
       setIsSaving(false);
     }
-  }, [bio, birthDate, copy.handleInvalid, copy.handleTaken, copy.saveError, gender, handle, hasBirthDate, imageDraft, isSaving, name, nationalityCountry, onClose, onSave, primaryLanguages]);
+  }, [bio, birthDate, copy.handleInvalid, copy.handleTaken, copy.saveError, gender, heightCm, handle, hasBirthDate, imageDraft, isSaving, name, nationalityCountry, onClose, onSave, primaryLanguages]);
 
   return (
     <SlideSurface
       open={open}
       onClose={onClose}
       ariaLabel={copy.title}
-      className="fixed inset-0 z-[90] flex min-h-0 w-full flex-col bg-white text-slate-950"
+      className="keyboard-safe fixed inset-0 z-[90] flex min-h-0 w-full flex-col bg-white text-slate-950"
       style={{ touchAction: "pan-y" }}
     >
           <header
@@ -1702,7 +1806,7 @@ function ProfileEditPanel({
             <button
               type="button"
               onClick={() => void handleSave()}
-              disabled={isSaving || !isEligibleAge}
+              disabled={isSaving || !isEligibleAge || !isHeightValid}
               className="min-w-[52px] text-[15px] font-semibold text-blue-600 transition active:opacity-60 disabled:opacity-50"
             >
               {isSaving ? "…" : copy.saveAction}
@@ -1768,8 +1872,33 @@ function ProfileEditPanel({
 
               <fieldset className="min-w-0 w-full max-w-full">
                 <legend className="mb-2 text-[13px] font-semibold text-gray-600">{genderCopy.label}</legend>
-                <ProfileGenderPicker value={gender} onChange={setGender} copy={genderCopy} disabled={isSaving} />
+                {initialGender ? (
+                  // Set once, then locked (the server refuses a change).
+                  <p data-qa="profile-edit-gender-locked" className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[15px] text-gray-500">
+                    {initialGender === "female" ? genderCopy.female : genderCopy.male}
+                  </p>
+                ) : (
+                  <ProfileGenderPicker value={gender} onChange={setGender} copy={genderCopy} disabled={isSaving} />
+                )}
               </fieldset>
+
+              <div className="block" data-qa="profile-edit-height">
+                <span className="mb-2 block text-[13px] font-semibold text-gray-600">{heightCopy.label}</span>
+                {/* A wheel like the birth date: no keyboard to cover Save. Men must give a height; others may pick "—".
+                    Set once, then locked (owner, 2026-11-25; the server refuses a change). */}
+                {normalizeHeightCm(initialHeightCm) !== null ? (
+                  <p data-qa="profile-edit-height-locked" className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[15px] text-gray-500">
+                    {normalizeHeightCm(initialHeightCm)} cm
+                  </p>
+                ) : (
+                  <ProfileHeightWheel
+                    value={gender === "male" && heightValue === NO_HEIGHT ? DEFAULT_HEIGHT_CM : heightValue}
+                    onChange={setHeightValue}
+                    optional={gender !== "male"}
+                  />
+                )}
+                <span className="mt-2 block text-[12px] leading-relaxed text-gray-400">{heightCopy.hint}</span>
+              </div>
 
               <fieldset className="min-w-0 w-full max-w-full">
                 <legend className="mb-2 text-[13px] font-semibold text-gray-600">{nationalityCopy.label}</legend>
@@ -1787,20 +1916,25 @@ function ProfileEditPanel({
                 <legend className="mb-2 text-[13px] font-semibold text-gray-600">
                   {signupCopy.birthDateTitle}
                 </legend>
-                <SignupBirthDatePicker
-                  value={birthDate}
-                  onChange={(nextBirthDate) => {
-                    setBirthDate(nextBirthDate);
-                    setHasBirthDate(true);
-                  }}
-                  yearLabel={signupCopy.yearLabel}
-                  monthLabel={signupCopy.monthLabel}
-                  dayLabel={signupCopy.dayLabel}
-                />
+                {initialBirthDate ? (
+                  <p data-qa="profile-edit-birth-date-locked" className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[15px] tabular-nums text-gray-500">
+                    {formatBirthDate(initialBirthDate)}
+                  </p>
+                ) : (
+                  <SignupBirthDatePicker
+                    value={birthDate}
+                    onChange={setBirthDate}
+                    // Saved only once year, month and day were each picked.
+                    onPickedChange={setHasBirthDate}
+                    yearLabel={signupCopy.yearLabel}
+                    monthLabel={signupCopy.monthLabel}
+                    dayLabel={signupCopy.dayLabel}
+                  />
+                )}
                 <p className="mt-2 text-[12px] leading-relaxed text-gray-400">
-                  {signupCopy.birthDateDescription}
+                  {initialBirthDate || initialGender ? resolveProfileLockedNote(locale) : signupCopy.birthDateDescription}
                 </p>
-                {!isEligibleAge ? (
+                {!initialBirthDate && !isEligibleAge ? (
                   <p className="mt-2 text-[12px] font-medium text-rose-600" role="alert">
                     {signupCopy.birthDateUnderage}
                   </p>
@@ -1867,6 +2001,46 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     };
   });
   const [profile, setProfile] = useState<ProfileRecord>(initialProfileSeed.profile);
+  const [selfieVerifyOpen, setSelfieVerifyOpen] = useState(false);
+  // The two checks side by side on the profile (owner, 2026-11-25: one
+  // "인증 완료" did not say which). The phone one opens the number sheet.
+  const [myPhone, setMyPhone] = useState<{ verified: boolean; available: boolean; worldwide: boolean } | null>(null);
+  const [myPhoneSheetOpen, setMyPhoneSheetOpen] = useState(false);
+  const [blockMaleDmsSaving, setBlockMaleDmsSaving] = useState(false);
+  const handleBlockMaleDmsChange = useCallback(async (next: boolean) => {
+    setBlockMaleDmsSaving(true);
+    setProfile((current) => ({ ...current, blockMaleDms: next }));
+    try {
+      const response = await fetch(buildClientApiPath("/profile"), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blockMaleDms: next }),
+      });
+      if (!response.ok) throw new Error("save_failed");
+    } catch {
+      setProfile((current) => ({ ...current, blockMaleDms: !next }));
+    } finally {
+      setBlockMaleDmsSaving(false);
+    }
+  }, []);
+  useEffect(() => {
+    if (sessionStatus !== "authenticated") return;
+    let cancelled = false;
+    void Promise.all([
+      fetch(buildClientApiPath("/phone"), { cache: "no-store" }).then((response) => (response.ok ? response.json() : null)).catch(() => null),
+      fetch(buildClientApiPath("/phone/sign-in"), { cache: "no-store" }).then((response) => (response.ok ? response.json() : null)).catch(() => null),
+    ]).then(([phone, signIn]) => {
+      if (cancelled || !phone) return;
+      setMyPhone({
+        verified: typeof phone.phoneE164 === "string" && phone.phoneE164.length > 0,
+        available: phone.available !== false,
+        worldwide: signIn?.worldwide === true,
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionStatus]);
   // The account whose data `profile` currently holds. Empty until a snapshot or
   // an API response arrives, so a placeholder is never cached as a real profile.
   const profileOwnerUserIdRef = useRef(initialProfileSeed.ownerUserId);
@@ -1923,14 +2097,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     ),
     [profile.nationality, profile.primaryLanguages],
   );
-  const nationality = getNationalityOption(profile.nationality || primaryLanguages[0] || null)?.locale ?? null;
-  const nationalityFlag = getNationalityOption(nationality)?.flag;
   const nationalityCountry = resolveNationalityCountry(profile.nationalityCountry, primaryLanguages);
-  const nationalityName = nationality
-    ? getSttLanguageDisplayName(nationality, locale)
-      ?? getNationalityOption(nationality)?.label
-      ?? nationality
-    : null;
   const signOutCallbackUrl = buildNativeAwareTabPath(`/${locale}`, searchParams, {
     skipConversationRestore: true,
     tabRoot: true,
@@ -2156,9 +2323,13 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           birthDate: parseProfileBirthDate(data.birthDate),
           gender: normalizeProfileGender(data.gender),
           age: typeof data.age === "number" ? data.age : null,
+          heightCm: typeof data.heightCm === "number" ? data.heightCm : null,
           followersCount: typeof data.followersCount === "number" ? data.followersCount : 0,
           followingCount: typeof data.followingCount === "number" ? data.followingCount : 0,
           isOfficial: data.isOfficial === true,
+          faceVerified: data.faceVerified === true,
+          memberNumber: typeof data.memberNumber === "number" ? data.memberNumber : null,
+          blockMaleDms: data.blockMaleDms === true,
         });
       })
       .catch(() => {
@@ -2270,6 +2441,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         imageFormData.append("imageCropScale", String(draft.imageCrop.scale));
         imageFormData.append("imageCropX", String(draft.imageCrop.x));
         imageFormData.append("imageCropY", String(draft.imageCrop.y));
+        imageFormData.append("faceCheck", await checkPhotoForFace(draft.imageFile));
 
         const imageResponse = await fetch(buildClientApiPath("/profile/image"), {
           method: "POST",
@@ -2301,6 +2473,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           primaryLanguages: draft.primaryLanguages,
           birthDate: draft.birthDate ? formatBirthDate(draft.birthDate) : null,
           ...(draft.gender ? { gender: draft.gender } : {}),
+          heightCm: draft.heightCm,
           imageCropScale: draft.imageCrop.scale,
           imageCropX: draft.imageCrop.x,
           imageCropY: draft.imageCrop.y,
@@ -2330,6 +2503,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         birthDate: parseProfileBirthDate(saved.birthDate) ?? current.birthDate,
         gender: normalizeProfileGender(saved.gender) ?? current.gender,
         age: typeof saved.age === "number" ? saved.age : current.age,
+        heightCm: typeof saved.heightCm === "number" ? saved.heightCm : null,
         nationality: typeof saved.nationality === "string" ? saved.nationality : current.nationality,
         nationalityCountry: normalizeNationalityCountry(saved.nationalityCountry) ?? current.nationalityCountry,
         primaryLanguages: sanitizeSttLanguageSelection(
@@ -2459,6 +2633,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         initialNationalityCountry={nationalityCountry}
         initialBirthDate={profile.birthDate}
         initialGender={profile.gender}
+        initialHeightCm={profile.heightCm ?? null}
         onClose={() => closeMyPageSurface({ id: MY_PAGE_PROFILE_EDIT_SURFACE_ID })}
         onSave={handleSaveProfile}
         open={showProfileEdit}
@@ -2527,14 +2702,12 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           x: profile.imageCropX,
           y: profile.imageCropY,
         }}
-        flag={nationalityFlag}
+        country={nationalityCountry}
         name={name}
         handle={profile.handle}
         bio={bio}
         bioUserId={sessionUserId}
         locale={locale}
-        languageLabel={dictionary.profile.primaryLanguagesLabel ?? dictionary.profile.nationalityLabel ?? "Primary language"}
-        languageName={nationalityName}
         closeLabel={dictionary.profile.settingsCloseLabel ?? dictionary.profile.profileShareBackLabel ?? "Close"}
         onClose={() => setShowProfileImagePreview(false)}
       />
@@ -2619,9 +2792,10 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
             <p className="flex min-w-0 items-center gap-1.5">
               <span className="truncate text-[15px] font-semibold text-slate-950">{name}</span>
               <AccountBadge kind={resolveAccountBadge(profile)} locale={locale} tone="dark" />
-              <ProfileGenderAgeBadge gender={profile.gender} age={profile.age} locale={locale} />
+              <ProfileGenderAgeBadge gender={profile.gender} age={profile.age} heightCm={profile.heightCm} locale={locale} />
               {profile.handle ? <span className="min-w-0 truncate text-[13px] text-gray-500">{formatHandle(profile.handle)}</span> : null}
             </p>
+            <MemberNumberLine memberNumber={profile.memberNumber} locale={locale} />
             <ProfileLanguageLevels
               primaryLanguages={primaryLanguages}
               interestLanguages={profile.interestLanguages ?? NO_INTEREST_LANGUAGES}
@@ -2677,6 +2851,79 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
             <Ticket size={16} strokeWidth={2.2} aria-hidden="true" />
             <span className="truncate">{resolveInviteTicketCopy(locale).inviteScreenEntry}</span>
           </button>
+          {/* The checks, one button each with its own icon: done ones are green
+              and say which check it was; the others open it (see @/lib/selfie-liveness). */}
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setSelfieVerifyOpen(true)}
+              disabled={profile.faceVerified === true}
+              data-qa="my-page-selfie-verify"
+              className={`flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[13px] font-bold transition ${profile.faceVerified ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-slate-900 active:bg-gray-200"}`}
+            >
+              <ScanFace size={16} strokeWidth={2.2} aria-hidden="true" />
+              <span className="truncate">
+                {profile.faceVerified ? resolveVerificationBadgesCopy(locale).face : resolveSelfieVerifyCopy(locale).entry}
+              </span>
+              {profile.faceVerified ? <Check size={14} strokeWidth={3} aria-hidden="true" /> : null}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMyPhoneSheetOpen(true)}
+              disabled={!myPhone || myPhone.verified || !myPhone.available}
+              data-qa="my-page-phone-verify"
+              className={`flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[13px] font-bold transition ${myPhone?.verified ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-slate-900 active:bg-gray-200 disabled:opacity-50"}`}
+            >
+              <Smartphone size={16} strokeWidth={2.2} aria-hidden="true" />
+              <span className="truncate">
+                {myPhone?.verified ? resolveVerificationBadgesCopy(locale).phone : resolvePhoneGateCopy(locale).start}
+              </span>
+              {myPhone?.verified ? <Check size={14} strokeWidth={3} aria-hidden="true" /> : null}
+            </button>
+          </div>
+          {/* Women only (owner, 2026-11-25): men cannot open a new chat with her. */}
+          {profile.gender === "female" ? (
+            <label data-qa="my-page-block-male-dms" className="mt-2 flex cursor-pointer items-start gap-3 rounded-lg bg-gray-50 px-3 py-2.5">
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13px] font-bold text-slate-900">{resolvePeopleSafetyCopy(locale).blockMenTitle}</span>
+                <span className="mt-0.5 block text-[12px] leading-snug text-slate-500">{resolvePeopleSafetyCopy(locale).blockMenHint}</span>
+              </span>
+              <input
+                type="checkbox"
+                role="switch"
+                checked={profile.blockMaleDms === true}
+                disabled={blockMaleDmsSaving}
+                onChange={(event) => void handleBlockMaleDmsChange(event.target.checked)}
+                className="peer sr-only"
+              />
+              <span aria-hidden="true" className={`relative mt-0.5 inline-flex h-6 w-10 shrink-0 rounded-full transition ${profile.blockMaleDms ? "bg-amber-500" : "bg-gray-300"}`}>
+                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${profile.blockMaleDms ? "left-[18px]" : "left-0.5"}`} />
+              </span>
+            </label>
+          ) : null}
+          {/* Who viewed my profile: blurred until paid for (owner, 2026-11-25). */}
+          {sessionStatus === "authenticated" ? <ProfileVisitorsSection locale={locale} /> : null}
+          {myPhoneSheetOpen ? (
+            <PhoneVerifySheet
+              copy={resolvePhoneFriendsCopy(locale)}
+              locale={locale}
+              koreaOnly={!myPhone?.worldwide}
+              onClose={() => setMyPhoneSheetOpen(false)}
+              onVerified={() => {
+                setMyPhoneSheetOpen(false);
+                setMyPhone((current) => (current ? { ...current, verified: true } : current));
+              }}
+            />
+          ) : null}
+          {selfieVerifyOpen ? (
+            <SelfieVerifyScreen
+              locale={locale}
+              hasPhoto={Boolean(profile.image)}
+              onClose={() => setSelfieVerifyOpen(false)}
+              onVerified={() => setProfile((current) => ({ ...current, faceVerified: true }))}
+              onPhotoUploaded={(image) => setProfile((current) => ({ ...current, image: image ?? current.image, imageCropScale: 1, imageCropX: 0, imageCropY: 0, faceVerified: false }))}
+            />
+          ) : null}
         </section>
 
           {sessionUserId && postingFeedSupported !== false ? (

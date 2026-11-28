@@ -7,7 +7,6 @@
 export const INTEREST_PROMPT_DELAY_MS = 8_000
 export const INTEREST_PROMPT_MAX_SHOWS = 2
 export const INTEREST_PROMPT_GAP_MS = 7 * 24 * 60 * 60 * 1000
-
 export type InterestPromptRecord = { count: number; lastShownAt: number }
 
 export function interestPromptStorageKey(userId: string): string {
@@ -25,7 +24,14 @@ export function parseInterestPromptRecord(raw: string | null): InterestPromptRec
   }
 }
 
-export function shouldShowInterestPrompt(record: InterestPromptRecord, now: number): boolean {
+export function shouldShowInterestPrompt(
+  record: InterestPromptRecord,
+  now: number,
+  options: { firstSpeakPending?: boolean } = {},
+): boolean {
+  // New accounts answer in the first-run onboarding (2026-11-23); this is for
+  // older ones, and never on top of the first "say something".
+  if (options.firstSpeakPending) return false
   if (record.count >= INTEREST_PROMPT_MAX_SHOWS) return false
   return record.count === 0 || now - record.lastShownAt >= INTEREST_PROMPT_GAP_MS
 }

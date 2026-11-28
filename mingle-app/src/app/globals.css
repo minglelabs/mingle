@@ -281,6 +281,59 @@ html[data-hash-rush-open="true"] [data-sonner-toaster] {
 
 /* Voice talk: a soft ripple spreading out from the avatar of whoever is
    speaking. Compositor-only (transform + opacity). */
+/* A live voice talk: level bars that rise and fall in turn (live-bars.tsx),
+   and a slow soft glow behind the faces on the lounge card. Compositor-only. */
+@keyframes mingle-live-bar {
+  0%, 100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.mingle-live-bar {
+  transform-origin: center bottom;
+  animation: mingle-live-bar 0.9s ease-in-out infinite;
+}
+
+@keyframes mingle-live-glow {
+  0%, 100% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(1.12);
+  }
+}
+
+.mingle-live-glow::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.75);
+  animation: mingle-live-glow 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.mingle-live-glow > * {
+  position: relative;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mingle-live-bar {
+    animation: none;
+    transform: scaleY(0.7);
+  }
+
+  .mingle-live-glow::before {
+    animation: none;
+    opacity: 0;
+  }
+}
+
 @keyframes mingle-voice-ripple {
   0% {
     transform: scale(1);
@@ -305,4 +358,109 @@ html[data-hash-rush-open="true"] [data-sonner-toaster] {
     animation: none;
     opacity: 0.45;
   }
+}
+
+/* 1:1 voice talk from a post: slow waves from the face while the call rings
+   or connects (DuoCallStage). */
+@keyframes mingle-call-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.55);
+    opacity: 0;
+  }
+}
+
+.mingle-call-ring {
+  animation: mingle-call-ring 2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+.mingle-call-ring-late {
+  animation-delay: 1.2s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mingle-call-ring {
+    animation: none;
+    opacity: 0.3;
+  }
+}
+
+/* The call screen of a 1:1 voice talk (LivePhoneDemo, data-duo-call): the
+   room's top and bottom bars are see-through over the blurred photo, and the
+   messages fade out under the face and the buttons instead of running over
+   them. Outside any layer so it wins over the bars' own utilities. */
+[data-duo-call="on"] [data-qa="live-demo-header"],
+[data-duo-call="on"] [data-qa="live-demo-bottom-bar"] {
+  background: transparent;
+  border-color: transparent;
+}
+
+[data-duo-call="on"] [data-qa="live-demo-header"] > div:first-child button {
+  color: #ffffff;
+  /* The back button's own pressed/hover fill would be a white box on the photo. */
+  background: transparent;
+}
+
+[data-duo-call="on"] [data-qa="live-demo-chat-area"] {
+  background: transparent;
+}
+
+[data-duo-call="on"] [data-qa="live-demo-chat-scroll"] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent var(--duo-stage-h, 0px), #000 calc(var(--duo-stage-h, 0px) + 28px));
+  mask-image: linear-gradient(to bottom, transparent 0, transparent var(--duo-stage-h, 0px), #000 calc(var(--duo-stage-h, 0px) + 28px));
+}
+
+/* Full-screen sheets and dialogs that hold a text field end above the
+   on-screen keyboard (iOS does not resize the page for it), so their bottom
+   button stays visible while typing. `--keyboard-inset` comes from
+   components/keyboard-inset-var.tsx. Outside any layer so it wins over
+   Tailwind's inset-0. */
+.keyboard-safe {
+  bottom: var(--keyboard-inset, 0px) !important;
+}
+
+/* Selfie verification: the "turn your head" demo over the camera
+   (components/selfie-verify-screen.tsx). */
+@keyframes selfie-chevron-march-left {
+  0% { opacity: 0.2; transform: translateX(6px); }
+  45% { opacity: 1; transform: translateX(-2px); }
+  100% { opacity: 0.2; transform: translateX(-6px); }
+}
+@keyframes selfie-chevron-march-right {
+  0% { opacity: 0.2; transform: translateX(-6px); }
+  45% { opacity: 1; transform: translateX(2px); }
+  100% { opacity: 0.2; transform: translateX(6px); }
+}
+.selfie-chevron-march-left { animation: selfie-chevron-march-left 0.9s ease-in-out infinite; }
+.selfie-chevron-march-right { animation: selfie-chevron-march-right 0.9s ease-in-out infinite; }
+
+@keyframes selfie-head-features-left {
+  0%, 12% { transform: translateX(0); }
+  45%, 70% { transform: translateX(-7px); }
+  100% { transform: translateX(0); }
+}
+@keyframes selfie-head-features-right {
+  0%, 12% { transform: translateX(0); }
+  45%, 70% { transform: translateX(7px); }
+  100% { transform: translateX(0); }
+}
+@keyframes selfie-head-outline-turn {
+  0%, 12% { transform: scaleX(1); }
+  45%, 70% { transform: scaleX(0.86); }
+  100% { transform: scaleX(1); }
+}
+.selfie-head-turn .selfie-head-features,
+.selfie-head-turn .selfie-head-outline { transform-box: fill-box; transform-origin: center; }
+.selfie-head-turn-left .selfie-head-features { animation: selfie-head-features-left 1.6s ease-in-out infinite; }
+.selfie-head-turn-right .selfie-head-features { animation: selfie-head-features-right 1.6s ease-in-out infinite; }
+.selfie-head-turn .selfie-head-outline { animation: selfie-head-outline-turn 1.6s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .selfie-chevron-march-left,
+  .selfie-chevron-march-right,
+  .selfie-head-turn .selfie-head-features,
+  .selfie-head-turn .selfie-head-outline { animation: none; }
 }

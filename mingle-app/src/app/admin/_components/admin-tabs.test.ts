@@ -2,15 +2,16 @@ import { describe, expect, it } from "vitest";
 import { ADMIN_TABS, formatAdminTabBadge, normalizeAdminTabBadge, resolveActiveAdminTab } from "./admin-tabs";
 
 describe("admin tabs", () => {
-  it("lists 인박스 · 알림 · 검토 · 피드 · 계정 · 레퍼런스 · 신고 · 피드백 · 대시보드 · 더보기 in order", () => {
+  it("lists 인박스 · 알림 · 검토 · 피드 · 계정 · 대기열 · 레퍼런스 · 신고/이상유저검수 · 피드백 · 대시보드 · 더보기 in order", () => {
     expect(ADMIN_TABS.map((tab) => [tab.label, tab.href])).toEqual([
       ["인박스", "/admin/inbox"],
       ["알림", "/admin/activity"],
       ["검토", "/admin/operators/review"],
       ["피드", "/admin/feed"],
       ["계정", "/admin/operators"],
+      ["대기열", "/admin/waitlist"],
       ["레퍼런스", "/admin/operators/references"],
-      ["신고", "/admin/reports"],
+      ["신고/이상유저검수", "/admin/reports"],
       ["피드백", "/admin"],
       ["대시보드", "/admin/dashboard"],
       ["더보기", "/admin/more"],
@@ -27,6 +28,7 @@ describe("admin tabs", () => {
     ["/admin/operators/reviewers", "operators"],
     ["/admin/operators/references", "references"],
     ["/admin/feed", "feed"],
+    ["/admin/waitlist", "waitlist"],
     ["/admin/posts", "more"],
     ["/admin/more", "more"],
     ["/admin", "feedback"],

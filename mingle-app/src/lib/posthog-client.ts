@@ -31,6 +31,15 @@ export type MingleClientEvent =
   // First run and the questions asked later; the `step` property names the moment.
   | "mingle_first_run_step"
   | "mingle_profile_basics_step"
+  | "mingle_first_message_gate"
+  | "mingle_dm_open_coins"
+  | "mingle_selfie_verify"
+  | "mingle_push_prompt"
+  // The phone number screen, step by step (sign-in and verification), see phone-verify-sheet.
+  | "mingle_phone_auth"
+  | "mingle_korea_visit"
+  | "mingle_onboarding_mic"
+  | "mingle_onboarding_photo"
   // Posting-feed events; names and allowed properties live in `@/lib/feed-analytics`.
   | FeedEventName;
 

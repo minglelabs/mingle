@@ -20,6 +20,26 @@ model User {
   imageCropScale               Float?    @map("image_crop_scale")
   imageCropX                   Float?    @map("image_crop_x")
   imageCropY                   Float?    @map("image_crop_y")
+  /// What the phone found in the profile photo: 'face', 'no_face', or 'unchecked'
+  /// (uploaded where no face check runs: a browser, an older app). Null: never checked.
+  imageFaceCheck               String?   @map("image_face_check")
+  /// When a selfie check on the phone (head turns + same face as the profile
+  /// photo) passed: the "verified" badge. Cleared when the profile photo changes.
+  faceVerifiedAt               DateTime? @map("face_verified_at")
+  /// Height in centimetres, typed by the user (never checked). Asked of men
+  /// with the profile basics; anyone may add it in profile edit.
+  heightCm                     Int?      @map("height_cm")
+  /// The Korea trip answered at sign-up by someone who is not Korean
+  /// (src/lib/korea-visit.ts): {kind:'dates',start,end|null}, {kind:'undecided'}
+  /// or {kind:'visited',ago}. Null: never asked.
+  koreaVisit                   Json?     @map("korea_visit")
+  /// A woman's choice (owner, 2026-11-25): men cannot open a new 1:1 room
+  /// with her. Rooms that already exist, and her writing first, are untouched.
+  blockMaleDms                 Boolean   @default(false) @map("block_male_dms")
+  /// Dormant (owner, 2026-11-25; src/server/dormancy.ts): the account had no
+  /// profile photo. Left out of explore, and its owner sees only the dormant
+  /// screen until a photo is added and the face check passed. Null: awake.
+  dormantAt                    DateTime? @map("dormant_at")
   latestIpAddress              String?   @map("latest_ip_address")
   latestUserAgent              String?   @map("latest_user_agent")
   language                     String?
@@ -87,12 +107,18 @@ model User {
   referralRechatAt             DateTime? @map("referral_rechat_at")
   /// When the contact-sync screen was shown on its own after signup. Null = not shown yet.
   contactSyncPromptedAt        DateTime? @map("contact_sync_prompted_at")
-  /// The user's own phone number, E.164 ("+821012345678"), set only after an SMS code check (src/server/phone-verification.ts). One account per number: verifying it elsewhere moves it.
+  /// Hiding from people in the address book is on once contacts are synced; true = this account turned it off (src/server/contact-avoid.ts).
+  contactHideOff               Boolean   @default(false) @map("contact_hide_off")
+  /// The user's own phone number, E.164 ("+821012345678"), set only after an SMS code check (src/server/phone-verification.ts). One account per number: a number never moves; whoever proves it lands on its account (src/server/identity/phone-claim.ts).
   phoneE164                    String?   @unique(map: "app_users_phone_e164_key") @map("phone_e164")
   /// sha256 hex of phoneE164. Friends' apps hash their contacts' numbers the same way to find this user (src/server/contact-match.ts); uploaded hashes are never stored.
   phoneHash                    String?   @unique(map: "app_users_phone_hash_key") @map("phone_hash")
   phoneVerifiedAt              DateTime? @map("phone_verified_at")
-  isActive                     Boolean   @default(true) @map("is_active")
+  /// Invite gate (src/server/app-access.ts): when an account without an invite joined the waitlist (a verified phone is required).
+  waitlistedAt                 DateTime? @map("waitlisted_at")
+  /// When an admin let this account in from the waitlist tab, without an invite.
+  accessGrantedAt              DateTime? @map("access_granted_at")
+  isActive                    Boolean   @default(true) @map("is_active")
   deactivatedAt                DateTime? @map("deactivated_at")
   withdrawnAt                  DateTime? @map("withdrawn_at")
   scheduledDeleteAt            DateTime? @map("scheduled_delete_at")
@@ -101,6 +127,14 @@ model User {
   inAppNotificationsEnabled    Boolean   @default(true) @map("in_app_notifications_enabled")
   moderationHiddenAt           DateTime? @map("moderation_hidden_at")
   moderationRestrictedAt       DateTime? @map("moderation_restricted_at")
+  /// Permanent ban (src/server/identity/ban.ts): no sign-in, no new account from the same device, number or sign-in method.
+  bannedAt                     DateTime? @map("banned_at")
+  bannedReason                 String?   @map("banned_reason")
+  /// One account per person (docs/one-account-per-person.md): this empty new account was folded into another one. The row stays as a pointer so a later sign-in with its id lands on that account.
+  mergedIntoUserId             String?   @map("merged_into_user_id")
+  mergedAt                     DateTime? @map("merged_at")
+  /// When this user last opened the notice list (src/server/notices.ts). Notices published after it are unread.
+  noticesSeenAt                DateTime? @map("notices_seen_at")
   /// The HashChat team's own official account (spec item 84): content it posts carries the "Official" badge. Display only; never affects ranking or counts. Not an operator account (see `isOperator`).
   isOfficial                   Boolean   @default(false) @map("is_official")
   /// Operator account run by HashChat staff (admin operator accounts): labeled "운영 계정" wherever its name is shown. Display and admin scoping only; never affects ranking or counts. Never true together with `isOfficial` (DB check app_users_operator_not_official_chk).
@@ -141,6 +175,12 @@ model User {
   postViews                 PostView[]
   profileViewsMade          ProfileView[]                  @relation("ProfileViewViewer")
   profileViewsReceived      ProfileView[]                  @relation("ProfileViewProfile")
+  profileVisitorUnlocks     ProfileVisitorUnlock[]         @relation("ProfileVisitorUnlockOwner")
+  nameTransliterations      UserNameTransliteration[]      @relation("UserNameTransliterations")
+  profileVisitorUnlockedBy  ProfileVisitorUnlock[]         @relation("ProfileVisitorUnlockVisitor")
+  postCallsMade             PostCall[]                     @relation("PostCallCaller")
+  contactAvoids             ContactAvoid[]
+  postCallsTaken            PostCall[]                     @relation("PostCallAuthor")
   postHides                 PostHide[]
   postDrafts                PostDraft[]
   recentSearches            RecentSearch[]
@@ -154,6 +194,7 @@ model User {
   @@index([createdAt], map: "app_users_created_at_idx")
   @@index([isOperator], map: "app_users_is_operator_idx")
   @@index([referredByUserId], map: "app_users_referred_by_user_id_idx")
+  @@index([waitlistedAt], map: "app_users_waitlisted_at_idx")
   @@map("app_users")
 }
 
@@ -424,6 +465,23 @@ model AppConversationChannel {
   // anyone may join it from there (through the share link, which turning the
   // room public switches on). A private room is listed only as a locked card.
   isPublic                   Boolean   @default(false) @map("is_public")
+  // Voice room (owner, 2026-11-25): an open room that is always in a voice
+  // talk. Listed on the voice-room tab (not under Explore, which lists open
+  // chat rooms) and shown with the stage; entering it from that tab joins
+  // its call. Only ever true together with isPublic.
+  isVoiceRoom                Boolean   @default(false) @map("is_voice_room")
+  // The hidden two-person room of a 1:1 voice talk started from a post
+  // (owner, 2026-11-25; src/server/post-calls.ts). No list shows it: the
+  // call screen is the only way in.
+  isDuoCall                  Boolean   @default(false) @map("is_duo_call")
+  // Women only (owner, 2026-11-25): made by a woman for women. Listed for
+  // everyone, but only a woman can come in (a man sees it locked).
+  womenOnly                  Boolean   @default(false) @map("women_only")
+  // Open room (a public room, listed under Explore): its topic tag, and the
+  // password it asks for when it has one (scrypt, see
+  // src/server/open-room-password.ts). Both are null on a chat room.
+  topic                      String?   @map("topic")
+  passwordHash               String?   @map("password_hash")
   // The room number people type in Search to find the room: 7 digits, shown
   // as "482 1937". Random (not sequential) so neighbours are not guessable;
   // the database picks a free one (next_room_code() in the app schema).
@@ -449,6 +507,7 @@ model AppConversationChannel {
   @@index([ownerUserId, updatedAt], map: "app_conversation_channels_owner_updated_at_idx")
   @@index([ownerUserId, status], map: "app_conversation_channels_owner_status_idx")
   @@index([hashRushActiveAt], map: "app_conversation_channels_hash_rush_active_at_idx")
+  @@index([isPublic, updatedAt], map: "app_conversation_channels_public_updated_at_idx")
   @@map("app_conversation_channels")
 }
 
@@ -798,11 +857,18 @@ model Post {
   likeCount            Int       @default(0) @map("like_count")
   commentCount         Int       @default(0) @map("comment_count")
   publishedAt          DateTime  @default(now()) @map("published_at")
+  /// What kind of post (owner, 2026-11-25; src/lib/post-category.ts): null or
+  /// 'free' an ordinary post, 'hour' one that leaves every list at `expiresAt`,
+  /// 'intro' a self-introduction with its answers in `intro`.
+  category             String?
+  expiresAt            DateTime? @map("expires_at")
+  intro                Json?
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
 
   author        User               @relation(fields: [authorId], references: [id], onDelete: Cascade)
   extraImages   PostImage[]
+  calls         PostCall[]
   translations  PostTranslation[]
   comments      PostComment[]
   likes         PostLike[]
@@ -968,6 +1034,98 @@ model ProfileView {
   @@index([sourcePostId], map: "app_profile_views_source_post_id_idx")
   @@index([profileUserId, createdAt], map: "app_profile_views_profile_created_at_idx")
   @@map("app_profile_views")
+}
+
+/// A person's name written for readers of another language (owner, 2026-11-25):
+/// the sound in that language's script (李伟 → 리웨이 / Li Wei), never a
+/// translation. Kept per language; a changed name (sourceName differs) is redone.
+model UserNameTransliteration {
+  userId     String   @map("user_id")
+  language   String
+  sourceName String   @map("source_name")
+  text       String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation("UserNameTransliterations", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, language])
+  @@map("app_user_name_transliterations")
+}
+
+/// "Who viewed my profile" (owner, 2026-11-25): a visitor shows blurred until
+/// the profile owner pays to see them (src/server/profile-visitors.ts). One row
+/// per owner and visitor; later visits by the same person stay visible.
+model ProfileVisitorUnlock {
+  userId    String   @map("user_id")
+  visitorId String   @map("visitor_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User @relation("ProfileVisitorUnlockOwner", fields: [userId], references: [id], onDelete: Cascade)
+  visitor User @relation("ProfileVisitorUnlockVisitor", fields: [visitorId], references: [id], onDelete: Cascade)
+
+  @@id([userId, visitorId])
+  @@index([visitorId], map: "app_profile_visitor_unlocks_visitor_id_idx")
+  @@map("app_profile_visitor_unlocks")
+}
+
+/// One number of an account's address book, as its sha256 hash (owner,
+/// 2026-11-26; src/server/contact-avoid.ts): on the explore tab the account
+/// and whoever has that number do not see each other. `allowed` lets one
+/// person through.
+/// Hash a man paid to open a 1:1 room with a woman (owner, 2026-11-26;
+/// src/server/dm-open-charge.ts). Given back when she has not written by
+/// `refundDueAt`. `outcome`: answered | refunded.
+model DmOpenCharge {
+  id           String    @id @default(cuid())
+  channelId    String    @unique @map("channel_id")
+  senderUserId String    @map("sender_user_id")
+  targetUserId String    @map("target_user_id")
+  chargedMicro BigInt    @map("charged_micro")
+  refundDueAt  DateTime  @map("refund_due_at")
+  settledAt    DateTime? @map("settled_at")
+  outcome      String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@index([senderUserId, settledAt], map: "app_dm_open_charges_sender_settled_idx")
+  @@map("app_dm_open_charges")
+}
+
+model ContactAvoid {
+  ownerId     String   @map("owner_id")
+  contactHash String   @map("contact_hash")
+  allowed     Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@id([ownerId, contactHash])
+  @@index([contactHash], map: "app_contact_avoids_contact_hash_idx")
+  @@map("app_contact_avoids")
+}
+
+/// A 1:1 voice talk asked for from a "call" post (owner, 2026-11-25;
+/// src/server/post-calls.ts). `status`: ringing (the author has 30 seconds),
+/// accepted, declined, missed, cancelled, ended. The call itself runs in the
+/// hidden room `channelId` (AppConversationChannel.isDuoCall).
+model PostCall {
+  id         String    @id @default(cuid())
+  postId     String    @map("post_id")
+  callerId   String    @map("caller_id")
+  authorId   String    @map("author_id")
+  channelId  String    @map("channel_id")
+  status     String    @default("ringing")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  answeredAt DateTime? @map("answered_at")
+  endedAt    DateTime? @map("ended_at")
+
+  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  caller User @relation("PostCallCaller", fields: [callerId], references: [id], onDelete: Cascade)
+  author User @relation("PostCallAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([authorId, status], map: "app_post_calls_author_id_status_idx")
+  @@index([callerId, status], map: "app_post_calls_caller_id_status_idx")
+  @@index([channelId], map: "app_post_calls_channel_id_idx")
+  @@map("app_post_calls")
 }
 
 model PostHide {
@@ -1455,6 +1613,128 @@ model AppCoinAdminGrant {
   @@map("app_coin_admin_grants")
 }
 
+// ── One account per person (docs/one-account-per-person.md) ───────────────
+// Every key below is an HMAC (src/server/identity/keys.ts), never the raw
+// value. None of these rows is deleted with a user: a ban has to outlive it.
+
+/// One phone or browser. Only 'keychain' (iOS) and 'android_id' survive a reinstall and decide anything; the other kinds are recorded only.
+model AppDevice {
+  id            String    @id @default(cuid())
+  platform      String
+  deviceKeyHash String    @unique(map: "app_devices_device_key_hash_key") @map("device_key_hash")
+  /// keychain | android_id | web_local | push_installation
+  keyKind       String    @map("key_kind")
+  firstSeenAt   DateTime  @default(now()) @map("first_seen_at")
+  lastSeenAt    DateTime  @default(now()) @map("last_seen_at")
+  blockedAt     DateTime? @map("blocked_at")
+  blockedReason String?   @map("blocked_reason")
+  /// Staff test phone: any number of accounts, and left out of ban bundles.
+  exemptAt      DateTime? @map("exempt_at")
+
+  users  AppDeviceUser[]
+  phones AppDevicePhone[]
+
+  @@map("app_devices")
+}
+
+model AppDeviceUser {
+  id          String   @id @default(cuid())
+  deviceId    String   @map("device_id")
+  userId      String   @map("user_id")
+  firstSeenAt DateTime @default(now()) @map("first_seen_at")
+  lastSeenAt  DateTime @default(now()) @map("last_seen_at")
+
+  device AppDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, userId], map: "app_device_users_device_user_key")
+  @@index([userId], map: "app_device_users_user_id_idx")
+  @@map("app_device_users")
+}
+
+model AppDevicePhone {
+  id           String   @id @default(cuid())
+  deviceId     String   @map("device_id")
+  phoneKeyHash String   @map("phone_key_hash")
+  verifiedAt   DateTime @default(now()) @map("verified_at")
+
+  device AppDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, phoneKeyHash], map: "app_device_phones_device_phone_key")
+  @@index([phoneKeyHash], map: "app_device_phones_phone_key_hash_idx")
+  @@map("app_device_phones")
+}
+
+/// An extra number attached to an account (its own number stays on User.phoneE164). A number belongs to one account.
+model AppUserPhone {
+  id                  String   @id @default(cuid())
+  userId              String   @map("user_id")
+  phoneKeyHash        String   @unique(map: "app_user_phones_phone_key_hash_key") @map("phone_key_hash")
+  /// Last four digits, to show the owner which number it is.
+  last4               String   @map("last4")
+  attachedViaDeviceId String?  @map("attached_via_device_id")
+  verifiedAt          DateTime @default(now()) @map("verified_at")
+
+  @@index([userId], map: "app_user_phones_user_id_idx")
+  @@map("app_user_phones")
+}
+
+/// Append-only: one row each time an account is seen with a sign-in method, number or device. Two accounts sharing a (method, methodKeyHash) are the same bundle.
+model AppIdentityLink {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  deviceId      String?  @map("device_id")
+  /// apple | google | email | phone
+  method        String
+  methodKeyHash String   @map("method_key_hash")
+  /// sign_up | sign_in | phone_verified | phone_in_use | attached | detached | merged
+  event         String
+  ip            String?
+  appVersion    String?  @map("app_version")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt], map: "app_identity_links_user_created_idx")
+  @@index([method, methodKeyHash], map: "app_identity_links_method_key_idx")
+  @@map("app_identity_links")
+}
+
+/// What a permanent ban closed: no sign-in or sign-up through it.
+model AppIdentityBlock {
+  id           String   @id @default(cuid())
+  /// device | phone | apple | google | email
+  kind         String
+  keyHash      String   @map("key_hash")
+  sourceUserId String?  @map("source_user_id")
+  reason       String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([kind, keyHash], map: "app_identity_blocks_kind_key_hash_key")
+  @@map("app_identity_blocks")
+}
+
+/// A service notice shown from the strip on top of the home tab (src/server/notices.ts).
+/// kind 'ban': one permanently banned account, with the name masked ("J***"),
+/// only the category of the reason, and the day. kind 'general': a text notice,
+/// per app language in `texts` ({ "ko": { "title": "…", "body": "…" }, "en": … }).
+model AppNotice {
+  id          String    @id @default(cuid())
+  /// ban | general
+  kind        String
+  maskedName  String?   @map("masked_name")
+  /// harassment | spam | scam | inappropriate | impersonation | other
+  category    String?
+  texts       Json?
+  /// Important notices are pushed once (server/notice-push.ts).
+  isImportant Boolean   @default(false) @map("is_important")
+  /// When the push went out; null for a notice that was not pushed.
+  pushedAt    DateTime? @map("pushed_at")
+  publishedAt DateTime  @default(now()) @map("published_at")
+  deletedAt   DateTime? @map("deleted_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([publishedAt], map: "app_notices_published_at_idx")
+  @@map("app_notices")
+}
+
 // A group voice-talk session inside a chat room (conversation channel). At
 // most one call is "live" per channel at a time (enforced by the partial
 // unique index on channel_id WHERE status = 'live' in the migration), so
@@ -1491,7 +1771,12 @@ model AppVoiceCallParticipant {
   id             String    @id @default(cuid())
   callId         String    @map("call_id")
   userId         String    @map("user_id")
-  role           String    @default("speaker") // "speaker" (MVP: all speakers; "listener" reserved)
+  // "speaker": on the stage, may talk. "listener": hears the call only. A chat
+  // room's call has speakers only; an open room's call puts everyone but the
+  // host and the one who started it in as a listener (server/voice/voice-stage.ts).
+  role           String    @default("speaker")
+  // A listener asking for the stage; cleared when they get it or take it back.
+  handRaisedAt   DateTime? @map("hand_raised_at")
   interpretOn    Boolean   @default(true) @map("interpret_on")
   // The language this user speaks in the room (their STT source language).
   speechLanguage String?   @map("speech_language")

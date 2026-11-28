@@ -23,12 +23,12 @@ history:
 
 ## Steps
 
-1. Tap the Search tab. Screenshot about 500 ms later.
+1. Tap the Explore tab (third tab). Screenshot about 500 ms later.
 2. Tap the field, type `a` and wait for results. Screenshot.
 3. Scroll the results down. Screenshot (the header and tab bar must stay put).
 4. Tap a result's avatar (not its name). Screenshot the profile.
 5. Edge-swipe back. Screenshot.
-6. Tap the Search tab again while already on it.
+6. Tap the Explore tab again while already on it.
 
 ## Oracle (pass when)
 

@@ -109,7 +109,7 @@ export default function InviteScreen({ open, onClose, locale }: InviteScreenProp
       ariaLabel={ticketCopy.inviteScreenTitle}
       zIndex={135}
       nativeBackPriority={135}
-      className="fixed inset-0 z-[135] flex min-h-0 w-full flex-col bg-white text-slate-950"
+      className="keyboard-safe fixed inset-0 z-[135] flex min-h-0 w-full flex-col bg-white text-slate-950"
       style={{ touchAction: "pan-y" }}
     >
       <header

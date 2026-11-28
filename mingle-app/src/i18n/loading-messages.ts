@@ -43,6 +43,35 @@ const LOGIN_LOADING_MESSAGE: LoadingMessage = {
   },
 };
 
+/**
+ * The brand line: what HashChat is for, in one sentence. Korean speaks to
+ * Koreans (foreign friends), every other language to people looking for Korean
+ * friends (docs/positioning-korean-friends.md). Shown on the sign-in screen and
+ * on the startup splash of a device with nothing to come back to (a first
+ * launch, or signed out), where a feature tip would mean nothing yet.
+ */
+export const BRAND_TAGLINE: Record<PrimaryUiLocale, string> = {
+  ko: "외국인 친구, 말이 안 통해도 사귈 수 있어요",
+  en: "Make Korean friends, even before your Korean is good",
+  ja: "韓国語が苦手でも、韓国人の友達ができます",
+  "zh-CN": "韩语还不好，也能交到韩国朋友",
+  "zh-TW": "韓語還不好，也能交到韓國朋友",
+  fr: "Faites-vous des amis coréens, même si votre coréen est encore hésitant",
+  de: "Finde koreanische Freunde, auch wenn dein Koreanisch noch holprig ist",
+  es: "Haz amigos coreanos aunque tu coreano aún no sea bueno",
+  pt: "Faça amigos coreanos mesmo que seu coreano ainda não seja bom",
+  it: "Fai amicizia con coreani anche se il tuo coreano è ancora incerto",
+  ru: "Заводите друзей-корейцев, даже если корейский пока слабый",
+  ar: "كوّن صداقات مع كوريين حتى لو كانت لغتك الكورية ضعيفة",
+  hi: "कोरियाई कमज़ोर हो तब भी कोरियाई दोस्त बनाएं",
+  th: "หาเพื่อนคนเกาหลีได้ แม้ภาษาเกาหลียังไม่เก่ง",
+  vi: "Kết bạn với người Hàn dù tiếng Hàn của bạn chưa giỏi",
+};
+
+export function resolveBrandTagline(rawLocale: string | null | undefined): string {
+  return BRAND_TAGLINE[resolveLocale(rawLocale)] ?? BRAND_TAGLINE.en;
+}
+
 export const LOADING_MESSAGES: readonly LoadingMessage[] = [
   // Service tips
   tip(

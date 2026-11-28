@@ -117,9 +117,11 @@ function resolveEmptyStateCopy(uiLocale: string): ConversationEmptyStateCopy {
 
 type ConversationEmptyStateProps = {
   uiLocale: string
+  /** Room kept free at the top (the speak trial's hint card sits there). */
+  topInsetPx?: number
 }
 
-export default function ConversationEmptyState({ uiLocale }: ConversationEmptyStateProps) {
+export default function ConversationEmptyState({ uiLocale, topInsetPx }: ConversationEmptyStateProps) {
   const copy = resolveEmptyStateCopy(uiLocale)
   const carouselRef = useRef<HTMLDivElement | null>(null)
   const carouselGroupRefs = useRef<Array<HTMLDivElement | null>>([])
@@ -237,6 +239,7 @@ export default function ConversationEmptyState({ uiLocale }: ConversationEmptySt
     <div
       data-qa="live-demo-empty-state"
       className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-white px-4 pb-4 pt-6"
+      style={topInsetPx && topInsetPx > 0 ? { paddingTop: topInsetPx } : undefined}
     >
       <div className="flex w-full max-w-[390px] -translate-y-2 flex-col items-center text-center">
         <div className="mb-5 flex h-9 items-end justify-center gap-1.5 text-amber-500" aria-hidden="true">

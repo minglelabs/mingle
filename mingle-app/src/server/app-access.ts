@@ -1,0 +1,210 @@
+import { prisma } from '@/lib/prisma'
+import { isPhoneVerificationAvailable, isReviewPhoneNumber } from '@/server/phone-verification'
+import { ReferralError, redeemReferralCode } from '@/server/referral'
+
+/**
+ * Invite-only access. With INVITE_GATE=on, an account made on or after
+ * INVITE_GATE_SINCE (ISO date; no date = every account) can use the app once
+ * it has accepted someone's invite. Accounts from before that date, operators,
+ * the official account and store-review accounts always get in. Review
+ * accounts are the PHONE_REVIEW_LOGINS numbers and the REVIEW_ACCOUNT_EMAILS
+ * addresses (comma-separated), so a reviewer never needs an invite.
+ *
+ * Only for some app languages: INVITE_GATE_LOCALES (comma-separated, default
+ * "ko") lists them, "*" means every language. The app sends the language it
+ * shows (the one picked on the first screen); any other language gets in.
+ *
+ * An account the gate stops is put on the waitlist by itself the first time
+ * it asks ('waitlisted'); an admin lets it in from the waitlist tab
+ * ('granted', src/app/admin/waitlist).
+ *
+ * Off by default: until INVITE_GATE=on nothing changes for anyone.
+ *
+ * Required phone number, checked before the invite gate: with PHONE_REQUIRED=on
+ * every account, old or new, whose app language is in PHONE_REQUIRED_LOCALES
+ * (comma-separated, default "ko"; "*" = every language) verifies its own phone
+ * number once after sign-in ('needs_phone'), however it signed in. Korean is
+ * the default because the SMS provider in production texts Korean numbers only
+ * (2026-11-21: Koreans verify their number, then are shown the contact sync). Operators,
+ * the official account and store-review accounts skip it. While this server
+ * cannot send a code (no SMS provider set up) nobody is asked, so turning the
+ * switch on before the keys are in locks no one out.
+ *
+ * Permanent ban, checked first and always: a banned account, or any account
+ * on a device a ban closed, gets 'banned' (src/server/identity/ban.ts).
+ */
+export type AppAccessReason =
+  | 'gate_off' | 'other_locale' | 'existing' | 'invited' | 'granted' | 'staff' | 'review' | 'needs_invite' | 'waitlisted' | 'needs_phone' | 'needs_phone_in_korea' | 'banned'
+
+export type AppAccess = { allowed: boolean; reason: AppAccessReason }
+
+export type AppAccessUser = {
+  createdAt: Date
+  referredByUserId: string | null
+  isOperator: boolean
+  isOfficial: boolean
+  phoneE164: string | null
+  email: string | null
+  waitlistedAt?: Date | null
+  accessGrantedAt?: Date | null
+  nationalityCountry?: string | null
+}
+
+/** Who counts as Korean for the required phone number: the first screen's answer, else the profile's nationality, else the app language. */
+export type KoreanSignal = {
+  locale?: string | null
+  korean?: boolean | null
+  nationalityCountry?: string | null
+  /**
+   * Using the app from Korea right now (the request's IP country is KR). There,
+   * "I have no Korean number" does not skip the number (owner, 2026-11-28):
+   * only someone shown to be outside Korea may use the app without one.
+   */
+  inKorea?: boolean | null
+}
+
+function readGateSince(env: NodeJS.ProcessEnv): Date | null {
+  const raw = env.INVITE_GATE_SINCE?.trim()
+  if (!raw) return null
+  const date = new Date(raw)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+export function isInviteGateOn(env: NodeJS.ProcessEnv = process.env): boolean {
+  return ['1', 'on', 'true'].includes((env.INVITE_GATE ?? '').trim().toLowerCase())
+}
+
+/** Whether the gate applies to an app language ("ko", "ko-KR", "en"...). No language sent counts as gated. */
+export function isInviteGateLocale(rawLocale: string | null | undefined, env: NodeJS.ProcessEnv = process.env): boolean {
+  const locales = (env.INVITE_GATE_LOCALES ?? 'ko').split(',').map((entry) => entry.trim().toLowerCase()).filter(Boolean)
+  if (locales.length === 0 || locales.includes('*')) return true
+  const locale = (rawLocale ?? '').trim().toLowerCase()
+  if (!locale) return true
+  const language = locale.split(/[-_]/)[0]
+  return locales.some((entry) => entry === locale || entry === language)
+}
+
+export function isReviewAccount(user: Pick<AppAccessUser, 'phoneE164' | 'email'>, env: NodeJS.ProcessEnv = process.env): boolean {
+  if (user.phoneE164 && isReviewPhoneNumber(user.phoneE164, env)) return true
+  const email = user.email?.trim().toLowerCase()
+  if (!email) return false
+  return (env.REVIEW_ACCOUNT_EMAILS ?? '').split(',').map((entry) => entry.trim().toLowerCase()).filter(Boolean).includes(email)
+}
+
+export function isPhoneRequiredOn(env: NodeJS.ProcessEnv = process.env): boolean {
+  return ['1', 'on', 'true'].includes((env.PHONE_REQUIRED ?? '').trim().toLowerCase())
+}
+
+/** Whether the required phone number applies to an app language. No language sent counts as included. */
+export function isPhoneRequiredLocale(rawLocale: string | null | undefined, env: NodeJS.ProcessEnv = process.env): boolean {
+  const locales = (env.PHONE_REQUIRED_LOCALES ?? 'ko').split(',').map((entry) => entry.trim().toLowerCase()).filter(Boolean)
+  if (locales.length === 0 || locales.includes('*')) return true
+  const locale = (rawLocale ?? '').trim().toLowerCase()
+  if (!locale) return true
+  const language = locale.split(/[-_]/)[0]
+  return locales.some((entry) => entry === locale || entry === language)
+}
+
+/**
+ * Whether the required phone number applies here. With "ko" in
+ * PHONE_REQUIRED_LOCALES (the default) a Korean is asked whatever app language
+ * they picked: the first screen asks "Are you Korean?" (2026-11-21).
+ */
+export function isPhoneRequiredFor(signal: KoreanSignal, env: NodeJS.ProcessEnv = process.env): boolean {
+  const locales = (env.PHONE_REQUIRED_LOCALES ?? 'ko').split(',').map((entry) => entry.trim().toLowerCase()).filter(Boolean)
+  if (locales.length === 0 || locales.includes('*')) return true
+  if (locales.includes('ko')) {
+    if (signal.inKorea === true) return true
+    // Known not Korean: only the other listed app languages still count.
+    const others = locales.filter((entry) => entry !== 'ko')
+    const inOtherLocale = () => {
+      const locale = (signal.locale ?? '').trim().toLowerCase()
+      const language = locale.split(/[-_]/)[0]
+      return locale !== '' && others.some((entry) => entry === locale || entry === language)
+    }
+    if (typeof signal.korean === 'boolean') return signal.korean || inOtherLocale()
+    if (signal.nationalityCountry) return signal.nationalityCountry.toUpperCase() === 'KR' || inOtherLocale()
+  }
+  return isPhoneRequiredLocale(signal.locale, env)
+}
+
+/** Whether this account still has to verify a phone number before using the app. */
+export function needsPhoneNumber(
+  user: Pick<AppAccessUser, 'isOperator' | 'isOfficial' | 'phoneE164' | 'email'> & { nationalityCountry?: string | null },
+  env: NodeJS.ProcessEnv = process.env,
+  canSendCodes: boolean = isPhoneVerificationAvailable(),
+  locale?: string | null,
+  korean?: boolean | null,
+  inKorea?: boolean | null,
+): boolean {
+  if (!isPhoneRequiredOn(env) || !canSendCodes) return false
+  if (!isPhoneRequiredFor({ locale, korean, nationalityCountry: user.nationalityCountry, inKorea }, env)) return false
+  if (user.phoneE164) return false
+  if (user.isOperator || user.isOfficial) return false
+  return !isReviewAccount(user, env)
+}
+
+export function resolveAppAccess(user: AppAccessUser, env: NodeJS.ProcessEnv = process.env, locale?: string | null): AppAccess {
+  if (!isInviteGateOn(env)) return { allowed: true, reason: 'gate_off' }
+  if (!isInviteGateLocale(locale, env)) return { allowed: true, reason: 'other_locale' }
+  if (user.isOperator || user.isOfficial) return { allowed: true, reason: 'staff' }
+  if (isReviewAccount(user, env)) return { allowed: true, reason: 'review' }
+  if (user.referredByUserId) return { allowed: true, reason: 'invited' }
+  if (user.accessGrantedAt) return { allowed: true, reason: 'granted' }
+  const since = readGateSince(env)
+  if (since && user.createdAt < since) return { allowed: true, reason: 'existing' }
+  return { allowed: false, reason: user.waitlistedAt ? 'waitlisted' : 'needs_invite' }
+}
+
+const ACCESS_SELECT = {
+  createdAt: true, referredByUserId: true, isOperator: true, isOfficial: true, phoneE164: true, email: true,
+  waitlistedAt: true, accessGrantedAt: true, bannedAt: true, nationalityCountry: true,
+} as const
+
+export async function readAppAccess(
+  userId: string,
+  locale?: string | null,
+  options: { deviceBlocked?: boolean; korean?: boolean | null; inKorea?: boolean | null } = {},
+): Promise<AppAccess> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: ACCESS_SELECT })
+  const phoneRequired = isPhoneRequiredOn() && isPhoneVerificationAvailable()
+    && isPhoneRequiredFor({ locale, korean: options.korean, nationalityCountry: user?.nationalityCountry, inKorea: options.inKorea })
+  if (user?.bannedAt) return { allowed: false, reason: 'banned' }
+  if (options.deviceBlocked && user && !user.isOperator && !user.isOfficial) return { allowed: false, reason: 'banned' }
+  if (!phoneRequired) {
+    if (!isInviteGateOn()) return { allowed: true, reason: 'gate_off' }
+    if (!isInviteGateLocale(locale)) return { allowed: true, reason: 'other_locale' }
+  }
+  if (!user) return phoneRequired && !isInviteGateOn() ? { allowed: true, reason: 'gate_off' } : { allowed: false, reason: 'needs_invite' }
+  if (phoneRequired && needsPhoneNumber(user, process.env, true, locale, options.korean, options.inKorea)) {
+    // Said "no Korean number" (or not Korean) but is in Korea: the number is still needed, and the gate says why.
+    const saidNotKorean = options.korean === false || (options.korean == null && Boolean(user.nationalityCountry) && user.nationalityCountry?.toUpperCase() !== 'KR')
+    return { allowed: false, reason: options.inKorea && saidNotKorean ? 'needs_phone_in_korea' : 'needs_phone' }
+  }
+  const access = resolveAppAccess(user, process.env, locale)
+  if (access.reason !== 'needs_invite') return access
+  // Stopped by the gate for the first time: onto the waitlist, no button needed.
+  await prisma.user.updateMany({ where: { id: userId, waitlistedAt: null }, data: { waitlistedAt: new Date() } })
+  return { allowed: false, reason: 'waitlisted' }
+}
+
+/** Enters an invite code at the gate: accepts the invite (both sides get the join reward) and lets the account in. */
+export async function enterInviteCode(userId: string, rawCode: unknown, locale?: string | null): Promise<AppAccess> {
+  try {
+    await redeemReferralCode(userId, rawCode, { source: 'code' })
+  } catch (error) {
+    // Already invited earlier: the gate should simply open.
+    if (!(error instanceof ReferralError && error.code === 'already_redeemed')) throw error
+  }
+  return readAppAccess(userId, locale)
+}
+
+/** Admin: lets a waitlisted (or any) account in without an invite. */
+export async function grantAppAccess(userId: string): Promise<void> {
+  await prisma.user.update({ where: { id: userId }, data: { accessGrantedAt: new Date() } })
+}
+
+/** Admin: takes back a grant made by mistake. */
+export async function revokeAppAccessGrant(userId: string): Promise<void> {
+  await prisma.user.update({ where: { id: userId }, data: { accessGrantedAt: null } })
+}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode, type RefObject } from 'react'
 
 /**
  * Shared chrome of the compose surfaces (new post, drafts, edit): one header
@@ -67,6 +67,51 @@ export function ComposePrimaryButton({
       {children}
     </button>
   )
+}
+
+/**
+ * How much of a full-screen box the on-screen keyboard covers, measured from
+ * the box itself (2026-11-27, on an iPhone): iOS shrinks innerHeight while the
+ * keyboard is up but a fixed screen keeps its height, and it scrolls the page
+ * up to show the focused field, which took the write screen's header and
+ * caret above the screen. While a field inside the box has focus, the page is
+ * kept at the top, so the box never moves; the padding returned keeps its
+ * content above the keyboard. 0 without a keyboard, and on Android (the
+ * WebView itself gets shorter there).
+ */
+export function useKeyboardCover(boxRef: RefObject<HTMLElement | null>): number {
+  const [cover, setCover] = useState(0)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.visualViewport) return
+    const viewport = window.visualViewport
+    let frame = 0
+    const measure = () => {
+      const box = boxRef.current
+      if (!box) return
+      if (window.scrollY !== 0 && box.contains(document.activeElement)) window.scrollTo(0, 0)
+      const bottom = box.getBoundingClientRect().bottom
+      setCover(Math.max(0, Math.round(bottom - viewport.height - viewport.offsetTop)))
+    }
+    const later = () => {
+      window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(measure)
+    }
+    later()
+    viewport.addEventListener('resize', later)
+    viewport.addEventListener('scroll', later)
+    window.addEventListener('scroll', later)
+    window.addEventListener('focusin', later)
+    window.addEventListener('focusout', later)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      viewport.removeEventListener('resize', later)
+      viewport.removeEventListener('scroll', later)
+      window.removeEventListener('scroll', later)
+      window.removeEventListener('focusin', later)
+      window.removeEventListener('focusout', later)
+    }
+  }, [boxRef])
+  return cover
 }
 
 /**
