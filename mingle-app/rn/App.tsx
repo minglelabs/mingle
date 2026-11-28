@@ -3530,6 +3530,8 @@ function AppInner(): React.JSX.Element {
         skip: text(labels.skip, 'Text only'),
         recent: text(labels.recent, 'Recents'),
         albums: text(labels.albums, 'Albums'),
+        camera: text(labels.camera, 'Camera'),
+        cameraDenied: text(labels.cameraDenied, 'Allow camera access to take a photo.'),
       },
     });
   }, []);

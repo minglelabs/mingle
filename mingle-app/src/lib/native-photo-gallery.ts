@@ -62,7 +62,7 @@ export function filesFromNativePhotos(detail: NativePhotosDetail | null): File[]
   return files.length > 0 ? files : null
 }
 
-export type NativePhotoGalleryLabels = { title: string; next: string; close: string; limited: string; denied: string; openSettings: string; skip: string; recent: string; albums: string }
+export type NativePhotoGalleryLabels = { title: string; next: string; close: string; limited: string; denied: string; openSettings: string; skip: string; recent: string; albums: string; camera: string; cameraDenied: string }
 
 export type NativePhotoGalleryResult =
   | { outcome: 'picked'; files: File[] }
@@ -106,4 +106,17 @@ export function openNativePhotoGallery(max: number, labels: NativePhotoGalleryLa
       JSON.stringify({ type: 'native_photo_gallery_open', payload: { requestId, max, labels } }),
     )
   })
+}
+
+/**
+ * One photo for a profile picture from the app's gallery, its camera tile
+ * included (owner, 2026-11-28: a photo can be taken right there, at sign-up
+ * and later). 'unavailable': a browser or an older app, so the caller opens
+ * the system picker instead; null: closed without a photo.
+ */
+export async function pickProfilePhotoFromAppGallery(labels: NativePhotoGalleryLabels): Promise<File | null | 'unavailable'> {
+  if (!isNativePhotoGalleryAvailable()) return 'unavailable'
+  const result = await openNativePhotoGallery(1, { ...labels, skip: '' })
+  if (result.outcome === 'denied') return 'unavailable'
+  return result.files?.[0] ?? null
 }

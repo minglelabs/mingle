@@ -23,6 +23,7 @@ import {
 } from 'react-native';
 import { check, openPhotoPicker, openSettings, PERMISSIONS, request, RESULTS, type Permission } from 'react-native-permissions';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Camera, CameraType, type CameraApi } from 'react-native-camera-kit';
 
 export type PhotoGalleryLabels = {
   title: string;
@@ -38,6 +39,10 @@ export type PhotoGalleryLabels = {
   recent: string;
   /** The title of the album list (older pages send none: "Albums"). */
   albums?: string;
+  /** The first tile of the grid: take a photo now (2026-11-28). */
+  camera?: string;
+  /** Camera access refused. */
+  cameraDenied?: string;
 };
 
 export type PhotoGalleryRequest = { requestId: string; max: number; labels: PhotoGalleryLabels };
@@ -56,6 +61,28 @@ const PAGE_SIZE = 60;
 const COLUMNS = 4;
 
 type Access = 'checking' | 'granted' | 'limited' | 'denied';
+
+/** The grid's first cell: the camera. */
+const CAMERA_TILE = { node: { id: '__camera__' } } as unknown as PhotoIdentifier;
+
+/** A photo just taken (a file) as a JPEG data URL no larger than MAX_SIDE. */
+async function capturedToDataUrl(uri: string, width: number, height: number): Promise<string> {
+  const target = scaled(width || MAX_SIDE, height || MAX_SIDE);
+  const result = await ImageEditor.cropImage(uri, {
+    offset: { x: 0, y: 0 },
+    size: { width: width || target.width, height: height || target.height },
+    displaySize: target,
+    resizeMode: 'contain',
+    quality: 0.85,
+    format: 'jpeg',
+    includeBase64: true,
+  });
+  return `data:image/jpeg;base64,${(result as { base64?: string }).base64 ?? ''}`;
+}
+
+function cameraPermission(): Permission {
+  return Platform.OS === 'ios' ? PERMISSIONS.IOS.CAMERA : PERMISSIONS.ANDROID.CAMERA;
+}
 
 function photoPermission(): Permission {
   if (Platform.OS === 'ios') return PERMISSIONS.IOS.PHOTO_LIBRARY;
@@ -140,6 +167,10 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
   const albumRef = useRef<GalleryAlbum | null>(null);
   const [albums, setAlbums] = useState<GalleryAlbum[] | null>(null);
   const [albumListOpen, setAlbumListOpen] = useState(false);
+  // The camera, from the grid's first tile: 'off', asking for access, on, or refused.
+  const [camera, setCamera] = useState<'off' | 'asking' | 'on' | 'denied'>('off');
+  const [cameraBack, setCameraBack] = useState(true);
+  const cameraRef = useRef<CameraApi>(null);
   // Picked photos by id, kept across albums (the grid only holds the album on show).
   const pickedEntries = useRef(new Map<string, PhotoIdentifier>());
   const requestId = galleryRequest?.requestId ?? null;
@@ -185,6 +216,7 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
     setAlbum(null);
     setAlbums(null);
     setAlbumListOpen(false);
+    setCamera('off');
     setFocusId(null);
     setCursor(null);
     setHasMore(true);
@@ -240,10 +272,11 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
     onAnswer(access === 'denied' ? { requestId, type: 'denied' } : { requestId, type: 'cancelled' });
   }, [access, onAnswer, requestId]);
 
-  const finish = useCallback(async () => {
+  const finish = useCallback(async (taken?: string) => {
     if (!requestId || busy) return;
-    const ids = picked;
-    if (ids.length === 0) return;
+    // A photo just taken goes after the ones picked, within the limit.
+    const ids = taken ? picked.slice(0, Math.max(0, max - 1)) : picked;
+    if (ids.length === 0 && !taken) return;
     setBusy(true);
     const out: Array<{ dataUrl: string; name: string }> = [];
     let lastError = '';
@@ -259,9 +292,34 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
         lastError = error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200);
       }
     }
+    if (taken) out.push({ dataUrl: taken, name: `photo-${out.length + 1}.jpg` });
     setBusy(false);
     onAnswer(out.length > 0 ? { requestId, type: 'picked', photos: out } : { requestId, type: 'cancelled', reason: lastError || 'nothing_read' });
-  }, [busy, byId, onAnswer, picked, requestId]);
+  }, [busy, byId, max, onAnswer, picked, requestId]);
+
+  const openCamera = useCallback(() => {
+    setCamera('asking');
+    void (async () => {
+      let status = await check(cameraPermission());
+      if (status === RESULTS.DENIED) status = await request(cameraPermission());
+      setCamera(status === RESULTS.GRANTED || status === RESULTS.LIMITED ? 'on' : 'denied');
+    })();
+  }, []);
+
+  const shoot = useCallback(async () => {
+    if (busy) return;
+    try {
+      const photo = await cameraRef.current?.capture();
+      if (!photo?.uri) return;
+      const uri = photo.uri.startsWith('file://') || photo.uri.startsWith('content://') ? photo.uri : `file://${photo.uri}`;
+      const dataUrl = await capturedToDataUrl(uri, photo.width, photo.height);
+      if (dataUrl.length <= 'data:image/jpeg;base64,'.length) return;
+      setCamera('off');
+      await finish(dataUrl);
+    } catch {
+      // Nothing taken: the camera stays open.
+    }
+  }, [busy, finish]);
 
   const skip = useCallback(() => {
     if (requestId) onAnswer({ requestId, type: 'skipped' });
@@ -305,7 +363,7 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
           <View style={styles.denied}><ActivityIndicator color={ACCENT} /></View>
         ) : (
           <FlatList
-            data={photos}
+            data={[CAMERA_TILE, ...photos]}
             keyExtractor={(entry) => entry.node.id}
             numColumns={COLUMNS}
             onEndReachedThreshold={0.6}
@@ -320,9 +378,11 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
                     <Text style={styles.recent} numberOfLines={1}>{album?.title ?? labels?.recent}</Text>
                     <Text style={styles.albumChevron}>▾</Text>
                   </Pressable>
-                  <Pressable accessibilityRole="button" onPress={skip} hitSlop={8} style={styles.skipPill} testID="photo-gallery-skip">
-                    <Text style={styles.skipText}>{labels?.skip}</Text>
-                  </Pressable>
+                  {labels?.skip ? (
+                    <Pressable accessibilityRole="button" onPress={skip} hitSlop={8} style={styles.skipPill} testID="photo-gallery-skip">
+                      <Text style={styles.skipText}>{labels.skip}</Text>
+                    </Pressable>
+                  ) : null}
                 </View>
                 {access === 'limited' && Platform.OS === 'ios' ? (
                   <Pressable accessibilityRole="button" onPress={letMoreIn} style={styles.limited}>
@@ -332,6 +392,16 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
               </View>
             )}
             renderItem={({ item }) => {
+              if (item === CAMERA_TILE) {
+                return (
+                  <Pressable accessibilityRole="button" accessibilityLabel={labels?.camera ?? 'Camera'} onPress={openCamera} style={{ width: cell, height: cell, padding: 1 }} testID="photo-gallery-camera">
+                    <View style={styles.cameraTile}>
+                      <Text style={styles.cameraIcon}>📷</Text>
+                      <Text style={styles.cameraLabel} numberOfLines={1}>{labels?.camera ?? 'Camera'}</Text>
+                    </View>
+                  </Pressable>
+                );
+              }
               const order = picked.indexOf(item.node.id);
               const isFocus = focus?.node.id === item.node.id;
               return (
@@ -346,6 +416,38 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
             contentContainerStyle={{ paddingBottom: insets.bottom + 12 }}
           />
         )}
+        {camera !== 'off' ? (
+          <View style={[StyleSheet.absoluteFill, styles.cameraSheet]} testID="photo-gallery-camera-view">
+            {camera === 'on' ? (
+              <Camera ref={cameraRef} style={StyleSheet.absoluteFill} cameraType={cameraBack ? CameraType.Back : CameraType.Front} />
+            ) : camera === 'denied' ? (
+              <View style={styles.denied}>
+                <Text style={[styles.deniedText, styles.cameraText]}>{labels?.cameraDenied ?? labels?.denied}</Text>
+                <Pressable accessibilityRole="button" onPress={() => { void openSettings(); }} style={styles.settings}>
+                  <Text style={styles.settingsText}>{labels?.openSettings}</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.denied}><ActivityIndicator color="#ffffff" /></View>
+            )}
+            <View style={[styles.cameraTop, { paddingTop: Platform.OS === 'ios' ? insets.top + 6 : 12 }]}>
+              <Pressable accessibilityRole="button" accessibilityLabel={labels?.close} onPress={() => setCamera('off')} hitSlop={12} style={styles.cameraRound}>
+                <Text style={styles.cameraClose}>✕</Text>
+              </Pressable>
+            </View>
+            {camera === 'on' ? (
+              <View style={[styles.cameraBottom, { paddingBottom: insets.bottom + 24 }]}>
+                <View style={styles.cameraSide} />
+                <Pressable accessibilityRole="button" accessibilityLabel={labels?.camera ?? 'Camera'} onPress={() => { void shoot(); }} disabled={busy} style={styles.shutter} testID="photo-gallery-shutter">
+                  {busy ? <ActivityIndicator color={ACCENT} /> : <View style={styles.shutterInner} />}
+                </Pressable>
+                <Pressable accessibilityRole="button" onPress={() => setCameraBack((back) => !back)} hitSlop={12} style={[styles.cameraSide, styles.cameraRound]}>
+                  <Text style={styles.cameraFlip}>⟲</Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
         {albumListOpen ? (
           <View style={[StyleSheet.absoluteFill, styles.albumSheet, { paddingTop: Platform.OS === 'ios' ? insets.top : 0 }]}>
             <View style={styles.bar}>
@@ -410,6 +512,19 @@ const styles = StyleSheet.create({
   albumButton: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1, marginRight: 12 },
   albumChevron: { color: INK, fontSize: 14, fontWeight: '700' },
   albumSheet: { backgroundColor: '#ffffff', zIndex: 10 },
+  cameraTile: { flex: 1, backgroundColor: '#fff7ed', alignItems: 'center', justifyContent: 'center', gap: 4 },
+  cameraIcon: { fontSize: 26 },
+  cameraLabel: { color: '#c2410c', fontSize: 12, fontWeight: '700' },
+  cameraSheet: { backgroundColor: '#000000', zIndex: 20 },
+  cameraText: { color: '#ffffff' },
+  cameraTop: { position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: 16 },
+  cameraRound: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' },
+  cameraClose: { color: '#ffffff', fontSize: 20, fontWeight: '600' },
+  cameraFlip: { color: '#ffffff', fontSize: 22, fontWeight: '700' },
+  cameraBottom: { position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 32 },
+  cameraSide: { width: 44, height: 44 },
+  shutter: { width: 76, height: 76, borderRadius: 38, borderWidth: 4, borderColor: '#ffffff', alignItems: 'center', justifyContent: 'center' },
+  shutterInner: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#ffffff' },
   albumRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 15, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(15,23,42,0.08)' },
   albumTitle: { color: INK, fontSize: 16, fontWeight: '600', flexShrink: 1 },
   albumTitleOn: { color: ACCENT, fontWeight: '800' },

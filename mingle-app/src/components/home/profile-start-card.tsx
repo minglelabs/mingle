@@ -1,5 +1,7 @@
 "use client";
 
+import { pickProfilePhotoFromAppGallery } from "@/lib/native-photo-gallery";
+import { profilePhotoGalleryLabels } from "@/i18n/compose-photo-copy";
 import { Camera, Loader2, UserRound } from "lucide-react";
 import { checkPhotoForFace } from "@/lib/native-face-check";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -119,7 +121,13 @@ export default function ProfileStartCard({ locale, userId }: { locale: string; u
       <div className="mt-3 flex items-center gap-3">
         <button
           type="button"
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => {
+            // The app's gallery with its camera tile when the app has one (owner, 2026-11-28).
+            void pickProfilePhotoFromAppGallery(profilePhotoGalleryLabels(locale)).then((picked) => {
+              if (picked === "unavailable") fileInputRef.current?.click();
+              else if (picked) pickFile(picked);
+            });
+          }}
           aria-label={shownImage ? copy.changePhoto : copy.addPhoto}
           className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-amber-300 bg-white text-gray-300 transition active:scale-95"
         >

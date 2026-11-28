@@ -1,5 +1,7 @@
 "use client";
 
+import { pickProfilePhotoFromAppGallery } from '@/lib/native-photo-gallery'
+import { profilePhotoGalleryLabels } from '@/i18n/compose-photo-copy'
 import dynamic from "next/dynamic";
 import { readKoreanAnswer, readNationalityAnswer, writeKoreanAnswer, writeNationalityAnswer, type KoreanAnswer } from "@/lib/korean-signup";
 import { MAJOR_NATIONALITY_CODES, NATIONALITY_COUNTRY_CODES, countryFlagEmoji, getCountryDisplayName, supportedLanguageNationalityCodes } from "@/lib/nationality";
@@ -620,6 +622,13 @@ export default function LanguageOnboardingModal({
     const picked = pickKoreaVisitDay(koreaVisit, day, tripField);
     setKoreaVisit(picked.range);
     setTripField(picked.field);
+  };
+
+  // The app's gallery with its camera tile when the app has one (owner, 2026-11-28), else the system picker.
+  const openPhotoPicker = async () => {
+    const picked = await pickProfilePhotoFromAppGallery(profilePhotoGalleryLabels(resolveUiLocaleForLanguage(language)));
+    if (picked === 'unavailable') photoInputRef.current?.click();
+    else if (picked) await handlePhotoPicked(picked);
   };
 
   const handlePhotoPicked = async (file: File | undefined) => {
@@ -1252,7 +1261,7 @@ export default function LanguageOnboardingModal({
               type="button"
               data-qa="onboarding-photo-pick"
               disabled={isConfirming || photoBusy}
-              onClick={() => photoInputRef.current?.click()}
+              onClick={() => void openPhotoPicker()}
               className="relative flex h-48 w-48 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-amber-300 bg-amber-50 text-amber-500 transition active:scale-[0.98]"
               aria-label={photoDataUrl ? extraCopy.photoChange : extraCopy.photoPick}
             >
@@ -1268,7 +1277,7 @@ export default function LanguageOnboardingModal({
             <button
               type="button"
               disabled={isConfirming || photoBusy}
-              onClick={() => photoInputRef.current?.click()}
+              onClick={() => void openPhotoPicker()}
               className="rounded-full border border-[#e6dfd2] bg-white px-5 py-2.5 text-[0.95rem] font-semibold text-slate-800 shadow-[0_8px_24px_rgba(15,23,42,0.05)]"
             >
               {photoDataUrl ? extraCopy.photoChange : extraCopy.photoPick}

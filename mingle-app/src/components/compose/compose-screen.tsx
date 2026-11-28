@@ -527,6 +527,8 @@ export default function ComposeScreen({
       skip: galleryCopy.galleryTextOnly,
       recent: galleryCopy.galleryRecent,
       albums: galleryCopy.galleryAlbums,
+      camera: galleryCopy.galleryCamera,
+      cameraDenied: galleryCopy.galleryCameraDenied,
     }).then(async ({ outcome, files }) => {
       if (outcome === 'cancelled' && options.first) {
         leave()
