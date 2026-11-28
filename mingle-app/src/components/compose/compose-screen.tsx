@@ -526,6 +526,7 @@ export default function ComposeScreen({
       openSettings: galleryCopy.galleryOpenSettings,
       skip: galleryCopy.galleryTextOnly,
       recent: galleryCopy.galleryRecent,
+      albums: galleryCopy.galleryAlbums,
     }).then(async ({ outcome, files }) => {
       if (outcome === 'cancelled' && options.first) {
         leave()

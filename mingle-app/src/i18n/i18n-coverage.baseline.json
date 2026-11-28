@@ -91,6 +91,7 @@
     "english-leak|i18n/coin-copy.ts#getCoinCopy|it|sourceBonus",
     "english-leak|i18n/coin-copy.ts#getCoinCopy|pt|coin",
     "english-leak|i18n/coin-copy.ts#getCoinCopy|vi|coin",
+    "english-leak|i18n/compose-photo-copy.ts#resolveComposePhotoCopy|fr|galleryAlbums",
     "english-leak|i18n/conversation-export-copy.ts#resolveConversationExportCopy|de|roomLabel",
     "english-leak|i18n/conversation-export-copy.ts#resolveConversationExportCopy|es|roomLabel",
     "english-leak|i18n/conversation-export-copy.ts#resolveConversationExportCopy|fr|participantsLabel",

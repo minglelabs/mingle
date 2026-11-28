@@ -36,6 +36,8 @@ export type PhotoGalleryLabels = {
   skip: string;
   /** Over the grid: which photos these are. */
   recent: string;
+  /** The title of the album list (older pages send none: "Albums"). */
+  albums?: string;
 };
 
 export type PhotoGalleryRequest = { requestId: string; max: number; labels: PhotoGalleryLabels };
@@ -102,6 +104,22 @@ async function toDataUrl(photo: PhotoIdentifier): Promise<string> {
   return `data:image/jpeg;base64,${base64}`;
 }
 
+/** An album to browse instead of the recent photos (iOS: albums and smart albums such as Favorites; Android: folders). */
+type GalleryAlbum = { title: string; count: number; type: 'Album' | 'SmartAlbum' | 'All' };
+
+async function readAlbums(): Promise<GalleryAlbum[]> {
+  try {
+    const albums = await CameraRoll.getAlbums(Platform.OS === 'ios' ? { assetType: 'Photos', albumType: 'All' } : { assetType: 'Photos' });
+    const list = albums
+      .filter((album) => album.count > 0 && album.title)
+      .map((album) => ({ title: album.title, count: album.count, type: album.type }));
+    // Smart albums (Favorites, Screenshots, …) first, as in the Photos app; the rest by size.
+    return list.sort((a, b) => (a.type === b.type ? b.count - a.count : a.type === 'SmartAlbum' ? -1 : 1));
+  } catch {
+    return [];
+  }
+}
+
 export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }: {
   request: PhotoGalleryRequest | null;
   onAnswer: (answer: PhotoGalleryAnswer) => void;
@@ -117,6 +135,13 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
   const [focusId, setFocusId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const loadingRef = useRef(false);
+  // The album on show (null: the recent photos) and the album list, opened from the "Recents ▾" title.
+  const [album, setAlbum] = useState<GalleryAlbum | null>(null);
+  const albumRef = useRef<GalleryAlbum | null>(null);
+  const [albums, setAlbums] = useState<GalleryAlbum[] | null>(null);
+  const [albumListOpen, setAlbumListOpen] = useState(false);
+  // Picked photos by id, kept across albums (the grid only holds the album on show).
+  const pickedEntries = useRef(new Map<string, PhotoIdentifier>());
   const requestId = galleryRequest?.requestId ?? null;
   const max = Math.max(1, galleryRequest?.max ?? 10);
   const labels = galleryRequest?.labels;
@@ -125,7 +150,15 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
     if (loadingRef.current) return;
     loadingRef.current = true;
     try {
-      const page = await CameraRoll.getPhotos({ first: PAGE_SIZE, ...(after ? { after } : {}), assetType: 'Photos', include: ['imageSize', 'filename'] });
+      const shown = albumRef.current;
+      const page = await CameraRoll.getPhotos({
+        first: PAGE_SIZE,
+        ...(after ? { after } : {}),
+        assetType: 'Photos',
+        include: ['imageSize', 'filename'],
+        ...(shown ? { groupName: shown.title, ...(Platform.OS === 'ios' ? { groupTypes: shown.type === 'SmartAlbum' ? 'SmartAlbum' as const : 'Album' as const } : {}) } : {}),
+      });
+      if (albumRef.current !== shown) return;
       setPhotos((current) => {
         const seen = new Set(current.map((entry) => entry.node.id));
         const next = after ? [...current, ...page.edges.filter((entry) => !seen.has(entry.node.id))] : page.edges;
@@ -147,6 +180,11 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
     let cancelled = false;
     setPhotos([]);
     setPicked([]);
+    pickedEntries.current.clear();
+    albumRef.current = null;
+    setAlbum(null);
+    setAlbums(null);
+    setAlbumListOpen(false);
     setFocusId(null);
     setCursor(null);
     setHasMore(true);
@@ -171,12 +209,31 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
 
   const toggle = useCallback((id: string) => {
     setFocusId(id);
+    const entry = byId.get(id);
+    if (entry) pickedEntries.current.set(id, entry);
     setPicked((current) => {
       if (current.includes(id)) return current.filter((entry) => entry !== id);
       if (current.length >= max) return current;
       return [...current, id];
     });
-  }, [max]);
+  }, [byId, max]);
+
+  const openAlbumList = useCallback(() => {
+    setAlbumListOpen(true);
+    if (albums === null) void readAlbums().then(setAlbums);
+  }, [albums]);
+
+  const showAlbum = useCallback((next: GalleryAlbum | null) => {
+    setAlbumListOpen(false);
+    albumRef.current = next;
+    setAlbum(next);
+    setPhotos([]);
+    setFocusId(null);
+    setCursor(null);
+    setHasMore(true);
+    loadingRef.current = false;
+    void loadPage(null);
+  }, [loadPage]);
 
   const close = useCallback(() => {
     if (!requestId) return;
@@ -191,7 +248,7 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
     const out: Array<{ dataUrl: string; name: string }> = [];
     let lastError = '';
     for (const [index, id] of ids.entries()) {
-      const photo = byId.get(id);
+      const photo = pickedEntries.current.get(id) ?? byId.get(id);
       if (!photo) continue;
       try {
         const dataUrl = await toDataUrl(photo);
@@ -259,7 +316,10 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
                   {focus ? <Image source={{ uri: focus.node.image.uri }} style={styles.previewImage} resizeMode="contain" /> : null}
                 </View>
                 <View style={styles.listBar}>
-                  <Text style={styles.recent}>{labels?.recent}</Text>
+                  <Pressable accessibilityRole="button" onPress={openAlbumList} hitSlop={8} style={styles.albumButton} testID="photo-gallery-albums">
+                    <Text style={styles.recent} numberOfLines={1}>{album?.title ?? labels?.recent}</Text>
+                    <Text style={styles.albumChevron}>▾</Text>
+                  </Pressable>
                   <Pressable accessibilityRole="button" onPress={skip} hitSlop={8} style={styles.skipPill} testID="photo-gallery-skip">
                     <Text style={styles.skipText}>{labels?.skip}</Text>
                   </Pressable>
@@ -286,6 +346,35 @@ export default function PhotoGalleryModal({ request: galleryRequest, onAnswer }:
             contentContainerStyle={{ paddingBottom: insets.bottom + 12 }}
           />
         )}
+        {albumListOpen ? (
+          <View style={[StyleSheet.absoluteFill, styles.albumSheet, { paddingTop: Platform.OS === 'ios' ? insets.top : 0 }]}>
+            <View style={styles.bar}>
+              <Pressable accessibilityRole="button" accessibilityLabel={labels?.close} onPress={() => setAlbumListOpen(false)} hitSlop={12} style={styles.barSide}>
+                <Text style={styles.close}>✕</Text>
+              </Pressable>
+              <Text style={styles.title} numberOfLines={1}>{labels?.albums ?? 'Albums'}</Text>
+              <View style={styles.barSide} />
+            </View>
+            {albums === null ? (
+              <View style={styles.denied}><ActivityIndicator color={ACCENT} /></View>
+            ) : (
+              <FlatList
+                data={[null, ...albums]}
+                keyExtractor={(entry, index) => (entry ? `${entry.type}:${entry.title}:${index}` : 'recent')}
+                renderItem={({ item }) => {
+                  const current = item ? album?.title === item.title && album?.type === item.type : album === null;
+                  return (
+                    <Pressable accessibilityRole="button" onPress={() => showAlbum(item)} style={styles.albumRow} testID={item ? undefined : 'photo-gallery-album-recent'}>
+                      <Text style={[styles.albumTitle, current && styles.albumTitleOn]} numberOfLines={1}>{item ? item.title : labels?.recent}</Text>
+                      {item ? <Text style={styles.albumCount}>{item.count}</Text> : null}
+                    </Pressable>
+                  );
+                }}
+                contentContainerStyle={{ paddingBottom: insets.bottom + 12 }}
+              />
+            )}
+          </View>
+        ) : null}
       </View>
     </Modal>
   );
@@ -317,7 +406,14 @@ const styles = StyleSheet.create({
   settings: { marginTop: 16, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14, backgroundColor: ACCENT },
   settingsText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
   listBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
-  recent: { color: INK, fontSize: 17, fontWeight: '700' },
+  recent: { color: INK, fontSize: 17, fontWeight: '700', flexShrink: 1 },
+  albumButton: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1, marginRight: 12 },
+  albumChevron: { color: INK, fontSize: 14, fontWeight: '700' },
+  albumSheet: { backgroundColor: '#ffffff', zIndex: 10 },
+  albumRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 15, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(15,23,42,0.08)' },
+  albumTitle: { color: INK, fontSize: 16, fontWeight: '600', flexShrink: 1 },
+  albumTitleOn: { color: ACCENT, fontWeight: '800' },
+  albumCount: { color: 'rgba(15,23,42,0.45)', fontSize: 14, marginLeft: 12 },
   skipPill: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999, backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fdba74' },
   skipWide: { marginTop: 12, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14, backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fdba74' },
   skipText: { color: '#c2410c', fontSize: 15, fontWeight: '700' },

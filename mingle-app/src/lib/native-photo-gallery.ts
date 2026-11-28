@@ -62,7 +62,7 @@ export function filesFromNativePhotos(detail: NativePhotosDetail | null): File[]
   return files.length > 0 ? files : null
 }
 
-export type NativePhotoGalleryLabels = { title: string; next: string; close: string; limited: string; denied: string; openSettings: string; skip: string; recent: string }
+export type NativePhotoGalleryLabels = { title: string; next: string; close: string; limited: string; denied: string; openSettings: string; skip: string; recent: string; albums: string }
 
 export type NativePhotoGalleryResult =
   | { outcome: 'picked'; files: File[] }

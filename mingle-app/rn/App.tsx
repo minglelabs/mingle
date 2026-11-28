@@ -3529,6 +3529,7 @@ function AppInner(): React.JSX.Element {
         openSettings: text(labels.openSettings, 'Open Settings'),
         skip: text(labels.skip, 'Text only'),
         recent: text(labels.recent, 'Recents'),
+        albums: text(labels.albums, 'Albums'),
       },
     });
   }, []);
