@@ -188,7 +188,13 @@ function buildScreenshotPrompt(description: string, place: string | null): strin
   ].join('\n')
 }
 
-export type ReservePostImage = { objectKey: string; width: number; height: number }
+/**
+ * `photoDescription`: what the photo really shows when it was drawn from a
+ * reference-library photo (that photo's description). The text was written
+ * for another photo, so the caller rewrites it to fit (staff 2026-11-29: many
+ * posts did not go with their photo).
+ */
+export type ReservePostImage = { objectKey: string; width: number; height: number; photoDescription?: string }
 
 /** The place line of a post photo: the author's city and country. */
 export async function reservePostPlace(operatorUserId: string): Promise<string | null> {
@@ -393,6 +399,30 @@ const LIBRARY_KINDS_BY_POST: Partial<Record<PostPhotoKind, readonly ReferenceKin
  * not fit (anime account, friends photo, profile-photo intro) or the library
  * has nothing left, and the photo is drawn the usual way.
  */
+/** The words a photo description uses for the language people of a country grow up with. */
+const OWN_LANGUAGE_WORDS: Readonly<Record<string, RegExp>> = {
+  KR: /\b(korean|hangul)\b/i,
+  JP: /\b(japanese|hiragana|katakana|kana|kanji)\b/i,
+  CN: /\b(chinese|hanzi|pinyin)\b/i,
+  TW: /\b(chinese|hanzi|zhuyin)\b/i,
+  TH: /\bthai\b/i,
+  VN: /\bvietnamese\b/i,
+  US: /\benglish\b/i, GB: /\benglish\b/i, AU: /\benglish\b/i, CA: /\benglish\b/i,
+  BR: /\bportuguese\b/i, MX: /\bspanish\b/i, ES: /\bspanish\b/i,
+  FR: /\bfrench\b/i, DE: /\bgerman\b/i, RU: /\brussian\b/i, ID: /\bindonesian\b/i,
+}
+const STUDY_MATERIAL = /\b(handwrit\w*|notebook|worksheet|flashcards?|textbook|workbook|practice sheet|study notes?|essay|vocabulary|grammar)\b/i
+
+/**
+ * A study photo (a notebook, a worksheet, handwritten practice) of the
+ * language the persona grew up with: a Korean practising Korean makes no
+ * sense (staff, 2026-11-29). Exported for tests.
+ */
+export function studiesOwnLanguage(summary: string | null | undefined, country: string | null | undefined): boolean {
+  const words = country ? OWN_LANGUAGE_WORDS[country.toUpperCase()] : undefined
+  return Boolean(summary && words && STUDY_MATERIAL.test(summary) && words.test(summary))
+}
+
 /** Which library photos may be used for this post brief of the account; null when none may. */
 async function libraryPostFilter(operatorUserId: string, description: string, options: { staff?: boolean } = {}) {
   const brief = decodePostPhoto(description)
@@ -414,7 +444,7 @@ async function libraryPostFilter(operatorUserId: string, description: string, op
     claim: {
       kinds, gender: kinds.includes('thing') ? null : gender,
       // Never a photo of another age or look than the persona (a 20-year-old's pose on a 50-year-old).
-      skip: (item: ReferencePhoto) => referenceSeasonClashes(item.attributes, avoid) || referencePersonaFit(item.attributes, persona, referenceKindOf(item)) === 'mismatch',
+      skip: (item: ReferencePhoto) => referenceSeasonClashes(item.attributes, avoid) || referencePersonaFit(item.attributes, persona, referenceKindOf(item)) === 'mismatch' || studiesOwnLanguage(item.summary, persona.country),
       prefer: (item: ReferencePhoto) => referencePersonaFit(item.attributes, persona, referenceKindOf(item)) === 'match',
     },
   }
@@ -448,7 +478,7 @@ async function libraryPostRequest(
   | { status: 'not_applicable' }
   /** `none`: no unused library photo fits it (kind, gender, age, look, season), or it could not be read. */
   | { status: 'none' }
-  | { status: 'ok'; request: { prompt: string; reference: AvatarReference }; referenceId: string }
+  | { status: 'ok'; request: { prompt: string; reference: AvatarReference }; referenceId: string; summary: string | null }
 > {
   const filter = await libraryPostFilter(operatorUserId, description, options)
   if (!filter) return { status: 'not_applicable' }
@@ -473,7 +503,7 @@ async function libraryPostRequest(
       'Vertical 3:4 image, one single photo (never two side by side). No watermarks, logos, borders or frames.',
     ].join('\n')
     const reference = poster ? { bytes: await pairImages(shot.bytes, poster.bytes), mimeType: 'image/jpeg' } : shot
-    return { status: 'ok', request: { prompt, reference }, referenceId: photo.id }
+    return { status: 'ok', request: { prompt, reference }, referenceId: photo.id, summary: photo.summary?.trim() || null }
   } catch (error) {
     console.warn('[operator-post-reserve] library_request_failed', { operatorUserId, referenceId: photo.id, error: error instanceof Error ? error.name : 'unknown' })
     await releaseReferencePhoto(photo.id).catch(() => {})
@@ -534,7 +564,7 @@ export async function drawReservePostImage(
     if (options.engine === 'seedream') await markSeedreamImage(stored.objectKey)
     // The review queue shows posts drawn from the library first.
     if (library) await markReferenceImage(library.referenceId, stored.objectKey).catch(() => {})
-    return stored
+    return library?.summary ? { ...stored, photoDescription: library.summary } : stored
   } catch (error) {
     console.warn('[operator-post-reserve] image_failed', { operatorUserId, error: error instanceof Error ? error.name : 'unknown' })
     return null

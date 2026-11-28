@@ -9,7 +9,7 @@ import { referenceAgeRange, referenceCountries } from '@/server/reference-librar
 import type { ReferenceAttributes } from '@/server/reference-library/classify'
 import { generateReservePosts, isKoreaCountry, pickReserveTopics, reservePosterProfile } from '@/server/operator-post-reserve/generate'
 import { drawReservePostImage, PHOTO_NO_REFERENCE } from '@/server/operator-post-reserve/post-image'
-import { loadExistingReserveTexts, loadReservePersona } from '@/server/operator-post-reserve/worker'
+import { fitReserveTextToPhoto, loadExistingReserveTexts, loadReservePersona } from '@/server/operator-post-reserve/worker'
 import { canDrawImagesHere } from '@/server/operator-avatars/generate'
 import type { ImageEngine } from '@/server/seedream/client'
 import { runOperatorEngagement, type EngagementRunResult } from '@/server/operator-engagement/engagement'
@@ -268,6 +268,8 @@ export async function writeDailyOperatorPosts(chancePercent: number, now: Date, 
               where: { id: row.id, state: 'review', imageObjectKey: null },
               data: { imageObjectKey: image.objectKey, imageWidth: image.width, imageHeight: image.height },
             })
+            // Drawn from a reference photo: the text is rewritten to go with it.
+            if (image.photoDescription) await fitReserveTextToPhoto(row.id, image.photoDescription, now)
           } else if (noReference) {
             // Drawn once staff upload a fitting reference photo (사진 그리기 / 레퍼런스로 재제작).
             await prisma.operatorPostReserve.updateMany({ where: { id: row.id, state: 'review', imageObjectKey: null }, data: { error: PHOTO_NO_REFERENCE } })

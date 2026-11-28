@@ -10,7 +10,8 @@ import { publishPost } from '@/server/posts/publish-post'
 import { reviewTranslationsFor } from './review-translations'
 import { drawReservePostImage } from './post-image'
 import { reserveExtraImages } from './extra-images'
-import { generateReservePosts, isKoreaCountry, pickReserveTopics, reservePosterProfile, RESERVE_CHUNK_SIZE, type ReservePersona } from './generate'
+import { generateReservePosts, isKoreaCountry, pickReserveTopics, reservePosterProfile, rewriteReservePostText, RESERVE_CHUNK_SIZE, type ReservePersona } from './generate'
+import { decodePostPhoto, encodePostPhoto } from './post-photo'
 import { nextReleaseAt, pickBackdatedPublishAt } from './schedule'
 import { getPostReserveSettings, postsPerDay, type PostReserveSettings } from './settings'
 import { operatorTextProvider } from '@/server/translation/translate-texts'
@@ -141,9 +142,13 @@ async function releaseOne(row: ClaimedReservePost, now: Date, origin: 'queued' |
       await settle({ state: 'review', error: PHOTO_PENDING, releaseAt: origin === 'scheduled' ? null : row.chosenAt ?? null })
       return false
     }
+    // A photo drawn just now from a reference photo: the text is rewritten to go with it.
+    const text = (!row.imageObjectKey && image && 'photoDescription' in image && image.photoDescription
+      ? await fitReserveTextToPhoto(row.id, image.photoDescription, now)
+      : null) ?? row.text
     const result = await publishPost({
       authorId: row.operatorUserId,
-      text: row.text,
+      text,
       imageObjectKey: image?.objectKey ?? null,
       imageDimensions: image && image.width > 0 && image.height > 0 ? { imageWidth: image.width, imageHeight: image.height } : null,
       // Only alongside the reviewed first photo they were picked with.
@@ -155,7 +160,7 @@ async function releaseOne(row: ClaimedReservePost, now: Date, origin: 'queued' |
         : undefined,
       clientHint: row.language ?? personaLanguageOf(check.account),
       clientPostId: reserveClientPostId(row.id),
-      knownTranslations: reviewTranslationsFor(row.translations, row.text),
+      knownTranslations: reviewTranslationsFor(row.translations, text),
       translationProvider: operatorTextProvider(),
     })
     if (result.kind === 'conflict') {
@@ -314,6 +319,72 @@ export async function loadExistingReserveTexts(operatorUserId: string): Promise<
     ...posts.map((post) => post.sourceText ?? '').filter(Boolean),
     ...reserve.map((row) => row.text),
   ].reverse()
+}
+
+/** Everything on the account's profile, so a rewritten text sounds like this exact person. */
+export async function loadReserveTextProfile(operatorUserId: string, persona: ReservePersona) {
+  const account = await prisma.user.findUnique({
+    where: { id: operatorUserId },
+    select: { primaryLanguages: true, interestLanguages: true, interestLanguageLevels: true, operatorAccount: { select: { personaGender: true } } },
+  })
+  return {
+    gender: account?.operatorAccount?.personaGender ?? null,
+    age: persona.age,
+    city: persona.city,
+    country: persona.country,
+    bio: persona.bio,
+    speaks: account?.primaryLanguages ?? [persona.language],
+    learning: account ? zipInterestLanguages(account.interestLanguages, account.interestLanguageLevels).map((item) => ({ language: item.code, level: item.level })) : [],
+  }
+}
+
+/** The staff-style feedback that makes the model rewrite a post for the photo it really got. */
+export const FIT_PHOTO_FEEDBACK = 'The photo was drawn from a reference photo and differs from the one this text was written for: "fixedPhoto" is what it really shows. Write a new text that clearly goes with that photo, as this person would post it with it. Keep the old subject only where it fits the photo; the photo wins. Never claim the photo shows something it does not. When the photo shows writing or study material in the language this person grew up with, do not make it about learning that language.'
+
+/**
+ * After a post photo was drawn from a reference-library photo: rewrites the
+ * post text to go with what the photo really shows, and stores that photo's
+ * description, so a later rewrite keeps fitting it (staff 2026-11-29: many
+ * posts did not go with their reference photo). Only while the text is still
+ * the one the photo was drawn for. Returns the new text, or null when it was
+ * kept. Never throws.
+ */
+export async function fitReserveTextToPhoto(reserveId: string, photoDescription: string, now: Date = new Date()): Promise<string | null> {
+  try {
+    const row = await prisma.operatorPostReserve.findUnique({
+      where: { id: reserveId },
+      select: { text: true, topic: true, language: true, imagePrompt: true, operatorUserId: true },
+    })
+    if (!row) return null
+    const persona = await loadReservePersona(row.operatorUserId, now, { includeInactive: true })
+    if (!persona) return null
+    const brief = row.imagePrompt ? decodePostPhoto(row.imagePrompt) : null
+    const description = photoDescription.replace(/\s+/g, ' ').trim().slice(0, 1200)
+    const text = await rewriteReservePostText({
+      persona,
+      previousText: row.text,
+      language: row.language ?? persona.language,
+      photo: { kind: brief?.kind ?? 'scene', description },
+      feedback: FIT_PHOTO_FEEDBACK,
+      existingTexts: await loadExistingReserveTexts(row.operatorUserId),
+      seed: row.operatorUserId,
+      topic: row.topic,
+      profile: await loadReserveTextProfile(row.operatorUserId, persona),
+    })
+    if (!text) return null
+    const saved = await prisma.operatorPostReserve.updateMany({
+      where: { id: reserveId, text: row.text },
+      data: {
+        text,
+        translations: Prisma.DbNull,
+        ...(brief ? { imagePrompt: encodePostPhoto(brief.kind, description, brief.place) } : {}),
+      },
+    })
+    return saved.count > 0 ? text : null
+  } catch (error) {
+    console.warn('[operator-post-reserve] fit_text_failed', { reserveId, error: error instanceof Error ? error.name : 'unknown' })
+    return null
+  }
 }
 
 /** Write one chunk of latent posts for an account. Returns how many were stored. Never throws. */
