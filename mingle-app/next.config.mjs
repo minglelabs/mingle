@@ -66,6 +66,12 @@ const nextConfig = {
       // STT records as voice recognition).
       // 2.5.0 (voice talk with live interpreting, Hash Rush in rooms) keeps
       // its new routes inside the v2.2.0 tree too.
+      // 2.6.0 (the app's own photo gallery with camera and albums, gallery-first
+      // posting, voice talk posts) keeps its new routes inside the v2.2.0 tree too.
+      ...['ios', 'android'].flatMap(platform => [
+        { source: `/api/${platform}/v2.6.0`, destination: `/api/${platform}/v2.2.0` },
+        { source: `/api/${platform}/v2.6.0/:path*`, destination: `/api/${platform}/v2.2.0/:path*` },
+      ]),
       ...['ios', 'android'].flatMap(platform => [
         { source: `/api/${platform}/v2.5.0`, destination: `/api/${platform}/v2.2.0` },
         { source: `/api/${platform}/v2.5.0/:path*`, destination: `/api/${platform}/v2.2.0/:path*` },
