@@ -33,6 +33,7 @@ import {
   buildInterimTailPartialTranslations,
   extendFixedSource,
   isSafeInterimCut,
+  joinTailDisplay,
   joinTailTranslations,
   matchTailCutAfter,
   parseBubbleTail,
@@ -694,6 +695,7 @@ async function runTranslateFinalize(
         sourceTextHasForeignScript?: boolean
         usedFallbackFromPreviousState?: boolean
         tailCutAfter?: string
+        tailRests?: Record<string, string>
       },
     ): Promise<NextResponse> => {
       // Tail mode: the provider filled only the blank. An interim answer covers
@@ -705,6 +707,9 @@ async function runTranslateFinalize(
         contextSource: string
         contextTranslations: Record<string, string>
       } | null = null
+      // The provisional rest may follow what is shown (see below).
+      let showTailRests = Boolean(bubbleTailPlan && !isFinal && meta.tailRests)
+        && (!meta.usedFallbackFromPreviousState || !meta.tailCutAfter)
       if (bubbleTailPlan && !meta.usedFallbackFromPreviousState) {
         const coveredLength = isFinal
           ? bubbleTailPlan.remainingSource.length
@@ -726,11 +731,32 @@ async function runTranslateFinalize(
           }
         }
         if (!isFinal && !hasFill && Object.keys(rawTranslations).length > 0) {
-          logTranslateFinalizeWarning('bubble_tail_unmatched_source', {
-            ...buildTranslateFinalizeLogContext(ctx),
-            tailCutAfter: meta.tailCutAfter || '',
-          })
+          if (coveredLength > 0) {
+            // A cut at words just heard: shown for now, not fixed.
+            translations = joinTailTranslations(bubbleTailPlan, rawTranslations, targetLanguages)
+          } else {
+            // The named cut is not in the blank: the fill may be anything, and
+            // the rest after it cannot be placed either.
+            showTailRests = false
+            logTranslateFinalizeWarning('bubble_tail_unmatched_source', {
+              ...buildTranslateFinalizeLogContext(ctx),
+              tailCutAfter: meta.tailCutAfter || '',
+            })
+          }
         }
+      }
+      // Interim tail: the provisional rest of the blank follows what is shown.
+      // Display only: tailFill keeps just the fixed part. After a fallback it is
+      // added only when it covers the whole blank (no cut), so no words go missing.
+      if (bubbleTailPlan && showTailRests && meta.tailRests) {
+        const rests = normalizeChineseContent({
+          sourceLanguage,
+          sourceText: ctx.text,
+          translations: meta.tailRests,
+          targetLanguages,
+          candidates: targetLanguages,
+        }).translations
+        translations = joinTailDisplay(translations, rests, targetLanguages)
       }
       if (isFinal && bubbleTailPlan) {
         const own = await addOwnLanguageRow(translations)
@@ -1023,6 +1049,7 @@ async function runTranslateFinalize(
           model: selectedResult.model,
           usage: selectedResult.usage,
           usedFallbackFromPreviousState: true,
+          tailRests: selectedResult.tailRests,
         })
       }
       return await buildResponseWithOptionalTts({}, {
@@ -1030,6 +1057,7 @@ async function runTranslateFinalize(
         infrastructureProvider: selectedResult.infrastructureProvider,
         model: selectedResult.model,
         usage: selectedResult.usage,
+        tailRests: selectedResult.tailRests,
       })
     }
 
@@ -1210,6 +1238,7 @@ async function runTranslateFinalize(
       sourceLanguagesMixed: selectedResult.sourceLanguagesMixed,
       sourceTextHasForeignScript: selectedResult.sourceTextHasForeignScript,
       tailCutAfter: selectedResult.tailCutAfter,
+      tailRests: selectedResult.tailRests,
     })
   } catch (error) {
     logTranslateFinalizeError('unexpected_handler_error', {

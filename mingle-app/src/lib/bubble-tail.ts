@@ -202,67 +202,65 @@ export function joinTailTranslations(
   return joined
 }
 
+// ===== Provisional rest =====
+//
+// An interim answer also translates the words after its cut, roughly, so the
+// bubble shows all of the speech at once. That part is never fixed: the next
+// request translates those words again (and cuts there once a sentence ends).
+
+/** Key of an interim answer's provisional translation of the words after its cut. */
+export const TAIL_REST_KEY_PREFIX = 'rest_'
+
+export function tailRestKey(language: string): string {
+  return `${TAIL_REST_KEY_PREFIX}${language}`
+}
+
+export function isTailRestKey(key: string): boolean {
+  return key.toLowerCase().startsWith(TAIL_REST_KEY_PREFIX)
+}
+
+/** The provisional rest per target language, read from an answer's fields ('' entries dropped). */
+export function pickTailRests(
+  values: Record<string, unknown>,
+  targetLanguages: readonly string[],
+): Record<string, string> {
+  const rests: Record<string, string> = {}
+  for (const language of targetLanguages) {
+    const value = values[tailRestKey(language)]
+    if (typeof value === 'string' && value.trim()) rests[language] = value.trim()
+  }
+  return rests
+}
+
+/** What the bubble shows: fixed translations, then the fill, then the provisional rest. */
+export function joinTailDisplay(
+  base: Record<string, string>,
+  rests: Record<string, string>,
+  targetLanguages: readonly string[],
+): Record<string, string> {
+  const joined: Record<string, string> = {}
+  for (const language of targetLanguages) {
+    const text = joinTailTexts([base[language] || '', rests[language] || ''], language)
+    if (text) joined[language] = text
+  }
+  return joined
+}
+
 // ===== When to ask for the next interim fill =====
 //
-// The model cuts at a clause or sentence boundary. A punctuation mark in the
-// STT text is the surest sign of one, so a new mark triggers a request; speech
-// often has no marks, so a stretch of new text (about one clause) does too.
+// Every request also returns a provisional translation of the words after its
+// cut (see `rest_<lang>`), so the listener reads new speech soon after it is
+// heard: a request goes out every few new characters, in every script.
 
-const CUT_CANDIDATE = new RegExp(`[${SENTENCE_MARKS}${CLAUSE_MARKS}]`, 'g')
-const SENTENCE_END = new RegExp(`[${SENTENCE_MARKS}]$`)
-const DENSE_SCRIPT_CHAR = /[\p{Script=Hangul}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Myanmar}\p{Script=Khmer}]/gu
-const LETTER = /\p{L}/gu
-
-/** New characters that trigger a request when no new mark appeared. */
-export const INTERIM_FILL_FALLBACK_CHARS_DENSE = 30
-export const INTERIM_FILL_FALLBACK_CHARS_DEFAULT = 60
-/** A new mark triggers a request only after fallback / 4 new characters (7 dense, 15 otherwise). */
-const INTERIM_FILL_MIN_CHARS_DIVISOR = 4
-
-/**
- * Punctuation marks the model could cut at: a mark with words after it, or a
- * sentence-ending mark at the very end. Marks inside numbers ("3.5", "1,000")
- * do not count.
- */
-export function countInterimCutCandidates(text: string): number {
-  const trimmed = (text || '').trim()
-  let count = 0
-  for (const match of trimmed.matchAll(CUT_CANDIDATE)) {
-    const index = match.index
-    const before = trimmed[index - 1] || ''
-    const after = trimmed[index + 1] || ''
-    if (/\d/.test(before) && /\d/.test(after)) continue
-    if (index < trimmed.length - 1 || SENTENCE_END.test(trimmed)) count += 1
-  }
-  return count
-}
-
-/**
- * Scripts that say more per character (Hangul, Han, kana, Thai, ...) get the
- * shorter fallback. Decided from the text itself, so an unknown or wrong
- * language label does not matter.
- */
-export function resolveInterimFillFallbackChars(text: string): number {
-  // Letters only: marks and digits say nothing about the script.
-  const total = (text.match(LETTER) || []).length
-  if (total === 0) return INTERIM_FILL_FALLBACK_CHARS_DEFAULT
-  const dense = (text.match(DENSE_SCRIPT_CHAR) || []).length
-  return dense * 2 >= total ? INTERIM_FILL_FALLBACK_CHARS_DENSE : INTERIM_FILL_FALLBACK_CHARS_DEFAULT
-}
+/** New characters (spaces included) that trigger the next interim request. */
+export const INTERIM_FILL_STEP_CHARS = 10
 
 /** True when the text since the last request is worth a new interim request. */
 export function shouldRequestInterimFill(currentText: string, lastRequestedText: string): boolean {
   const current = (currentText || '').trim()
   const last = (lastRequestedText || '').trim()
   if (!current || current === last) return false
-  const grown = current.length - last.length
-  const fallbackChars = resolveInterimFillFallbackChars(current)
-  // Speech full of short phrases ("Well... so... what now? Huh?!") adds a mark
-  // every few characters: wait for a minimum of new text so each request
-  // carries a few of them instead of one request per mark.
-  const minChars = fallbackChars / INTERIM_FILL_MIN_CHARS_DIVISOR
-  if (grown >= minChars && countInterimCutCandidates(current) > countInterimCutCandidates(last)) return true
-  return grown >= fallbackChars
+  return current.length - last.length >= INTERIM_FILL_STEP_CHARS
 }
 
 // ===== Streamed interim fills =====
@@ -270,11 +268,11 @@ export function shouldRequestInterimFill(currentText: string, lastRequestedText:
 const PARTIAL_MARKER = /<\/?(?:end|fin)>/gi
 
 /**
- * What an interim tail answer still being streamed lets the bubble show:
- * the fixed translations plus the fill so far, per language. Null until the
- * answer has named where it cuts and that cut is one the finished
- * answer would keep (the same checks as the finished answer), so nothing
- * shows that the final answer would throw away.
+ * What an interim tail answer still being streamed lets the bubble show: the
+ * fixed translations, the fill so far and the provisional rest so far, per
+ * language. Null until the answer has named where it cuts (it writes that
+ * first) and that cut is in the blank, so the fill is known to start where
+ * the fixed part ends.
  */
 export function buildInterimTailPartialTranslations(
   plan: BubbleTailPlan,
@@ -283,13 +281,17 @@ export function buildInterimTailPartialTranslations(
   cutAfterKey: string,
 ): Record<string, string> | null {
   if (!fields.complete.has(cutAfterKey)) return null
-  const coveredLength = matchTailCutAfter(plan.remainingSource, fields.values[cutAfterKey] || '')
-  if (coveredLength <= 0 || !isSafeInterimCut(plan.remainingSource, coveredLength)) return null
+  // A named cut that is not in the blank: neither the fill nor the rest can be placed.
+  if (matchTailCutAfter(plan.remainingSource, fields.values[cutAfterKey] || '') < 0) return null
   const fills: Record<string, string> = {}
   for (const language of targetLanguages) {
     const fill = (fields.values[language] || '').replace(PARTIAL_MARKER, '').trim()
     if (fill) fills[language] = fill
   }
-  if (Object.keys(fills).length === 0) return null
-  return joinTailTranslations(plan, fills, targetLanguages)
+  const rests = pickTailRests(
+    Object.fromEntries(Object.entries(fields.values).map(([key, value]) => [key, value.replace(PARTIAL_MARKER, '')])),
+    targetLanguages,
+  )
+  if (Object.keys(fills).length === 0 && Object.keys(rests).length === 0) return null
+  return joinTailDisplay(joinTailTranslations(plan, fills, targetLanguages), rests, targetLanguages)
 }

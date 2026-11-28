@@ -9,6 +9,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { GoogleGenerativeAI, SchemaType, type GenerateContentRequest, type ResponseSchema } from '@google/generative-ai'
 import { getTranslationLanguageName } from '@/lib/translation-languages'
+import { isTailRestKey, pickTailRests, tailRestKey } from '@/lib/bubble-tail'
 import { isChineseLanguage, toChineseVariant } from '@/lib/chinese-variant'
 import {
   resolveTranslationRuntimeSelection,
@@ -77,6 +78,8 @@ export type TranslationEngineResult = {
   sourceTextHasForeignScript?: boolean
   /** Tail mode (interim): the last source words the model translated, which mark where it cut. */
   tailCutAfter?: string
+  /** Tail mode (interim): provisional translation, per target language, of the words after the cut. */
+  tailRests?: Record<string, string>
   provider: TranslationProvider
   infrastructureProvider: TranslationInfrastructureProvider | string
   model: string
@@ -945,12 +948,13 @@ function buildBubbleTailFillPrompt(
 
   const tailRules = interim
     ? [
-      `Keys: ${TAIL_CUT_AFTER_KEY} and the target language codes.`,
+      `Keys: ${TAIL_CUT_AFTER_KEY}, the target language codes, and ${tailRestKey('<code>')} for each target language.`,
       'The speaker is still talking. Translate the start of the blank up to a cut point: the end of a sentence, of a finished remark, or of a clause (a dependent clause too). Punctuation is not needed: speech transcripts often have none. Even a short sentence counts ("Yes.", "네.").',
       'Your translation is final and never revised, and the next part will be appended after it, so it must read correctly and naturally whatever comes next. Never cut inside a phrase, between a verb and its object, or where the target language would need the next words to order the sentence. When unsure, cut earlier or translate nothing.',
       'Translate exactly the source up to your cut: never pull in words that come after it, even though you can see them.',
       'The last words of the blank were just heard and the next words may change them: never include them unless the blank ends with punctuation.',
-      `${TAIL_CUT_AFTER_KEY} = the last words of the source you translated, copied exactly from the blank: 2 to 4 words (in a language written without spaces, the last 4 to 8 characters), enough that they appear only once in the blank. Write it before the translations. Nothing to translate yet: "" everywhere.`,
+      `${TAIL_CUT_AFTER_KEY} = the last words of the source you translated, copied exactly from the blank: 2 to 4 words (in a language written without spaces, the last 4 to 8 characters), enough that they appear only once in the blank. Write it before the translations. Nothing to translate yet: "" for ${TAIL_CUT_AFTER_KEY} and the target language codes.`,
+      `${tailRestKey('<code>')} = a provisional translation of every word of the blank after your cut (all of the blank when you cut nothing), including the words just heard, so the listener can read it now. It is shown after your translation and redone by the next request, so it may stop mid-sentence. Never repeat words of your translation in it. "" only when nothing is left after your cut.`,
     ]
     : ['Keys: the target language codes. Translate the whole blank.']
   return {
@@ -980,11 +984,22 @@ export function parseTailCutAfter(content: string): string {
   }
 }
 
+/** Tail mode (interim): the provisional rest per target language ({} when absent). */
+export function parseTailRests(content: string, targetLanguages: readonly string[]): Record<string, string> {
+  try {
+    const parsed = JSON.parse(extractJsonText(content)) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    return pickTailRests(parsed as Record<string, unknown>, targetLanguages)
+  } catch {
+    return {}
+  }
+}
+
 function withoutTailCutAfterKey(translations: Record<string, string>): Record<string, string> {
   const output: Record<string, string> = {}
   for (const [key, value] of Object.entries(translations)) {
     const lowered = key.toLowerCase()
-    if (lowered === TAIL_CUT_AFTER_KEY.toLowerCase() || lowered === WHOLE_SENTENCE_KEY) continue
+    if (lowered === TAIL_CUT_AFTER_KEY.toLowerCase() || lowered === WHOLE_SENTENCE_KEY || isTailRestKey(lowered)) continue
     output[key] = value
   }
   return output
@@ -1035,8 +1050,18 @@ function buildGeminiResponseSchema(targetLanguages: string[], options?: {
       description: describeGeminiTargetLanguage(language),
     }
   }
+  if (options?.interimBubbleTail) {
+    for (const language of targetLanguages) {
+      properties[tailRestKey(language)] = { type: SchemaType.STRING, description: describeTailRest(language) }
+      required.push(tailRestKey(language))
+    }
+  }
 
   return { type: SchemaType.OBJECT, properties, required }
+}
+
+function describeTailRest(language: string): string {
+  return `Provisional ${language} translation of the blank after the cut ("" when nothing is left).`
 }
 
 function describeGeminiTargetLanguage(language: string): string {
@@ -1168,6 +1193,7 @@ export async function translateWithGemini(
 
   const translations = withoutTailCutAfterKey(parseTranslations(content))
   const tailCutAfter = isInterimBubbleTail(ctx) ? parseTailCutAfter(content) : ''
+  const tailRests = isInterimBubbleTail(ctx) ? parseTailRests(content, ctx.targetLanguages) : {}
   const declaredSourceLanguage = ctx.shouldRedetectSourceLanguage ? parseDetectedSourceLanguage(content) : ''
   const sourceLanguagesMixed = ctx.shouldRedetectSourceLanguage ? parseSourceLanguagesMixed(content) : false
   const sourceTextHasForeignScript = ctx.shouldRedetectSourceLanguage ? parseSourceTextHasForeignScript(content) : false
@@ -1187,6 +1213,7 @@ export async function translateWithGemini(
         model: config.model,
         translations: {},
         emptyReason: 'blank_translations',
+        ...(Object.keys(tailRests).length > 0 ? { tailRests } : {}),
         usage: normalizeUsage({ prompt: promptTokens, completion: completionTokens, total: totalTokens }),
       }
     }
@@ -1204,6 +1231,7 @@ export async function translateWithGemini(
     ...(ctx.shouldRedetectSourceLanguage ? { sourceLanguagesMixed } : {}),
     ...(ctx.shouldRedetectSourceLanguage ? { sourceTextHasForeignScript } : {}),
     ...(tailCutAfter ? { tailCutAfter } : {}),
+    ...(Object.keys(tailRests).length > 0 ? { tailRests } : {}),
     provider: config.provider,
     infrastructureProvider: config.infrastructureProvider,
     model: config.model,
@@ -1248,6 +1276,12 @@ function buildTranslationResponseJsonSchema(ctx: TranslateContext): Record<strin
   for (const language of ctx.targetLanguages) {
     properties[language] = { type: 'string', description: describeOpenAICompatibleTargetLanguage(language) }
     required.push(language)
+  }
+  if (isInterimBubbleTail(ctx)) {
+    for (const language of ctx.targetLanguages) {
+      properties[tailRestKey(language)] = { type: 'string', description: describeTailRest(language) }
+      required.push(tailRestKey(language))
+    }
   }
   return { type: 'object', properties, required, additionalProperties: false }
 }
@@ -1571,6 +1605,7 @@ export async function translateWithOpenAICompatible(
 
   const translations = withoutTailCutAfterKey(parseTranslations(content))
   const tailCutAfter = isInterimBubbleTail(ctx) ? parseTailCutAfter(content) : ''
+  const tailRests = isInterimBubbleTail(ctx) ? parseTailRests(content, ctx.targetLanguages) : {}
   const declaredSourceLanguage = ctx.shouldRedetectSourceLanguage ? parseDetectedSourceLanguage(content) : ''
   const sourceLanguagesMixed = ctx.shouldRedetectSourceLanguage ? parseSourceLanguagesMixed(content) : false
   const sourceTextHasForeignScript = ctx.shouldRedetectSourceLanguage ? parseSourceTextHasForeignScript(content) : false
@@ -1590,6 +1625,7 @@ export async function translateWithOpenAICompatible(
         model: config.model,
         translations: {},
         emptyReason: 'blank_translations',
+        ...(Object.keys(tailRests).length > 0 ? { tailRests } : {}),
         usage: normalizeUsage({ prompt: promptTokens, completion: completionTokens, reasoning: reasoningTokens, total: totalTokens }),
       }
     }
@@ -1608,6 +1644,7 @@ export async function translateWithOpenAICompatible(
     ...(ctx.shouldRedetectSourceLanguage ? { sourceLanguagesMixed } : {}),
     ...(ctx.shouldRedetectSourceLanguage ? { sourceTextHasForeignScript } : {}),
     ...(tailCutAfter ? { tailCutAfter } : {}),
+    ...(Object.keys(tailRests).length > 0 ? { tailRests } : {}),
     provider: config.provider,
     infrastructureProvider: config.infrastructureProvider,
     model: config.model,
