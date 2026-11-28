@@ -11,6 +11,7 @@ paths:
   - mingle-app/src/server/phone-verification.ts
   - mingle-app/src/server/identity/**
   - mingle-app/src/server/app-access.ts
+  - mingle-app/src/server/request-country.ts
   - mingle-app/src/server/api/controllers/shared/phone-contacts-controller.ts
   - mingle-app/src/server/api/controllers/shared/app-access-controller.ts
   - mingle-app/src/lib/auth-options.ts
@@ -41,6 +42,10 @@ history:
     E's `password_hash` on the local database. That is the one write this scenario allows, and the notes must
     say the stand-in was used.
   - **F** (full): no number, but has sent a message or written a post.
+- Since 2026-11-28 the server also looks at the request's country (`cf-ipcountry` through the tunnel, else the IP):
+  from Korea every account without a number is asked for one, whatever its nationality or app language, and
+  `한국 전화번호가 없어요` no longer lets it through (that rule is `phone-gate-in-korea`). This scenario never uses
+  that link; record the country the server saw.
 - Record the device row before the run: `app.app_devices` for this phone (read-only), and after each step which
   accounts it lists.
 

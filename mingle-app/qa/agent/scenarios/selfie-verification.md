@@ -7,7 +7,8 @@ tags: [my-page, selfie, camera, face, badge, permission]
 taste: [T5, T12, T16, T17, T22]
 paths:
   - mingle-app/src/components/selfie-verify-screen.tsx
-  - mingle-app/src/components/face-verified-badge.tsx
+  - mingle-app/src/components/public-user-profile-screen.tsx
+  - mingle-app/src/i18n/verification-badges-copy.ts
   - mingle-app/src/lib/selfie-liveness.ts
   - mingle-app/src/i18n/selfie-verify-copy.ts
   - mingle-app/src/app/api/profile/face-verification/**
@@ -15,6 +16,9 @@ paths:
   - mingle-app/rn/App.tsx
 history:
   - 2026-11-19 — Selfie check on the phone for a "Verified" badge (free, nothing leaves the phone)
+  - No history entry heading; bullet 2026-11-25-verification-chips-explore-after-signup (the badge became chips)
+  - No history entry heading; bullet 2026-11-25-my-page-two-checks
+  - No history entry heading; bullet 2026-11-25-selfie-autostart-women-no-selfie-bio-continue
 ---
 
 ## Preconditions
@@ -44,7 +48,11 @@ history:
   on Verified; the app shell does not fall to its error screen (T22).
 - Step 5: the prompts read "왼쪽으로" then "오른쪽으로" (the person's own sides, matching the mirrored preview),
   with arrows on the side to turn toward, and the gauge fills as the head turns. The end says Verified.
-- Step 6 shows the badge (`[data-qa=face-verified-badge]`) next to the name. Step 7 removes it.
+- Step 6 shows a green check on the profile photo (`[data-qa=profile-avatar-face-verified]`) and a green
+  `얼굴 인증` chip in the row under the name (`[data-qa=profile-verified-face]`, next to `profile-verified-phone`
+  when the number is verified). Step 7 removes both face marks.
+- Since 2026-11-25 the check starts by itself once the screen opens; a `시작하기` button still waiting to be tapped
+  is a finding. My page shows two buttons side by side (face, phone), each `✓` when done.
 
 ## Signals
 

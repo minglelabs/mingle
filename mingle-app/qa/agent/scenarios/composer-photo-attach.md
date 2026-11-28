@@ -20,6 +20,9 @@ history:
 
 ## Preconditions
 
+- This is the chat room's composer, which still uses the system photo picker. The feed's write screen opens the
+  app's own gallery instead (since 2026-11-27): see `compose-gallery-first`.
+
 - Signed in, inside a room. The phone's photo library has at least two photos. Send them only into the QA account's own rooms.
 - The microphone permission is granted. Speech is not needed; only the running state matters.
 

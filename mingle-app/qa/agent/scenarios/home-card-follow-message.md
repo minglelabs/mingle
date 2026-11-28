@@ -6,31 +6,32 @@ environment: device
 tags: [home, follow, message, profile-basics, limit, room]
 taste: [T5, T8, T13, T16, T19, T21, T22]
 paths:
-  - mingle-app/src/components/home/home-page.tsx
+  - mingle-app/src/components/explore/explore-people-page.tsx
   - mingle-app/src/lib/use-start-direct-conversation.ts
   - mingle-app/src/app/api/users/discover/**
   - mingle-app/src/app/api/*/*/users/discover/**
 history:
   - 2026-11-19 — Home cards follow and message on the spot; height on profiles, required for men
+  - No history entry; commit 9ccc9d5da (2026-11-23) moved the people cards from Home to the Explore tab
 ---
 
 ## Preconditions
 
 - Signed in with a QA account that is not an operator or official account. For step 3, a man without a height (or
   any account still missing gender or birth date), so the profile basics question appears on the first follow.
-- The home grid shows the official account's card and at least two other people the account does not follow and
+- The Explore tab's card grid (the people cards moved there from Home on 2026-11-23) shows the official account's card and at least two other people the account does not follow and
   has no room with.
 
 ## Steps
 
-1. Open Home. Screenshot the first two rows of cards. Read every card's `[data-qa=home-card-follow]` text.
+1. Open the Explore tab (third tab). Screenshot the first two rows of cards. Read every card's `[data-qa=home-card-follow]` text.
 2. Scroll one screen down and back up. Screenshot.
 3. Tap Follow on a card that reads `팔로우` / Follow. Answer the profile basics question if it opens (type a height
    such as 182 and continue). Screenshot the card.
 4. Tap the same button again. Screenshot.
-5. Tap Message on the official account's card. Screenshot the room, then go back to Home.
+5. Tap Message on the official account's card. Screenshot the room, then go back to Explore.
 6. Tap Message on a person's card (not the official account). Screenshot what opens.
-7. Close whatever opened in step 6 with its ✕ or back. Screenshot Home.
+7. Close whatever opened in step 6 with its ✕ or back. Screenshot Explore.
 
 ## Oracle (pass when)
 
@@ -42,9 +43,9 @@ history:
 - Step 4: the card is back to `팔로우` / Follow, and the server shows `isFollowing: false` (T5).
 - Step 5 opens the room with the official account on the first tap; a second visit opens the same room.
 - Step 6 runs the profile's Message checks: the first-message setup sheet (`[data-qa=first-message-gate]`) when the
-  account has no verified number or no photo with a face, the one-new-person-a-day sentence as a toast when that
-  limit is used up, otherwise a new room. Nothing opens twice, and the button is not stuck on loading (T5, T22).
-- Closing the sheet in step 7 leaves Home as it was: same cards, same scroll position, no room created.
+  account has no verified number or (a man) no face-verified photo, the daily-limit sentence as a toast when a man
+  has used up his three new women today, otherwise a new room. Nothing opens twice, and the button is not stuck on loading (T5, T22).
+- Closing the sheet in step 7 leaves Explore as it was: same cards, same scroll position, no room created.
 
 ## Signals
 

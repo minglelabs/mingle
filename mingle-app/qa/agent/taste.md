@@ -5,7 +5,8 @@ These are the UX rules the product owner has enforced again and again, taken fro
 scenario against them. A violation counts as a finding even when nothing is technically broken.
 
 Each source names an entry heading in the history file, so `grep -n "<heading>"` finds it. "P2" marks an entry
-that came from the former app-only audit, which is now part of the same file.
+that came from the former app-only audit, which is now part of the same file. Newer entries are one-line bullets
+that start with an id in backticks (for example `` `2026-11-27-compose-one-tap-post` ``); those are cited by id.
 
 When the owner overrules a verdict in a QA report, update the matching rule here (or add one), together with the
 date and the run it came from. See "Calibration" in [README.md](README.md).
@@ -205,3 +206,42 @@ pop the playback in progress.
 - 2026-09-30 — Gemini TTS asked to speak fast in every language; new Korean male voice
 - 2026-09-30 — Gemini TTS pace matched to Inworld and a male Korean voice
 - [mingle-app/docs/tts-stt-regression-checklist.md](../../docs/tts-stt-regression-checklist.md)
+
+## Flow and authoring
+
+### T24. One obvious next tap, in a place that never moves
+A screen's main button (Post, Continue, Next) keeps one place: right above the keyboard while it is up, at the
+bottom otherwise. It changes its label (`게시` / `계속`) and its on/off state, never its position, and a line
+above it says why it is off. Show one choice at a time; once something is tapped, the tapped row stays where the
+finger left it while the rest folds away smoothly (height and opacity) and the next part unfolds under it, with
+no jump or re-layout. Posting what is already there (photos picked) takes a single tap.
+- `2026-11-27-compose-one-tap-post`
+- `2026-11-27-compose-category-first`
+- `2026-11-27-compose-gallery-then-category`
+- 2026-11-20 — Bottom buttons stay above the keyboard; height is a wheel that starts at 177 cm
+
+### T25. A screen opened from the app looks like the app
+Native screens the app opens (its photo gallery, the selfie check, shell-drawn sheets) use the app's light
+background, dark ink and key colour, so moving into them never feels like switching to another app. A black
+system-style screen next to a white one is a finding.
+- `2026-11-27-compose-gallery-light-and-kind-forms` (the black gallery "felt like another app")
+- 2026-11-20 — First-message sheet title counts its rows; the selfie screen adds a missing photo and is light
+
+### T26. Focus goes to the field the person fills first, and only then
+The keyboard opens by itself only when typing is the first thing to do (a free or 1-hour post: the caption).
+When choices, a card or photos come first (self-introduction, voice talk post, the photo screen), nothing is
+focused, because the keyboard would hide them. With the keyboard up, the header and the caret stay on screen.
+A field reads as a field: a visible box and a placeholder dark enough to read at a glance.
+- `2026-11-27-compose-gallery-light-and-kind-forms`
+- `2026-11-27-compose-gallery-then-category`
+- `2026-11-27-compose-photo-first-and-intro-extras` (no keyboard on open: it would cover the photos)
+- `2026-11-27-compose-gallery-first` (caption box and darker placeholder)
+- Owner, session of 2026-11-27: the placeholder was hard to see and the iOS keyboard pushed the caret off screen
+
+### T27. What the author sees is what viewers get
+A preview draws the post exactly as its feed card will (background, title, time left, the call block), and a
+block shown on the write screen is the same block, and the same button, on the post. Default copy (a call post's
+title) is shown in the viewer's language.
+- `2026-11-27-call-post-title`
+- `2026-11-27-call-post-invite-button`
+- `2026-11-27-compose-text-mode-and-native-gallery`

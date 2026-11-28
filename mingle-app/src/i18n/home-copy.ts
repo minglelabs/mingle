@@ -49,7 +49,7 @@ const COPY: Record<PrimaryUiLocale, HomeCopy> = {
     signInPrompt: "Sign in to meet new friends.", signIn: "Sign in",
     banStrip: "{count} permanently banned this week", noticesTitle: "Notices", noticesEmpty: "No notices yet.", banLabel: "Permanent ban",
     banCategory: { harassment: "Harassment", spam: "Spam", scam: "Scam", inappropriate: "Inappropriate content", impersonation: "Impersonation", other: "Rule violation" },
-    dailyLimit: "You can start a chat with {count} new person a day. Please try again tomorrow.",
+    dailyLimit: "You can start chats with up to {count} new people a day. Please try again tomorrow.",
     more: "More", postsHeading: "Posts", back: "Back",
   },
   ja: {

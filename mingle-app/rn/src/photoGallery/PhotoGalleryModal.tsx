@@ -137,9 +137,15 @@ type GalleryAlbum = { title: string; count: number; type: 'Album' | 'SmartAlbum'
 async function readAlbums(): Promise<GalleryAlbum[]> {
   try {
     const albums = await CameraRoll.getAlbums(Platform.OS === 'ios' ? { assetType: 'Photos', albumType: 'All' } : { assetType: 'Photos' });
-    const list = albums
+    let list = albums
       .filter((album) => album.count > 0 && album.title)
       .map((album) => ({ title: album.title, count: album.count, type: album.type }));
+    // iOS: the largest smart album is the whole library ("Recents"), already the first row of the list.
+    if (Platform.OS === 'ios') {
+      const smart = list.filter((album) => album.type === 'SmartAlbum');
+      const library = smart.reduce<GalleryAlbum | null>((largest, album) => (!largest || album.count > largest.count ? album : largest), null);
+      if (library) list = list.filter((album) => album !== library);
+    }
     // Smart albums (Favorites, Screenshots, …) first, as in the Photos app; the rest by size.
     return list.sort((a, b) => (a.type === b.type ? b.count - a.count : a.type === 'SmartAlbum' ? -1 : 1));
   } catch {
