@@ -2,7 +2,7 @@
 
 import { ChevronRight, Heart, UserRound, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { resolveProfileLikesCopy } from "@/i18n/profile-likes-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
@@ -30,23 +30,50 @@ export default function ProfileLikesPill({ locale }: { locale: string }) {
   const [people, setPeople] = useState<Liker[] | null>(null);
   const [count, setCount] = useState(0);
   const [open, setOpen] = useState(false);
+  // The list has no end (owner, 2026-11-28): the next page loads near the bottom of the sheet.
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   useNativeBannerSuppression(open);
+
+  const readPage = useCallback(async (cursor: string | null) => {
+    const response = await fetch(`${buildClientApiPath("/profile/likes")}${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { cache: "no-store" });
+    const body = (response.ok ? await response.json() : null) as { count?: unknown; people?: unknown; nextCursor?: unknown } | null;
+    if (!body || !Array.isArray(body.people)) return null;
+    const list = (body.people as Array<Partial<Liker>>).flatMap((row): Liker[] => (
+      typeof row?.id === "string" ? [{ id: row.id, name: row.name ?? null, handle: row.handle ?? null, image: row.image ?? null }] : []
+    ));
+    return { list, count: typeof body.count === "number" ? body.count : null, nextCursor: typeof body.nextCursor === "string" ? body.nextCursor : null };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    void fetch(buildClientApiPath("/profile/likes"), { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((body: { count?: unknown; people?: unknown } | null) => {
-        if (cancelled || !body || !Array.isArray(body.people)) return;
-        const list = (body.people as Array<Partial<Liker>>).flatMap((row): Liker[] => (
-          typeof row?.id === "string" ? [{ id: row.id, name: row.name ?? null, handle: row.handle ?? null, image: row.image ?? null }] : []
-        ));
-        setPeople(list);
-        setCount(typeof body.count === "number" ? body.count : list.length);
+    void readPage(null)
+      .then((page) => {
+        if (cancelled || !page) return;
+        setPeople(page.list);
+        setCount(page.count ?? page.list.length);
+        setNextCursor(page.nextCursor);
       })
       .catch(() => undefined);
     return () => { cancelled = true; };
-  }, []);
+  }, [readPage]);
+
+  const loadMore = useCallback(() => {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    void readPage(nextCursor)
+      .then((page) => {
+        if (!page) return;
+        setPeople((current) => {
+          const seen = new Set((current ?? []).map((person) => person.id));
+          return [...(current ?? []), ...page.list.filter((person) => !seen.has(person.id))];
+        });
+        if (page.count !== null) setCount(page.count);
+        setNextCursor(page.nextCursor);
+      })
+      .catch(() => undefined)
+      .finally(() => setLoadingMore(false));
+  }, [loadingMore, nextCursor, readPage]);
 
   if (!people || people.length === 0) return null;
 
@@ -84,7 +111,13 @@ export default function ProfileLikesPill({ locale }: { locale: string }) {
                 <X size={17} strokeWidth={2.6} aria-hidden="true" />
               </button>
             </div>
-            <ul className="mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <ul
+              className="mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain"
+              onScroll={(event) => {
+                const list = event.currentTarget;
+                if (list.scrollHeight - list.scrollTop - list.clientHeight < 240) loadMore();
+              }}
+            >
               {people.map((person) => (
                 <li key={person.id}>
                   <button
@@ -102,6 +135,11 @@ export default function ProfileLikesPill({ locale }: { locale: string }) {
                   </button>
                 </li>
               ))}
+              {nextCursor ? (
+                <li className="flex justify-center py-3" aria-hidden="true">
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-rose-200 border-t-rose-500" />
+                </li>
+              ) : null}
             </ul>
           </div>
         </div>

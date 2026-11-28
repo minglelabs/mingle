@@ -7,7 +7,8 @@ import { accountShownInAppWhere } from "@/server/posts/block-visibility";
  * from whom. One heart per pair; taking it back removes it. Nobody hearts
  * their own profile.
  */
-export const PROFILE_LIKES_LIST_LIMIT = 100;
+/** One page of the likers list; the list itself has no end (owner, 2026-11-28: no 100 cap). */
+export const PROFILE_LIKES_PAGE_SIZE = 100;
 
 export type ProfileLiker = { id: string; name: string | null; handle: string | null; image: string | null; likedAt: string };
 
@@ -49,25 +50,39 @@ export async function setProfileLike(likerId: string, likedId: string, liked: bo
   return { ok: true, liked: true };
 }
 
-/** The hearts an account got: how many, and who sent them, newest first. People it blocked (or who blocked it) and hidden accounts are left out. */
-export async function listProfileLikers(userId: string): Promise<{ count: number; people: ProfileLiker[] }> {
-  const rows = await prisma.profileLike.findMany({
-    where: {
-      likedId: userId,
-      liker: {
-        isActive: true,
-        isDeleted: false,
-        ...accountShownInAppWhere(),
-        blockedByRelations: { none: { blockerId: userId } },
-        blockingRelations: { none: { blockedId: userId } },
-      },
+/**
+ * The hearts an account got: how many in all, and who sent them, newest first,
+ * a page at a time (`cursor`: the liker id the previous page ended on). People
+ * it blocked (or who blocked it) and hidden accounts are left out.
+ */
+export async function listProfileLikers(
+  userId: string,
+  cursor?: string | null,
+): Promise<{ count: number; people: ProfileLiker[]; nextCursor: string | null }> {
+  const where = {
+    likedId: userId,
+    liker: {
+      isActive: true,
+      isDeleted: false,
+      ...accountShownInAppWhere(),
+      blockedByRelations: { none: { blockerId: userId } },
+      blockingRelations: { none: { blockedId: userId } },
     },
-    orderBy: { createdAt: "desc" },
-    take: PROFILE_LIKES_LIST_LIMIT,
-    select: { createdAt: true, liker: { select: { id: true, name: true, handle: true, image: true } } },
-  });
+  };
+  const [count, rows] = await Promise.all([
+    prisma.profileLike.count({ where }),
+    prisma.profileLike.findMany({
+      where,
+      orderBy: [{ createdAt: "desc" }, { likerId: "desc" }],
+      take: PROFILE_LIKES_PAGE_SIZE + 1,
+      ...(cursor ? { cursor: { likerId_likedId: { likerId: cursor, likedId: userId } }, skip: 1 } : {}),
+      select: { createdAt: true, liker: { select: { id: true, name: true, handle: true, image: true } } },
+    }),
+  ]);
+  const page = rows.slice(0, PROFILE_LIKES_PAGE_SIZE);
   return {
-    count: rows.length,
-    people: rows.map((row) => ({ id: row.liker.id, name: row.liker.name, handle: row.liker.handle, image: row.liker.image, likedAt: row.createdAt.toISOString() })),
+    count,
+    people: page.map((row) => ({ id: row.liker.id, name: row.liker.name, handle: row.liker.handle, image: row.liker.image, likedAt: row.createdAt.toISOString() })),
+    nextCursor: rows.length > PROFILE_LIKES_PAGE_SIZE ? page[page.length - 1]?.liker.id ?? null : null,
   };
 }
