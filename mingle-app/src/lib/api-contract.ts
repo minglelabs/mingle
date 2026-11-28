@@ -69,6 +69,7 @@ const VERSIONED_API_NAMESPACE_RULES = [
   { namespace: 'android/v2.4.2', enablesFinalizeSourceRedetection: true },
   { namespace: 'android/v2.4.3', enablesFinalizeSourceRedetection: true },
   { namespace: 'android/v2.5.0', enablesFinalizeSourceRedetection: true },
+  { namespace: 'android/v2.6.0', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v1.0.0', enablesFinalizeSourceRedetection: false },
   { namespace: 'ios/v1.0.2', enablesFinalizeSourceRedetection: false },
   { namespace: 'ios/v1.0.3', enablesFinalizeSourceRedetection: false },
@@ -104,6 +105,7 @@ const VERSIONED_API_NAMESPACE_RULES = [
   { namespace: 'ios/v2.4.2', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v2.4.3', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v2.5.0', enablesFinalizeSourceRedetection: true },
+  { namespace: 'ios/v2.6.0', enablesFinalizeSourceRedetection: true },
 ] as const
 const ALLOWED_API_NAMESPACES = new Set<string>([
   DEFAULT_API_NAMESPACE,
